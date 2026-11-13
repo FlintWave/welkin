@@ -1,0 +1,22 @@
+## 1. Data layer
+
+- [ ] 1.1 `sqlx` access for each store, three database backends
+- [ ] 1.2 Carry over migrations; verify a C#-created database opens unchanged
+- [ ] 1.3 Record C# service traffic for every handler with the conformance recorder
+
+## 2. Services
+
+- [ ] 2.1 Assets and file-system asset store
+- [ ] 2.2 Inventory
+- [ ] 2.3 Grid, presence, grid user
+- [ ] 2.4 User accounts, authentication, authorization
+- [ ] 2.5 Friends, avatar, mute list, user profiles
+- [ ] 2.6 Map images, estate, simulation
+- [ ] 2.7 Login
+
+## 3. Proof
+
+- [ ] 3.1 Replay tests pass for every handler
+- [ ] 3.2 A C# simulator runs against the Rust `robust` and `pCampBot` logs in, rezzes and teleports
+- [ ] 3.3 Aurora Viewer logs in to the mixed grid
+- [ ] 3.4 Second review of authentication, inventory writes and asset writes

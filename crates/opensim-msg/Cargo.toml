@@ -1,0 +1,14 @@
+[package]
+name = "opensim-msg"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+aurora-msg = { workspace = true }
+opensim-types = { path = "../opensim-types" }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

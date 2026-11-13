@@ -1,0 +1,20 @@
+[package]
+name = "opensim-region"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+opensim-config = { path = "../opensim-config" }
+opensim-scene = { path = "../opensim-scene" }
+opensim-net = { path = "../opensim-net" }
+opensim-physics-rapier = { path = "../opensim-physics-rapier" }
+opensim-modules = { path = "../opensim-modules" }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+clap = { workspace = true }
+
+[lints]
+workspace = true

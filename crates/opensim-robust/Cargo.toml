@@ -1,0 +1,19 @@
+[package]
+name = "opensim-robust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+opensim-config = { path = "../opensim-config" }
+opensim-services = { path = "../opensim-services" }
+opensim-data = { path = "../opensim-data" }
+axum = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+clap = { workspace = true }
+
+[lints]
+workspace = true

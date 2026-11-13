@@ -1,0 +1,18 @@
+[package]
+name = "opensim-scene"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+opensim-types = { path = "../opensim-types" }
+opensim-prim = { path = "../opensim-prim" }
+opensim-physics = { path = "../opensim-physics" }
+tokio = { workspace = true }
+glam = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[lints]
+workspace = true
