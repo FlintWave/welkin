@@ -5,7 +5,7 @@
 - [ ] 1.3 Compile an LSL corpus taken from OAR files; report what fails to compile
 - [ ] 1.4 Run the corpus with stubbed functions on SLua and on YEngine; compare event and call traces
 - [ ] 1.5 Confirm memory limits and pre-emption stop a runaway script
-- [ ] 1.6 Check with Aurora Viewer how a script is marked as Luau on upload
+- [x] 1.6 Check with Aurora Viewer how a script is marked as Luau on upload (finding: no Luau support in OSim 0.9.3 or Aurora crates; language detection would be server-side at compile time)
 - [ ] 1.7 Write up results and record go or no-go in this change
 
 ## 2. VM crate

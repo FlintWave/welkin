@@ -1,8 +1,8 @@
 ## 1. Profiles
 
-- [ ] 1.1 Grid profile format and loader; `standalone`, `own-grid`, `custom`
-- [ ] 1.2 Importer support for an OSgrid distribution: read its `GridCommon.ini` and `OpenSim.ini`, write the `osgrid` profile
-- [ ] 1.3 Per-profile overrides
+- [x] 1.1 Grid profile format and loader; `standalone`, `own-grid`, `custom`
+- [x] 1.2 Importer support for an OSgrid distribution: read its `GridCommon.ini` and `OpenSim.ini`, write the `osgrid` profile
+- [x] 1.3 Per-profile overrides
 
 ## 2. Connectors
 
