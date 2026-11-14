@@ -8,6 +8,41 @@ Project licence: **GPL-3.0-or-later**.
 
 ---
 
+## Executive summary
+
+opensim-rust is a clean-room Rust port of OpenSimulator, licensed
+GPL-3.0-or-later. This audit examined every third-party library, binary,
+and data file shipped in the C# source tree to determine what can be
+reused, what must be replaced, and what licence obligations apply.
+
+**Key findings:**
+
+1. **All C# third-party dependencies are dropped.** The Rust port replaces
+   every C# library with a Rust equivalent. No Ms-PL, MPL-1.1, or
+   custom-licensed code carries forward.
+2. **Aurora Viewer crates are GPL-3.0-or-later**, compatible with the
+   project licence. They transitively bring in openjpeg-sys (BSD-2-Clause),
+   V-HACD (BSD-3-Clause), and parry3d (Apache-2.0) -- all compatible.
+3. **The SL message template** is LGPL-2.1 (Linden Lab), which is
+   GPLv3-compatible. It lives in the aurora-msg crate, not in this repo.
+4. **No default asset library is shipped.** The C# tree's assets have
+   mixed provenance (CC-BY-SA 3.0, unknown, CC-BY-NC). The server starts
+   without them.
+5. **All Rust dependency licences are GPLv3-compatible.** The dependency
+   tree uses MIT, Apache-2.0, BSD-2/3-Clause, ISC, Zlib, Unicode-3.0,
+   CDLA-Permissive-2.0, BSL-1.0, CC0-1.0, and Unlicense -- all
+   compatible with GPL-3.0-or-later.
+6. **Three items were flagged as GPL-incompatible** in the C# tree
+   (Ms-PL libraries, CC-BY-SA 3.0 artwork, Warp3D). All are dropped.
+
+**Disposition summary:** of 76+ third-party items in the C# tree, zero
+are carried into the Rust port. The only external code comes from
+crates.io dependencies and Aurora Viewer git dependencies, all with
+confirmed-compatible licences. A `deny.toml` enforces the allow-list
+via `cargo deny`.
+
+---
+
 ## Decisions
 
 - **D1 (2026-11-13):** GPL-3.0-or-later, so that Aurora Viewer's crates can
@@ -395,6 +430,31 @@ Licences NOT GPLv3-compatible or uncertain:
   identifies compatibility, not affiliation.
 - LSL (Linden Scripting Language) is a descriptive term used by multiple
   projects. No trademark issue identified.
+
+## Recommendations
+
+1. **Run `cargo deny check` in CI.** The workspace `deny.toml` enforces
+   the licence allow-list and checks the RustSec advisory database.
+   Add it to the build pipeline.
+2. **Do not ship a default asset library.** The C# tree's assets have
+   mixed and unverified provenance. Let grid operators import their own.
+   If a default library is needed later, build it from scratch with
+   confirmed-licensed content only.
+3. **Keep openjpeg-sys.** No pure Rust JPEG 2000 implementation exists.
+   The BSD-2-Clause C library is mature and GPLv3-compatible. Accept
+   the C FFI dependency.
+4. **Do not include CC-BY-SA 3.0 content.** Only CC-BY-SA 4.0 has the
+   one-way GPLv3 compatibility provision. This rules out Linden Lab
+   viewer artwork and the default terrain texture.
+5. **Audit collision sounds individually** before shipping any. The
+   Freesound.org sourced sounds may include CC-BY-NC, which is
+   GPL-incompatible.
+6. **Pin Aurora Viewer crates to a reviewed commit.** Currently pinned at
+   `3d523b14`. Re-audit when updating the pin.
+7. **Generate new default textures** (terrain, avatar defaults) rather
+   than porting the existing ones with unclear provenance.
+
+---
 
 ## Open items
 
