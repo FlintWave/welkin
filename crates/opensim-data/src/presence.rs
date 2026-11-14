@@ -51,6 +51,14 @@ impl PresenceStore {
         Ok(rows)
     }
 
+    pub async fn get_agents(&self, user_ids: &[&str]) -> Result<Vec<PresenceRow>, DataError> {
+        let mut out = Vec::new();
+        for id in user_ids {
+            out.extend(self.get_by_user(id).await?);
+        }
+        Ok(out)
+    }
+
     pub async fn report_agent(&self, session_id: &str, region_id: &str) -> Result<(), DataError> {
         sqlx::query("UPDATE Presence SET RegionID = $1, LastSeen = $2 WHERE SessionID = $3")
             .bind(region_id.to_string())

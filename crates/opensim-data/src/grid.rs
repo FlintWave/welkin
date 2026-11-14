@@ -189,4 +189,103 @@ impl GridStore {
             .await?;
         Ok(res.rows_affected() > 0)
     }
+
+    async fn query_flagged(&self, scope_id: &str, mask: i32) -> Result<Vec<RegionRow>, DataError> {
+        let sql = format!(
+            "SELECT {COLS} FROM regions WHERE ScopeID = $1 AND (flags & {mask}) <> 0"
+        );
+        Ok(sqlx::query_as::<_, RegionRow>(&sql)
+            .bind(scope_id)
+            .fetch_all(&self.pool)
+            .await?)
+    }
+
+    pub async fn get_region_by_uuid(
+        &self,
+        scope_id: &str,
+        region_id: &str,
+    ) -> Result<Option<RegionRow>, DataError> {
+        if scope_id.is_empty() {
+            return self.get_region(region_id).await;
+        }
+        let sql = format!("SELECT {COLS} FROM regions WHERE ScopeID = $1 AND uuid = $2");
+        Ok(sqlx::query_as::<_, RegionRow>(&sql)
+            .bind(scope_id)
+            .bind(region_id)
+            .fetch_optional(&self.pool)
+            .await?)
+    }
+
+    /// Regions whose extents lie within one 256m cell of the given region.
+    pub async fn get_neighbours(
+        &self,
+        scope_id: &str,
+        region_id: &str,
+    ) -> Result<Vec<RegionRow>, DataError> {
+        let Some(r) = self.get_region_by_uuid(scope_id, region_id).await? else {
+            return Ok(Vec::new());
+        };
+        let sql = format!(
+            "SELECT {COLS} FROM regions WHERE ScopeID = $1 AND uuid <> $2 \
+             AND locX + sizeX > $3 AND locX < $4 AND locY + sizeY > $5 AND locY < $6"
+        );
+        Ok(sqlx::query_as::<_, RegionRow>(&sql)
+            .bind(r.scope_id.clone())
+            .bind(r.uuid.clone())
+            .bind(r.loc_x - 256)
+            .bind(r.loc_x + r.size_x + 256)
+            .bind(r.loc_y - 256)
+            .bind(r.loc_y + r.size_y + 256)
+            .fetch_all(&self.pool)
+            .await?)
+    }
+
+    /// Regions with the DefaultHypergridRegion flag (bit 2) set.
+    pub async fn get_default_hypergrid_regions(
+        &self,
+        scope_id: &str,
+    ) -> Result<Vec<RegionRow>, DataError> {
+        self.query_flagged(scope_id, 4).await
+    }
+
+    /// Regions with the FallbackRegion flag (bit 1) set.
+    pub async fn get_fallback_regions(&self, scope_id: &str) -> Result<Vec<RegionRow>, DataError> {
+        self.query_flagged(scope_id, 2).await
+    }
+
+    /// Regions with the RegionOnline flag (bit 3) set, nearest to (x, y) first.
+    pub async fn get_online_regions(
+        &self,
+        scope_id: &str,
+        x: i32,
+        y: i32,
+        max_count: usize,
+    ) -> Result<Vec<RegionRow>, DataError> {
+        let mut rows = self.query_flagged(scope_id, 8).await?;
+        let dist = |r: &RegionRow| {
+            let dx = i64::from(r.loc_x - x);
+            let dy = i64::from(r.loc_y - y);
+            dx * dx + dy * dy
+        };
+        rows.sort_by_key(dist);
+        rows.truncate(max_count);
+        Ok(rows)
+    }
+
+    /// Regions with the Hyperlink flag (bit 4) set.
+    pub async fn get_hyperlinks(&self, scope_id: &str) -> Result<Vec<RegionRow>, DataError> {
+        self.query_flagged(scope_id, 16).await
+    }
+
+    pub async fn get_region_flags(
+        &self,
+        scope_id: &str,
+        region_id: &str,
+    ) -> Result<Option<i32>, DataError> {
+        Ok(self.get_region_by_uuid(scope_id, region_id).await?.map(|r| r.flags))
+    }
+
+    pub async fn deregister(&self, region_id: &str) -> Result<bool, DataError> {
+        self.delete_region(region_id).await
+    }
 }

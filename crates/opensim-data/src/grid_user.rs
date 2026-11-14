@@ -137,4 +137,39 @@ impl GridUserStore {
             .await?;
         Ok(())
     }
+
+    pub async fn get_multiple(
+        &self,
+        user_ids: &[&str],
+    ) -> Result<Vec<Option<GridUserRow>>, DataError> {
+        let mut out = Vec::with_capacity(user_ids.len());
+        for id in user_ids {
+            out.push(self.get(id).await?);
+        }
+        Ok(out)
+    }
+
+    /// Get or create the record, then mark it online with the current login time.
+    pub async fn logged_in(&self, user_id: &str) -> Result<GridUserRow, DataError> {
+        let now = chrono::Utc::now().timestamp().to_string();
+        let mut row = match self.get(user_id).await? {
+            Some(r) => r,
+            None => GridUserRow {
+                user_id: user_id.to_string(),
+                home_region_id: "00000000-0000-0000-0000-000000000000".into(),
+                home_position: "<128, 128, 70>".into(),
+                home_look_at: "<0, 0, 0>".into(),
+                last_region_id: "00000000-0000-0000-0000-000000000000".into(),
+                last_position: "<128, 128, 70>".into(),
+                last_look_at: "<0, 0, 0>".into(),
+                online: "false".into(),
+                login: now.clone(),
+                logout: "0".into(),
+            },
+        };
+        row.online = "true".into();
+        row.login = now;
+        self.store(&row).await?;
+        Ok(row)
+    }
 }
