@@ -7,6 +7,7 @@ publish.workspace = true
 
 [dependencies]
 opensim-types = { path = "../opensim-types" }
+opensim-script-compiler = { path = "../opensim-script-compiler" }
 opensim-script-vm = { path = "../opensim-script-vm" }
 opensim-scene = { path = "../opensim-scene" }
 thiserror = { workspace = true }

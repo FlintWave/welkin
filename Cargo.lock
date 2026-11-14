@@ -2341,6 +2341,7 @@ name = "opensim-script-api"
 version = "0.1.0"
 dependencies = [
  "opensim-scene",
+ "opensim-script-compiler",
  "opensim-script-vm",
  "opensim-types",
  "thiserror 2.0.21",
@@ -2362,8 +2363,11 @@ dependencies = [
  "mlua",
  "opensim-script-compiler",
  "opensim-types",
+ "serde",
+ "serde_json",
  "thiserror 2.0.21",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
