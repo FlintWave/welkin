@@ -1,11 +1,11 @@
 ## 1. Scene graph
 
-- [ ] 1.1 Scene struct: heartbeat loop, entity maps, update dispatch, frame timing
-- [ ] 1.2 SceneObjectGroup: linked prim set, root part, link/unlink, bounding box
-- [ ] 1.3 SceneObjectPart: shape, texture entry, extra params, properties, flags, inventory stub
-- [ ] 1.4 ScenePresence: position, rotation, velocity, animation state, sit, controls, appearance
-- [ ] 1.5 Scene entity add/remove/update and spatial queries (by position, by owner, by name)
-- [ ] 1.6 XML2 scene serialization: round-trip tests against C# output
+- [x] 1.1 Scene struct: heartbeat loop, entity maps, update dispatch, frame timing
+- [x] 1.2 SceneObjectGroup: linked prim set, root part, link/unlink, bounding box
+- [x] 1.3 SceneObjectPart: shape, texture entry, extra params, properties, flags, inventory stub
+- [x] 1.4 ScenePresence: position, rotation, velocity, animation state, sit, controls, appearance
+- [x] 1.5 Scene entity add/remove/update and spatial queries (by position, by owner, by name)
+- [x] 1.6 XML2 scene serialization: round-trip tests against C# output
 
 ## 2. Client stack
 

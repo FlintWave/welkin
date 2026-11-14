@@ -7,7 +7,9 @@ publish.workspace = true
 
 [dependencies]
 aurora-prim = { workspace = true }
+glam = { workspace = true }
 opensim-types = { path = "../opensim-types" }
+rapier3d = { workspace = true }
 thiserror = { workspace = true }
 
 [lints]

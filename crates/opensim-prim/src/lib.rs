@@ -32,6 +32,8 @@ pub use aurora_prim::extra::{
     pack_sculpt, parse_extra_params,
 };
 
+pub mod meshing;
+
 pub use aurora_prim::sculpt::{generate_sculpt, sculpt_placeholder};
 pub use aurora_prim::volume::{
     VolumeFace, VolumeMesh, generate_volume, lod_triangle_counts, num_faces,
