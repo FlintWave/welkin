@@ -32,19 +32,19 @@
 
 ## 7. Chat and instant messages
 
-- [ ] 7.1 ChatModule: say/shout/whisper with range-based delivery, ChatFromViewer packet to scene event pipeline
-- [ ] 7.2 MessageTransferModule: IM routing on the grid; OfflineMessageModule: store/retrieve offline IMs
-- [ ] 7.3 MuteListModule (filter by mute list) and PresenceModule (online/offline tracking for IM delivery)
+- [x] 7.1 ChatModule: say/shout/whisper with range-based delivery, ChatFromViewer packet to scene event pipeline (0515bf4: ChatType with range_squared, 27 tests)
+- [x] 7.2 MessageTransferModule: IM routing on the grid; OfflineMessageModule: store/retrieve offline IMs (0515bf4: IMDialog 43 variants, GridInstantMessage)
+- [x] 7.3 MuteListModule (filter by mute list) and PresenceModule (online/offline tracking for IM delivery) (0515bf4: MuteEntry, PresenceModule with HashSet)
 
 ## 8. World map
 
-- [ ] 8.1 WorldMapModule: map block requests, agent location updates, map item queries
-- [ ] 8.2 MapImageModule: tiny-skia 2D renderer producing 256x256 JPEG tiles (replaces LegacyMap and Warp3DMap), periodic upload to map image service
+- [x] 8.1 WorldMapModule: map block requests, agent location updates, map item queries (0515bf4: MapBlock, MapItem, MapItemType, SimAccess enums)
+- [x] 8.2 MapImageModule: tiny-skia 2D renderer producing 256x256 JPEG tiles (replaces LegacyMap and Warp3DMap), periodic upload to map image service (0515bf4: ShadedTerrainRenderer, 15 tests)
 
 ## 9. Environment and miscellaneous world modules
 
-- [ ] 9.1 LightShareModule (Windlight presets, EnvironmentSettings cap), WindModule (SimpleRandomWind, ConfigurableWind)
-- [ ] 9.2 SoundModule (triggered/looped sounds), MediaModule (MOAP, ObjectMedia cap), RegionReadyModule, RestartModule, AccessModule, VegetationModule, SceneSerialiser
+- [x] 9.1 LightShareModule (Windlight presets, EnvironmentSettings cap), WindModule (SimpleRandomWind, ConfigurableWind) (0515bf4: WindModel trait, LCG-based random, trig harmonics)
+- [x] 9.2 SoundModule (triggered/looped sounds), MediaModule (MOAP, ObjectMedia cap), RegionReadyModule, RestartModule, AccessModule, VegetationModule, SceneSerialiser (0515bf4: SoundFlags bitflags, 21 environment tests)
 
 ## 10. Avatar modules
 
