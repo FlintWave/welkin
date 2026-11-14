@@ -6,9 +6,9 @@
 
 ## 2. Connectors
 
-- [ ] 2.1 Remote connectors for every service listed in `Grid.ini`, with replay tests recorded from a C# region
-- [ ] 2.2 Local asset cache with expiry
-- [ ] 2.3 Region register, deregister and neighbour notification
+- [x] 2.1 Remote connectors for every service listed in `Grid.ini`, with replay tests recorded from a C# region
+- [x] 2.2 Local asset cache with expiry
+- [x] 2.3 Region register, deregister and neighbour notification
 - [ ] 2.4 Hypergrid variants
 
 ## 3. OSgrid
