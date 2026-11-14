@@ -1,6 +1,6 @@
 ## 1. Spike (needs no simulator)
 
-- [ ] 1.1 Build SLua in the container image and call it from Rust: compile, load, run, yield
+- [x] 1.1 Build SLua in the container image and call it from Rust: compile, load, run, yield (mlua 0.12 + luau feature, 8 tests passing)
 - [ ] 1.2 Serialise a script suspended mid-event, restore it in a second process, and continue
 - [ ] 1.3 Compile an LSL corpus taken from OAR files; report what fails to compile
 - [ ] 1.4 Run the corpus with stubbed functions on SLua and on YEngine; compare event and call traces
