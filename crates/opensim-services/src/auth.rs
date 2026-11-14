@@ -131,7 +131,7 @@ async fn handle_auth(State(state): State<AuthServiceState>, body: Bytes) -> Resp
             };
 
             let expected = md5_hex(&format!("{password}:{}", auth.password_salt));
-            if expected != auth.password_hash {
+            if !crate::constant_time_eq(&expected, &auth.password_hash) {
                 tracing::debug!(principal, "auth: password mismatch");
                 return ok(false);
             }

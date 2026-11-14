@@ -102,7 +102,7 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>)
     };
     let stripped = passwd.strip_prefix("$1$").unwrap();
     let computed = md5_hex(&format!("{}:{}", stripped, auth.password_salt));
-    if computed != auth.password_hash {
+    if !crate::constant_time_eq(&computed, &auth.password_hash) {
         tracing::debug!(principal = %principal_id, "login: password mismatch");
         return error_response("key", "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist.");
     }
