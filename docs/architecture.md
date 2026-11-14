@@ -402,6 +402,49 @@ Groups V2, OfflineIM, user profiles, NPCs, Concierge and IRC bridge. See
 Review found 0 critical, 3 high (IRC injection, group creation power check,
 notice attachment size), 10 medium; see `docs/security-review-social-modules.md`.
 
+## Hypergrid
+
+Cross-grid federation: Gatekeeper, UserAgent, suitcase inventory, HG assets,
+friends, IM, HypergridLinker, and 10 region modules. See
+`docs/hypergrid-summary.md`.
+
+| Component | Role |
+|---|---|
+| `GatekeeperService` | Foreign visitor entry, hyperlink creation, access control |
+| `UserAgentService` | Outbound HG teleport, session verification, UUI format |
+| `HGSuitcaseInventoryService` | Restricted suitcase folder for foreign visitors |
+| `HGAssetService` | Access-controlled asset transfer, export type filtering |
+| `HGFriendsService` + module | Cross-grid friendship, secret verification, online/offline |
+| `HGInstantMessageService` | Cross-grid IM routing via UserAgent location resolution |
+| `HypergridLinker` | Grid-to-grid region linking, `link-region`/`unlink-region` commands |
+| Service connectors | HTTP clients for Gatekeeper, UserAgent, HGFriends, HELO probe |
+| `HGEntityTransferModule` | Cross-grid teleport, appearance restriction, inventory transfer |
+| `HGInventoryAccessModule` + Broker | Route inventory to local/remote, suitcase enforcement |
+| `HGLureModule`, `HGWorldMapModule`, `HGUserManagementModule` | Lures, map blocks, foreign user resolution |
+| `HypergridServiceInConnectorModule` | Expose HG endpoints in simulator |
+
+~9,144 lines, 265 tests (215 unit, 50 integration). CRITICAL RISK review
+found 3 critical (suitcase escape, VerifyAgent missing, UUID impersonation),
+3 high, 3 medium, 2 low; see `docs/security-review-hypergrid.md`.
+
+## WebRTC voice
+
+WebRTC voice via wolfvoice sidecar. See `docs/webrtc-voice-summary.md`.
+
+| Component | Role |
+|---|---|
+| `WebRtcVoiceModule` | Shared region module, IVoiceModule trait, channel lifecycle |
+| `WolfvoiceClient` | JSON-RPC client: provision, channel create/destroy, health |
+| `ProvisionVoiceAccountRequest` | Map agent UUID to voice credentials via wolfvoice |
+| `ParcelVoiceInfoRequest` | Estate/parcel voice check, channel URI construction |
+| OSSL integration | Wire `osSetParcelSIPAddress` to voice module |
+| Docker/portal integration | Sidecar service definition, admin dashboard status |
+
+~2,079 lines, 102 tests (59 unit, 43 integration). Neither Vivox nor
+FreeSWITCH are ported; Aurora Viewer supports WebRTC voice only.
+Review found 0 critical, 2 high (wolfvoice auth, rate limiting), 3 medium;
+see `docs/security-review-voice.md`.
+
 ## Roadmap
 
 See `openspec/ROADMAP.md` for phases 1 to 7, and `docs/decisions.md` for the
