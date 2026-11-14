@@ -1553,6 +1553,7 @@ name = "opensim-llsd"
 version = "0.1.0"
 dependencies = [
  "aurora-llsd",
+ "base64 0.23.1",
  "serde",
  "thiserror 2.0.21",
 ]
@@ -1602,7 +1603,9 @@ dependencies = [
 name = "opensim-physics-rapier"
 version = "0.1.0"
 dependencies = [
+ "aurora-prim",
  "glam 0.34.3",
+ "nalgebra",
  "opensim-physics",
  "opensim-types",
  "rapier3d",

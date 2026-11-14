@@ -9,6 +9,7 @@ publish.workspace = true
 aurora-llsd = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
+base64 = { workspace = true }
 
 [lints]
 workspace = true

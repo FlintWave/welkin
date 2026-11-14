@@ -14,3 +14,5 @@ pub use aurora_llsd::{
     from_xml_element, to_binary, to_notation, to_pretty_xml_string, to_serialized_xml, to_xml,
     to_xml_string,
 };
+
+pub mod xmlrpc;
