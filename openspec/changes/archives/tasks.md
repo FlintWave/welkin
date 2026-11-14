@@ -10,15 +10,15 @@
 
 ## 3. OAR write
 
-- [ ] 3.1 OAR write (single region): gather scene objects, terrain, land, settings; stream to tar.gz via `tar` + `flate2`; progress callback
-- [ ] 3.2 Async asset gathering: walk object asset references, fetch from asset service with configurable timeout, deduplicate
-- [ ] 3.3 OAR write (multi-region): ArchiveScenesGroup, per-region subdirectories, cross-region asset dedup
+- [x] 3.1 OAR write (single region): gather scene objects, terrain, land, settings; stream to tar.gz via `tar` + `flate2`; progress callback (4853ed9: oar_write.rs, 3 tests)
+- [x] 3.2 Async asset gathering: walk object asset references, fetch from asset service with configurable timeout, deduplicate (4853ed9: assets_request.rs, 7 tests)
+- [x] 3.3 OAR write (multi-region): ArchiveScenesGroup, per-region subdirectories, cross-region asset dedup (4853ed9: oar_write.rs, 2 tests)
 
 ## 4. OAR read
 
-- [ ] 4.1 OAR read (single region, basic): parse tar entries, dearchive objects via XML2 deserializer, load terrain and parcels, restore settings
-- [ ] 4.2 OAR read options: merge mode (skip terrain/parcels), displacement vector, rotation, bounding-box filter, default-user substitution
-- [ ] 4.3 OAR permission filter: check export permissions during save, check import permissions during load, no-assets mode
+- [x] 4.1 OAR read (single region, basic): parse tar entries, dearchive objects via XML2 deserializer, load terrain and parcels, restore settings (4853ed9: oar_read.rs, 12 tests)
+- [x] 4.2 OAR read options: merge mode (skip terrain/parcels), displacement vector, rotation, bounding-box filter, default-user substitution (4853ed9: oar_read.rs, 7 tests)
+- [x] 4.3 OAR permission filter: check export permissions during save, check import permissions during load, no-assets mode (4853ed9: oar_write.rs + oar_read.rs, 4 tests)
 
 ## 5. IAR
 
