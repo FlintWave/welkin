@@ -32,6 +32,8 @@ pub struct Circuit {
     rtt: Duration,
     buf: Vec<u8>,
     dropped: Vec<u32>,
+    ping_id: u8,
+    ping_sent: Option<(u8, Instant)>,
 }
 
 pub struct CircuitTick {
@@ -54,6 +56,8 @@ impl Circuit {
             rtt: DEFAULT_RTT,
             buf: Vec::with_capacity(1500),
             dropped: Vec::new(),
+            ping_id: 0,
+            ping_sent: None,
         }
     }
 
@@ -245,11 +249,42 @@ impl Circuit {
     pub fn unacked_count(&self) -> usize {
         self.unacked.len()
     }
+
+    pub fn start_ping(&mut self) -> (Vec<u8>, u8) {
+        self.ping_id = self.ping_id.wrapping_add(1);
+        let oldest = self.unacked.keys().min().copied().unwrap_or(self.next_seq);
+        let msg = opensim_msg::msgs::StartPingCheck {
+            ping_id: opensim_msg::msgs::start_ping_check::PingID {
+                ping_id: self.ping_id,
+                oldest_unacked: oldest,
+            },
+        };
+        self.ping_sent = Some((self.ping_id, Instant::now()));
+        let (pkt, _seq) = self.send_msg(&msg, false);
+        (pkt, self.ping_id)
+    }
+
+    pub fn on_ping_reply(&mut self, id: u8) -> Option<Duration> {
+        if let Some((pid, at)) = self.ping_sent {
+            if pid == id {
+                let rtt = at.elapsed();
+                self.rtt = (self.rtt * 7 + rtt) / 8;
+                self.ping_sent = None;
+                return Some(rtt);
+            }
+        }
+        None
+    }
+
+    pub fn is_timed_out(&self, timeout: Duration) -> bool {
+        Instant::now().duration_since(self.last_recv) > timeout
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     impl Circuit {
         fn force_resend_timeout(&mut self, seq: u32) {
@@ -285,6 +320,23 @@ mod tests {
             5,
             &[]
         ));
+    }
+
+    #[test]
+    fn test_ping_roundtrip() {
+        let mut c = Circuit::new("127.0.0.1:8000".parse().unwrap());
+        let (pkt, id) = c.start_ping();
+        assert!(!pkt.is_empty());
+        let rtt = c.on_ping_reply(id);
+        assert!(rtt.is_some());
+        assert!(c.on_ping_reply(id).is_none());
+    }
+
+    #[test]
+    fn test_timeout() {
+        let c = Circuit::new("127.0.0.1:8000".parse().unwrap());
+        assert!(!c.is_timed_out(Duration::from_secs(9999)));
+        assert!(c.is_timed_out(Duration::ZERO));
     }
 
     #[test]
