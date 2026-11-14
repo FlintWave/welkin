@@ -34,6 +34,6 @@
 
 ## 7. Testing and security
 
-- [ ] 7.1 Integration tests: group create/join/leave/IM round trip, offline IM store/deliver, profile update/query, NPC lifecycle
-- [ ] 7.2 Protocol replay tests: group packets, profile caps, offline IM from C# recordings
-- [ ] 7.3 SECURITY REVIEW: group role/power permission checks (HIGH RISK, Opus reviewer), NPC command validation, profile text sanitization
+- [x] 7.1 Integration tests: group create/join/leave/IM round trip, offline IM store/deliver, profile update/query, NPC lifecycle (e5997a1: social_integration_tests.rs 1,408 lines, 36 tests)
+- [x] 7.2 Protocol replay tests: group packets, profile caps, offline IM from C# recordings (e5997a1: social_protocol_tests.rs 961 lines, 17 tests)
+- [x] 7.3 SECURITY REVIEW: group role/power permission checks (HIGH RISK, Opus reviewer), NPC command validation, profile text sanitization (e5997a1: CONDITIONAL PASS, 24 findings in docs/security-review-social-modules.md, 0 critical, 3 high tracked for remediation)

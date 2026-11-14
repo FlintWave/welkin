@@ -103,7 +103,7 @@ when its phase starts, so later rows are placeholders until then.
 | 4 | `os*` API | `ossl-api` | accepted |
 | 5 | Land, permissions, estate, inventory, attachments, chat, IM, map | `region-modules` | accepted |
 | 5 | OAR and IAR archives | `archives` | accepted |
-| 6 | Groups, OfflineIM, profiles, NPCs | `social-modules` | proposed |
+| 6 | Groups, OfflineIM, profiles, NPCs | `social-modules` | accepted |
 | 6 | Hypergrid | `hypergrid` | proposed |
 | 6 | Grid profiles: standalone, own grid, OSgrid, custom | `external-grid-mode` | accepted |
 | 6 | WebRTC voice | `webrtc-voice` | proposed |
