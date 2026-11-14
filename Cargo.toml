@@ -39,6 +39,9 @@ metrics = "0.24"
 metrics-exporter-prometheus = "0.16"
 tempfile = "3"
 mlua = { version = "0.12", features = ["luau", "serialize"] }
+parking_lot = "0.12"
+sha1_smol = "1"
+md-5 = "0.10"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "warn"

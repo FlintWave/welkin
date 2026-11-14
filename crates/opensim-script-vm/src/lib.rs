@@ -6,6 +6,7 @@
 //! host the full LSL-on-Luau runtime.  For now it contains only the spike
 //! proof that the toolchain works.
 
+pub mod events;
 pub mod instance;
 pub mod scheduler;
 pub mod transfer;
