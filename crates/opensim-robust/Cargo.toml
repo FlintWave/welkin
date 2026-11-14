@@ -7,6 +7,7 @@ publish.workspace = true
 
 [dependencies]
 opensim-config = { path = "../opensim-config" }
+opensim-runtime = { path = "../opensim-runtime" }
 opensim-services = { path = "../opensim-services" }
 opensim-data = { path = "../opensim-data" }
 axum = { workspace = true }

@@ -30,6 +30,9 @@ axum = "0.8"
 sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "mysql", "postgres", "sqlite"] }
 rapier3d = "0.23"
 clap = { version = "4", features = ["derive"] }
+configparser = "3"
+metrics = "0.24"
+metrics-exporter-prometheus = "0.16"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "warn"
