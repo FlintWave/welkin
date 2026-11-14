@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Prim-to-physics-collider meshing pipeline.
 //!
 //! Converts aurora-prim volume geometry into Rapier 3-D collision shapes
@@ -12,10 +14,14 @@ use std::time::Instant;
 use glam::Vec3;
 use rapier3d::geometry::SharedShape;
 use rapier3d::math::Vector;
+use uuid::Uuid;
 
 use crate::{
-    VolumeParams, generate_volume,
+    VolumeParams, generate_volume, generate_sculpt, sculpt_placeholder,
     LL_PCODE_PATH_LINE, LL_PCODE_PROFILE_CIRCLE, LL_PCODE_PROFILE_SQUARE,
+    LL_SCULPT_FLAG_INVERT, LL_SCULPT_FLAG_MIRROR, LL_SCULPT_TYPE_MASK,
+    LL_SCULPT_TYPE_NONE, LL_SCULPT_TYPE_SPHERE, LL_SCULPT_TYPE_TORUS,
+    LL_SCULPT_TYPE_PLANE, LL_SCULPT_TYPE_CYLINDER,
 };
 
 // ---------------------------------------------------------------------------
@@ -45,6 +51,54 @@ pub struct MeshingResult {
     pub triangle_count: usize,
     /// Wall-clock time spent generating the shape.
     pub elapsed_us: u64,
+}
+
+// ---------------------------------------------------------------------------
+// Sculpt types and texture source
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SculptType {
+    None,
+    Sphere,
+    Torus,
+    Plane,
+    Cylinder,
+}
+
+impl SculptType {
+    pub fn from_raw(raw: u8) -> (SculptType, bool, bool) {
+        let kind = raw & LL_SCULPT_TYPE_MASK;
+        let invert = raw & LL_SCULPT_FLAG_INVERT != 0;
+        let mirror = raw & LL_SCULPT_FLAG_MIRROR != 0;
+        let ty = match kind {
+            LL_SCULPT_TYPE_SPHERE => SculptType::Sphere,
+            LL_SCULPT_TYPE_TORUS => SculptType::Torus,
+            LL_SCULPT_TYPE_PLANE => SculptType::Plane,
+            LL_SCULPT_TYPE_CYLINDER => SculptType::Cylinder,
+            LL_SCULPT_TYPE_NONE | _ => SculptType::None,
+        };
+        (ty, invert, mirror)
+    }
+}
+
+pub struct SculptTextureData {
+    pub width: u32,
+    pub height: u32,
+    pub components: u8,
+    pub pixels: Vec<u8>,
+}
+
+pub trait SculptTextureSource {
+    fn decode_sculpt_texture(&self, texture_id: &Uuid) -> Option<SculptTextureData>;
+}
+
+pub struct PlaceholderSculptSource;
+
+impl SculptTextureSource for PlaceholderSculptSource {
+    fn decode_sculpt_texture(&self, _texture_id: &Uuid) -> Option<SculptTextureData> {
+        None
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -251,6 +305,72 @@ fn shape_convex_from_volume(
 }
 
 // ---------------------------------------------------------------------------
+// Sculpt -> physics shape
+// ---------------------------------------------------------------------------
+
+pub fn shape_from_sculpt(
+    params: &VolumeParams,
+    size: Vec3,
+    detail: f32,
+    texture_data: Option<&SculptTextureData>,
+) -> MeshingResult {
+    let start = Instant::now();
+
+    let mesh = match texture_data {
+        Some(data) => generate_sculpt(
+            params,
+            detail,
+            data.width,
+            data.height,
+            data.components,
+            &data.pixels,
+        ),
+        None => sculpt_placeholder(params, detail),
+    };
+
+    let mut vertices: Vec<Vector> = Vec::new();
+    let mut indices: Vec<[u32; 3]> = Vec::new();
+    let mut base: u32 = 0;
+
+    for face in &mesh.faces {
+        for pos in &face.positions {
+            vertices.push(Vector::new(
+                pos[0] * size.x,
+                pos[1] * size.y,
+                pos[2] * size.z,
+            ));
+        }
+
+        let face_indices = &face.indices;
+        let tri_count = face_indices.len() / 3;
+        for tri in 0..tri_count {
+            let i0 = base + face_indices[tri * 3] as u32;
+            let i1 = base + face_indices[tri * 3 + 1] as u32;
+            let i2 = base + face_indices[tri * 3 + 2] as u32;
+            indices.push([i0, i1, i2]);
+        }
+
+        base += face.positions.len() as u32;
+    }
+
+    let vertex_count = vertices.len();
+    let triangle_count = indices.len();
+
+    let shape = if vertices.is_empty() || indices.is_empty() {
+        SharedShape::ball(0.001)
+    } else {
+        SharedShape::trimesh(vertices, indices).unwrap_or_else(|_| SharedShape::ball(0.001))
+    };
+
+    MeshingResult {
+        shape,
+        vertex_count,
+        triangle_count,
+        elapsed_us: start.elapsed().as_micros() as u64,
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
 
@@ -271,6 +391,17 @@ pub fn create_physics_shape(
     cache: &ShapeCache,
     cache_key: u64,
 ) -> Option<MeshingResult> {
+    create_physics_shape_with_sculpt(params, size, shape_type, cache, cache_key, None)
+}
+
+pub fn create_physics_shape_with_sculpt(
+    params: &VolumeParams,
+    size: Vec3,
+    shape_type: PhysicsShapeType,
+    cache: &ShapeCache,
+    cache_key: u64,
+    sculpt_source: Option<&dyn SculptTextureSource>,
+) -> Option<MeshingResult> {
     if shape_type == PhysicsShapeType::None {
         return None;
     }
@@ -288,6 +419,19 @@ pub fn create_physics_shape(
     }
 
     let start = Instant::now();
+
+    // Sculpted prims bypass analytic shape detection and volume meshing.
+    if params.is_sculpt() {
+        let detail = PhysicsLod::from_size(size).detail();
+        let texture_data = params.sculpt.and_then(|sp| {
+            sculpt_source.and_then(|src| src.decode_sculpt_texture(&sp.texture))
+        });
+        let result = shape_from_sculpt(params, size, detail, texture_data.as_ref());
+        if cache_key != 0 {
+            cache.insert(cache_key, result.shape.clone());
+        }
+        return Some(result);
+    }
 
     // Try analytic shapes first.
     if is_box(params) {
@@ -386,7 +530,7 @@ impl PhysicsLod {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{PathParams, ProfileParams};
+    use crate::{PathParams, ProfileParams, SculptParams};
 
     fn box_params() -> VolumeParams {
         VolumeParams {
@@ -411,6 +555,17 @@ mod tests {
             },
             path: PathParams::default(),
             sculpt: None,
+        }
+    }
+
+    fn sculpt_params(sculpt_type: u8) -> VolumeParams {
+        VolumeParams {
+            profile: ProfileParams::default(),
+            path: PathParams::default(),
+            sculpt: Some(SculptParams {
+                texture: Uuid::from_u128(0xdead_beef),
+                sculpt_type,
+            }),
         }
     }
 
@@ -603,5 +758,85 @@ mod tests {
         assert_eq!(PhysicsLod::Low.detail(), 0.5);
         assert_eq!(PhysicsLod::Medium.detail(), 1.0);
         assert_eq!(PhysicsLod::High.detail(), 2.0);
+    }
+
+    // --- Sculpt tests ---
+
+    #[test]
+    fn test_sculpt_type_from_raw() {
+        assert_eq!(SculptType::from_raw(LL_SCULPT_TYPE_NONE), (SculptType::None, false, false));
+        assert_eq!(SculptType::from_raw(LL_SCULPT_TYPE_SPHERE), (SculptType::Sphere, false, false));
+        assert_eq!(SculptType::from_raw(LL_SCULPT_TYPE_TORUS), (SculptType::Torus, false, false));
+        assert_eq!(SculptType::from_raw(LL_SCULPT_TYPE_PLANE), (SculptType::Plane, false, false));
+        assert_eq!(SculptType::from_raw(LL_SCULPT_TYPE_CYLINDER), (SculptType::Cylinder, false, false));
+        assert_eq!(SculptType::from_raw(7), (SculptType::None, false, false));
+    }
+
+    #[test]
+    fn test_sculpt_type_flags() {
+        let (ty, inv, mir) = SculptType::from_raw(LL_SCULPT_TYPE_SPHERE | LL_SCULPT_FLAG_INVERT);
+        assert_eq!(ty, SculptType::Sphere);
+        assert!(inv);
+        assert!(!mir);
+
+        let (ty, inv, mir) = SculptType::from_raw(LL_SCULPT_TYPE_TORUS | LL_SCULPT_FLAG_MIRROR);
+        assert_eq!(ty, SculptType::Torus);
+        assert!(!inv);
+        assert!(mir);
+
+        let (ty, inv, mir) = SculptType::from_raw(
+            LL_SCULPT_TYPE_CYLINDER | LL_SCULPT_FLAG_INVERT | LL_SCULPT_FLAG_MIRROR,
+        );
+        assert_eq!(ty, SculptType::Cylinder);
+        assert!(inv);
+        assert!(mir);
+
+        let (ty, inv, mir) = SculptType::from_raw(LL_SCULPT_TYPE_PLANE);
+        assert_eq!(ty, SculptType::Plane);
+        assert!(!inv);
+        assert!(!mir);
+    }
+
+    #[test]
+    fn test_sculpt_placeholder_produces_shape() {
+        let params = sculpt_params(LL_SCULPT_TYPE_SPHERE);
+        let size = Vec3::splat(1.0);
+        let result = shape_from_sculpt(&params, size, 1.0, None);
+        assert!(result.vertex_count > 0);
+        assert!(result.triangle_count > 0);
+    }
+
+    #[test]
+    fn test_sculpt_with_fake_texture() {
+        let params = sculpt_params(LL_SCULPT_TYPE_SPHERE);
+        let size = Vec3::splat(1.0);
+
+        let mut pixels = vec![0u8; 4 * 4 * 3];
+        for y in 0..4u32 {
+            for x in 0..4u32 {
+                let i = (y * 4 + x) as usize * 3;
+                pixels[i] = (x * 85) as u8;
+                pixels[i + 1] = (y * 85) as u8;
+                pixels[i + 2] = 128;
+            }
+        }
+
+        let tex = SculptTextureData {
+            width: 4,
+            height: 4,
+            components: 3,
+            pixels,
+        };
+
+        let result = shape_from_sculpt(&params, size, 1.0, Some(&tex));
+        assert!(result.vertex_count > 0);
+        assert!(result.triangle_count > 0);
+    }
+
+    #[test]
+    fn test_placeholder_sculpt_source() {
+        let src = PlaceholderSculptSource;
+        assert!(src.decode_sculpt_texture(&Uuid::nil()).is_none());
+        assert!(src.decode_sculpt_texture(&Uuid::from_u128(42)).is_none());
     }
 }

@@ -11,6 +11,7 @@ glam = { workspace = true }
 opensim-types = { path = "../opensim-types" }
 rapier3d = { workspace = true }
 thiserror = { workspace = true }
+uuid = { workspace = true }
 
 [lints]
 workspace = true

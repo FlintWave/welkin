@@ -7,9 +7,9 @@
 
 ## 2. Sculpt maps
 
-- [ ] 2.1 Sculpt texture decode: JPEG2000 sculpt map to displacement grid
-- [ ] 2.2 Generate sculpt mesh via aurora-prim, produce TriMeshShape collider
-- [ ] 2.3 Sculpt types and flags: sphere, torus, plane, cylinder, invert, mirror
+- [x] 2.1 Sculpt texture decode: JPEG2000 sculpt map to displacement grid
+- [x] 2.2 Generate sculpt mesh via aurora-prim, produce TriMeshShape collider
+- [x] 2.3 Sculpt types and flags: sphere, torus, plane, cylinder, invert, mirror
 
 ## 3. Mesh assets
 
