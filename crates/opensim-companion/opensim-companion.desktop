@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Desktop Entry]
+Name=OpenSimulator Companion
+Comment=Desktop companion for OpenSimulator grid management
+Exec=opensim-companion
+Icon=opensim-companion
+Terminal=false
+Type=Application
+Categories=Game;Simulation;Network;
+Keywords=opensim;opensimulator;virtual;world;grid;
+StartupNotify=true
+StartupWMClass=opensim-companion
