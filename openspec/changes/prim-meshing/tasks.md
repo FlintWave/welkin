@@ -18,9 +18,9 @@
 
 ## 4. Convex decomposition
 
-- [ ] 4.1 V-HACD pipeline: triangle mesh in, compound convex hull collider out, via parry3d
-- [ ] 4.2 Parameter tuning: max hulls, resolution, concavity threshold calibrated against C# output
-- [ ] 4.3 Decomposition cache: store results keyed by shape hash
+- [x] 4.1 V-HACD pipeline: triangle mesh in, compound convex hull collider out, via parry3d
+- [x] 4.2 Parameter tuning: max hulls, resolution, concavity threshold calibrated against C# output
+- [x] 4.3 Decomposition cache: store results keyed by shape hash
 
 ## 5. Integration
 

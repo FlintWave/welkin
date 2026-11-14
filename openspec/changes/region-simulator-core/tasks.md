@@ -33,8 +33,8 @@
 
 ## 5. Persistence
 
-- [ ] 5.1 SimulationDataStore trait: store/load objects, terrain, region settings, spawn points
-- [ ] 5.2 sqlx implementation over existing regionstore tables (MySQL, PostgreSQL, SQLite)
+- [x] 5.1 SimulationDataStore trait: store/load objects, terrain, region settings, spawn points
+- [x] 5.2 sqlx implementation over existing regionstore tables (MySQL, PostgreSQL, SQLite)
 - [ ] 5.3 Round-trip test: load a C#-created region database, verify objects and terrain match
 - [ ] 5.4 Periodic backup: dirty-object tracking, timed persistence in the scene loop
 
