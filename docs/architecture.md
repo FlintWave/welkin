@@ -5,8 +5,10 @@ simulator). Wire and schema compatibility with the C# server is the contract;
 internals are free to change. Licence: GPL-3.0-or-later. The C# reference tree
 is read-only at `/var/home/erik/Projects/opensim-0.9.3.0-source/`.
 
-Status: Phase 0, protocol-core, physics-backend, grid-services and capacity-assessor (sections 1-2) are complete. Most crates below are still
-empty skeletons (a `lib.rs` with no logic). The table marks which.
+Status: Phase 2 complete. Phases 0, 1 and 2 (port-foundation, open-source-audit,
+protocol-core, physics-backend, grid-services, capacity-assessor, grid-portal)
+are done. Most simulator and module crates below are still empty skeletons (a
+`lib.rs` with no logic). The table marks which.
 
 ## Workspace
 
@@ -33,6 +35,8 @@ crates are prefixed `opensim-`.
 | `opensim-modules` | Region modules (land, permissions, chat, ...) | skeleton |
 | `opensim-archive` | OAR/IAR archives | skeleton |
 | `opensim-script-compiler`, `-vm`, `-api` | SLua embedding, LSL/Luau, `ll*`/`os*` API | skeleton |
+| `opensim-portal` | Grid portal: staff auth (argon2), sessions, RBAC roles, audit log, region control, pages, grid map, people/sign-up, first-run wizard, content/catalogue | implemented |
+| `opensim-companion` | Tauri 2 desktop app: tray icon, service start/stop, log viewer, notifications, remote grid connect. **Standalone** — excluded from workspace (`Cargo.toml` exclude) | implemented |
 | `opensim-robust` | Binary: grid services | skeleton (`main.rs`) |
 | `opensim-region` | Binary: region simulator | skeleton (`main.rs`) |
 
@@ -48,6 +52,8 @@ opensim-types <- llsd, msg, net, caps, data, scene, physics, archive, scripts
 opensim-config, opensim-runtime -> opensim-robust
 opensim-data, opensim-caps -> opensim-services -> opensim-robust
 opensim-scene, opensim-services -> opensim-modules
+opensim-capacity -> opensim-portal -> opensim-robust (portal router)
+opensim-companion (standalone, Tauri 2) --HTTP--> opensim-portal control interface
 opensim-script-compiler -> opensim-script-vm -> opensim-script-api
 aurora-net (test bot only) -> opensim-conformance, dev-dep of opensim-msg
 ```
@@ -104,7 +110,75 @@ the `opensim-physics` trait), `glam` (vectors, as in Aurora), `tracing`,
 5. Grid services: 14 replay tests and 4 multi-step wire-traffic tests (`opensim-conformance/tests`).
 6. Later: live `pCampBot`, physics trajectory comparison against recorded C# runs, Aurora Viewer sessions.
 
-Physics details: `docs/physics-backend-summary.md`. Grid services details: `docs/grid-services-summary.md`. Capacity assessor details: `docs/capacity-assessor-summary.md`.
+Physics details: `docs/physics-backend-summary.md`. Grid services details: `docs/grid-services-summary.md`. Capacity assessor details: `docs/capacity-assessor-summary.md`. Grid portal details: `docs/grid-portal-summary.md`.
+
+## Grid Portal
+
+The portal is served by the `robust` binary via `axum`, with GridGate's page set
+as the model. It is the single management interface for the grid.
+
+### opensim-portal crate (2,084 lines, 12 source files)
+
+| Module | Responsibility |
+|---|---|
+| `auth.rs` | Argon2id password hashing (OWASP defaults via `argon2` 0.5), login/logout handlers, TOTP stub (locked — returns false until implemented) |
+| `sessions.rs` | In-memory session store (HashMap), `RequireStaff` axum extractor, Bearer token and cookie extraction, expiry enforcement |
+| `roles.rs` | `StaffRole` enum: Admin, Operator, Viewer with `can_manage_accounts()` and `can_manage_regions()` checks |
+| `audit.rs` | In-memory audit log (to be persisted to SQLite) |
+| `region_control.rs` | CRUD + start/stop/snapshot for regions (process management stubs pending region-simulator-core) |
+| `pages.rs` | Portal HTML shell, status, logs, metrics, audit endpoints |
+| `map.rs` | Region placement with coordinate conflict detection, spiral free-coordinate finder, variable sizes, external grid overlay (6 tests) |
+| `people.rs` | Sign-up with approval, account search/suspend, password reset with token store; all staff handlers enforce `require_admin()` |
+| `wizard.rs` | 7-step first-run wizard: mode → owner → network → capacity → placement → content → finish |
+| `content.rs` | Catalogue format with licence fields, OAR import, terrain presets, backup scheduling |
+
+### Security model
+
+- **Authentication:** Argon2id with OsRng salt, UUID v4 session tokens, constant-time password verification.
+- **Authorization:** RBAC: Admin (full access), Operator (region management), Viewer (read-only). People/account management requires Admin. Region management requires Operator or above.
+- **Security review findings:** 3 HIGHs fixed (TOTP stub locked, role enforcement on people endpoints, password hashed at sign-up). 5 MEDIUMs noted for deployment hardening (rate limiting, cookie CSRF flags, bot protection, audit persistence, body size limit). Full report: `scratchpad/security_review_portal.md`.
+
+### opensim-companion crate (standalone Tauri 2 app)
+
+Not part of the workspace — has its own `Cargo.toml` with Tauri 2 dependencies.
+Excluded via `exclude = ["crates/opensim-companion"]` in workspace `Cargo.toml`.
+
+- WebView pointing at the local portal (`http://localhost:8002/`)
+- System tray: status indicator, start/stop service, open portal, show window, quit
+- Tauri commands: `start_service`, `stop_service`, `service_status` (systemctl), `view_logs` (journalctl), `open_portal`, `connect_remote`, `list_remote_grids`, `set_portal_url`
+- Desktop notifications for service start/stop
+- `.desktop` launcher file for Linux, bundle config for Windows/macOS in `tauri.conf.json`
+
+### install/ directory
+
+| File | Purpose |
+|---|---|
+| `install.sh` | Full install: distro detection, prereqs, system user, directories, config generation, admin token, DB setup, systemd service, start |
+| `upgrade.sh` | Backup config, stop service, replace binary, run migrations, restart |
+| `uninstall.sh` | Stop, disable, remove binary/service; preserves data |
+| `install-archive.sh` | Release tarball install to `/opt/opensim/` (non-container path) |
+| `opensim-robust.service` | Systemd unit file |
+| `container/Containerfile` | Multi-stage Rust build → Debian slim runtime |
+| `container/compose.yaml` | Compose with optional MySQL/PostgreSQL |
+
+### E2E test
+
+`crates/opensim-portal/tests/e2e_portal_flow.rs` — 14-stage integration test
+via `tower::ServiceExt::oneshot()` covering: portal page, status, wizard (7
+steps), login, region lifecycle, map placement, people sign-up/approval,
+authenticated pages, content, access control, logout.
+
+## Phase 2 summary
+
+Phase 2 complete: 53 tasks across 3 changes. All accepted.
+
+| Change | Tasks | Lines | Key deliverables |
+|---|---|---|---|
+| `grid-services` | 14/14 | ~2,800 | 14 HTTP service handlers (asset, inventory, grid, presence, auth, login, etc.), replay conformance tests (14 fixtures), interop wire-traffic tests (4 multi-step flows), Opus security review with 1 fix (constant-time hash comparison) |
+| `capacity-assessor` | 13/13 | ~600 | Host scanning (CPU, memory with cgroup limits, disk, container), 12 sourced coefficients, estimate engine with 3 workload profiles, stubs for benchmark/model/live pending region-simulator-core (Phase 3) |
+| `grid-portal` | 26/26 | ~3,800 | 2,084-line portal crate, installer scripts, Tauri 2 companion app, 14-stage e2e test, Opus security review with 3 fixes |
+
+Phase 2 total: 111/142 overall tasks complete. Next: Phase 3 (region-simulator-core, prim-meshing).
 
 ## Roadmap
 

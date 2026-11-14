@@ -37,6 +37,10 @@ where none is given.
 | C1 | Capacity estimate comes from sourced coefficients now; the on-host benchmark, calibration and live refinement are stubs until `region-simulator-core` (`97f5ebd`, `880338a`) | The benchmark needs a running simulator; the proposal already allows a labelled estimate before that. Result carries `is_measured: false` | 2026-11-13 |
 | C2 | Estimate is a range of 80% to 120% of the point value, reserves one core, and names the limiting resource (`97f5ebd`) | Proposal risk is MEDIUM: an overestimate overloads a machine, so no unqualified number is shown | 2026-11-13 |
 | C3 | Network speed and public IP are manual configuration for now (`97f5ebd`) | Speed test and address detection deferred; bandwidth limit applies only when upload speed is set | 2026-11-13 |
+| G1 | Desktop companion is a Tauri 2 app, optional, excluded from the Cargo workspace (`e8ddfd8`) | Operator decision; one set of portal pages serves browser and control window, and `tray-icon` covers Windows, macOS and Linux. Needs WebKitGTK on Linux; GNOME needs a tray extension | 2026-11-13 |
+| G2 | Portal staff and sign-up passwords use argon2; sign-up passwords are hashed at registration (`ddba6d0`, `59eea64`) | Security review H3: plaintext in memory is not acceptable. TOTP rejects accounts that have a secret until implemented (H1), which fails closed | 2026-11-13 |
+| G3 | Portal follows the GridGate model: Admin/Operator/Viewer roles, sign-up with approval, map placement, one-command install (`ddba6d0`) | BSD-licensed model in the roadmap, so pages and flow can be adapted; roles enforced in code (H2) | 2026-11-13 |
+| G4 | Portal is not for public exposure until security review items M1 to M5 are fixed; restrict by network or proxy meanwhile | Review assessment; same arrangement as S5 | 2026-11-13 |
 
 ## Open questions
 
