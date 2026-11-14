@@ -8,8 +8,8 @@
 
 ## 2. Traits
 
-- [ ] 2.1 Define `PhysicsScene` and `PhysicsActor` from `SharedBase`, with no engine types in the signatures
-- [ ] 2.2 Null backend for tests
+- [x] 2.1 Define `PhysicsScene` and `PhysicsActor` from `SharedBase`, with no engine types in the signatures
+- [x] 2.2 Null backend for tests
 
 ## 3. Rapier backend
 
