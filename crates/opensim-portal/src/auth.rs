@@ -59,8 +59,9 @@ pub fn verify_password(account: &StaffAccount, password: &str) -> bool {
 }
 
 pub fn verify_totp(_account: &StaffAccount, _code: &str) -> bool {
-    // TODO: implement TOTP verification
-    true
+    // Reject all codes until TOTP verification is implemented.
+    // Enabling totp_secret on an account locks it out — by design.
+    false
 }
 
 #[derive(Deserialize)]

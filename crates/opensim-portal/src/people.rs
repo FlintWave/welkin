@@ -11,6 +11,13 @@ use std::sync::{Arc, Mutex};
 use crate::error::PortalError;
 use crate::sessions::RequireStaff;
 
+fn require_admin(staff: &RequireStaff) -> Result<(), PortalError> {
+    if !staff.0.role.can_manage_accounts() {
+        return Err(PortalError::Forbidden);
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignUpRequest {
     pub first_name: String,
@@ -211,9 +218,29 @@ where
     // TODO: send email confirmation
     tracing::info!(email = %req.email, "sign-up received; email confirmation not yet implemented");
 
+    let password_hash = {
+        use argon2::PasswordHasher;
+        let salt = argon2::password_hash::SaltString::generate(
+            &mut argon2::password_hash::rand_core::OsRng,
+        );
+        match argon2::Argon2::default().hash_password(req.password.as_bytes(), &salt) {
+            Ok(h) => h.to_string(),
+            Err(_) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({ "error": "internal error" })),
+                )
+                    .into_response();
+            }
+        }
+    };
+
     let signup = PendingSignUp {
         id: id.clone(),
-        request: req,
+        request: SignUpRequest {
+            password: password_hash,
+            ..req
+        },
         status: SignUpStatus::Pending,
         created_at: now,
     };
@@ -226,23 +253,29 @@ where
         .into_response()
 }
 
-async fn handle_list_signups<S>(_staff: RequireStaff, State(state): State<S>) -> Response
+async fn handle_list_signups<S>(staff: RequireStaff, State(state): State<S>) -> Response
 where
     S: Clone + Send + Sync + 'static + AsRef<SignUpStore>,
 {
+    if let Err(e) = require_admin(&staff) {
+        return e.into_response();
+    }
     let store: &SignUpStore = state.as_ref();
     let pending = store.list_pending();
     (StatusCode::OK, Json(serde_json::json!({ "signups": pending }))).into_response()
 }
 
 async fn handle_approve<S>(
-    _staff: RequireStaff,
+    staff: RequireStaff,
     State(state): State<S>,
     Path(id): Path<String>,
 ) -> Response
 where
     S: Clone + Send + Sync + 'static + AsRef<SignUpStore>,
 {
+    if let Err(e) = require_admin(&staff) {
+        return e.into_response();
+    }
     let store: &SignUpStore = state.as_ref();
     if store.update_status(&id, SignUpStatus::Approved) {
         // TODO: create UserAccount via opensim-data, send welcome email
@@ -254,13 +287,16 @@ where
 }
 
 async fn handle_reject<S>(
-    _staff: RequireStaff,
+    staff: RequireStaff,
     State(state): State<S>,
     Path(id): Path<String>,
 ) -> Response
 where
     S: Clone + Send + Sync + 'static + AsRef<SignUpStore>,
 {
+    if let Err(e) = require_admin(&staff) {
+        return e.into_response();
+    }
     let store: &SignUpStore = state.as_ref();
     if store.update_status(&id, SignUpStatus::Rejected) {
         (StatusCode::OK, Json(serde_json::json!({ "success": true }))).into_response()
@@ -270,13 +306,16 @@ where
 }
 
 async fn handle_search_accounts<S>(
-    _staff: RequireStaff,
+    staff: RequireStaff,
     State(_state): State<S>,
     Query(_q): Query<AccountSearchQuery>,
 ) -> Response
 where
     S: Clone + Send + Sync + 'static,
 {
+    if let Err(e) = require_admin(&staff) {
+        return e.into_response();
+    }
     // TODO: query UserAccountStore
     let accounts: Vec<AccountSummary> = Vec::new();
     (
@@ -287,37 +326,46 @@ where
 }
 
 async fn handle_get_account<S>(
-    _staff: RequireStaff,
+    staff: RequireStaff,
     State(_state): State<S>,
     Path(_id): Path<String>,
 ) -> Response
 where
     S: Clone + Send + Sync + 'static,
 {
+    if let Err(e) = require_admin(&staff) {
+        return e.into_response();
+    }
     // TODO: query UserAccountStore
     PortalError::NotFound.into_response()
 }
 
 async fn handle_suspend<S>(
-    _staff: RequireStaff,
+    staff: RequireStaff,
     State(_state): State<S>,
     Path(_id): Path<String>,
 ) -> Response
 where
     S: Clone + Send + Sync + 'static,
 {
+    if let Err(e) = require_admin(&staff) {
+        return e.into_response();
+    }
     // TODO: set UserLevel = -1 in UserAccountStore, audit log
     (StatusCode::OK, Json(serde_json::json!({ "success": true }))).into_response()
 }
 
 async fn handle_unsuspend<S>(
-    _staff: RequireStaff,
+    staff: RequireStaff,
     State(_state): State<S>,
     Path(_id): Path<String>,
 ) -> Response
 where
     S: Clone + Send + Sync + 'static,
 {
+    if let Err(e) = require_admin(&staff) {
+        return e.into_response();
+    }
     // TODO: restore UserLevel in UserAccountStore, audit log
     (StatusCode::OK, Json(serde_json::json!({ "success": true }))).into_response()
 }
