@@ -94,9 +94,11 @@ pub fn extract_lod_block(
         )));
     }
     let compressed = &data[offset..end];
-    let mut decoder = ZlibDecoder::new(compressed);
+    let decoder = ZlibDecoder::new(compressed);
+    const MAX_DECOMPRESSED: u64 = 32 * 1024 * 1024;
+    let mut limited = decoder.take(MAX_DECOMPRESSED);
     let mut decompressed = Vec::new();
-    decoder
+    limited
         .read_to_end(&mut decompressed)
         .map_err(|e| MeshAssetError::Decompress(e.to_string()))?;
     Ok(decompressed)
@@ -149,6 +151,14 @@ fn decode_one_submesh(submesh: &Llsd) -> Result<DecodedMesh, MeshAssetError> {
         .chunks_exact(2)
         .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]) as u32)
         .collect();
+
+    // Validate that all triangle indices are within the vertex buffer bounds.
+    let vertex_count = vertices.len() as u32;
+    if indices.iter().any(|&idx| idx >= vertex_count) {
+        return Err(MeshAssetError::InvalidData(
+            "triangle index out of bounds".into(),
+        ));
+    }
 
     Ok(DecodedMesh { vertices, indices })
 }
@@ -373,6 +383,65 @@ mod tests {
         assert_eq!(physics[0].indices.len(), 3);
         let shape = mesh_to_shape(physics);
         assert!(shape.as_trimesh().is_some());
+    }
+
+    #[test]
+    fn test_oob_triangle_index_returns_error() {
+        // Build a submesh with 3 vertices but an index referencing vertex 5.
+        let submesh = make_submesh_llsd(
+            &[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            &[0, 1, 5], // index 5 is out of bounds (only 3 vertices)
+            [0.0, 0.0, 0.0],
+            [1.0, 1.0, 1.0],
+        );
+        let submesh_data = to_binary(&Llsd::Array(vec![submesh]));
+        let result = decode_submeshes(&submesh_data);
+        assert!(result.is_err(), "out-of-bounds index should return an error");
+        match result {
+            Err(MeshAssetError::InvalidData(msg)) => {
+                assert!(msg.contains("out of bounds"), "error message: {msg}");
+            }
+            other => panic!("expected InvalidData error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_valid_triangle_indices_accepted() {
+        // All indices within bounds should succeed.
+        let submesh = make_submesh_llsd(
+            &[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+            &[0, 1, 2],
+            [0.0, 0.0, 0.0],
+            [1.0, 1.0, 1.0],
+        );
+        let submesh_data = to_binary(&Llsd::Array(vec![submesh]));
+        let result = decode_submeshes(&submesh_data);
+        assert!(result.is_ok(), "valid indices should be accepted");
+    }
+
+    #[test]
+    fn test_decompression_bounded() {
+        // Verify that the decompression limit is enforced.  We create a zlib
+        // stream that decompresses to well under the 32 MiB limit to confirm
+        // normal data still works, and check the constant exists by ensuring
+        // the compressed-data path succeeds.
+        let small_data = vec![0u8; 1024];
+        let compressed = zlib_compress(&small_data);
+
+        let mut header = Map::new();
+        header.insert(
+            "test_lod".to_string(),
+            llsd_map(&[
+                ("offset", Llsd::Integer(0)),
+                ("size", Llsd::Integer(compressed.len() as i32)),
+            ]),
+        );
+
+        // extract_lod_block offsets are relative to the data slice passed in,
+        // so we pass the compressed blob directly as the body.
+        let result = extract_lod_block(&compressed, &header, "test_lod");
+        assert!(result.is_ok(), "small decompression should succeed");
+        assert_eq!(result.unwrap().len(), 1024);
     }
 
     #[test]

@@ -169,17 +169,17 @@ impl ShapeCache {
 
     /// Look up a cached shape.  Returns `None` on a miss.
     pub fn get(&self, key: u64) -> Option<SharedShape> {
-        self.inner.lock().unwrap().get(&key).cloned()
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).get(&key).cloned()
     }
 
     /// Insert a shape into the cache, returning the previous value (if any).
     pub fn insert(&self, key: u64, shape: SharedShape) -> Option<SharedShape> {
-        self.inner.lock().unwrap().insert(key, shape)
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).insert(key, shape)
     }
 
     /// Number of cached entries.
     pub fn len(&self) -> usize {
-        self.inner.lock().unwrap().len()
+        self.inner.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
 
     /// Whether the cache is empty.
@@ -213,17 +213,17 @@ impl DecompCache {
 
     /// Look up a cached decomposition.  Returns `None` on a miss.
     pub fn get(&self, key: u64) -> Option<SharedShape> {
-        self.cache.lock().unwrap().get(&key).cloned()
+        self.cache.lock().unwrap_or_else(|e| e.into_inner()).get(&key).cloned()
     }
 
     /// Insert a decomposed shape into the cache.
     pub fn insert(&self, key: u64, shape: SharedShape) {
-        self.cache.lock().unwrap().insert(key, shape);
+        self.cache.lock().unwrap_or_else(|e| e.into_inner()).insert(key, shape);
     }
 
     /// Number of cached entries.
     pub fn len(&self) -> usize {
-        self.cache.lock().unwrap().len()
+        self.cache.lock().unwrap_or_else(|e| e.into_inner()).len()
     }
 
     /// Whether the cache is empty.
@@ -233,7 +233,7 @@ impl DecompCache {
 
     /// Drop all cached entries.
     pub fn clear(&self) {
-        self.cache.lock().unwrap().clear();
+        self.cache.lock().unwrap_or_else(|e| e.into_inner()).clear();
     }
 }
 
