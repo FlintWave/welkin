@@ -22,13 +22,13 @@
 
 ## 5. IAR
 
-- [ ] 5.1 IAR write: inventory folder-tree walk, item serialization (UserInventoryItemSerializer), permission filter, asset gathering
-- [ ] 5.2 IAR read: folder creation, item insertion, creator UUID resolution, handle missing assets gracefully
+- [x] 5.1 IAR write: inventory folder-tree walk, item serialization (UserInventoryItemSerializer), permission filter, asset gathering (21945b2: iar_write.rs, 18 tests)
+- [x] 5.2 IAR read: folder creation, item insertion, creator UUID resolution, handle missing assets gracefully (21945b2: iar_read.rs, 11 tests)
 
 ## 6. Cross-grid portability
 
-- [ ] 6.1 OspResolver: first.last to UUID mapping, write profiles during save, resolve during load, fallback to UserManagement service
-- [ ] 6.2 ExternalRepresentationUtils: rewrite creator/owner/lastOwner UUIDs on dearchive, handle HG-format UUIDs (uuid;uri)
+- [x] 6.1 OspResolver: first.last to UUID mapping, write profiles during save, resolve during load, fallback to UserManagement service (21945b2: osp_resolver.rs, 12 tests)
+- [x] 6.2 ExternalRepresentationUtils: rewrite creator/owner/lastOwner UUIDs on dearchive, handle HG-format UUIDs (uuid;uri) (21945b2: external_representation.rs, 17 tests)
 
 ## 7. Integration
 
