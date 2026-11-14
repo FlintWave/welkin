@@ -1,3 +1,6 @@
+mod lludp;
+mod pcampbot;
+
 use axum::{
     Router,
     extract::{Request, State},
@@ -10,6 +13,7 @@ use hyper::header::{HOST, HeaderName, HeaderValue};
 use hyper::{HeaderMap, Method, StatusCode, Uri};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::process;
 use tokio::net::TcpListener;
@@ -39,6 +43,34 @@ enum Commands {
         recordings: PathBuf,
         #[arg(long)]
         strict: bool,
+    },
+    LludpRecord {
+        #[arg(long, default_value = "0.0.0.0:9000")]
+        listen: SocketAddr,
+        #[arg(long)]
+        server: SocketAddr,
+        #[arg(long, default_value = "recordings")]
+        output: PathBuf,
+    },
+    LludpReplay {
+        #[arg(long)]
+        server: SocketAddr,
+        #[arg(long)]
+        recording: PathBuf,
+    },
+    Bot {
+        #[arg(long)]
+        pcampbot: PathBuf,
+        #[arg(long)]
+        login_uri: String,
+        #[arg(long, default_value = "Test")]
+        first_name: String,
+        #[arg(long, default_value = "Bot")]
+        last_name: String,
+        #[arg(long, default_value = "password")]
+        password: String,
+        #[arg(long, default_value = "1")]
+        count: usize,
     },
 }
 
@@ -102,6 +134,61 @@ async fn main() {
             strict,
         } => {
             run_replay(target, recordings, strict).await;
+        }
+        Commands::LludpRecord {
+            listen,
+            server,
+            output,
+        } => {
+            if let Err(e) = lludp::lludp_record(listen, server, output).await {
+                error!("LLUDP record failed: {e}");
+                process::exit(1);
+            }
+        }
+        Commands::LludpReplay { server, recording } => {
+            match lludp::lludp_replay(server, recording).await {
+                Ok((matched, mismatched)) => {
+                    println!("\nLLUDP: {matched} matched, {mismatched} mismatched");
+                    if mismatched > 0 {
+                        process::exit(1);
+                    }
+                }
+                Err(e) => {
+                    error!("LLUDP replay failed: {e}");
+                    process::exit(1);
+                }
+            }
+        }
+        Commands::Bot {
+            pcampbot,
+            login_uri,
+            first_name,
+            last_name,
+            password,
+            count,
+        } => {
+            match pcampbot::run_pcampbot(
+                pcampbot, login_uri, first_name, last_name, password, count,
+            )
+            .await
+            {
+                Ok(result) => {
+                    println!(
+                        "\npCampBot: {} connected, {} failed",
+                        result.connected, result.failed
+                    );
+                    for err in &result.errors {
+                        println!("  error: {err}");
+                    }
+                    if result.failed > 0 {
+                        process::exit(1);
+                    }
+                }
+                Err(e) => {
+                    error!("pCampBot failed: {e}");
+                    process::exit(1);
+                }
+            }
         }
     }
 }
