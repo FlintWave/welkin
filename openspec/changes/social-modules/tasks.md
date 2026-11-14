@@ -6,9 +6,9 @@
 
 ## 2. Groups region module
 
-- [ ] 2.1 GroupsModule (region-side): IGroupsModule trait, handle group packets (CreateGroupRequest, UpdateGroupInfo, JoinGroupRequest, LeaveGroupRequest, GroupRoleDataRequest, etc.), caps for GroupActiveProposals/GroupVoteHistory/GroupAccountSummary
-- [ ] 2.2 GroupsMessagingModule: group IM routing via MessageTransferModule, group notices with attachments, session-based group chat
-- [ ] 2.3 HGGroupsServiceConnector: Hypergrid group federation, ForeignImporter for cross-grid membership, RemoteConnectorCacheWrapper for caching
+- [x] 2.1 GroupsModule (region-side): IGroupsModule trait, handle group packets (CreateGroupRequest, UpdateGroupInfo, JoinGroupRequest, LeaveGroupRequest, GroupRoleDataRequest, etc.), caps for GroupActiveProposals/GroupVoteHistory/GroupAccountSummary (4061c14: groups/mod.rs 1,497 lines, 20 tests)
+- [x] 2.2 GroupsMessagingModule: group IM routing via MessageTransferModule, group notices with attachments, session-based group chat (4061c14: groups/messaging.rs 756 lines, 16 tests)
+- [x] 2.3 HGGroupsServiceConnector: Hypergrid group federation, ForeignImporter for cross-grid membership, RemoteConnectorCacheWrapper for caching (4061c14: groups/hg_connector.rs 1,262 lines, 20 tests)
 
 ## 3. OfflineIM
 
