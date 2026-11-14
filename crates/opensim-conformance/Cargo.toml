@@ -23,8 +23,10 @@ http-body-util = "0.1"
 bytes = "1"
 
 [dev-dependencies]
+aurora-llsd = { workspace = true }
 aurora-msg = { workspace = true }
 aurora-net = { workspace = true }
+opensim-llsd = { path = "../opensim-llsd" }
 uuid = { workspace = true }
 
 [lints]

@@ -1950,6 +1950,7 @@ dependencies = [
 name = "opensim-conformance"
 version = "0.1.0"
 dependencies = [
+ "aurora-llsd",
  "aurora-msg",
  "aurora-net",
  "axum",
@@ -1958,6 +1959,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "opensim-llsd",
  "serde",
  "serde_json",
  "tokio",

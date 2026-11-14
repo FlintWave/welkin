@@ -166,38 +166,67 @@ pub fn build_fault(code: i32, message: &str) -> String {
     s
 }
 
+#[derive(Debug)]
+pub struct XmlRpcFault {
+    pub code: i32,
+    pub message: String,
+}
+
+impl std::fmt::Display for XmlRpcFault {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "XML-RPC fault {}: {}", self.code, self.message)
+    }
+}
+
+impl std::error::Error for XmlRpcFault {}
+
+/// Build a `methodCall` document from method name and parameters.
+pub fn build_call(method: &str, params: &[Llsd]) -> String {
+    let mut s = String::from("<?xml version=\"1.0\"?><methodCall><methodName>");
+    xml::escape(method, &mut s);
+    s.push_str("</methodName><params>");
+    for p in params {
+        s.push_str("<param>");
+        write_value(p, &mut s);
+        s.push_str("</param>");
+    }
+    s.push_str("</params></methodCall>");
+    s
+}
+
+/// Parse a `methodResponse` document, returning the result value or a fault.
+pub fn parse_response(body: &[u8]) -> Result<Llsd, XmlRpcFault> {
+    let root = xml::parse(body).map_err(|e| XmlRpcFault {
+        code: -1,
+        message: e.to_string(),
+    })?;
+    if let Some(fault) = root.child("fault") {
+        if let Some(val) = fault.child("value") {
+            let v = parse_value(val);
+            return Err(XmlRpcFault {
+                code: v["faultCode"].as_i32(),
+                message: v["faultString"].to_string_value(),
+            });
+        }
+        return Err(XmlRpcFault {
+            code: -1,
+            message: "malformed fault".into(),
+        });
+    }
+    root.child("params")
+        .and_then(|p| p.child("param"))
+        .and_then(|p| p.child("value"))
+        .map(parse_value)
+        .ok_or_else(|| XmlRpcFault {
+            code: -1,
+            message: "no result in response".into(),
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use aurora_llsd::llsd_map;
-
-    fn build_call(method: &str, params: &[Llsd]) -> String {
-        let mut s = String::from("<?xml version=\"1.0\"?><methodCall><methodName>");
-        xml::escape(method, &mut s);
-        s.push_str("</methodName><params>");
-        for p in params {
-            s.push_str("<param>");
-            write_value(p, &mut s);
-            s.push_str("</param>");
-        }
-        s.push_str("</params></methodCall>");
-        s
-    }
-
-    fn parse_response(body: &[u8]) -> Result<Llsd, (i32, String)> {
-        let root = xml::parse(body).unwrap();
-        assert_eq!(root.name, "methodResponse");
-        if let Some(fault) = root.child("fault") {
-            let v = parse_value(fault.child("value").unwrap());
-            return Err((v["faultCode"].as_i32(), v["faultString"].to_string_value()));
-        }
-        let v = root
-            .child("params")
-            .and_then(|p| p.child("param"))
-            .and_then(|p| p.child("value"))
-            .unwrap();
-        Ok(parse_value(v))
-    }
 
     #[test]
     fn roundtrip_call() {
@@ -264,9 +293,9 @@ mod tests {
     #[test]
     fn fault_is_valid() {
         let doc = build_fault(4, "Too <many> & \"bad\"");
-        let (code, msg) = parse_response(doc.as_bytes()).unwrap_err();
-        assert_eq!(code, 4);
-        assert_eq!(msg, "Too <many> & \"bad\"");
+        let err = parse_response(doc.as_bytes()).unwrap_err();
+        assert_eq!(err.code, 4);
+        assert_eq!(err.message, "Too <many> & \"bad\"");
     }
 
     #[test]
