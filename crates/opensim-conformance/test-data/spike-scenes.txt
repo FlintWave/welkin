@@ -1,0 +1,42 @@
+# Spike scene recording instructions
+#
+# Prerequisites:
+# 1. Build C# OpenSim 0.9.3.0 with the TrajectoryRecorder patch
+#    (SharedBase/TrajectoryRecorder.cs + ODEScene.cs hooks)
+# 2. Start with: OPENSIM_TRAJECTORY_FILE=spike-<scene>.jsonl ./OpenSim
+# 3. Run the console commands for each scene below
+# 4. Wait for the scene to settle (60 seconds per scene)
+# 5. Shut down to flush the trajectory file
+# 6. Copy the .jsonl files to this directory
+#
+# Scene 1: Box drop (gravity, collision, resting contact)
+# Creates a single box at height 50 and lets it fall onto terrain.
+create object box 128 128 50
+# Wait 10 seconds for it to fall and come to rest.
+#
+# Scene 2: Box stack (stacking stability)
+# Creates a stack of 10 boxes, each 1m, centered on 128,128.
+# In-world: Use "create object box" at heights 26, 27, 28, ..., 35
+create object box 128 128 26
+create object box 128 128 27
+create object box 128 128 28
+create object box 128 128 29
+create object box 128 128 30
+create object box 128 128 31
+create object box 128 128 32
+create object box 128 128 33
+create object box 128 128 34
+create object box 128 128 35
+# Wait 60 seconds for stability check.
+#
+# Scene 3: Fast object (CCD test)
+# Create a small sphere and give it high velocity toward a thin wall.
+# This requires script or manual setup - the console cannot set velocity.
+# Use LSL: llSetVelocity(<50,0,0>, FALSE) on a 0.1m sphere aimed at a 0.05m wall.
+#
+# Scene 4: Avatar walk (capsule controller)
+# Log in a test avatar with pCampBot and have it walk.
+# Use: osim-conform bot --pcampbot <path> --login-uri http://localhost:9100
+#
+# These trajectory files can be loaded by the Rust TrajectoryRecording::load()
+# and compared against Rapier simulation output.
