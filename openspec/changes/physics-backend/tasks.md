@@ -23,7 +23,7 @@
 ## 4. Engine-independent behaviour
 
 - [x] 4.1 Vehicle model from `ODEDynamics.cs`
-- [ ] 4.2 Avatar controller from `ODECharacter.cs`, including sit
+- [x] 4.2 Avatar controller from `ODECharacter.cs`, including sit
 - [ ] 4.3 Move-to-target, hover, buoyancy, look-at, applied force, torque and impulse
 - [ ] 4.4 Keyframed motion
 

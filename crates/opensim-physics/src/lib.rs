@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+pub mod avatar;
 pub mod null;
 pub mod vehicle;
 
