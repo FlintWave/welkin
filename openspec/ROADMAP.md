@@ -107,7 +107,7 @@ when its phase starts, so later rows are placeholders until then.
 | 6 | Hypergrid | `hypergrid` | proposed |
 | 6 | Grid profiles: standalone, own grid, OSgrid, custom | `external-grid-mode` | accepted |
 | 6 | WebRTC voice | `webrtc-voice` | proposed |
-| 7 | Migration tooling, load tests, first production grid | `cutover` | planned |
+| 7 | Migration tooling, load tests, first production grid | `cutover` | proposed |
 
 ## Order and dependencies
 
