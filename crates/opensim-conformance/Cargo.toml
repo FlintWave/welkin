@@ -22,5 +22,8 @@ hyper-util = { version = "0.1", features = ["client-legacy", "tokio"] }
 http-body-util = "0.1"
 bytes = "1"
 
+[dev-dependencies]
+aurora-msg = { workspace = true }
+
 [lints]
 workspace = true
