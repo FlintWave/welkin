@@ -1,7 +1,7 @@
 ## 1. Module framework
 
-- [ ] 1.1 RegionModule trait, ModuleType enum, ModuleRegistry with TypeId-keyed interface lookup, SceneEvents typed event bus
-- [ ] 1.2 Module lifecycle integration: Scene calls initialise/add_region/remove_region/close; CapsModule, InterfaceCommanderModule, DynAttrsModule, ServiceThrottleModule
+- [x] 1.1 RegionModule trait, ModuleType enum, ModuleRegistry with TypeId-keyed interface lookup, SceneEvents typed event bus (d3f148c: 4 source files, 14 tests)
+- [x] 1.2 Module lifecycle integration: Scene calls initialise/add_region/remove_region/close; CapsModule, DynAttrsModule, ServiceThrottleModule (d3f148c: skeleton implementations with config reading)
 
 ## 2. Land management
 
