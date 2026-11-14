@@ -19,7 +19,7 @@
 - [x] 3.1 Generate function tables and constants from `lsl-definitions` (5357247: 100+ functions, 120+ constants, 35 events, LslType/LslValue type system, 16 tests)
 - [ ] 3.2 Implement `ll*` functions by area: math and strings, lists, objects and prims, physics, communication, inventory, HTTP, sensors, permissions, land
 - [ ] 3.3 `os*` extension library
-- [ ] 3.4 Events and detected parameters
+- [x] 3.4 Events and detected parameters (ee60389: 16 llDetected* functions, DetectedInfo, EventContext, dispatch_event, 11 tests)
 
 ## 4. Proof
 
