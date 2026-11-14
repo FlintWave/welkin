@@ -104,7 +104,7 @@ when its phase starts, so later rows are placeholders until then.
 | 5 | Land, permissions, estate, inventory, attachments, chat, IM, map | `region-modules` | accepted |
 | 5 | OAR and IAR archives | `archives` | proposed |
 | 6 | Groups, OfflineIM, profiles, NPCs | `social-modules` | proposed |
-| 6 | Hypergrid | `hypergrid` | planned |
+| 6 | Hypergrid | `hypergrid` | proposed |
 | 6 | Grid profiles: standalone, own grid, OSgrid, custom | `external-grid-mode` | accepted |
 | 6 | WebRTC voice | `webrtc-voice` | proposed |
 | 7 | Migration tooling, load tests, first production grid | `cutover` | planned |
