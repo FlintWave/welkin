@@ -16,7 +16,7 @@
 
 ## 3. Proof
 
-- [ ] 3.1 Replay tests pass for every handler
-- [ ] 3.2 A C# simulator runs against the Rust `robust` and `pCampBot` logs in, rezzes and teleports
-- [ ] 3.3 Aurora Viewer logs in to the mixed grid
-- [ ] 3.4 Second review of authentication, inventory writes and asset writes
+- [x] 3.1 Replay tests pass for every handler
+- [x] 3.2 A C# simulator runs against the Rust `robust` and `pCampBot` logs in, rezzes and teleports
+- [x] 3.3 Aurora Viewer logs in to the mixed grid
+- [x] 3.4 Second review of authentication, inventory writes and asset writes
