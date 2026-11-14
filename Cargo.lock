@@ -2194,7 +2194,9 @@ dependencies = [
 name = "opensim-region"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "clap",
+ "opensim-caps",
  "opensim-config",
  "opensim-data",
  "opensim-modules",
@@ -2203,6 +2205,7 @@ dependencies = [
  "opensim-runtime",
  "opensim-scene",
  "tokio",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
 ]

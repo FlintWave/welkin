@@ -10,6 +10,7 @@ opensim-config = { path = "../opensim-config" }
 opensim-runtime = { path = "../opensim-runtime" }
 opensim-scene = { path = "../opensim-scene" }
 opensim-net = { path = "../opensim-net" }
+opensim-caps = { path = "../opensim-caps" }
 opensim-physics-rapier = { path = "../opensim-physics-rapier" }
 opensim-modules = { path = "../opensim-modules" }
 opensim-data = { path = "../opensim-data" }
@@ -17,6 +18,8 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 clap = { workspace = true }
+tokio-util = { workspace = true }
+axum = { workspace = true }
 
 [lints]
 workspace = true

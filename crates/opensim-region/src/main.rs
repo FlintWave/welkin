@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use clap::Parser;
 use tracing::{error, info, warn};
+use tokio_util::sync::CancellationToken;
 
 use opensim_config::Config;
 use opensim_data::DataPool;
@@ -161,13 +163,64 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    // --- Cancellation token for coordinated shutdown ---
+    let cancel = CancellationToken::new();
+
+    // --- LLUDP server ---
+    let udp_addr = SocketAddr::from(([0, 0, 0, 0], region_config.internal_port));
+    let udp_server = opensim_net::server::LLUDPServer::bind(udp_addr).await?;
+
+    let (msg_tx, msg_rx) = tokio::sync::mpsc::unbounded_channel();
+    let udp_cancel = cancel.clone();
+    let udp_handle = tokio::spawn(async move {
+        udp_server.run(msg_tx, udp_cancel).await;
+    });
+
+    info!(addr = %udp_addr, "LLUDP receive loop started");
+
+    // --- Capability HTTP server ---
+    let caps_port = region_config.internal_port.wrapping_add(1);
+    let caps_addr = SocketAddr::from(([0, 0, 0, 0], caps_port));
+
+    let cap_server = opensim_caps::server::CapabilityServer::new();
+
+    // Build the caps router: merge per-agent seed-cap router with the static
+    // capability handler routes (GetTexture, GetMesh, SimulatorFeatures, etc.).
+    let mut caps_router = cap_server.into_router();
+    for (name, method_router) in opensim_caps::handlers::cap_routes() {
+        caps_router = caps_router.route(&format!("/{name}"), method_router);
+    }
+
+    let caps_listener = tokio::net::TcpListener::bind(caps_addr).await?;
+    info!(addr = %caps_addr, "Capability HTTP server listening");
+
+    let caps_cancel = cancel.clone();
+    let caps_handle = tokio::spawn(async move {
+        axum::serve(caps_listener, caps_router)
+            .with_graceful_shutdown(async move {
+                caps_cancel.cancelled().await;
+            })
+            .await
+            .ok();
+    });
+
     info!(
         region = %scene.region_info.region_name,
         "Region simulator started successfully"
     );
 
-    // The actual event loop will be wired in a later task.
-    // For now, we just demonstrate that the startup pipeline works.
+    // --- Wait for shutdown signal ---
+    opensim_runtime::shutdown_signal().await;
+    info!("Initiating graceful shutdown");
+
+    cancel.cancel();
+
+    // Drop the receiver so the LLUDP task's sender will see closure.
+    drop(msg_rx);
+
+    // Wait for background tasks to finish.
+    let _ = udp_handle.await;
+    let _ = caps_handle.await;
 
     scene.shutdown();
     info!("Region simulator shut down");
@@ -262,5 +315,40 @@ mod tests {
         assert_eq!(info.external_host_name, "127.0.0.1");
         assert_eq!(info.internal_port, 9000);
         assert!(!info.region_id.is_nil());
+    }
+
+    #[test]
+    fn test_server_address_construction() {
+        let port: u16 = 9000;
+        let addr = SocketAddr::from(([0, 0, 0, 0], port));
+        assert_eq!(addr.port(), 9000);
+        assert!(addr.ip().is_unspecified());
+
+        // Caps port is internal_port + 1
+        let caps_port = port.wrapping_add(1);
+        let caps_addr = SocketAddr::from(([0, 0, 0, 0], caps_port));
+        assert_eq!(caps_addr.port(), 9001);
+
+        // Edge case: port 65535 wraps to 0
+        let max_port: u16 = 65535;
+        let wrapped = max_port.wrapping_add(1);
+        assert_eq!(wrapped, 0);
+    }
+
+    #[test]
+    fn test_cancellation_token_propagates() {
+        let parent = CancellationToken::new();
+        let child = parent.child_token();
+        let clone = parent.clone();
+
+        assert!(!parent.is_cancelled());
+        assert!(!child.is_cancelled());
+        assert!(!clone.is_cancelled());
+
+        parent.cancel();
+
+        assert!(parent.is_cancelled());
+        assert!(child.is_cancelled());
+        assert!(clone.is_cancelled());
     }
 }
