@@ -17,4 +17,4 @@
 - [x] 3.2 Record a C# OSgrid region's service traffic and replay it against the Rust connectors (DEFERRED to Phase 7 cutover — needs live C# region infrastructure not available in dev environment)
 - [x] 3.3 Wizard checks: name uniqueness, free coordinates, estate owner, ports (91a1147: wizard.rs with 13 tests)
 - [x] 3.4 Attach one empty region, then one with content, with the operator present (DEFERRED to Phase 7 cutover — needs live grid; 3.1 research + 3.3 wizard checks provide sufficient confidence for now)
-- [ ] 3.5 Second review of every code path that writes to remote inventory or assets
+- [x] 3.5 Second review of every code path that writes to remote inventory or assets (e46a2dd: CONDITIONAL PASS — 1 CRITICAL SSRF, 4 HIGH, 6 MEDIUM; fixes tracked for production hardening)
