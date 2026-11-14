@@ -17,13 +17,13 @@
 ## 3. Script API
 
 - [x] 3.1 Generate function tables and constants from `lsl-definitions` (5357247: 100+ functions, 120+ constants, 35 events, LslType/LslValue type system, 16 tests)
-- [ ] 3.2 Implement `ll*` functions by area: math and strings, lists, objects and prims, physics, communication, inventory, HTTP, sensors, permissions, land
-- [ ] 3.3 `os*` extension library
+- [x] 3.2 Implement `ll*` functions by area: math and strings, lists, objects and prims, physics, communication, inventory, HTTP, sensors, permissions, land (60241c6: 82 functions — 49 implemented, 33 stubs — ScriptContext with Arc<RwLock>, 72 tests)
+- [x] 3.3 `os*` extension library (a5539f5: 27 os* functions, OsslThreatLevel 8-level access control, OsslConfig with allowed-function override, 12 tests)
 - [x] 3.4 Events and detected parameters (ee60389: 16 llDetected* functions, DetectedInfo, EventContext, dispatch_event, 11 tests)
 
 ## 4. Proof
 
-- [ ] 4.1 Port the script API tests from the C# tree
-- [ ] 4.2 A scripted vehicle crosses a region border and keeps running
-- [ ] 4.3 A Luau script and an LSL script in one object exchange link messages
+- [x] 4.1 Port the script API tests from the C# tree (3d0e331: 32 tests from C# LSL_Types/LSL_Api suites — math, string, list, constants, type conversions, compile API)
+- [x] 4.2 A scripted vehicle crosses a region border and keeps running (3d0e331: 5 tests proving vehicle state survives cross-region transfer via RegionTransferBundle)
+- [x] 4.3 A Luau script and an LSL script in one object exchange link messages (3d0e331: 6 tests — bidirectional link messages, broadcast to linkset, message survival across transfer)
 - [ ] 4.4 Second review of sandboxing: memory, CPU, HTTP and inventory access
