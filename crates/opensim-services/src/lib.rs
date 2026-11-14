@@ -15,3 +15,4 @@ pub mod agentprefs;
 pub mod map;
 pub mod estate;
 pub mod simulation;
+pub mod login;
