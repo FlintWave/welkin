@@ -14,6 +14,7 @@ pub mod environment;
 pub mod estate;
 pub mod events;
 pub mod groups;
+pub mod hg;
 pub mod inventory;
 pub mod irc_bridge;
 pub mod land;
@@ -26,6 +27,7 @@ pub mod permissions;
 pub mod profiles;
 pub mod registry;
 pub mod transfer;
+pub mod voice;
 pub mod world_map;
 pub mod framework;
 

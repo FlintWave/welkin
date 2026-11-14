@@ -18,6 +18,7 @@ pub mod agent_prefs;
 pub mod migrations;
 pub mod simulation;
 pub mod groups;
+pub mod hg_traveling_data;
 
 pub use pool::DataPool;
 
