@@ -25,5 +25,5 @@
 ## 5. Proof
 
 - [x] 5.1 Test bot on `aurora-net`
-- [ ] 5.2 The bot completes a login and circuit handshake with the C# simulator
+- [x] 5.2 The bot completes a login and circuit handshake with the C# simulator
 - [ ] 5.3 Fuzz targets for the server-side decoders
