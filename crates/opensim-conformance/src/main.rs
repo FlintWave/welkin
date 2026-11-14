@@ -1,5 +1,6 @@
 mod lludp;
 mod pcampbot;
+pub mod trajectory;
 
 use axum::{
     Router,
