@@ -2386,16 +2386,20 @@ dependencies = [
 name = "opensim-modules"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "bitflags 2.13.2",
+ "http-body-util",
  "irc",
  "opensim-data",
  "opensim-scene",
  "opensim-services",
  "opensim-types",
  "parking_lot 0.12.5",
+ "sqlx",
  "thiserror 2.0.21",
  "tiny-skia",
  "tokio",
+ "tower",
  "tracing",
  "uuid",
 ]
