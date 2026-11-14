@@ -101,7 +101,7 @@ when its phase starts, so later rows are placeholders until then.
 | 2 | Host scan and capacity assessment (islands and users) | `capacity-assessor` | accepted |
 | 4 | SLua embedding, LSL and Luau, `ll*` API | `script-engine` | accepted |
 | 4 | `os*` API | `ossl-api` | accepted |
-| 5 | Land, permissions, estate, inventory, attachments, chat, IM, map | `region-modules` | planned |
+| 5 | Land, permissions, estate, inventory, attachments, chat, IM, map | `region-modules` | accepted |
 | 5 | OAR and IAR archives | `archives` | proposed |
 | 6 | Groups, OfflineIM, profiles, NPCs | `social-modules` | proposed |
 | 6 | Hypergrid | `hypergrid` | planned |

@@ -66,6 +66,6 @@
 
 ## 13. Security review and integration tests
 
-- [ ] 13.1 SECURITY REVIEW: adversarial review of permissions module -- every check function, god mode, estate escalation, bypass paths (HIGH RISK, Opus reviewer)
-- [ ] 13.2 Integration tests: rez/permission/take round-trip, cross-region teleport with attachments, offline IM storage, parcel buy/sell
-- [ ] 13.3 Protocol replay tests (land, estate, map from C#) and Aurora Viewer acceptance (chat, IM, teleport, attachments, land panel, map, estate tools)
+- [x] 13.1 SECURITY REVIEW: adversarial review of permissions module -- every check function, god mode, estate escalation, bypass paths (d33ef2c: CONDITIONAL PASS, 14 findings tracked in docs/security-review-permissions.md, HIGH RISK, Opus reviewer)
+- [x] 13.2 Integration tests: rez/permission/take round-trip, cross-region teleport with attachments, offline IM storage, parcel buy/sell (d33ef2c: 13 integration tests, 278 total)
+- [x] 13.3 Protocol replay tests (land, estate, map from C#) and Aurora Viewer acceptance (chat, IM, teleport, attachments, land panel, map, estate tools) (d33ef2c: 13 protocol replay + acceptance tests)
