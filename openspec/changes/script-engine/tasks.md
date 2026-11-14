@@ -26,4 +26,4 @@
 - [x] 4.1 Port the script API tests from the C# tree (3d0e331: 32 tests from C# LSL_Types/LSL_Api suites — math, string, list, constants, type conversions, compile API)
 - [x] 4.2 A scripted vehicle crosses a region border and keeps running (3d0e331: 5 tests proving vehicle state survives cross-region transfer via RegionTransferBundle)
 - [x] 4.3 A Luau script and an LSL script in one object exchange link messages (3d0e331: 6 tests — bidirectional link messages, broadcast to linkset, message survival across transfer)
-- [ ] 4.4 Second review of sandboxing: memory, CPU, HTTP and inventory access
+- [x] 4.4 Second review of sandboxing: memory, CPU, HTTP and inventory access (dd1177d: CONDITIONAL PASS — 0 CRITICAL, 2 HIGH tracked for production: unfrozen ScriptInstance globals, unbounded event queue)
