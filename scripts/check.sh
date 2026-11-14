@@ -10,9 +10,9 @@ run() {
     printf '\n=== %s ===\n' "$1"
     shift
     if "$@"; then
-        ((pass++))
+        pass=$((pass + 1))
     else
-        ((fail++))
+        fail=$((fail + 1))
     fi
 }
 
