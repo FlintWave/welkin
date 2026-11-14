@@ -15,7 +15,7 @@
 
 - [x] 3.1 Prims, linksets as compound bodies, physics shape types (prim, convex, none)
 - [x] 3.2 Terrain heightfield and water level
-- [ ] 3.3 Collision events, volume detect, top colliders
+- [x] 3.3 Collision events, volume detect, top colliders
 - [ ] 3.4 Ray, box, sphere and plane probes with filter flags
 - [ ] 3.5 Materials: friction, restitution, density, gravity multiplier
 - [ ] 3.6 Snapshot and restore

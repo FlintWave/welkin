@@ -57,6 +57,7 @@ pub struct RapierActor {
     children: Vec<u32>,
     pending_forces: Vec<(Vec3, bool)>,
     pending_torques: Vec<(Vec3, bool)>,
+    collision_score: f32,
     pub shape_type: PhysicsShapeType,
 }
 
@@ -95,6 +96,7 @@ impl RapierActor {
             children: Vec::new(),
             pending_forces: Vec::new(),
             pending_torques: Vec::new(),
+            collision_score: 0.0,
             shape_type: PhysicsShapeType::Prim,
         }
     }
@@ -298,15 +300,17 @@ impl RapierPhysicsScene {
                 Some(a) if a.dirty || !a.pending_forces.is_empty() || !a.pending_torques.is_empty() => a,
                 _ => continue,
             };
-            let handle = actor.body_handle;
+            let body_handle = actor.body_handle;
+            let coll_handle = actor.collider_handle;
             let pos = actor.position;
             let vel = actor.velocity;
             let ori = actor.orientation;
+            let is_phantom = actor.phantom;
             let forces: Vec<(Vec3, bool)> = actor.pending_forces.clone();
             let torques: Vec<(Vec3, bool)> = actor.pending_torques.clone();
             let was_dirty = actor.dirty;
 
-            if let Some(body) = self.bodies.get_mut(handle) {
+            if let Some(body) = self.bodies.get_mut(body_handle) {
                 if was_dirty {
                     body.set_translation(to_rapier(pos), true);
                     body.set_linvel(to_rapier(vel), true);
@@ -320,6 +324,12 @@ impl RapierPhysicsScene {
                 }
             }
 
+            if was_dirty {
+                if let Some(coll) = self.colliders.get_mut(coll_handle) {
+                    coll.set_sensor(is_phantom);
+                }
+            }
+
             if let Some(a) = self.actors.get_mut(&id) {
                 a.dirty = false;
                 a.pending_forces.clear();
@@ -330,10 +340,46 @@ impl RapierPhysicsScene {
 
     fn sync_from_rapier(&mut self) {
         for actor in self.actors.values_mut() {
+            actor.colliding = false;
+            actor.colliding_ground = false;
             if let Some(body) = self.bodies.get(actor.body_handle) {
                 actor.position = from_rapier(body.translation());
                 actor.velocity = from_rapier(body.linvel());
                 actor.orientation = from_rapier_quat(*body.rotation());
+            }
+        }
+
+        // Build collider→actor lookup for contact processing
+        let coll_to_actor: HashMap<ColliderHandle, u32> = self
+            .actors
+            .values()
+            .map(|a| (a.collider_handle, a.local_id))
+            .collect();
+
+        for pair in self.narrow_phase.contact_pairs() {
+            if !pair.has_any_active_contact() {
+                continue;
+            }
+            let id1 = coll_to_actor.get(&pair.collider1).copied();
+            let id2 = coll_to_actor.get(&pair.collider2).copied();
+
+            if let Some(id) = id1 {
+                if let Some(a) = self.actors.get_mut(&id) {
+                    a.colliding = true;
+                    a.collision_score += 1.0;
+                    if id2.is_none() {
+                        a.colliding_ground = true;
+                    }
+                }
+            }
+            if let Some(id) = id2 {
+                if let Some(a) = self.actors.get_mut(&id) {
+                    a.colliding = true;
+                    a.collision_score += 1.0;
+                    if id1.is_none() {
+                        a.colliding_ground = true;
+                    }
+                }
             }
         }
     }
@@ -567,7 +613,15 @@ impl PhysicsScene for RapierPhysicsScene {
     }
 
     fn get_top_colliders(&self) -> Vec<(u32, f32)> {
-        Vec::new()
+        let mut scored: Vec<(u32, f32)> = self
+            .actors
+            .values()
+            .filter(|a| a.collision_score > 0.0)
+            .map(|a| (a.local_id, a.collision_score))
+            .collect();
+        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        scored.truncate(25);
+        scored
     }
 
     fn raycast(
