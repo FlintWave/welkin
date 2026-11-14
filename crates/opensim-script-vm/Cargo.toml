@@ -8,6 +8,7 @@ publish.workspace = true
 [dependencies]
 opensim-types = { path = "../opensim-types" }
 opensim-script-compiler = { path = "../opensim-script-compiler" }
+mlua = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
