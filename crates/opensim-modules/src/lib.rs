@@ -7,14 +7,18 @@
 //! and skeleton module implementations.
 
 pub mod attachments;
+pub mod chat;
+pub mod environment;
 pub mod estate;
 pub mod events;
 pub mod inventory;
 pub mod land;
 pub mod lifecycle;
+pub mod messaging;
 pub mod module;
 pub mod permissions;
 pub mod registry;
+pub mod world_map;
 
 // Re-exports for convenience.
 pub use attachments::{AttachmentInfo, AttachmentPoint, AttachmentsModule};
@@ -28,12 +32,27 @@ pub use land::{
     DwellModule, LandData, LandManagementModule, LandParcel, ParcelGrid, PrimCountModule,
     PrimCounts,
 };
+pub use chat::{ChatMessage, ChatModule, ChatSourceType, ChatType, DEBUG_CHANNEL, MAX_MESSAGE_LENGTH};
+pub use environment::{
+    AccessModule, ConfigurableWind, EnvironmentSettings, LightShareModule, MediaEntry, MediaModule,
+    RegionAccessFlags, RegionReadyModule, RestartModule, SceneSerialiser, SimpleRandomWind,
+    SoundFlags, SoundModule, SoundTrigger, VegetationModule, WindModel, WindModule,
+    WindlightPreset,
+};
 pub use lifecycle::{CapsModule, DynAttrsModule, ServiceThrottleModule};
+pub use messaging::{
+    GridInstantMessage, IMDialog, MessageTransferModule, MuteEntry, MuteListModule, MuteType,
+    OfflineMessageModule, PresenceModule,
+};
 pub use module::{ModuleConfig, ModuleError, ModuleType, RegionModule};
 pub use permissions::{
     checks::ObjectPerms, DefaultPermissionsModule, PermissionsConfig, UserSet,
 };
 pub use registry::{ModuleRegistry, SceneRef};
+pub use world_map::{
+    map_image::{MapImageModule, MapTileConfig, ShadedTerrainRenderer, TerrainRenderer},
+    MapBlock, MapItem, MapItemType, MapSearchModule, SimAccess, WorldMapModule,
+};
 
 #[cfg(test)]
 mod tests {
@@ -1704,5 +1723,1075 @@ mod tests {
             Uuid::nil(),
             Some(&parcel),
         ));
+    }
+
+    // ===================================================================
+    // World-map module tests (section 8)
+    // ===================================================================
+
+    use crate::world_map::{
+        MapBlock, MapItem, MapItemType, MapSearchModule as MapSearch,
+        SimAccess, WorldMapModule,
+    };
+    use crate::world_map::map_image::{
+        MapImageModule, MapTileConfig, ShadedTerrainRenderer, TerrainRenderer,
+    };
+
+    // -- 101. SimAccess from_u8 roundtrip ------------------------------------
+
+    #[test]
+    fn sim_access_from_u8_roundtrip() {
+        assert_eq!(SimAccess::from_u8(13), SimAccess::PG);
+        assert_eq!(SimAccess::from_u8(21), SimAccess::Mature);
+        assert_eq!(SimAccess::from_u8(42), SimAccess::Adult);
+        assert_eq!(SimAccess::from_u8(254), SimAccess::Down);
+        assert_eq!(SimAccess::from_u8(255), SimAccess::NonExistent);
+        // Unknown values map to Unknown.
+        assert_eq!(SimAccess::from_u8(99), SimAccess::Unknown);
+    }
+
+    // -- 102. MapBlock construction and terminal sentinel ---------------------
+
+    #[test]
+    fn map_block_construction_and_terminal() {
+        let block = MapBlock::new(1000, 1000, "TestRegion");
+        assert_eq!(block.x, 1000);
+        assert_eq!(block.y, 1000);
+        assert_eq!(block.name, "TestRegion");
+        assert_eq!(block.access, SimAccess::PG);
+        assert_eq!(block.agents, 0);
+        assert_eq!(block.size_x, 256);
+
+        let terminal = MapBlock::terminal_block("search query");
+        assert_eq!(terminal.access, SimAccess::NonExistent);
+        assert_eq!(terminal.name, "search query");
+        assert_eq!(terminal.x, 0);
+        assert_eq!(terminal.size_x, 0);
+    }
+
+    // -- 103. MapItemType from_u32 -------------------------------------------
+
+    #[test]
+    fn map_item_type_from_u32() {
+        assert_eq!(MapItemType::from_u32(1), Some(MapItemType::Telehub));
+        assert_eq!(MapItemType::from_u32(7), Some(MapItemType::LandForSale));
+        assert_eq!(MapItemType::from_u32(8), Some(MapItemType::Classified));
+        assert_eq!(MapItemType::from_u32(6), Some(MapItemType::AgentLocations));
+        assert!(MapItemType::from_u32(0).is_none());
+        assert!(MapItemType::from_u32(99).is_none());
+    }
+
+    // -- 104. WorldMapModule map block request --------------------------------
+
+    #[test]
+    fn world_map_block_request() {
+        let mut module = WorldMapModule::new();
+        module.region_grid_x = 1000;
+        module.region_grid_y = 1000;
+        module.region_name = "Main".to_string();
+
+        // Cache a neighbour.
+        module.cache_block(MapBlock::new(1001, 1000, "East"));
+
+        // Request a rectangle that includes both.
+        let results = module.handle_map_block_request(999, 999, 1002, 1001);
+        assert_eq!(results.len(), 2);
+        let names: Vec<&str> = results.iter().map(|b| b.name.as_str()).collect();
+        assert!(names.contains(&"Main"));
+        assert!(names.contains(&"East"));
+
+        // Request outside range.
+        let empty = module.handle_map_block_request(0, 0, 10, 10);
+        assert!(empty.is_empty());
+    }
+
+    // -- 105. WorldMapModule map item request ---------------------------------
+
+    #[test]
+    fn world_map_item_request() {
+        let mut module = WorldMapModule::new();
+        module.add_map_item(MapItem::new(100, 200, MapItemType::Telehub, "Hub1"));
+        module.add_map_item(MapItem::new(300, 400, MapItemType::LandForSale, "Plot A"));
+        module.add_map_item(MapItem::new(500, 600, MapItemType::LandForSale, "Plot B"));
+
+        let telehubs = module.handle_map_item_request(MapItemType::Telehub);
+        assert_eq!(telehubs.len(), 1);
+        assert_eq!(telehubs[0].name, "Hub1");
+
+        let land = module.handle_map_item_request(MapItemType::LandForSale);
+        assert_eq!(land.len(), 2);
+
+        // No events registered.
+        let events = module.handle_map_item_request(MapItemType::PGEvent);
+        assert!(events.is_empty());
+    }
+
+    // -- 106. WorldMapModule remove_items_by_type ----------------------------
+
+    #[test]
+    fn world_map_remove_items_by_type() {
+        let mut module = WorldMapModule::new();
+        module.add_map_item(MapItem::new(0, 0, MapItemType::Telehub, "Hub"));
+        module.add_map_item(MapItem::new(0, 0, MapItemType::LandForSale, "Land"));
+        assert_eq!(module.map_item_count(), 2);
+
+        module.remove_items_by_type(MapItemType::Telehub);
+        assert_eq!(module.map_item_count(), 1);
+        assert!(module.handle_map_item_request(MapItemType::Telehub).is_empty());
+    }
+
+    // -- 107. WorldMapModule RegionModule lifecycle ---------------------------
+
+    #[test]
+    fn world_map_module_lifecycle() {
+        let mut module = WorldMapModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+
+        module.initialise(&config).unwrap();
+        module.add_region(&scene).unwrap();
+        assert_eq!(module.name(), "WorldMapModule");
+        assert_eq!(module.module_type(), ModuleType::NonShared);
+
+        // Add items, then remove_region should clear them.
+        module.add_map_item(MapItem::new(0, 0, MapItemType::Telehub, "Hub"));
+        module.cache_block(MapBlock::new(1001, 1000, "Neighbour"));
+        module.remove_region(&scene).unwrap();
+        assert_eq!(module.map_item_count(), 0);
+        assert_eq!(module.cached_block_count(), 0);
+        module.close().unwrap();
+    }
+
+    // -- 108. MapSearchModule search -----------------------------------------
+
+    #[test]
+    fn map_search_module_search() {
+        let mut module = MapSearch::new();
+        module.register_region(MapBlock::new(1000, 1000, "Welcome Island"));
+        module.register_region(MapBlock::new(1001, 1000, "Welcome Hub"));
+        module.register_region(MapBlock::new(1002, 1000, "Sandbox Plaza"));
+
+        // Search for "welcome" should find 2 + terminal.
+        let results = module.search_map("welcome", 20).unwrap();
+        assert_eq!(results.len(), 3); // 2 matches + terminal
+        assert_eq!(results.last().unwrap().access, SimAccess::NonExistent);
+
+        // Case insensitive.
+        let results2 = module.search_map("SANDBOX", 20).unwrap();
+        assert_eq!(results2.len(), 2); // 1 match + terminal
+
+        // Short query rejected.
+        let err = module.search_map("ab", 20);
+        assert!(err.is_err());
+    }
+
+    // -- 109. MapSearchModule register/unregister ----------------------------
+
+    #[test]
+    fn map_search_register_unregister() {
+        let mut module = MapSearch::new();
+        module.register_region(MapBlock::new(0, 0, "Region One"));
+        assert_eq!(module.region_count(), 1);
+
+        module.unregister_region("Region One");
+        assert_eq!(module.region_count(), 0);
+
+        // Search now returns only the terminal.
+        let results = module.search_map("Region", 20).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].access, SimAccess::NonExistent);
+    }
+
+    // -- 110. ShadedTerrainRenderer produces correctly-sized pixmap ----------
+
+    #[test]
+    fn shaded_renderer_output_size() {
+        let renderer = ShadedTerrainRenderer::new();
+        // Flat terrain at 50m.
+        let heightmap = vec![50.0_f32; 64 * 64];
+        let pixmap = renderer.render_terrain(&heightmap, 64, 64, 20.0);
+        assert_eq!(pixmap.width(), 64);
+        assert_eq!(pixmap.height(), 64);
+        // All land pixels (above water) should have a non-zero green channel.
+        let data = pixmap.data();
+        // Check a pixel in the middle: RGBA at index (32, 32) after Y-flip.
+        let yr = 63 - 32;
+        let idx = ((yr * 64 + 32) * 4) as usize;
+        assert!(data[idx + 1] > 0, "green channel should be non-zero for land");
+        assert_eq!(data[idx + 3], 255, "alpha should be 255");
+    }
+
+    // -- 111. ShadedTerrainRenderer paints water below water_height ----------
+
+    #[test]
+    fn shaded_renderer_water_painting() {
+        let renderer = ShadedTerrainRenderer {
+            water_color: (0x1D, 0x47, 0x5F),
+        };
+        // All terrain at 10m, water at 20m — everything is underwater.
+        let heightmap = vec![10.0_f32; 16 * 16];
+        let pixmap = renderer.render_terrain(&heightmap, 16, 16, 20.0);
+        let data = pixmap.data();
+
+        // Every pixel should be the water colour.
+        for y in 0..16_u32 {
+            for x in 0..16_u32 {
+                let idx = ((y * 16 + x) * 4) as usize;
+                assert_eq!(data[idx], 0x1D, "red");
+                assert_eq!(data[idx + 1], 0x47, "green");
+                assert_eq!(data[idx + 2], 0x5F, "blue");
+            }
+        }
+    }
+
+    // -- 112. MapImageModule generate_map_tile returns correct byte count ----
+
+    #[test]
+    fn map_image_generate_tile_size() {
+        let mut module = MapImageModule::new();
+        module.config = MapTileConfig {
+            tile_size: 32,
+            draw_prims: false,
+            terrain_color_scheme: "shaded".to_string(),
+            water_color: (0x1D, 0x47, 0x5F),
+            water_height: 20.0,
+        };
+        let heightmap = vec![50.0_f32; 32 * 32];
+        let rgba = module.generate_map_tile(&heightmap);
+        assert_eq!(rgba.len(), 32 * 32 * 4);
+    }
+
+    // -- 113. MapImageModule upload_map_tile stub returns new UUID -----------
+
+    #[test]
+    fn map_image_upload_tile_stub() {
+        let mut module = MapImageModule::new();
+        assert_eq!(module.last_tile_id(), Uuid::nil());
+
+        let id = module.upload_map_tile(&[0u8; 256]);
+        assert!(!id.is_nil());
+        assert_eq!(module.last_tile_id(), id);
+
+        // Second upload yields a different UUID.
+        let id2 = module.upload_map_tile(&[0u8; 256]);
+        assert_ne!(id, id2);
+    }
+
+    // -- 114. MapImageModule RegionModule lifecycle ---------------------------
+
+    #[test]
+    fn map_image_module_lifecycle() {
+        let mut module = MapImageModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+
+        module.initialise(&config).unwrap();
+        module.add_region(&scene).unwrap();
+        assert_eq!(module.name(), "MapImageModule");
+        assert_eq!(module.module_type(), ModuleType::NonShared);
+        module.remove_region(&scene).unwrap();
+        module.close().unwrap();
+    }
+
+    // -- 115. MapTileConfig defaults match expectations -----------------------
+
+    #[test]
+    fn map_tile_config_defaults() {
+        let cfg = MapTileConfig::default();
+        assert_eq!(cfg.tile_size, 256);
+        assert!(cfg.draw_prims);
+        assert_eq!(cfg.terrain_color_scheme, "shaded");
+        assert_eq!(cfg.water_color, (0x1D, 0x47, 0x5F));
+        assert!((cfg.water_height - 20.0).abs() < f32::EPSILON);
+    }
+
+    // ===================================================================
+    // Chat-module tests (section 7.1)
+    // ===================================================================
+
+    use crate::chat::{
+        ChatMessage, ChatModule as ChatMod, ChatSourceType, ChatType,
+        DEBUG_CHANNEL, MAX_MESSAGE_LENGTH,
+    };
+
+    fn make_chat_msg(chat_type: ChatType, channel: i32) -> ChatMessage {
+        ChatMessage {
+            sender_id: Uuid::new_v4(),
+            sender_name: "Tester".to_string(),
+            message: "Hello, world!".to_string(),
+            chat_type,
+            source_type: ChatSourceType::Agent,
+            position: [128.0, 128.0, 25.0],
+            channel,
+        }
+    }
+
+    // -- 116. ChatType::range_squared values ----------------------------------
+
+    #[test]
+    fn chat_type_range_squared() {
+        assert_eq!(ChatType::Whisper.range_squared(), Some(100.0));
+        assert_eq!(ChatType::Say.range_squared(), Some(400.0));
+        assert_eq!(ChatType::Shout.range_squared(), Some(10_000.0));
+        assert_eq!(ChatType::Region.range_squared(), None);
+        assert_eq!(ChatType::Owner.range_squared(), None);
+        assert_eq!(ChatType::Direct.range_squared(), None);
+        assert_eq!(ChatType::Broadcast.range_squared(), None);
+        assert_eq!(ChatType::DebugChannel.range_squared(), None);
+    }
+
+    // -- 117. ChatModule default construction ---------------------------------
+
+    #[test]
+    fn chat_module_defaults() {
+        let m = ChatMod::new();
+        assert!(m.enabled);
+        assert_eq!(m.whisper_distance, 10);
+        assert_eq!(m.say_distance, 20);
+        assert_eq!(m.shout_distance, 100);
+        assert!(m.admin_prefix.is_empty());
+    }
+
+    // -- 118. ChatModule reads config -----------------------------------------
+
+    #[test]
+    fn chat_module_reads_config() {
+        let mut m = ChatMod::new();
+        let mut config = TestConfig::new();
+        config.set_int("Chat", "whisper_distance", 15);
+        config.set_int("Chat", "say_distance", 30);
+        config.set_int("Chat", "shout_distance", 200);
+        config.set_string("Chat", "admin_prefix", "[ADMIN] ");
+        m.initialise(&config).unwrap();
+        assert_eq!(m.whisper_distance, 15);
+        assert_eq!(m.say_distance, 30);
+        assert_eq!(m.shout_distance, 200);
+        assert_eq!(m.admin_prefix, "[ADMIN] ");
+    }
+
+    // -- 119. ChatModule lifecycle --------------------------------------------
+
+    #[test]
+    fn chat_module_lifecycle() {
+        let mut m = ChatMod::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        m.initialise(&config).unwrap();
+        m.add_region(&scene).unwrap();
+        assert_eq!(m.name(), "ChatModule");
+        assert_eq!(m.module_type(), ModuleType::NonShared);
+        m.remove_region(&scene).unwrap();
+        m.close().unwrap();
+    }
+
+    // -- 120. on_chat_from_viewer broadcasts to event bus ----------------------
+
+    #[test]
+    fn chat_on_chat_from_viewer_broadcasts() {
+        let mut m = ChatMod::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        m.initialise(&config).unwrap();
+        m.add_region(&scene).unwrap();
+
+        let mut rx = scene.events.on_chat_message.subscribe();
+        let mut msg = make_chat_msg(ChatType::Say, 0);
+        assert!(m.on_chat_from_viewer(&mut msg));
+
+        let evt = rx.try_recv().unwrap();
+        assert_eq!(evt.message, "Hello, world!");
+        assert_eq!(evt.channel, 0);
+    }
+
+    // -- 121. on_chat_from_viewer truncates long messages ----------------------
+
+    #[test]
+    fn chat_truncates_long_messages() {
+        let mut m = ChatMod::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        m.initialise(&config).unwrap();
+        m.add_region(&scene).unwrap();
+
+        let mut rx = scene.events.on_chat_message.subscribe();
+        let long_text = "A".repeat(2000);
+        let mut msg = make_chat_msg(ChatType::Say, 0);
+        msg.message = long_text;
+        m.on_chat_from_viewer(&mut msg);
+
+        let evt = rx.try_recv().unwrap();
+        assert!(evt.message.len() <= MAX_MESSAGE_LENGTH);
+    }
+
+    // -- 122. on_chat_from_viewer sets DebugChannel on debug channel -----------
+
+    #[test]
+    fn chat_debug_channel_override() {
+        let mut m = ChatMod::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        m.initialise(&config).unwrap();
+        m.add_region(&scene).unwrap();
+
+        let mut msg = make_chat_msg(ChatType::Say, DEBUG_CHANNEL);
+        m.on_chat_from_viewer(&mut msg);
+        assert_eq!(msg.chat_type, ChatType::DebugChannel);
+    }
+
+    // -- 123. deliver_chat_to_client range filter: in range -------------------
+
+    #[test]
+    fn chat_deliver_in_range() {
+        let m = ChatMod::new();
+        let msg = make_chat_msg(ChatType::Say, 0);
+        // Listener 10m away (within 20m say range).
+        let listener_pos = [138.0, 128.0, 25.0];
+        assert!(m.deliver_chat_to_client(&msg, listener_pos));
+    }
+
+    // -- 124. deliver_chat_to_client range filter: out of range ---------------
+
+    #[test]
+    fn chat_deliver_out_of_range() {
+        let m = ChatMod::new();
+        let msg = make_chat_msg(ChatType::Whisper, 0);
+        // Listener 15m away (outside 10m whisper range).
+        let listener_pos = [143.0, 128.0, 25.0];
+        assert!(!m.deliver_chat_to_client(&msg, listener_pos));
+    }
+
+    // -- 125. deliver_chat_to_client: unlimited range types always deliver -----
+
+    #[test]
+    fn chat_deliver_unlimited_range() {
+        let m = ChatMod::new();
+        let msg = make_chat_msg(ChatType::Region, 0);
+        // Very far away.
+        let listener_pos = [9999.0, 9999.0, 9999.0];
+        assert!(m.deliver_chat_to_client(&msg, listener_pos));
+    }
+
+    // -- 126. is_frozen stub returns false -------------------------------------
+
+    #[test]
+    fn chat_is_frozen_stub() {
+        let m = ChatMod::new();
+        assert!(!m.is_frozen(Uuid::new_v4()));
+    }
+
+    // -- 127. on_chat_from_viewer returns false when disabled ------------------
+
+    #[test]
+    fn chat_disabled_returns_false() {
+        let mut m = ChatMod::new();
+        m.enabled = false;
+        let mut msg = make_chat_msg(ChatType::Say, 0);
+        assert!(!m.on_chat_from_viewer(&mut msg));
+    }
+
+    // ===================================================================
+    // Messaging-module tests (section 7.2 / 7.3)
+    // ===================================================================
+
+    use crate::messaging::{
+        GridInstantMessage, IMDialog, MessageTransferModule as MsgXfer,
+        MuteEntry, MuteListModule as MuteMod, MuteType,
+        OfflineMessageModule as OfflineMod, PresenceModule as PresenceMod,
+    };
+
+    fn make_im(from: Uuid, to: Uuid) -> GridInstantMessage {
+        GridInstantMessage {
+            from_agent_id: from,
+            from_agent_name: "Sender".to_string(),
+            to_agent_id: to,
+            message: "Hello IM".to_string(),
+            im_session_id: Uuid::new_v4(),
+            dialog: IMDialog::MessageFromAgent,
+            from_group: false,
+            offline: 0,
+            parent_estate_id: 1,
+            position: [128.0, 128.0, 25.0],
+            region_id: Uuid::new_v4(),
+            timestamp: 1000,
+            binary_bucket: Vec::new(),
+        }
+    }
+
+    // -- 128. MessageTransferModule send to nil returns false ------------------
+
+    #[test]
+    fn message_transfer_nil_recipient() {
+        let m = MsgXfer::new();
+        let im = make_im(Uuid::new_v4(), Uuid::nil());
+        assert!(!m.send_instant_message(&im));
+    }
+
+    // -- 129. MessageTransferModule send to valid agent returns true -----------
+
+    #[test]
+    fn message_transfer_valid_recipient() {
+        let m = MsgXfer::new();
+        let im = make_im(Uuid::new_v4(), Uuid::new_v4());
+        assert!(m.send_instant_message(&im));
+    }
+
+    // -- 130. MessageTransferModule lifecycle ----------------------------------
+
+    #[test]
+    fn message_transfer_lifecycle() {
+        let mut m = MsgXfer::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        m.initialise(&config).unwrap();
+        m.add_region(&scene).unwrap();
+        assert_eq!(m.name(), "MessageTransferModule");
+        assert_eq!(m.module_type(), ModuleType::Shared);
+        m.remove_region(&scene).unwrap();
+        m.close().unwrap();
+    }
+
+    // -- 131. OfflineMessageModule store and retrieve -------------------------
+
+    #[test]
+    fn offline_store_retrieve() {
+        let mut m = OfflineMod::new();
+        let agent = Uuid::new_v4();
+        let im1 = make_im(Uuid::new_v4(), agent);
+        let im2 = make_im(Uuid::new_v4(), agent);
+        m.store_message(im1);
+        m.store_message(im2);
+        assert_eq!(m.pending_count(agent), 2);
+        assert_eq!(m.total_pending(), 2);
+
+        let msgs = m.retrieve_messages(agent);
+        assert_eq!(msgs.len(), 2);
+        assert_eq!(m.pending_count(agent), 0);
+        assert_eq!(m.total_pending(), 0);
+    }
+
+    // -- 132. OfflineMessageModule retrieve empty returns empty vec ------------
+
+    #[test]
+    fn offline_retrieve_empty() {
+        let mut m = OfflineMod::new();
+        let msgs = m.retrieve_messages(Uuid::new_v4());
+        assert!(msgs.is_empty());
+    }
+
+    // -- 133. MuteListModule update and is_muted ------------------------------
+
+    #[test]
+    fn mute_list_update_and_check() {
+        let mut m = MuteMod::new();
+        let owner = Uuid::new_v4();
+        let target = Uuid::new_v4();
+        let entry = MuteEntry {
+            agent_id: owner,
+            mute_id: target,
+            name: "Annoying".to_string(),
+            mute_type: MuteType::ByAgent,
+            flags: 0,
+        };
+        m.update_mute(owner, entry);
+        assert!(m.is_muted(owner, target));
+        assert!(!m.is_muted(owner, Uuid::new_v4()));
+    }
+
+    // -- 134. MuteListModule remove_mute --------------------------------------
+
+    #[test]
+    fn mute_list_remove() {
+        let mut m = MuteMod::new();
+        let owner = Uuid::new_v4();
+        let target = Uuid::new_v4();
+        let entry = MuteEntry {
+            agent_id: owner,
+            mute_id: target,
+            name: "Removed".to_string(),
+            mute_type: MuteType::ByAgent,
+            flags: 0,
+        };
+        m.update_mute(owner, entry);
+        assert!(m.is_muted(owner, target));
+        m.remove_mute(owner, target, "Removed");
+        assert!(!m.is_muted(owner, target));
+    }
+
+    // -- 135. MuteListModule get_mutes ----------------------------------------
+
+    #[test]
+    fn mute_list_get_mutes() {
+        let mut m = MuteMod::new();
+        let owner = Uuid::new_v4();
+        assert!(m.get_mutes(owner).is_empty());
+
+        m.update_mute(owner, MuteEntry {
+            agent_id: owner,
+            mute_id: Uuid::new_v4(),
+            name: "A".to_string(),
+            mute_type: MuteType::ByAgent,
+            flags: 0,
+        });
+        m.update_mute(owner, MuteEntry {
+            agent_id: owner,
+            mute_id: Uuid::new_v4(),
+            name: "B".to_string(),
+            mute_type: MuteType::ByObject,
+            flags: 0,
+        });
+        assert_eq!(m.get_mutes(owner).len(), 2);
+    }
+
+    // -- 136. MuteListModule update replaces existing entry --------------------
+
+    #[test]
+    fn mute_list_update_replaces() {
+        let mut m = MuteMod::new();
+        let owner = Uuid::new_v4();
+        let target = Uuid::new_v4();
+        m.update_mute(owner, MuteEntry {
+            agent_id: owner,
+            mute_id: target,
+            name: "Original".to_string(),
+            mute_type: MuteType::ByAgent,
+            flags: 0,
+        });
+        m.update_mute(owner, MuteEntry {
+            agent_id: owner,
+            mute_id: target,
+            name: "Updated".to_string(),
+            mute_type: MuteType::ByAgent,
+            flags: 1,
+        });
+        let mutes = m.get_mutes(owner);
+        assert_eq!(mutes.len(), 1);
+        assert_eq!(mutes[0].name, "Updated");
+        assert_eq!(mutes[0].flags, 1);
+    }
+
+    // -- 137. PresenceModule register/deregister/is_present --------------------
+
+    #[test]
+    fn presence_register_deregister() {
+        let mut m = PresenceMod::new();
+        let agent = Uuid::new_v4();
+        assert!(!m.is_present(agent));
+        assert_eq!(m.presence_count(), 0);
+
+        m.register_presence(agent);
+        assert!(m.is_present(agent));
+        assert_eq!(m.presence_count(), 1);
+
+        m.deregister_presence(agent);
+        assert!(!m.is_present(agent));
+        assert_eq!(m.presence_count(), 0);
+    }
+
+    // -- 138. PresenceModule get_present_agents --------------------------------
+
+    #[test]
+    fn presence_get_agents() {
+        let mut m = PresenceMod::new();
+        let a1 = Uuid::new_v4();
+        let a2 = Uuid::new_v4();
+        m.register_presence(a1);
+        m.register_presence(a2);
+
+        let agents = m.get_present_agents();
+        assert_eq!(agents.len(), 2);
+        assert!(agents.contains(&a1));
+        assert!(agents.contains(&a2));
+    }
+
+    // -- 139. PresenceModule lifecycle -----------------------------------------
+
+    #[test]
+    fn presence_module_lifecycle() {
+        let mut m = PresenceMod::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        m.initialise(&config).unwrap();
+        m.add_region(&scene).unwrap();
+        assert_eq!(m.name(), "PresenceModule");
+        assert_eq!(m.module_type(), ModuleType::Shared);
+
+        m.register_presence(Uuid::new_v4());
+        m.close().unwrap();
+        assert_eq!(m.presence_count(), 0);
+    }
+
+    // -- 140. IMDialog enum values match C# -----------------------------------
+
+    #[test]
+    fn im_dialog_values() {
+        assert_eq!(IMDialog::MessageFromAgent as u8, 0);
+        assert_eq!(IMDialog::MessageFromObject as u8, 19);
+        assert_eq!(IMDialog::FriendshipOffered as u8, 38);
+        assert_eq!(IMDialog::FriendshipAccepted as u8, 39);
+        assert_eq!(IMDialog::FriendshipDeclined as u8, 40);
+        assert_eq!(IMDialog::GroupInvitation as u8, 3);
+        assert_eq!(IMDialog::InventoryOffered as u8, 4);
+        assert_eq!(IMDialog::InventoryAccepted as u8, 5);
+        assert_eq!(IMDialog::InventoryDeclined as u8, 6);
+        assert_eq!(IMDialog::StartTyping as u8, 41);
+        assert_eq!(IMDialog::StopTyping as u8, 42);
+    }
+
+    // -- 141. MuteType enum values match C# -----------------------------------
+
+    #[test]
+    fn mute_type_values() {
+        assert_eq!(MuteType::ByName as u8, 0);
+        assert_eq!(MuteType::ByAgent as u8, 1);
+        assert_eq!(MuteType::ByGroup as u8, 2);
+        assert_eq!(MuteType::ByObject as u8, 3);
+    }
+
+    // -- 142. DEBUG_CHANNEL constant ------------------------------------------
+
+    #[test]
+    fn debug_channel_value() {
+        assert_eq!(DEBUG_CHANNEL, i32::MAX);
+    }
+
+    // ===================================================================
+    // Environment-module tests (section 9)
+    // ===================================================================
+
+    use crate::environment::{
+        AccessModule, ConfigurableWind, LightShareModule, MediaEntry, MediaModule,
+        RegionAccessFlags, RegionReadyModule, RestartModule, SceneSerialiser,
+        SimpleRandomWind, SoundFlags, SoundModule, SoundTrigger, VegetationModule,
+        WindModel, WindModule, WindlightPreset,
+    };
+
+    // -- 143. WindlightPreset defaults ------------------------------------
+
+    #[test]
+    fn windlight_preset_defaults() {
+        let p = WindlightPreset::default();
+        assert!((p.cloud_coverage - 0.27).abs() < f32::EPSILON);
+        assert!((p.haze_density - 0.7).abs() < f32::EPSILON);
+        assert!((p.scene_gamma - 1.0).abs() < f32::EPSILON);
+        assert_eq!(p.sun_direction, [0.0, 0.707, 0.707]);
+        assert_eq!(p.normal_map_texture, Uuid::nil());
+    }
+
+    // -- 144. LightShareModule get/set/reset windlight --------------------
+
+    #[test]
+    fn lightshare_get_set_reset() {
+        let mut module = LightShareModule::new();
+        assert!((module.get_windlight().cloud_coverage - 0.27).abs() < f32::EPSILON);
+
+        let mut preset = WindlightPreset::default();
+        preset.cloud_coverage = 0.9;
+        module.set_windlight(preset);
+        assert!((module.get_windlight().cloud_coverage - 0.9).abs() < f32::EPSILON);
+        assert_eq!(module.env_version(), 0); // -1 + 1 = 0
+
+        module.reset_windlight();
+        assert!((module.get_windlight().cloud_coverage - 0.27).abs() < f32::EPSILON);
+        assert_eq!(module.env_version(), 1);
+    }
+
+    // -- 145. LightShareModule lifecycle ----------------------------------
+
+    #[test]
+    fn lightshare_lifecycle() {
+        let mut module = LightShareModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        module.initialise(&config).unwrap();
+        assert!(!module.is_enabled()); // No config = disabled
+        assert_eq!(module.name(), "LightShareModule");
+        assert_eq!(module.module_type(), ModuleType::NonShared);
+        module.add_region(&scene).unwrap();
+        module.remove_region(&scene).unwrap();
+        module.close().unwrap();
+    }
+
+    // -- 146. SimpleRandomWind produces non-zero after update --------------
+
+    #[test]
+    fn simple_random_wind_produces_output() {
+        let mut wind = SimpleRandomWind::new();
+        wind.strength = 2.0;
+        wind.update(1.0);
+        let mut has_nonzero = false;
+        for y in 0..16 {
+            for x in 0..16 {
+                let (vx, vy) = wind.wind_speed((x * 16) as f32, (y * 16) as f32);
+                if vx.abs() > f32::EPSILON || vy.abs() > f32::EPSILON {
+                    has_nonzero = true;
+                }
+            }
+        }
+        assert!(has_nonzero, "SimpleRandomWind should produce non-zero values");
+        assert_eq!(wind.name(), "SimpleRandomWind");
+    }
+
+    // -- 147. ConfigurableWind default values and update -------------------
+
+    #[test]
+    fn configurable_wind_update() {
+        let mut wind = ConfigurableWind::new();
+        assert!((wind.avg_strength - 5.0).abs() < f32::EPSILON);
+        assert!((wind.avg_direction - 0.0).abs() < f32::EPSILON);
+
+        wind.update(100.0);
+        let (vx, vy) = wind.wind_speed(128.0, 128.0);
+        let mag = (vx * vx + vy * vy).sqrt();
+        assert!(mag > 0.0, "ConfigurableWind should produce non-zero wind");
+        assert_eq!(wind.name(), "ConfigurableWind");
+    }
+
+    // -- 148. WindModule default model is SimpleRandomWind -----------------
+
+    #[test]
+    fn wind_module_default_model() {
+        let module = WindModule::new();
+        assert_eq!(module.active_model_name(), "SimpleRandomWind");
+        assert!(module.is_enabled());
+        assert_eq!(module.frame_update_rate(), 150);
+        assert_eq!(module.name(), "WindModule");
+        assert_eq!(module.module_type(), ModuleType::Shared);
+    }
+
+    // -- 149. WindModule tick triggers model update at rate ----------------
+
+    #[test]
+    fn wind_module_tick_updates() {
+        let mut module = WindModule::new();
+        let (x0, y0) = module.wind_speed(128.0, 128.0);
+        assert!((x0.abs() + y0.abs()) < f32::EPSILON);
+
+        for _ in 0..150 {
+            module.tick(1.0);
+        }
+        let mut found = false;
+        for i in 0..16 {
+            let (vx, vy) = module.wind_speed((i * 16) as f32, 0.0);
+            if vx.abs() > f32::EPSILON || vy.abs() > f32::EPSILON {
+                found = true;
+                break;
+            }
+        }
+        assert!(found);
+    }
+
+    // -- 150. WindModule set_model swaps model -----------------------------
+
+    #[test]
+    fn wind_module_set_model() {
+        let mut module = WindModule::new();
+        module.set_model(Box::new(ConfigurableWind::new()));
+        assert_eq!(module.active_model_name(), "ConfigurableWind");
+    }
+
+    // -- 151. WindModule initialise with ConfigurableWind ------------------
+
+    #[test]
+    fn wind_module_init_configurable() {
+        let mut module = WindModule::new();
+        let mut config = TestConfig::new();
+        config.set_string("Wind", "wind_plugin", "ConfigurableWind");
+        config.set_float("Wind", "avg_strength", 10.0);
+        config.set_float("Wind", "avg_direction", 45.0);
+        module.initialise(&config).unwrap();
+        assert_eq!(module.active_model_name(), "ConfigurableWind");
+    }
+
+    // -- 152. SoundFlags bitflags -----------------------------------------
+
+    #[test]
+    fn sound_flags_values() {
+        assert_eq!(SoundFlags::LOOP.bits(), 1);
+        assert_eq!(SoundFlags::STOP.bits(), 32);
+        let combined = SoundFlags::LOOP | SoundFlags::QUEUE;
+        assert!(combined.contains(SoundFlags::LOOP));
+        assert!(combined.contains(SoundFlags::QUEUE));
+        assert!(!combined.contains(SoundFlags::STOP));
+        let sync = SoundFlags::SYNC_MASK;
+        assert!(sync.contains(SoundFlags::SYNC_MASTER));
+        assert!(sync.contains(SoundFlags::SYNC_SLAVE));
+        assert!(sync.contains(SoundFlags::SYNC_PENDING));
+    }
+
+    // -- 153. SoundModule loop/stop tracking ------------------------------
+
+    #[test]
+    fn sound_module_loop_stop() {
+        let mut module = SoundModule::new();
+        let obj1 = Uuid::new_v4();
+        let obj2 = Uuid::new_v4();
+        let snd = Uuid::new_v4();
+
+        module.loop_sound(obj1, snd, 1.0);
+        module.loop_sound(obj2, snd, 0.5);
+        assert_eq!(module.active_loop_count(), 2);
+
+        module.stop_sound(obj1);
+        assert_eq!(module.active_loop_count(), 1);
+
+        module.loop_sound(obj2, Uuid::new_v4(), 0.8);
+        assert_eq!(module.active_loop_count(), 1);
+    }
+
+    // -- 154. SoundModule lifecycle ----------------------------------------
+
+    #[test]
+    fn sound_module_lifecycle() {
+        let mut module = SoundModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        module.initialise(&config).unwrap();
+        assert!(module.is_enabled());
+        assert!((module.max_distance() - 100.0).abs() < f32::EPSILON);
+        assert_eq!(module.name(), "SoundModule");
+        assert_eq!(module.module_type(), ModuleType::NonShared);
+        module.add_region(&scene).unwrap();
+        module.remove_region(&scene).unwrap();
+        module.close().unwrap();
+    }
+
+    // -- 155. SoundTrigger construction -----------------------------------
+
+    #[test]
+    fn sound_trigger_new() {
+        let snd = Uuid::new_v4();
+        let owner = Uuid::new_v4();
+        let obj = Uuid::new_v4();
+        let trigger = SoundTrigger::new(snd, owner, obj);
+        assert_eq!(trigger.sound_id, snd);
+        assert!((trigger.gain - 1.0).abs() < f32::EPSILON);
+        assert!((trigger.radius - 20.0).abs() < f32::EPSILON);
+        assert_eq!(trigger.flags, SoundFlags::NONE);
+    }
+
+    // -- 156. MediaModule get/set -----------------------------------------
+
+    #[test]
+    fn media_module_get_set() {
+        let mut module = MediaModule::new();
+        assert!(module.get_media().is_empty());
+
+        let entry = MediaEntry {
+            media_url: "https://example.com".to_string(),
+            ..MediaEntry::default()
+        };
+        module.set_media(vec![entry]);
+        assert_eq!(module.get_media().len(), 1);
+        assert_eq!(module.get_media()[0].media_url, "https://example.com");
+    }
+
+    // -- 157. RegionReadyModule ready state --------------------------------
+
+    #[test]
+    fn region_ready_state() {
+        let mut module = RegionReadyModule::new();
+        assert!(!module.is_ready());
+        module.set_ready();
+        assert!(module.is_ready());
+
+        let scene = test_scene_ref();
+        module.remove_region(&scene).unwrap();
+        assert!(!module.is_ready());
+    }
+
+    // -- 158. RestartModule schedule/abort ---------------------------------
+
+    #[test]
+    fn restart_schedule_abort() {
+        let mut module = RestartModule::new();
+        assert!(!module.is_restart_pending());
+        assert_eq!(module.restart_seconds(), 0);
+
+        module.schedule_restart(120);
+        assert!(module.is_restart_pending());
+        assert_eq!(module.restart_seconds(), 120);
+
+        module.abort_restart();
+        assert!(!module.is_restart_pending());
+        assert_eq!(module.restart_seconds(), 0);
+    }
+
+    // -- 159. AccessModule flags and check ---------------------------------
+
+    #[test]
+    fn access_module_flags() {
+        let mut module = AccessModule::new();
+        let default_flags = module.access_flags();
+        assert!(default_flags.contains(RegionAccessFlags::ALLOW_LANDMARK));
+        assert!(default_flags.contains(RegionAccessFlags::ALLOW_DIRECT));
+        assert!(default_flags.contains(RegionAccessFlags::ALLOW_TELEPORT));
+
+        module.set_access_flags(RegionAccessFlags::ALLOW_TELEPORT);
+        assert!(!module.access_flags().contains(RegionAccessFlags::ALLOW_LANDMARK));
+        assert!(module.access_flags().contains(RegionAccessFlags::ALLOW_TELEPORT));
+
+        assert!(module.check_access(Uuid::new_v4()));
+    }
+
+    // -- 160. VegetationModule lifecycle (stub) ----------------------------
+
+    #[test]
+    fn vegetation_lifecycle() {
+        let mut module = VegetationModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        module.initialise(&config).unwrap();
+        assert_eq!(module.name(), "VegetationModule");
+        assert_eq!(module.module_type(), ModuleType::Shared);
+        module.add_region(&scene).unwrap();
+        module.remove_region(&scene).unwrap();
+        module.close().unwrap();
+    }
+
+    // -- 161. SceneSerialiser stubs don't panic ----------------------------
+
+    #[test]
+    fn scene_serialiser_stubs() {
+        let mut module = SceneSerialiser::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        module.initialise(&config).unwrap();
+        assert_eq!(module.name(), "SceneSerialiser");
+        assert_eq!(module.module_type(), ModuleType::Shared);
+
+        let data = module.serialize_region();
+        assert!(data.is_empty());
+        module.deserialize_region(&[1, 2, 3]);
+
+        module.add_region(&scene).unwrap();
+        module.remove_region(&scene).unwrap();
+        module.close().unwrap();
+    }
+
+    // -- 162. EnvironmentSettings default is empty -------------------------
+
+    #[test]
+    fn environment_settings_default_empty() {
+        let es = crate::environment::EnvironmentSettings::default();
+        assert!(es.day_cycle.is_empty());
+        assert!(es.sky_map.is_empty());
+        assert!(es.water_map.is_empty());
+    }
+
+    // -- 163. LightShareModule environment settings get/set ----------------
+
+    #[test]
+    fn lightshare_env_settings() {
+        let mut module = LightShareModule::new();
+        assert!(module.get_environment_settings().day_cycle.is_empty());
+
+        let settings = crate::environment::EnvironmentSettings {
+            day_cycle: vec![1, 2, 3],
+            sky_map: vec![4, 5],
+            water_map: vec![6],
+        };
+        module.set_environment_settings(settings);
+        assert_eq!(module.get_environment_settings().day_cycle, vec![1, 2, 3]);
+        assert_eq!(module.get_environment_settings().sky_map, vec![4, 5]);
     }
 }
