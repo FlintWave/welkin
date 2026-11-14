@@ -7,7 +7,7 @@
 ## 2. Types and encodings
 
 - [ ] 2.1 `types` crate for what Aurora does not define, with round-trip tests against values produced by the C# server
-- [ ] 2.2 XML-RPC encode and decode
+- [x] 2.2 XML-RPC encode and decode
 - [ ] 2.3 Decode and re-encode every packet in a recorded C# session without error
 
 ## 3. Server-direction gaps
