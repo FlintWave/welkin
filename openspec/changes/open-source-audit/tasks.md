@@ -15,6 +15,6 @@
 
 ## 3. Outputs
 
-- [ ] 3.1 Write `docs/licence-audit.md`
-- [ ] 3.2 Write the `cargo deny` allow-list
-- [ ] 3.3 Write naming and trademark rules
+- [x] 3.1 Write `docs/licence-audit.md` (b3518a5: executive summary, recommendations, full audit)
+- [x] 3.2 Write the `cargo deny` allow-list (b3518a5: GPL-3.0-or-later fix, missing licences, advisory updates)
+- [x] 3.3 Write naming and trademark rules (b3518a5: docs/naming-and-trademarks.md)
