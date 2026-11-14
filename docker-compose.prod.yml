@@ -1,0 +1,253 @@
+# docker-compose.prod.yml — Production stack for opensim-rust
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Full production deployment with grid services (Robust), region simulator,
+# web admin portal, voice sidecar, and MySQL database.
+#
+# Usage:
+#   cp .env.example .env        # edit with real credentials
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Prerequisites:
+#   - Build images first:
+#       docker build -t opensim-rust:latest -f Dockerfile .
+#       docker build -t opensim-rust-region:latest -f Dockerfile.region .
+#   - Or use pre-built images by setting IMAGE_TAG in .env
+#
+# Architecture:
+#   ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌───────────┐
+#   │ Portal  │──▶│ Robust  │◀──│ Region  │   │ WolfVoice │
+#   │  :8080  │   │  :8002  │   │  :9000  │   │   :8090   │
+#   └─────────┘   └────┬────┘   └────┬────┘   └───────────┘
+#                      │             │
+#                      ▼             ▼
+#                 ┌─────────────────────┐
+#                 │     MySQL 8.0       │
+#                 │      :3306          │
+#                 └─────────────────────┘
+
+# ---------------------------------------------------------------------------
+# Shared logging configuration (YAML anchor)
+# JSON driver with rotation to prevent disk exhaustion.
+# ---------------------------------------------------------------------------
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+# ---------------------------------------------------------------------------
+# Shared restart policy
+# ---------------------------------------------------------------------------
+x-restart: &default-restart
+  restart: unless-stopped
+
+services:
+  # =========================================================================
+  # db — MySQL 8.0 database backend
+  # =========================================================================
+  # Stores all grid data: users, inventory, assets, region state.
+  # Not exposed to the host network in production — only reachable by other
+  # services on the opensim-net bridge.
+  # =========================================================================
+  db:
+    image: docker.io/library/mysql:8.0
+    <<: *default-restart
+    logging: *default-logging
+    networks:
+      - opensim-net
+    volumes:
+      - db-data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-opensim}"
+      MYSQL_USER: "${MYSQL_USER:-opensim}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    # No host port mapping — internal only.  Uncomment for debugging:
+    # ports:
+    #   - "127.0.0.1:3306:3306"
+
+  # =========================================================================
+  # robust — Grid services server (osim-robust)
+  # =========================================================================
+  # Central grid services: login, asset, inventory, grid registration,
+  # presence, friends, user accounts, authentication.
+  #
+  # Health check note: the runtime image is distroless (no shell, no curl,
+  # no wget).  Compose healthchecks that exec into the container cannot work.
+  # Instead, use an external probe against http://<host>:8002/health, or
+  # deploy behind a load balancer that checks the endpoint.  The binary
+  # itself handles SIGTERM gracefully (see opensim-runtime::shutdown_signal).
+  #
+  # Prometheus metrics are available at http://<host>:8002/metrics from the
+  # same listener — no separate metrics port needed.
+  # =========================================================================
+  robust:
+    image: opensim-rust:${IMAGE_TAG:-latest}
+    command: ["opensim-robust"]
+    <<: *default-restart
+    logging: *default-logging
+    networks:
+      - opensim-net
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${ROBUST_PORT:-8002}:8002"
+    environment:
+      RUST_LOG: "${RUST_LOG:-info}"
+      OPENSIM__Database__ConnectionString: >-
+        Server=db;Port=3306;Database=${MYSQL_DATABASE:-opensim};User=${MYSQL_USER:-opensim};Password=${MYSQL_PASSWORD}
+      OPENSIM__Network__http_listener_port: "8002"
+
+  # =========================================================================
+  # region — Region simulator (osim-region)
+  # =========================================================================
+  # Runs the virtual world simulation: scene graph, physics (Rapier 3D),
+  # script engine, terrain, object persistence.
+  #
+  # LLUDP (viewer protocol) uses UDP 9000; HTTP caps and health use TCP 9000.
+  # To run multiple regions, deploy additional region containers with unique
+  # port mappings (e.g. 9001:9000, 9002:9000) and distinct region configs
+  # mounted into /data/regions.
+  # =========================================================================
+  region:
+    image: opensim-rust-region:${IMAGE_TAG:-latest}
+    command: ["opensim-region"]
+    <<: *default-restart
+    logging: *default-logging
+    networks:
+      - opensim-net
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      robust:
+        condition: service_started
+    ports:
+      # TCP: HTTP services (caps, health, metrics)
+      - "${REGION_PORT:-9000}:9000/tcp"
+      # UDP: LLUDP viewer protocol traffic
+      - "${REGION_PORT:-9000}:9000/udp"
+    environment:
+      RUST_LOG: "${RUST_LOG:-info}"
+      OPENSIM__Database__ConnectionString: >-
+        Server=db;Port=3306;Database=${MYSQL_DATABASE:-opensim};User=${MYSQL_USER:-opensim};Password=${MYSQL_PASSWORD}
+      OPENSIM__Network__http_listener_port: "9000"
+      OPENSIM__GridService__GridServerURI: "http://robust:8002"
+    volumes:
+      # Region configuration files (OpenSim.ini overrides, region XMLs)
+      - region-data:/data/regions
+      # OAR backup storage
+      - oar-backups:/data/backups
+
+  # =========================================================================
+  # portal — Web admin portal (osim-portal)
+  # =========================================================================
+  # Browser-based administration interface for managing users, regions,
+  # estates, and grid configuration.
+  # =========================================================================
+  portal:
+    image: opensim-rust:${IMAGE_TAG:-latest}
+    command: ["opensim-portal"]
+    <<: *default-restart
+    logging: *default-logging
+    networks:
+      - opensim-net
+    env_file: .env
+    depends_on:
+      robust:
+        condition: service_started
+    ports:
+      - "${PORTAL_PORT:-8080}:8080"
+    environment:
+      RUST_LOG: "${RUST_LOG:-info}"
+      OPENSIM__Database__ConnectionString: >-
+        Server=db;Port=3306;Database=${MYSQL_DATABASE:-opensim};User=${MYSQL_USER:-opensim};Password=${MYSQL_PASSWORD}
+      OPENSIM__GridService__GridServerURI: "http://robust:8002"
+
+  # =========================================================================
+  # wolfvoice — WebRTC voice sidecar
+  # =========================================================================
+  # Provides spatial voice chat via WebRTC.  This is a separate Docker image
+  # maintained in the wolfvoice project — the image below is a placeholder.
+  # Replace with the actual registry path when available.
+  #
+  # The voice server authenticates viewer requests using a shared secret
+  # (WOLFVOICE_SECRET_KEY) that must match the Robust configuration.
+  # =========================================================================
+  wolfvoice:
+    image: wolfvoice/wolfvoice:latest    # placeholder — update to real image
+    <<: *default-restart
+    logging: *default-logging
+    networks:
+      - opensim-net
+    depends_on:
+      robust:
+        condition: service_started
+    ports:
+      - "${WOLFVOICE_PORT:-8090}:8090"
+    environment:
+      SECRET_KEY: "${WOLFVOICE_SECRET_KEY:?Set WOLFVOICE_SECRET_KEY in .env}"
+      ROBUST_URI: "http://robust:8002"
+
+  # =========================================================================
+  # backup — Scheduled OAR backup sidecar (optional)
+  # =========================================================================
+  # Uncomment to enable automated region backup via cron.
+  # This mounts the same oar-backups volume and uses the region's admin API
+  # to trigger OAR saves on a schedule.
+  #
+  # backup:
+  #   image: docker.io/library/alpine:3.21
+  #   restart: unless-stopped
+  #   logging: *default-logging
+  #   networks:
+  #     - opensim-net
+  #   depends_on:
+  #     region:
+  #       condition: service_started
+  #   volumes:
+  #     - oar-backups:/data/backups
+  #   environment:
+  #     REGION_ADMIN_URI: "http://region:9000"
+  #     BACKUP_CRON: "${BACKUP_CRON:-0 4 * * *}"
+  #   entrypoint: ["/bin/sh", "-c"]
+  #   command:
+  #     - |
+  #       echo "$${BACKUP_CRON} wget -qO- $${REGION_ADMIN_URI}/admin/backup?format=oar > /data/backups/region-$$(date +%Y%m%d-%H%M%S).oar" \
+  #         | crontab -
+  #       crond -f -l 2
+
+# =============================================================================
+# Named volumes
+# =============================================================================
+# db-data:       MySQL data directory — back this up regularly.
+# region-data:   Region configuration files, terrain heightmaps.
+# oar-backups:   OAR (OpenSim Archive) backup files.
+# =============================================================================
+volumes:
+  db-data:
+    driver: local
+  region-data:
+    driver: local
+  oar-backups:
+    driver: local
+
+# =============================================================================
+# Networks
+# =============================================================================
+# All services communicate over a single bridge network.  The database is not
+# exposed to the host, reducing attack surface.  Only the application ports
+# (Robust, Region, Portal, Voice) are published.
+# =============================================================================
+networks:
+  opensim-net:
+    driver: bridge

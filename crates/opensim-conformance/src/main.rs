@@ -1,5 +1,9 @@
 mod lludp;
 mod pcampbot;
+mod bot_scripting;
+pub mod protocol_replay;
+pub mod service_conformance;
+pub mod cutover;
 pub mod spike;
 pub mod trajectory;
 
@@ -61,18 +65,33 @@ enum Commands {
         recording: PathBuf,
     },
     Bot {
+        /// Path to a bot configuration file (JSON)
         #[arg(long)]
-        pcampbot: PathBuf,
+        config: PathBuf,
+        /// Override the number of bots in the config
         #[arg(long)]
+        count: Option<usize>,
+        /// Override the action interval (milliseconds)
+        #[arg(long)]
+        interval: Option<u64>,
+    },
+    /// Run a programmable bot script.
+    BotScript {
+        /// Path to a BotScript JSON file.
+        #[arg(long)]
+        script_path: PathBuf,
+        /// Login URI (simulated).
+        #[arg(long, default_value = "http://localhost:9000")]
         login_uri: String,
-        #[arg(long, default_value = "Test")]
-        first_name: String,
-        #[arg(long, default_value = "Bot")]
-        last_name: String,
-        #[arg(long, default_value = "password")]
-        password: String,
-        #[arg(long, default_value = "1")]
-        count: usize,
+    },
+    /// Run service conformance tests against a Robust server.
+    ServiceConformance {
+        /// Base URL of the target Robust server.
+        #[arg(long)]
+        target: String,
+        /// Path to a directory of recorded responses.
+        #[arg(long)]
+        recordings_path: Option<PathBuf>,
     },
     PhysicsSpike {
         #[arg(long)]
@@ -168,27 +187,19 @@ async fn main() {
             }
         }
         Commands::Bot {
-            pcampbot,
-            login_uri,
-            first_name,
-            last_name,
-            password,
+            config,
             count,
+            interval,
         } => {
-            match pcampbot::run_pcampbot(
-                pcampbot, login_uri, first_name, last_name, password, count,
-            )
-            .await
-            {
-                Ok(result) => {
+            match pcampbot::run_bots(config, count, interval).await {
+                Ok(report) => {
                     println!(
-                        "\npCampBot: {} connected, {} failed",
-                        result.connected, result.failed
+                        "\npCampBot: {} connected, {} disconnected, {} actions ({} failed), avg {:.1}ms",
+                        report.connected, report.disconnected,
+                        report.actions_completed, report.actions_failed,
+                        report.avg_latency_ms,
                     );
-                    for err in &result.errors {
-                        println!("  error: {err}");
-                    }
-                    if result.failed > 0 {
+                    if report.actions_failed > 0 {
                         process::exit(1);
                     }
                 }
@@ -196,6 +207,46 @@ async fn main() {
                     error!("pCampBot failed: {e}");
                     process::exit(1);
                 }
+            }
+        }
+        Commands::BotScript {
+            script_path,
+            login_uri,
+        } => match bot_scripting::run_bot_script(script_path, login_uri).await {
+            Ok(result) => {
+                println!(
+                    "\nBotScript: {} run, {} failed, passed={}",
+                    result.actions_run, result.actions_failed, result.passed
+                );
+                for f in &result.failures {
+                    println!("  FAIL action {}: {}", f.action_index, f.error);
+                }
+                if !result.passed {
+                    process::exit(1);
+                }
+            }
+            Err(e) => {
+                error!("BotScript failed: {e}");
+                process::exit(1);
+            }
+        },
+        Commands::ServiceConformance {
+            target,
+            recordings_path,
+        } => {
+            let report = service_conformance::run_conformance_suite(
+                &target,
+                recordings_path.as_deref(),
+            );
+            println!(
+                "\nConformance: {} total, {} passed, {} failed, {} skipped",
+                report.total, report.passed, report.failed, report.skipped
+            );
+            for f in &report.failures {
+                println!("  FAIL {:?} ({}): {}", f.endpoint, f.test_name, f.reason);
+            }
+            if report.failed > 0 {
+                process::exit(1);
             }
         }
         Commands::PhysicsSpike {

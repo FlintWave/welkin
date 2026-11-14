@@ -1,10 +1,59 @@
+# OpenSim Rust — Docker Build Context Exclusions
+# ============================================================================
+# Prevents unnecessary files from being sent to the Docker daemon during
+# build, reducing context size, build time, and cache invalidation.
+#
+# Only Cargo.toml, Cargo.lock, and crates/ source code are needed for
+# compilation.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+# ============================================================================
+
+# ── Build artifacts ─────────────────────────────────────────────────
+# The target/ directory can be many gigabytes; the builder stage
+# compiles from scratch inside the container.
 target/
+
+# ── Version control ─────────────────────────────────────────────────
 .git/
-*.md
+.gitignore
+
+# ── Documentation and metadata ──────────────────────────────────────
 docs/
 openspec/
-scripts/
-deny.toml
-.dockerignore
+*.md
+LICENSE
+NOTICE
+NOTICE.md
+CONTRIBUTORS.txt
+
+# ── Container and compose files ─────────────────────────────────────
+# These files are not needed inside the build context.
 Containerfile
+Dockerfile
+Dockerfile.*
 compose.yaml
+compose.reference.yaml
+docker-compose.prod.yml
+.dockerignore
+
+# ── Development and CI tooling ──────────────────────────────────────
+scripts/
+recordings/
+deny.toml
+
+# ── Claude / AI assistant state ─────────────────────────────────────
+.claude/
+
+# ── Secrets and local config ────────────────────────────────────────
+# Never include .env (may contain production secrets).
+.env
+.env.*
+!.env.example
+
+# ── IDE and editor files ────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

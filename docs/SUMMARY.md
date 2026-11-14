@@ -45,6 +45,14 @@
 
 ---
 
+# Operator documentation
+
+- [Test grid deployment](test-grid-deployment.md)
+- [Operator guide](operator-guide.md)
+- [Migration guide (C# to Rust)](migration-guide.md)
+
+---
+
 # Reference
 
 - [Licence audit](licence-audit.md)

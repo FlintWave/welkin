@@ -32,6 +32,12 @@ See the [Roadmap](../openspec/ROADMAP.md) for the full plan.
 | 6 | [Hypergrid](hypergrid-summary.md) | [Hypergrid](security-review-hypergrid.md) |
 | 6 | [WebRTC voice](webrtc-voice-summary.md) | [Voice](security-review-voice.md) |
 
+## Operator documentation
+
+- [Test grid deployment](test-grid-deployment.md) — deploy a containerised test grid in minutes
+- [Operator guide](operator-guide.md) — installation, configuration, running, monitoring, security
+- [Migration guide](migration-guide.md) — step-by-step C# to Rust migration with rollback at every step
+
 ## Reference
 
 - [Architecture](architecture.md) — workspace, crates, dependency graph, build

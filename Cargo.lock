@@ -2383,6 +2383,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "opensim-migration"
+version = "0.1.0"
+dependencies = [
+ "argon2",
+ "base64 0.23.1",
+ "clap",
+ "md5 0.7.0",
+ "rand_core 0.6.4",
+ "regex",
+ "serde",
+ "serde_json",
+ "tokio",
+ "toml 0.8.2",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "opensim-modules"
 version = "0.1.0"
 dependencies = [

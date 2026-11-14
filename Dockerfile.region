@@ -1,0 +1,157 @@
+# Dockerfile.region — Region simulator container image
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Minimal multi-stage build that produces only the opensim-region binary.
+# Uses cargo-chef for dependency caching and Google's distroless base for
+# a hardened, shell-free runtime image.
+#
+# Build:
+#   docker build -f Dockerfile.region -t opensim-region .
+#
+# Run:
+#   docker run --rm -p 9000:9000/tcp -p 9000:9000/udp opensim-region
+#
+# Health checking:
+#   Distroless images contain no shell, so HEALTHCHECK cannot be used here.
+#   Configure your orchestrator (Docker Swarm, Kubernetes, etc.) to probe:
+#     HTTP GET http://<host>:9000/health
+#   The endpoint returns "ok" with status 200 when the region is ready.
+#
+# Copyright (C) 2024-2026 opensim-rust contributors
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or (at your
+# option) any later version.
+
+# ---------------------------------------------------------------------------
+# Build arguments
+# ---------------------------------------------------------------------------
+
+# Version embedded in OCI labels; override at build time with --build-arg.
+ARG VERSION=0.1.0
+
+# ===================================================================
+# Stage 1: chef — install cargo-chef for dependency caching
+# ===================================================================
+FROM docker.io/library/rust:1.83-bookworm AS chef
+
+# cargo-chef splits the build into a dependency-only layer (cacheable)
+# and the actual source build, so code changes don't re-download crates.
+RUN cargo install cargo-chef --locked
+
+WORKDIR /src
+
+# ===================================================================
+# Stage 2: planner — compute the dependency recipe
+# ===================================================================
+FROM chef AS planner
+
+# Copy the full workspace so cargo-chef can resolve all path dependencies.
+COPY Cargo.toml Cargo.lock ./
+COPY crates crates
+
+# Produce recipe.json — a lock-file-like manifest of every dependency.
+RUN cargo chef prepare --recipe-path recipe.json
+
+# ===================================================================
+# Stage 3: builder — compile opensim-region in release mode
+# ===================================================================
+FROM chef AS builder
+
+# Native build dependencies:
+#   cmake, g++  — required by openjpeg-sys (via aurora-assets) and future
+#                  SLua (C++ Luau) integration
+#   pkg-config   — locates system libraries for *-sys crates
+#   libssl-dev   — TLS support for network and database connections
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        cmake \
+        g++ \
+        pkg-config \
+        libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- Dependency cache layer ---
+# Restore the recipe from the planner stage and build only dependencies.
+# This layer is cached as long as Cargo.toml / Cargo.lock don't change.
+COPY --from=planner /src/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+
+# --- Source build ---
+# Now copy the real source and build the region binary.
+COPY Cargo.toml Cargo.lock ./
+COPY crates crates
+
+# Build only the region binary — no other binaries are compiled, keeping
+# this stage as lean as possible.
+RUN cargo build --release --bin opensim-region
+
+# Strip debug symbols to shrink the binary (typically 50-70% smaller).
+RUN strip target/release/opensim-region
+
+# ===================================================================
+# Stage 4: runtime — minimal distroless image
+# ===================================================================
+#
+# gcr.io/distroless/cc-debian12 provides:
+#   - glibc, libgcc, libstdc++ (needed by Rust glibc-linked binaries)
+#   - CA certificates for TLS
+#   - No shell, no package manager, no extra utilities
+#
+# This drastically reduces the attack surface compared to Debian or Alpine.
+FROM gcr.io/distroless/cc-debian12:nonroot AS runtime
+
+# Restate the build arg so it's available for labels in this stage.
+ARG VERSION=0.1.0
+
+# ---------------------------------------------------------------------------
+# OCI / Docker labels
+# ---------------------------------------------------------------------------
+LABEL maintainer="opensim-rust contributors" \
+      org.opencontainers.image.title="opensim-region" \
+      org.opencontainers.image.description="OpenSim Region Simulator" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.licenses="GPL-3.0-or-later" \
+      org.opencontainers.image.source="https://github.com/opensim-rust/opensim-rust"
+
+# ---------------------------------------------------------------------------
+# Binary installation
+# ---------------------------------------------------------------------------
+
+# Copy the stripped binary from the builder stage.
+COPY --from=builder /src/target/release/opensim-region /usr/local/bin/opensim-region
+
+# ---------------------------------------------------------------------------
+# Runtime configuration
+# ---------------------------------------------------------------------------
+
+# Run as the distroless nonroot user (UID 65534).
+# Never run containers as root in production.
+USER 65534:65534
+
+# Default log level — override with -e RUST_LOG=debug at runtime.
+# Supports env_filter syntax: RUST_LOG=opensim_region=debug,opensim_net=trace
+ENV RUST_LOG=info
+
+# ---------------------------------------------------------------------------
+# Network ports
+# ---------------------------------------------------------------------------
+
+# TCP 9000 — HTTP services (capabilities, health, metrics, region API)
+EXPOSE 9000/tcp
+
+# UDP 9000 — LLUDP protocol (viewer ↔ region traffic)
+# Must be explicitly published: docker run -p 9000:9000/udp
+EXPOSE 9000/udp
+
+# ---------------------------------------------------------------------------
+# Entrypoint
+# ---------------------------------------------------------------------------
+
+# Exec form ensures opensim-region is PID 1 and receives signals directly.
+# SIGTERM triggers graceful shutdown via tokio's signal handler.
+#
+# Override configuration with environment variables:
+#   docker run -e OPENSIM__Network__http_listener_port=9000 \
+#              -e OPENSIM__GridService__GridServerURI=http://robust:8003 \
+#              opensim-region
+ENTRYPOINT ["opensim-region"]

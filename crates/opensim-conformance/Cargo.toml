@@ -23,6 +23,7 @@ hyper = { version = "1.6", features = ["full"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "tokio"] }
 http-body-util = "0.1"
 bytes = "1"
+uuid = { workspace = true }
 
 [dev-dependencies]
 aurora-llsd = { workspace = true }
