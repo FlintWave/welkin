@@ -25,7 +25,7 @@ pub struct Circuit {
     next_seq: u32,
     unacked: HashMap<u32, Unacked>,
     pending_acks: Vec<u32>,
-    last_ack_flush: Instant,
+    pub(crate) last_ack_flush: Instant,
     recent: VecDeque<u32>,
     recent_set: HashSet<u32>,
     pub last_recv: Instant,

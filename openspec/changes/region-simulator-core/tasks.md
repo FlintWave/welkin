@@ -9,12 +9,12 @@
 
 ## 2. Client stack
 
-- [ ] 2.1 LLUDPServer: listener, accept, per-client dispatch using aurora-msg decode
-- [ ] 2.2 LLUDPClient: ack tracking, reliable resend, sequence numbers, connection lifecycle
-- [ ] 2.3 LLClientView packet dispatch: typed handler table keyed on message id
-- [ ] 2.4 Core viewer handlers: UseCircuitCode, CompleteAgentMovement, AgentUpdate, ObjectUpdate, ImprovedTerseObjectUpdate
-- [ ] 2.5 Object handlers: ObjectAdd, ObjectDelete, ObjectSelect, ObjectDeselect, ObjectGrab, ObjectProperties, MultipleObjectUpdate
-- [ ] 2.6 Avatar handlers: AvatarAnimation, AvatarAppearance, AgentSetAppearance, ViewerEffect, ChatFromViewer
+- [x] 2.1 LLUDPServer: listener, accept, per-client dispatch using aurora-msg decode
+- [x] 2.2 LLUDPClient: ack tracking, reliable resend, sequence numbers, connection lifecycle
+- [x] 2.3 LLClientView packet dispatch: typed handler table keyed on message id
+- [x] 2.4 Core viewer handlers: UseCircuitCode, CompleteAgentMovement, AgentUpdate, ObjectUpdate, ImprovedTerseObjectUpdate
+- [x] 2.5 Object handlers: ObjectAdd, ObjectDelete, ObjectSelect, ObjectDeselect, ObjectGrab, ObjectProperties, MultipleObjectUpdate
+- [x] 2.6 Avatar handlers: AvatarAnimation, AvatarAppearance, AgentSetAppearance, ViewerEffect, ChatFromViewer
 
 ## 3. Capabilities
 
