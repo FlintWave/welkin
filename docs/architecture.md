@@ -20,7 +20,7 @@ crates are prefixed `opensim-`.
 | `opensim-types` | SL protocol enums and bitfields: asset, inventory, folder and wearable types, attachment points, `PermissionMask` | implemented |
 | `opensim-llsd` | Wrapper over `aurora-llsd`, plus server-side XML-RPC codec (`src/xmlrpc.rs`) for login and legacy calls | implemented |
 | `opensim-msg` | Wrapper over `aurora-msg` (framing, zero-coding, typed messages). `src/objects.rs` adds server-direction object update encoders | implemented |
-| `opensim-prim` | Re-exports from `aurora-prim`: prim params, texture entries, extra params, sculpts, volume generation | wrapper only |
+| `opensim-prim` | Re-exports from `aurora-prim`, plus physics meshing: analytic box/sphere, volume and sculpt trimeshes, LOD selection, mesh asset decoder (`mesh_asset.rs`), V-HACD convex decomposition, shape and decomposition caches, linkset compound colliders (`meshing.rs`). See `docs/prim-meshing-summary.md` | implemented |
 | `opensim-net` | Server-side LLUDP circuit: `circuit.rs` (sequence, ack, resend, dedup, ping, timeout) and `throttle.rs` (7 categories, token buckets) | implemented |
 | `opensim-config` | TOML configuration with env overrides; `OpenSim.ini` / `Robust.ini` importer | implemented |
 | `opensim-runtime` | Logging (`tracing`), Prometheus metrics, health endpoint, graceful shutdown | implemented |

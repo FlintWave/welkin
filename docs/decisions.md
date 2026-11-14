@@ -41,6 +41,10 @@ where none is given.
 | G2 | Portal staff and sign-up passwords use argon2; sign-up passwords are hashed at registration (`ddba6d0`, `59eea64`) | Security review H3: plaintext in memory is not acceptable. TOTP rejects accounts that have a secret until implemented (H1), which fails closed | 2026-11-13 |
 | G3 | Portal follows the GridGate model: Admin/Operator/Viewer roles, sign-up with approval, map placement, one-command install (`ddba6d0`) | BSD-licensed model in the roadmap, so pages and flow can be adapted; roles enforced in code (H2) | 2026-11-13 |
 | G4 | Portal is not for public exposure until security review items M1 to M5 are fixed; restrict by network or proxy meanwhile | Review assessment; same arrangement as S5 | 2026-11-13 |
+| M1 | Box and sphere prims use analytic colliders; other prims use aurora-prim trimeshes with LOD chosen by size | Cheaper and exact for the common case; LOD thresholds match C# Meshmerizer | 2026-11-13 |
+| M2 | Convex decomposition uses parry3d V-HACD, with C# voxel budget mapped to a grid size clamped to 16 to 256, results cached | No new dependency; C# parameters kept for parity (`max_vertices_per_hull` advisory only) | 2026-11-13 |
+| M3 | Sculpt textures come through a `SculptTextureSource` trait; JPEG 2000 decoding deferred | Keeps meshing testable and leaves the `aurora-assets` versus pure Rust question open | 2026-11-13 |
+| M4 | Mesh asset decoding is treated as untrusted: indices validated, zlib output capped at 32 MiB, cache mutexes recover from poisoning (`1812e45`) | Security review CRITICAL-1, HIGH-1, MEDIUM-3 | 2026-11-13 |
 
 ## Open questions
 
