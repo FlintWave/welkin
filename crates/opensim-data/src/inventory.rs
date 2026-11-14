@@ -274,4 +274,150 @@ impl InventoryStore {
         tx.commit().await?;
         Ok(())
     }
+
+    pub async fn get_folder_for_type(
+        &self,
+        agent_id: &str,
+        folder_type: i16,
+    ) -> Result<Option<InventoryFolderRow>, DataError> {
+        let sql =
+            format!("SELECT {FOLDER_COLS} FROM inventoryfolders WHERE agentID = $1 AND type = $2");
+        Ok(sqlx::query_as::<_, InventoryFolderRow>(&sql)
+            .bind(agent_id)
+            .bind(folder_type)
+            .fetch_optional(&self.pool)
+            .await?)
+    }
+
+    pub async fn move_folder(&self, folder_id: &str, parent_id: &str) -> Result<bool, DataError> {
+        let res = sqlx::query("UPDATE inventoryfolders SET parentFolderID = $1 WHERE folderID = $2")
+            .bind(parent_id)
+            .bind(folder_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(res.rows_affected() > 0)
+    }
+
+    pub async fn delete_folders(&self, folder_ids: &[&str]) -> Result<(), DataError> {
+        let mut tx = self.pool.begin().await?;
+        for id in folder_ids {
+            sqlx::query("DELETE FROM inventoryfolders WHERE folderID = $1")
+                .bind(*id)
+                .execute(&mut *tx)
+                .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn delete_items(&self, item_ids: &[&str]) -> Result<(), DataError> {
+        let mut tx = self.pool.begin().await?;
+        for id in item_ids {
+            sqlx::query("DELETE FROM inventoryitems WHERE inventoryID = $1")
+                .bind(*id)
+                .execute(&mut *tx)
+                .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// `item_ids` and `dest_ids` are parallel arrays; extra entries are ignored.
+    pub async fn move_items(&self, item_ids: &[&str], dest_ids: &[&str]) -> Result<(), DataError> {
+        let mut tx = self.pool.begin().await?;
+        for (id, dest) in item_ids.iter().zip(dest_ids.iter()) {
+            sqlx::query("UPDATE inventoryitems SET parentFolderID = $1 WHERE inventoryID = $2")
+                .bind(*dest)
+                .bind(*id)
+                .execute(&mut *tx)
+                .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn get_active_gestures(
+        &self,
+        agent_id: &str,
+    ) -> Result<Vec<InventoryItemRow>, DataError> {
+        let sql = format!(
+            "SELECT {ITEM_COLS} FROM inventoryitems WHERE avatarID = $1 AND invType = 21 \
+             AND (flags & 1) = 1"
+        );
+        Ok(sqlx::query_as::<_, InventoryItemRow>(&sql)
+            .bind(agent_id)
+            .fetch_all(&self.pool)
+            .await?)
+    }
+
+    /// OR of `inventoryCurrentPermissions` over matching items, as OpenSim does.
+    pub async fn get_asset_permissions(
+        &self,
+        principal_id: &str,
+        asset_id: &str,
+    ) -> Result<i32, DataError> {
+        let rows: Vec<(i64,)> = sqlx::query_as(
+            "SELECT COALESCE(inventoryCurrentPermissions, 0) FROM inventoryitems \
+             WHERE avatarID = $1 AND assetID = $2",
+        )
+        .bind(principal_id)
+        .bind(asset_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows.into_iter().fold(0i64, |acc, (p,)| acc | p) as i32)
+    }
+
+    pub async fn get_multiple_items(
+        &self,
+        item_ids: &[&str],
+    ) -> Result<Vec<Option<InventoryItemRow>>, DataError> {
+        let mut out = Vec::with_capacity(item_ids.len());
+        for id in item_ids {
+            out.push(self.get_item(id).await?);
+        }
+        Ok(out)
+    }
+
+    pub async fn create_user_inventory(&self, principal_id: &str) -> Result<(), DataError> {
+        const SKELETON: &[(&str, i16)] = &[
+            ("Animations", 20),
+            ("Body Parts", 13),
+            ("Calling Cards", 2),
+            ("Clothing", 5),
+            ("Current Outfit", 46),
+            ("Favorites", 23),
+            ("Gestures", 21),
+            ("Landmarks", 3),
+            ("Lost And Found", 16),
+            ("My Outfits", 48),
+            ("Notecards", 7),
+            ("Objects", 6),
+            ("Scripts", 10),
+            ("Sounds", 1),
+            ("Textures", 0),
+            ("Trash", 14),
+        ];
+        let root_id = uuid::Uuid::new_v4().to_string();
+        self.store_folder(&InventoryFolderRow {
+            folder_name: "My Inventory".to_string(),
+            folder_type: -1,
+            version: 1,
+            folder_id: root_id.clone(),
+            agent_id: principal_id.to_string(),
+            parent_folder_id: ZERO_UUID.to_string(),
+        })
+        .await?;
+        for (name, ty) in SKELETON {
+            self.store_folder(&InventoryFolderRow {
+                folder_name: (*name).to_string(),
+                folder_type: *ty,
+                version: 1,
+                folder_id: uuid::Uuid::new_v4().to_string(),
+                agent_id: principal_id.to_string(),
+                parent_folder_id: root_id.clone(),
+            })
+            .await?;
+        }
+        Ok(())
+    }
 }
