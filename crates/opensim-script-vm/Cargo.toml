@@ -18,6 +18,13 @@ uuid = { workspace = true }
 base64 = { workspace = true }
 sha1_smol = { workspace = true }
 md-5 = { workspace = true }
+regex = { workspace = true }
+sha2 = { workspace = true }
+aes = { workspace = true }
+cbc = { workspace = true }
+pbkdf2 = { workspace = true }
+hmac = { workspace = true }
+chrono = { workspace = true }
 
 [lints]
 workspace = true

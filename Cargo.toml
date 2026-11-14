@@ -42,6 +42,13 @@ mlua = { version = "0.12", features = ["luau", "serialize"] }
 parking_lot = "0.12"
 sha1_smol = { version = "1", features = ["std"] }
 md-5 = "0.10"
+regex = "1"
+sha2 = "0.10"
+aes = "0.8"
+cbc = "0.1"
+pbkdf2 = "0.12"
+hmac = "0.12"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "warn"
