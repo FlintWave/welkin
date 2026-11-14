@@ -38,4 +38,4 @@
 ## 8. Testing and security
 
 - [x] 8.1 Port ArchiverTests and InventoryArchiveTests (~900 lines C#): round-trip save/load, merge, displacement, permission filter, multi-region (62994dd: tests/integration_tests.rs, 31 integration tests)
-- [ ] 8.2 SECURITY REVIEW: path traversal on tar extraction, asset size limits, UUID injection via OspResolver, permission bypass (HIGH RISK, Opus reviewer)
+- [x] 8.2 SECURITY REVIEW: path traversal on tar extraction, asset size limits, UUID injection via OspResolver, permission bypass (HIGH RISK, Opus reviewer) (62994dd: CONDITIONAL PASS, 15 findings in docs/security-review-archives.md, 0 critical, 0 high, 5 medium tracked for remediation)
