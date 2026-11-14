@@ -47,7 +47,7 @@ None.
      versions (e.g., replace `llSay` with a function that also captures and
      exfiltrates arguments to a global table for later retrieval).
   2. Mutate the Luau standard library tables (`math`, `string`, `table`,
-     `coroutine`) — not exploitable for cross-script attacks (separate VMs)
+     `coroutine`) - not exploitable for cross-script attacks (separate VMs)
      but violates the principle of least privilege.
   3. In future, if per-environment isolation replaces per-VM isolation (for
      efficiency), the unfrozen globals become a cross-script attack surface.
@@ -56,7 +56,7 @@ None.
   This is safe because handler functions are already registered as globals
   at that point.
 
-**H2. Event queue is unbounded — host-side memory exhaustion**
+**H2. Event queue is unbounded - host-side memory exhaustion**
 
 - **Location:** `instance.rs` line 152, `ScriptInstance::post_event`
 - **Description:** `event_queue: VecDeque<ScriptEvent>` has no size cap.
@@ -101,7 +101,7 @@ None.
   verifier bug. While no such bug is currently known in mlua/Luau 0.12,
   defence-in-depth argues for validation.
 - **Fix:** Add a magic/version header to `ScriptState.bytecode` (e.g., the
-  Luau bytecode version byte that Luau already embeds — verify it matches
+  Luau bytecode version byte that Luau already embeds - verify it matches
   the version compiled by this build). Consider HMAC-signing transfer
   bundles.
 
@@ -167,7 +167,7 @@ None.
 
 ### INFO (observations)
 
-**I1. All communication functions are stubs — no network access**
+**I1. All communication functions are stubs - no network access**
 
 Communication builtins (`llSay`, `llShout`, `llWhisper`, `llRegionSay`,
 `llRegionSayTo`, `llOwnerSay`, `llInstantMessage`, `llListen`,
@@ -176,7 +176,7 @@ Communication builtins (`llSay`, `llShout`, `llWhisper`, `llRegionSay`,
 The `Cargo.toml` contains no networking dependencies. **No network
 escape is possible from scripts.**
 
-**I2. All OSSL functions are stubs — no inventory or file I/O**
+**I2. All OSSL functions are stubs - no inventory or file I/O**
 
 OSSL notecard functions (`osGetNotecard`, `osGetNotecardLine`,
 `osMakeNotecard`) are stubs that return empty values. No `std::fs` or
@@ -201,7 +201,7 @@ available.
 **I5. `Arc<RwLock<ScriptContext>>` is safe from deadlocks**
 
 All lock acquisitions in registered ll*/os* functions are brief, non-
-nested, and bounded. A script cannot hold the lock — it is acquired and
+nested, and bounded. A script cannot hold the lock - it is acquired and
 released within the Rust callback, outside the script's control. No
 deadlock scenario is possible with the current registration pattern.
 
@@ -214,7 +214,7 @@ branches (loops), which is standard practice. The `fetch_add` counter
 with `Ordering::Relaxed` is correct for single-threaded-per-VM usage.
 Test `instruction_limit_produces_error` confirms the mechanism works.
 
-**I7. `osSetDynamicTextureURL` accepts a URL parameter — future SSRF risk**
+**I7. `osSetDynamicTextureURL` accepts a URL parameter - future SSRF risk**
 
 Currently a stub, but when implemented it will fetch a URL from within
 the simulator. The implementation must validate the URL scheme (reject

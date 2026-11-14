@@ -57,6 +57,12 @@ where none is given.
 | E4 | OSgrid setup rules are wizard checks, not documentation only (`91a1147`) | Name, coordinate, estate owner and port mistakes are caught before registration |
 | E5 | Replay recording (3.2) and live attach (3.4) deferred to Phase 7 cutover (`0b0f587`) | Needs live C# region and grid infrastructure and an answer from OSgrid |
 | E6 | External-grid mode accepted as CONDITIONAL PASS: SSRF fix and the 4 HIGH fixes are required before any untrusted grid; `osgrid` and `custom` stay disabled meanwhile (`e46a2dd`) | Security review of remote write paths, hostile-grid threat model |
+| V1 | Go on Luau via mlua 0.12, not a custom VM; LSL runs through a transpiler to Luau (`d413580`) | Spike passed: yield, memory limit, interrupt pre-emption and state serialisation all work | 2026-11-13 |
+| V2 | Script state persists as bytecode plus globals JSON (checkpoint pattern); coroutine stacks are not saved (`3fb1cbd`) | Luau cannot snapshot a coroutine stack; scripts restart their event after transfer | 2026-11-13 |
+| V3 | One Luau VM per script | Strong isolation; memory limit applies per script | 2026-11-13 |
+| V4 | `os*` functions are gated by an 8-level `OsslThreatLevel` with a per-function allow override (`a5539f5`) | Mirrors C# OSSL threat levels so existing grid configuration carries over | 2026-11-13 |
+| V5 | `ll*` functions not yet needed are registered as stubs (33 of 82) | Keeps the function table complete so scripts compile and run | 2026-11-13 |
+| V6 | Script engine accepted as CONDITIONAL PASS: freeze globals with `sandbox(true)` in `ScriptInstance` and bound the event queue before production (`dd1177d`) | Second review, 2 HIGH findings; same arrangement as S5 and G4 | 2026-11-13 |
 
 ## Open questions
 

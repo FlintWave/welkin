@@ -34,7 +34,8 @@ crates are prefixed `opensim-`.
 | `opensim-scene` | Scene, object groups and parts, presences, XML2 serializer, terrain (channel, file I/O, brushes, compression), region manager, shutdown | implemented |
 | `opensim-modules` | Region modules (land, permissions, chat, ...) | skeleton |
 | `opensim-archive` | OAR/IAR archives | skeleton |
-| `opensim-script-compiler`, `-vm`, `-api` | SLua embedding, LSL/Luau, `ll*`/`os*` API | skeleton |
+| `opensim-script-vm` | Luau VM via mlua: `ScriptInstance`, `ScriptScheduler`, `RegionTransferBundle`, `ScriptState` save/restore, 82 `ll*` (49 implemented), 27 `os*` with threat levels, events and detected parameters. See `docs/script-engine-summary.md` | implemented (172 tests) |
+| `opensim-script-compiler`, `-api` | LSL-to-Luau transpiler; scene-bound script API | skeleton |
 | `opensim-portal` | Grid portal: staff auth (argon2), sessions, RBAC roles, audit log, region control, pages, grid map, people/sign-up, first-run wizard, content/catalogue | implemented |
 | `opensim-companion` | Tauri 2 desktop app: tray icon, service start/stop, log viewer, notifications, remote grid connect. **Standalone**: excluded from workspace (`Cargo.toml` exclude) | implemented |
 | `opensim-robust` | Binary: grid services | skeleton (`main.rs`) |
@@ -198,7 +199,7 @@ Phase 2 complete: 53 tasks across 3 changes. All accepted.
 
 Phase 2 total: 111/142 overall tasks complete.
 
-Phase 3: region-simulator-core (all 7 task groups) and prim-meshing accepted.
+Phase 3: region-simulator-core (all 7 task groups), prim-meshing and script-engine accepted.
 
 ## External grid mode
 
@@ -216,6 +217,24 @@ Grid profiles let a region join a grid it does not run. See
 
 The remote grid is treated as hostile. Review `docs/security-review-remote-writes.md`
 found 1 CRITICAL (SSRF) and 4 HIGH issues that block use against an untrusted grid.
+
+## Script engine
+
+Scripts run on Luau through mlua 0.12, one VM per script. See
+`docs/script-engine-summary.md`.
+
+| Component | Location | Role |
+|---|---|---|
+| Instance | `opensim-script-vm/src/instance.rs` | One VM, memory limit, event queue, dispatch |
+| Scheduler | `scheduler.rs` | Round-robin by instruction limit, timers, event broadcast |
+| Transfer | `transfer.rs` | `RegionTransferBundle` for region crossing |
+| State | `lib.rs` | `ScriptState` (bytecode and globals JSON), `new_vm_with_memory_limit` |
+| `ll*` | `builtins/` | 82 functions over a shared `ScriptContext` |
+| `os*` | `ossl.rs` | 27 functions gated by `OsslThreatLevel` and `OsslConfig` |
+| Events | `events.rs` | `DetectedInfo`, `EventContext`, `llDetected*`, `dispatch_event` |
+
+Sandboxing review found 2 HIGH issues (unfrozen globals, unbounded event queue)
+that block production use. See `docs/security-review-script-sandboxing.md`.
 
 ## Roadmap
 
