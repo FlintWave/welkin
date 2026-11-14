@@ -1,12 +1,12 @@
 ## 1. Foundation
 
-- [ ] 1.1 Archive constants module: 21 asset-type-to-extension mappings, tar path prefixes, control file version, max archive size constant
-- [ ] 1.2 RegionSettingsSerializer: XML read/write for region settings matching C# format, round-trip test against C# output
+- [x] 1.1 Archive constants module: 21 asset-type-to-extension mappings, tar path prefixes, control file version, max archive size constant (5207afc: constants.rs, 9 tests)
+- [x] 1.2 RegionSettingsSerializer: XML read/write for region settings matching C# format, round-trip test against C# output (5207afc: region_settings.rs, 4 tests)
 
 ## 2. Land and settings serialization
 
-- [ ] 2.1 LandDataSerializer: XML read/write for parcel data matching C# format, round-trip test
-- [ ] 2.2 Archive control file (archive.xml): version, timestamps, region dimensions, multi-region flag
+- [x] 2.1 LandDataSerializer: XML read/write for parcel data matching C# format, round-trip test (5207afc: land_data.rs, 4 tests)
+- [x] 2.2 Archive control file (archive.xml): version, timestamps, region dimensions, multi-region flag (5207afc: control_file.rs, 5 tests)
 
 ## 3. OAR write
 
