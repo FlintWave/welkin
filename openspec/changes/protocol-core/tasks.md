@@ -13,7 +13,7 @@
 ## 3. Server-direction gaps
 
 - [x] 3.1 Encoders for object updates (full, terse, compressed) and other messages the viewer only decodes
-- [ ] 3.2 Decoders for messages the viewer only sends
+- [x] 3.2 Decoders for messages the viewer only sends
 - [ ] 3.3 Offer the additions to Aurora Viewer upstream
 
 ## 4. Circuit
