@@ -495,6 +495,23 @@ impl RapierPhysicsScene {
         rotation: Quat,
         is_physical: bool,
     ) -> u32 {
+        self.insert_actor_with_shape(
+            local_id, name, actor_type, position, velocity, size, rotation, is_physical, None,
+        )
+    }
+
+    fn insert_actor_with_shape(
+        &mut self,
+        local_id: u32,
+        name: &str,
+        actor_type: ActorType,
+        position: Vec3,
+        velocity: Vec3,
+        size: Vec3,
+        rotation: Quat,
+        is_physical: bool,
+        shape: Option<SharedShape>,
+    ) -> u32 {
         let builder = if is_physical {
             RigidBodyBuilder::dynamic()
         } else {
@@ -510,11 +527,14 @@ impl RapierPhysicsScene {
             body.set_rotation(to_rapier_quat(rotation), false);
         }
 
-        let collider = ColliderBuilder::cuboid(
-            (size.x / 2.0).max(0.01),
-            (size.y / 2.0).max(0.01),
-            (size.z / 2.0).max(0.01),
-        )
+        let collider = match shape {
+            Some(s) => ColliderBuilder::new(s),
+            None => ColliderBuilder::cuboid(
+                (size.x / 2.0).max(0.01),
+                (size.y / 2.0).max(0.01),
+                (size.z / 2.0).max(0.01),
+            ),
+        }
         .density(1000.0)
         .friction(0.5)
         .restitution(0.0)
@@ -613,6 +633,30 @@ impl PhysicsScene for RapierPhysicsScene {
             size,
             rotation,
             is_physical,
+        )
+    }
+
+    fn add_prim_with_shape(
+        &mut self,
+        local_id: u32,
+        name: &str,
+        position: Vec3,
+        size: Vec3,
+        rotation: Quat,
+        is_physical: bool,
+        shape: Option<Box<dyn std::any::Any + Send>>,
+    ) -> u32 {
+        let shared_shape = shape.and_then(|s| s.downcast::<SharedShape>().ok().map(|s| *s));
+        self.insert_actor_with_shape(
+            local_id,
+            name,
+            ActorType::Prim,
+            position,
+            Vec3::ZERO,
+            size,
+            rotation,
+            is_physical,
+            shared_shape,
         )
     }
 

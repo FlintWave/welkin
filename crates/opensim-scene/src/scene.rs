@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::RwLock;
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use glam::Vec3;
 use uuid::Uuid;
@@ -339,6 +339,55 @@ impl Scene {
             dirty_objects,
         }
     }
+
+    // ---- Periodic backup ----
+
+    /// Returns UUIDs of objects eligible for backup based on C#-style persistence timing.
+    ///
+    /// An object is collected when `backup_needed` is true AND either:
+    /// - it has been idle (unchanged) for at least `persist_min_seconds`, OR
+    /// - it has been dirty for at least `persist_max_seconds` (forced backup).
+    pub fn collect_for_backup(&self) -> Vec<Uuid> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs() as i64;
+        let min_s = self.config.persist_min_seconds;
+        let max_s = self.config.persist_max_seconds;
+
+        let objects = self.objects.read().unwrap();
+        objects
+            .iter()
+            .filter(|(_, g)| {
+                g.backup_needed
+                    && ((now - g.time_last_changed >= min_s)
+                        || (now - g.time_first_changed >= max_s))
+            })
+            .map(|(id, _)| *id)
+            .collect()
+    }
+
+    /// Clears dirty/backup flags on an object after it has been persisted.
+    pub fn mark_backed_up(&self, uuid: &Uuid) {
+        let mut objects = self.objects.write().unwrap();
+        if let Some(g) = objects.get_mut(uuid) {
+            g.backup_needed = false;
+            g.has_changed = false;
+            g.time_first_changed = 0;
+            g.time_last_changed = 0;
+        }
+    }
+
+    /// Returns UUIDs of ALL objects with `backup_needed == true`, ignoring timing.
+    /// Used during shutdown to flush every pending change.
+    pub fn force_backup_all(&self) -> Vec<Uuid> {
+        let objects = self.objects.read().unwrap();
+        objects
+            .iter()
+            .filter(|(_, g)| g.backup_needed)
+            .map(|(id, _)| *id)
+            .collect()
+    }
 }
 
 impl std::fmt::Debug for Scene {
@@ -550,5 +599,164 @@ mod tests {
         let info = RegionInfo::new("Encode", 1000, 2000);
         let expected = ((1000u64) << 32) | 2000u64;
         assert_eq!(info.region_handle, expected);
+    }
+
+    // ---- Periodic backup tests ----
+
+    #[test]
+    fn test_collect_for_backup_empty_scene() {
+        let scene = test_scene();
+        assert!(scene.collect_for_backup().is_empty());
+    }
+
+    #[test]
+    fn test_collect_for_backup_clean_objects() {
+        let scene = test_scene();
+        let owner = Uuid::new_v4();
+        // Add objects but never mark them dirty
+        scene.add_object(test_group("Clean1", owner, Vec3::ZERO));
+        scene.add_object(test_group("Clean2", owner, Vec3::new(10.0, 0.0, 0.0)));
+        assert!(scene.collect_for_backup().is_empty());
+    }
+
+    #[test]
+    fn test_collect_for_backup_recently_changed() {
+        let scene = test_scene();
+        let owner = Uuid::new_v4();
+        let group = test_group("Recent", owner, Vec3::ZERO);
+        let uuid = group.uuid();
+        scene.add_object(group);
+
+        // Mark dirty with timestamps set to "just now" — not eligible yet
+        scene.with_object_mut(&uuid, |g| {
+            g.mark_changed();
+        });
+
+        // persist_min_seconds is 60, so a just-changed object should NOT be collected
+        assert!(scene.collect_for_backup().is_empty());
+    }
+
+    #[test]
+    fn test_collect_for_backup_idle_long_enough() {
+        let scene = test_scene();
+        let owner = Uuid::new_v4();
+        let group = test_group("Idle", owner, Vec3::ZERO);
+        let uuid = group.uuid();
+        scene.add_object(group);
+
+        // Simulate: object was changed persist_min_seconds + 1 seconds ago
+        let past = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64
+            - scene.config.persist_min_seconds
+            - 1;
+
+        scene.with_object_mut(&uuid, |g| {
+            g.backup_needed = true;
+            g.has_changed = true;
+            g.time_first_changed = past;
+            g.time_last_changed = past;
+        });
+
+        let collected = scene.collect_for_backup();
+        assert_eq!(collected.len(), 1);
+        assert!(collected.contains(&uuid));
+    }
+
+    #[test]
+    fn test_collect_for_backup_dirty_too_long() {
+        // Object keeps being changed (time_last_changed is recent) but
+        // time_first_changed exceeds persist_max_seconds — force backup.
+        let scene = test_scene();
+        let owner = Uuid::new_v4();
+        let group = test_group("ForceDirty", owner, Vec3::ZERO);
+        let uuid = group.uuid();
+        scene.add_object(group);
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let long_ago = now - scene.config.persist_max_seconds - 1;
+
+        scene.with_object_mut(&uuid, |g| {
+            g.backup_needed = true;
+            g.has_changed = true;
+            g.time_first_changed = long_ago;
+            g.time_last_changed = now; // just changed — still active
+        });
+
+        let collected = scene.collect_for_backup();
+        assert_eq!(collected.len(), 1);
+        assert!(collected.contains(&uuid));
+    }
+
+    #[test]
+    fn test_force_backup_all() {
+        let scene = test_scene();
+        let owner = Uuid::new_v4();
+
+        let g1 = test_group("Dirty1", owner, Vec3::ZERO);
+        let g2 = test_group("Dirty2", owner, Vec3::new(5.0, 0.0, 0.0));
+        let g3 = test_group("Clean", owner, Vec3::new(10.0, 0.0, 0.0));
+        let u1 = g1.uuid();
+        let u2 = g2.uuid();
+        let u3 = g3.uuid();
+
+        scene.add_object(g1);
+        scene.add_object(g2);
+        scene.add_object(g3);
+
+        // Mark two as needing backup (recently — would NOT pass timed collection)
+        scene.with_object_mut(&u1, |g| g.mark_changed());
+        scene.with_object_mut(&u2, |g| g.mark_changed());
+
+        let forced = scene.force_backup_all();
+        assert_eq!(forced.len(), 2);
+        assert!(forced.contains(&u1));
+        assert!(forced.contains(&u2));
+        assert!(!forced.contains(&u3));
+    }
+
+    #[test]
+    fn test_mark_backed_up() {
+        let scene = test_scene();
+        let owner = Uuid::new_v4();
+        let group = test_group("BackedUp", owner, Vec3::ZERO);
+        let uuid = group.uuid();
+        scene.add_object(group);
+
+        // Simulate old dirty object eligible for backup
+        let past = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64
+            - scene.config.persist_min_seconds
+            - 1;
+        scene.with_object_mut(&uuid, |g| {
+            g.backup_needed = true;
+            g.has_changed = true;
+            g.time_first_changed = past;
+            g.time_last_changed = past;
+        });
+
+        // Verify it would be collected
+        assert_eq!(scene.collect_for_backup().len(), 1);
+
+        // Mark backed up
+        scene.mark_backed_up(&uuid);
+
+        // Should no longer be collected
+        assert!(scene.collect_for_backup().is_empty());
+        assert!(scene.force_backup_all().is_empty());
+
+        // Verify the flags are fully reset
+        scene.with_object(&uuid, |g| {
+            assert!(!g.backup_needed);
+            assert!(!g.has_changed);
+            assert_eq!(g.time_first_changed, 0);
+            assert_eq!(g.time_last_changed, 0);
+        });
     }
 }

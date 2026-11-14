@@ -184,6 +184,27 @@ pub trait PhysicsScene {
         flags: RayFilterFlags,
     ) -> Vec<ContactResult>;
     fn dispose(&mut self);
+
+    /// Add a prim with an optional pre-computed collision shape.
+    ///
+    /// The `shape` parameter is type-erased so this crate does not depend on any
+    /// specific physics engine.  Backend implementations downcast to their own
+    /// shape type (e.g. `rapier3d::parry::shape::SharedShape`).
+    ///
+    /// The default implementation ignores the shape and delegates to [`add_prim`].
+    fn add_prim_with_shape(
+        &mut self,
+        local_id: u32,
+        name: &str,
+        position: Vec3,
+        size: Vec3,
+        rotation: Quat,
+        is_physical: bool,
+        shape: Option<Box<dyn std::any::Any + Send>>,
+    ) -> u32 {
+        let _ = shape;
+        self.add_prim(local_id, name, position, size, rotation, is_physical)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
