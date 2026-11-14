@@ -1,5 +1,6 @@
 mod lludp;
 mod pcampbot;
+pub mod spike;
 pub mod trajectory;
 
 use axum::{
@@ -72,6 +73,12 @@ enum Commands {
         password: String,
         #[arg(long, default_value = "1")]
         count: usize,
+    },
+    PhysicsSpike {
+        #[arg(long)]
+        recording: PathBuf,
+        #[arg(long, default_value = "2.0")]
+        tolerance: f32,
     },
 }
 
@@ -191,6 +198,31 @@ async fn main() {
                 }
             }
         }
+        Commands::PhysicsSpike {
+            recording,
+            tolerance,
+        } => match spike::run_spike(&recording, tolerance) {
+            Ok(report) => {
+                for r in &report.results {
+                    println!(
+                        "actor {}: max_err={:.4} mean_err={:.4} frames={}",
+                        r.actor_id, r.max_position_error, r.mean_position_error, r.frame_count
+                    );
+                }
+                println!(
+                    "\noverall: {} (tolerance={:.2})",
+                    if report.overall_pass { "PASS" } else { "FAIL" },
+                    report.tolerance
+                );
+                if !report.overall_pass {
+                    process::exit(1);
+                }
+            }
+            Err(e) => {
+                error!("physics spike failed: {e}");
+                process::exit(1);
+            }
+        },
     }
 }
 

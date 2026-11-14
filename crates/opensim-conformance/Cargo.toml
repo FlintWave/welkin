@@ -18,6 +18,7 @@ serde_json = { workspace = true }
 clap = { workspace = true }
 axum = { workspace = true }
 glam = { workspace = true }
+rapier3d = { workspace = true }
 hyper = { version = "1.6", features = ["full"] }
 hyper-util = { version = "0.1", features = ["client-legacy", "tokio"] }
 http-body-util = "0.1"

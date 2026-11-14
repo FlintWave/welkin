@@ -1961,6 +1961,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "opensim-llsd",
+ "rapier3d",
  "serde",
  "serde_json",
  "tokio",
