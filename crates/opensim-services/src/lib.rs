@@ -14,6 +14,7 @@ pub(crate) fn constant_time_eq(a: &str, b: &str) -> bool {
 }
 
 pub mod assets;
+pub mod cache;
 pub mod inventory;
 pub mod grid;
 pub mod presence;
@@ -30,3 +31,5 @@ pub mod map;
 pub mod estate;
 pub mod simulation;
 pub mod login;
+pub mod remote;
+pub mod registration;
