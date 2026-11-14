@@ -7,7 +7,7 @@
 ## 2. Services
 
 - [x] 2.1 Assets and file-system asset store
-- [ ] 2.2 Inventory
+- [x] 2.2 Inventory
 - [ ] 2.3 Grid, presence, grid user
 - [ ] 2.4 User accounts, authentication, authorization
 - [ ] 2.5 Friends, avatar, mute list, user profiles
