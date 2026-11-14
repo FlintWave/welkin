@@ -4,7 +4,7 @@ Rust port of [OpenSimulator 0.9.3.0](http://opensimulator.org/) — a complete
 reimplementation of the grid services and region simulator in Rust, with wire
 and schema compatibility so existing grids can migrate without losing content.
 
-**Status:** 283/333 tasks (84%), 15 of 18 phases accepted.
+**Status:** 314/333 tasks (94%), 17 of 18 phases accepted.
 See the [Roadmap](../openspec/ROADMAP.md) for the full plan.
 
 > [!NOTE]
@@ -29,6 +29,8 @@ See the [Roadmap](../openspec/ROADMAP.md) for the full plan.
 | 5 | [Archives](archives-summary.md) | [Archives](security-review-archives.md) |
 | 6 | [Social modules](social-modules-summary.md) | [Social modules](security-review-social-modules.md) |
 | 6 | [External grid mode](external-grid-mode-summary.md) | [Remote writes](security-review-remote-writes.md) |
+| 6 | [Hypergrid](hypergrid-summary.md) | [Hypergrid](security-review-hypergrid.md) |
+| 6 | [WebRTC voice](webrtc-voice-summary.md) | [Voice](security-review-voice.md) |
 
 ## Reference
 
@@ -52,6 +54,8 @@ acceptance. Current verdicts:
 | [Remote writes](security-review-remote-writes.md) | CONDITIONAL PASS | 1 | 4 | 0 |
 | [Archives](security-review-archives.md) | CONDITIONAL PASS | 0 | 0 | 5 |
 | [Social modules](security-review-social-modules.md) | CONDITIONAL PASS | 0 | 3 | 10 |
+| [Hypergrid](security-review-hypergrid.md) | CONDITIONAL PASS | 3 | 3 | 3 |
+| [Voice](security-review-voice.md) | CONDITIONAL PASS | 0 | 2 | 3 |
 
 > [!WARNING]
 > All phases carry a CONDITIONAL PASS. The tracked findings must be resolved

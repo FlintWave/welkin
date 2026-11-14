@@ -103,22 +103,12 @@ where none is given.
 | H5 | HELO probe discovers HG capability before attempting cross-grid operations, with timeout and retry | Avoids wasting resources on grids that don't support HG; graceful degradation | 2026-11-14 |
 | H6 | Hypergrid accepted as CONDITIONAL PASS (CRITICAL RISK): fix F-01 (suitcase escape), F-02 (VerifyAgent), F-03 (UUID impersonation) and all HIGH findings before any public-facing deployment | Opus adversarial review; same arrangement as S5 and G4 | 2026-11-14 |
 
-| V1 | JSON-RPC over HTTP to wolfvoice, not gRPC | Simpler, no protobuf dependency, matches wolfvoice's documented API | 2026-11-14 |
-| V2 | Channel URIs use `webrtc:region/parcel` format, not SIP URIs | Aurora Viewer expects WebRTC format | 2026-11-14 |
-| V3 | Voice credentials are ephemeral per-session, not stored in the database | wolfvoice manages credential lifecycle; no new DB columns | 2026-11-14 |
-| V4 | Estate and parcel voice-enable checks reuse existing flags from region-modules | No new database columns needed | 2026-11-14 |
 | WV1 | JSON-RPC over HTTP to wolfvoice, not gRPC | Simpler, no protobuf dependency, matches wolfvoice's documented API | 2026-11-14 |
 | WV2 | Channel URIs use `webrtc:region/parcel` format, not SIP URIs | Aurora Viewer expects WebRTC format | 2026-11-14 |
 | WV3 | Voice credentials are ephemeral per-session, not stored in the database | wolfvoice manages credential lifecycle; no new DB columns | 2026-11-14 |
 | WV4 | Estate and parcel voice-enable checks reuse existing flags from region-modules | No new database columns needed | 2026-11-14 |
 | WV5 | WebRTC voice accepted as CONDITIONAL PASS: fix H-1 (wolfvoice auth) and H-2 (rate limiting) before production; wolfvoice sidecar must not accept unauthenticated JSON-RPC | Opus adversarial review; same arrangement as S5 and G4 | 2026-11-14 |
 
-| HG1 | HG modules extend base modules via trait composition, not separate implementations | `HGEntityTransferModule` wraps `EntityTransferModule`; avoids code duplication | 2026-11-14 |
-| HG2 | UUI format (`uuid;griduri;name`) stored alongside local UUIDs | `HGUserManagementModule` resolves `first.last@griduri` to local cache; matches C# format | 2026-11-14 |
-| HG3 | Suitcase inventory uses root-anchored path validation to prevent escape | Defense in depth over folder-ID checks; prevents directory traversal | 2026-11-14 |
-| HG4 | Traveling agent sessions use cryptographically random tokens, single-use, expire on logout | Prevents session replay and token prediction attacks | 2026-11-14 |
-| HG5 | HELO probe discovers HG capability before cross-grid operations, with timeout and retry | Avoids sending HG requests to non-HG grids | 2026-11-14 |
-| HG6 | Hypergrid accepted as CONDITIONAL PASS (CRITICAL RISK): fix F-01 (suitcase escape), F-02 (VerifyAgent), F-03 (UUID impersonation) before any multi-user grid; fix F-04 through F-06 before production | Opus adversarial review; same arrangement as S5 and G4 | 2026-11-14 |
 
 </details>
 

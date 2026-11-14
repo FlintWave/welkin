@@ -27,6 +27,8 @@
 - [Phase 5: Archives](archives-summary.md)
 - [Phase 6: Social modules](social-modules-summary.md)
 - [Phase 6: External grid mode](external-grid-mode-summary.md)
+- [Phase 6: Hypergrid](hypergrid-summary.md)
+- [Phase 6: WebRTC voice](webrtc-voice-summary.md)
 
 ---
 
@@ -38,6 +40,8 @@
 - [Remote writes](security-review-remote-writes.md)
 - [Archives](security-review-archives.md)
 - [Social modules](security-review-social-modules.md)
+- [Hypergrid](security-review-hypergrid.md)
+- [Voice](security-review-voice.md)
 
 ---
 

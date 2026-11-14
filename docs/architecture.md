@@ -427,6 +427,27 @@ friends, IM, HypergridLinker, and 10 region modules. See
 found 3 critical (suitcase escape, VerifyAgent missing, UUID impersonation),
 3 high, 3 medium, 2 low; see `docs/security-review-hypergrid.md`.
 
+## Hypergrid
+
+Cross-grid federation: teleportation, inventory, friends, IM, and map linking
+between independent grids. See `docs/hypergrid-summary.md`.
+
+| Component | Role |
+|---|---|
+| `GatekeeperService` | Foreign visitor entry, hyperlink creation, access control |
+| `UserAgentService` | Outbound HG teleport, session verification, UUI |
+| `HGSuitcaseInventoryService` | Restricted suitcase inventory for foreign visitors |
+| `HGAssetService` | Access-controlled asset transfer between grids |
+| `HGFriendsService` | Cross-grid friendship with secret verification |
+| `HGInstantMessageService` | Cross-grid IM routing via UserAgentService |
+| `HypergridLinker` | Grid-to-grid region linking, console commands |
+| Service connectors | HTTP clients for Gatekeeper, UserAgent, HGFriends, HELO |
+| HG region modules | Entity transfer, inventory, friends, lure, map, users (10 modules) |
+
+~9,144 lines, 265 tests (215 unit, 50 integration). CRITICAL RISK security
+review found 3 critical (suitcase escape, VerifyAgent, UUID impersonation),
+3 high, 3 medium; see `docs/security-review-hypergrid.md`.
+
 ## WebRTC voice
 
 WebRTC voice via wolfvoice sidecar. See `docs/webrtc-voice-summary.md`.
