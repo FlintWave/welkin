@@ -33,4 +33,4 @@
 - [x] 6.1 Collider tests: reference prims (box, cylinder, torus, sculpt, mesh) match C# collision surfaces
 - [x] 6.2 Drop test: objects with real colliders land correctly on terrain and on other objects
 - [x] 6.3 Performance: meshing 1000 mixed prims completes within 5 seconds
-- [ ] 6.4 Second review of mesh asset parsing (untrusted input from user uploads)
+- [x] 6.4 Second review of mesh asset parsing (untrusted input from user uploads) (CONDITIONAL PASS: CRITICAL-1 index OOB + HIGH-1 decompression bomb — fixes dispatched)
