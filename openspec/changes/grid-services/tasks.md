@@ -6,7 +6,7 @@
 
 ## 2. Services
 
-- [ ] 2.1 Assets and file-system asset store
+- [x] 2.1 Assets and file-system asset store
 - [ ] 2.2 Inventory
 - [ ] 2.3 Grid, presence, grid user
 - [ ] 2.4 User accounts, authentication, authorization
