@@ -63,6 +63,12 @@ where none is given.
 | V4 | `os*` functions are gated by an 8-level `OsslThreatLevel` with a per-function allow override (`a5539f5`) | Mirrors C# OSSL threat levels so existing grid configuration carries over | 2026-11-13 |
 | V5 | `ll*` functions not yet needed are registered as stubs (33 of 82) | Keeps the function table complete so scripts compile and run | 2026-11-13 |
 | V6 | Script engine accepted as CONDITIONAL PASS: freeze globals with `sandbox(true)` in `ScriptInstance` and bound the event queue before production (`dd1177d`) | Second review, 2 HIGH findings; same arrangement as S5 and G4 | 2026-11-13 |
+| O1 | `os*` functions are gated at registration: a function that fails the threat check is never placed in the Lua globals | Stronger than the C# call-time check; no bypass through a missed check. Cost: role checks need caller context (see O6) | 2026-11-13 |
+| O2 | Access is a global threat ceiling plus per-function `FunctionPerm` (`Disabled`, `Everyone`, `AllowList` of roles and UUIDs) | Reproduces C# `Allow_<Function>` semantics so existing INI files carry over | 2026-11-13 |
+| O3 | Macros (`osslParcelO`, `osslParcelOG`, `osslNPC`) are expanded when the INI is loaded | Keeps `is_allowed()` free of string handling; expansion needs a depth bound (review S7) | 2026-11-13 |
+| O4 | Functions whose subsystem is absent are registered as stubs that log and return a default; 233 registered, catalog test fixed | Scripts compile and run; each stub is replaced by the change that adds its module (same approach as V5) | 2026-11-13 |
+| O5 | AES key and IV derive by PBKDF2-HMAC-SHA1, 1000 iterations, salt `OpenSimulator OSSL`, not SHA256 (review S1) | .NET `Rfc2898DeriveBytes` uses SHA1; SHA256 broke ciphertext interchange with C# regions | 2026-11-13 |
+| O6 | OSSL accepted as CONDITIONAL PASS: commit the S1 fix, enforce role checks at call time (S2) and remove `expect()` from crypto (S3) before production | Second review; same arrangement as S5 and G4 | 2026-11-13 |
 
 ## Open questions
 

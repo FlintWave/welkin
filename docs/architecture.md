@@ -230,11 +230,29 @@ Scripts run on Luau through mlua 0.12, one VM per script. See
 | Transfer | `transfer.rs` | `RegionTransferBundle` for region crossing |
 | State | `lib.rs` | `ScriptState` (bytecode and globals JSON), `new_vm_with_memory_limit` |
 | `ll*` | `builtins/` | 82 functions over a shared `ScriptContext` |
-| `os*` | `ossl.rs` | 27 functions gated by `OsslThreatLevel` and `OsslConfig` |
+| `os*` | `ossl/` | 233 functions gated by `OsslThreatLevel` and `OsslConfig`; see OSSL below |
 | Events | `events.rs` | `DetectedInfo`, `EventContext`, `llDetected*`, `dispatch_event` |
 
 Sandboxing review found 2 HIGH issues (unfrozen globals, unbounded event queue)
 that block production use. See `docs/security-review-script-sandboxing.md`.
+
+## OSSL API
+
+The `os*` layer lives in `opensim-script-vm/src/ossl/` (13 files). See
+`docs/ossl-api-summary.md`.
+
+| Component | Role |
+|---|---|
+| `OsslThreatLevel` | 8 levels, mirrors C# `ThreatLevel` |
+| `OsslConfig` | Threat ceiling plus `function_perms` (`Disabled`, `Everyone`, `AllowList` of roles and UUIDs) |
+| INI loader | `[OSSL]` section, `Allow_<Function>`, `osslParcelO`/`osslParcelOG`/`osslNPC` macros |
+| `register_ossl()` | Registers only permitted functions into the Luau globals |
+| `function_catalog()` | Name and threat level for every function |
+
+Roughly 60 functions have real bodies (draw, string, math, crypto, time, sim
+info); the rest are stubs awaiting region modules. Review found 1 HIGH (PBKDF2
+hash, fixed in the working tree) and 2 MEDIUM (role checks not enforced at
+registration, `expect()` in crypto); see `docs/security-review-ossl-api.md`.
 
 ## Roadmap
 
