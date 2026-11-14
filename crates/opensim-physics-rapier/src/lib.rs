@@ -630,7 +630,7 @@ impl PhysicsScene for RapierPhysicsScene {
         direction: Vec3,
         length: f32,
         _count: u32,
-        _flags: RayFilterFlags,
+        flags: RayFilterFlags,
     ) -> Vec<ContactResult> {
         let ray = Ray {
             origin: to_rapier(origin),
@@ -643,25 +643,49 @@ impl PhysicsScene for RapierPhysicsScene {
             QueryFilter::default(),
         );
         let mut results = Vec::new();
-        if let Some((collider_handle, toi)) = qp.cast_ray(&ray, length, true) {
-            let hit = ray.origin + ray.dir * toi;
-            let consumer_id = self
+        if let Some((collider_handle, intersection)) =
+            qp.cast_ray_and_get_normal(&ray, length, true)
+        {
+            let is_terrain = self
+                .terrain_collider_handle
+                .map_or(false, |th| th == collider_handle);
+
+            let body_handle = self
                 .colliders
                 .get(collider_handle)
-                .and_then(|c| c.parent())
-                .and_then(|bh| {
-                    self.actors
-                        .values()
-                        .find(|a| a.body_handle == bh)
-                        .map(|a| a.local_id)
-                })
-                .unwrap_or(0);
-            results.push(ContactResult {
-                pos: Vec3::new(hit.x, hit.y, hit.z),
-                normal: Vec3::Z,
-                depth: toi,
-                consumer_id,
+                .and_then(|c| c.parent());
+
+            let actor = body_handle.and_then(|bh| {
+                self.actors.values().find(|a| a.body_handle == bh)
             });
+
+            let dominated = if is_terrain {
+                (flags & RayFilterFlags::LAND).0 == 0
+            } else if let Some(a) = actor {
+                let dominated_agent =
+                    a.actor_type == ActorType::Agent && (flags & RayFilterFlags::AGENT).0 == 0;
+                let dominated_physical =
+                    a.is_physical && (flags & RayFilterFlags::PHYSICAL).0 == 0;
+                let dominated_nonphysical =
+                    !a.is_physical && (flags & RayFilterFlags::NONPHYSICAL).0 == 0;
+                let dominated_phantom =
+                    a.phantom && (flags & RayFilterFlags::PHANTOM).0 == 0;
+                dominated_agent || dominated_physical || dominated_nonphysical || dominated_phantom
+            } else {
+                false
+            };
+
+            if !dominated {
+                let hit = ray.origin + ray.dir * intersection.time_of_impact;
+                let normal = from_rapier(intersection.normal);
+                let consumer_id = actor.map(|a| a.local_id).unwrap_or(0);
+                results.push(ContactResult {
+                    pos: Vec3::new(hit.x, hit.y, hit.z),
+                    normal,
+                    depth: intersection.time_of_impact,
+                    consumer_id,
+                });
+            }
         }
         results
     }
