@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-11-13T00:00:00Z",
+  "request": {
+    "method": "POST",
+    "uri": "/griduser",
+    "headers": {
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    "body": "METHOD=getgriduserinfo&UserID=d6a10998-7b7f-4c8a-b8e5-3e3f4c5d6e7f"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/xml"
+    },
+    "body": "<?xml version=\"1.0\"?><ServerResponse><result type=\"List\"><UserID>d6a10998-7b7f-4c8a-b8e5-3e3f4c5d6e7f</UserID><HomeID>a1b2c3d4-e5f6-7890-abcd-ef1234567890</HomeID><HomePosition>&lt;128,128,25&gt;</HomePosition><HomeLookAt>&lt;0,1,0&gt;</HomeLookAt><LastRegionID>a1b2c3d4-e5f6-7890-abcd-ef1234567890</LastRegionID><LastPosition>&lt;128,128,25&gt;</LastPosition><LastLookAt>&lt;0,1,0&gt;</LastLookAt><Online>True</Online><Login>1700000000</Login><Logout>0</Logout></result></ServerResponse>"
+  }
+}

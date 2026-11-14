@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-11-13T00:00:00Z",
+  "request": {
+    "method": "POST",
+    "uri": "/mutelist",
+    "headers": {
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    "body": "METHOD=get&AGENTID=d6a10998-7b7f-4c8a-b8e5-3e3f4c5d6e7f&MUTECRC=0"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/xml"
+    },
+    "body": "<?xml version=\"1.0\"?><ServerResponse><result type=\"List\"><mute0 type=\"List\"><AgentID>d6a10998-7b7f-4c8a-b8e5-3e3f4c5d6e7f</AgentID><MuteID>12121212-3434-5656-7878-909090909090</MuteID><MuteName>Annoying Bob</MuteName><MuteType>1</MuteType><MuteFlags>0</MuteFlags><Stamp>1700000000</Stamp></mute0></result></ServerResponse>"
+  }
+}

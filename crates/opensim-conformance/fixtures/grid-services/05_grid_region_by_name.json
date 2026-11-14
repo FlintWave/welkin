@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-11-13T00:00:00Z",
+  "request": {
+    "method": "POST",
+    "uri": "/grid",
+    "headers": {
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    "body": "METHOD=get_region_by_name&SCOPEID=00000000-0000-0000-0000-000000000000&NAME=TestRegion"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/xml"
+    },
+    "body": "<?xml version=\"1.0\"?><ServerResponse><result type=\"List\"><uuid>a1b2c3d4-e5f6-7890-abcd-ef1234567890</uuid><locX>256000</locX><locY>256000</locY><sizeX>256</sizeX><sizeY>256</sizeY><regionName>TestRegion</regionName><serverIP>127.0.0.1</serverIP><serverHttpPort>9000</serverHttpPort><serverURI>http://127.0.0.1:9000/</serverURI><serverPort>9000</serverPort><regionMapTexture>00000000-0000-0000-0000-000000000000</regionMapTexture><parcelMapTexture>00000000-0000-0000-0000-000000000000</parcelMapTexture><access>21</access><regionSecret></regionSecret><owner_uuid>d6a10998-7b7f-4c8a-b8e5-3e3f4c5d6e7f</owner_uuid><Token></Token><flags>0</flags></result></ServerResponse>"
+  }
+}

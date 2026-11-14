@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-11-13T00:00:00Z",
+  "request": {
+    "method": "POST",
+    "uri": "/xinventory",
+    "headers": {
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    "body": "METHOD=GETFOLDERCONTENT&PRINCIPAL=d6a10998-7b7f-4c8a-b8e5-3e3f4c5d6e7f&FOLDER=f0f0f0f0-1111-2222-3333-444455556666"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/xml"
+    },
+    "body": "<?xml version=\"1.0\"?><ServerResponse><FID>f0f0f0f0-1111-2222-3333-444455556666</FID><VERSION>1</VERSION><FOLDERS type=\"List\"><folder0 type=\"List\"><ParentID>f0f0f0f0-1111-2222-3333-444455556666</ParentID><Type>0</Type><Version>1</Version><Name>Textures</Name><Owner>d6a10998-7b7f-4c8a-b8e5-3e3f4c5d6e7f</Owner><ID>f0f0f0f0-1111-2222-3333-444455556667</ID></folder0></FOLDERS><ITEMS type=\"List\"><item0 type=\"List\"><AssetID>aaaabbbb-cccc-dddd-eeee-ffffffffffff</AssetID><AssetType>0</AssetType><BasePermissions>2147483647</BasePermissions><CreationDate>1700000000</CreationDate><CreatorId>d6a10998-7b7f-4c8a-b8e5-3e3f4c5d6e7f</CreatorId><CurrentPermissions>2147483647</CurrentPermissions><Description>Test item</Description><EveryOnePermissions>0</EveryOnePermissions><Flags>0</Flags><Folder>f0f0f0f0-1111-2222-3333-444455556666</Folder><GroupID>00000000-0000-0000-0000-000000000000</GroupID><GroupOwned>False</GroupOwned><GroupPermissions>0</GroupPermissions><ID>eeeeeeee-dddd-cccc-bbbb-aaaaaaaaaaaa</ID><InvType>0</InvType><Name>Test Item</Name><NextPermissions>2147483647</NextPermissions><Owner>d6a10998-7b7f-4c8a-b8e5-3e3f4c5d6e7f</Owner><SalePrice>0</SalePrice><SaleType>0</SaleType></item0></ITEMS></ServerResponse>"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-11-13T00:00:00Z",
+  "request": {
+    "method": "POST",
+    "uri": "/presence",
+    "headers": {
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    "body": "METHOD=report&SessionID=11111111-2222-3333-4444-555555666677&RegionID=a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/xml"
+    },
+    "body": "<?xml version=\"1.0\"?><ServerResponse><result>Success</result></ServerResponse>"
+  }
+}

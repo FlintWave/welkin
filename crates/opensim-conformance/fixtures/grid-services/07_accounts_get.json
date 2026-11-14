@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-11-13T00:00:00Z",
+  "request": {
+    "method": "POST",
+    "uri": "/accounts",
+    "headers": {
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    "body": "METHOD=getaccount&ScopeID=00000000-0000-0000-0000-000000000000&FirstName=Test&LastName=User"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/xml"
+    },
+    "body": "<?xml version=\"1.0\"?><ServerResponse><result type=\"List\"><FirstName>Test</FirstName><LastName>User</LastName><Email>test.user@example.com</Email><PrincipalID>d6a10998-7b7f-4c8a-b8e5-3e3f4c5d6e7f</PrincipalID><ScopeID>00000000-0000-0000-0000-000000000000</ScopeID><Created>1700000000</Created><UserLevel>0</UserLevel><UserFlags>0</UserFlags><UserTitle></UserTitle><ServiceURLs>HomeURI=;GatekeeperURI=;InventoryServerURI=;AssetServerURI=</ServiceURLs></result></ServerResponse>"
+  }
+}

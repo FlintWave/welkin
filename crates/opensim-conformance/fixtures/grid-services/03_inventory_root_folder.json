@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-11-13T00:00:00Z",
+  "request": {
+    "method": "POST",
+    "uri": "/xinventory",
+    "headers": {
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    "body": "METHOD=GETROOTFOLDER&PRINCIPAL=d6a10998-7b7f-4c8a-b8e5-3e3f4c5d6e7f"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/xml"
+    },
+    "body": "<?xml version=\"1.0\"?><ServerResponse><folder type=\"List\"><ParentID>00000000-0000-0000-0000-000000000000</ParentID><Type>8</Type><Version>1</Version><Name>My Inventory</Name><Owner>d6a10998-7b7f-4c8a-b8e5-3e3f4c5d6e7f</Owner><ID>f0f0f0f0-1111-2222-3333-444455556666</ID></folder></ServerResponse>"
+  }
+}

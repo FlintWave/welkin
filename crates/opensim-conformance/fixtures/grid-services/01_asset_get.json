@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-11-13T00:00:00Z",
+  "request": {
+    "method": "GET",
+    "uri": "/assets/aaaabbbb-cccc-dddd-eeee-ffffffffffff",
+    "headers": {}
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/xml"
+    },
+    "body": "<?xml version=\"1.0\"?><AssetBase xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\"><Data>SGVsbG8gT3BlblNpbSE=</Data><FullID><Guid>aaaabbbb-cccc-dddd-eeee-ffffffffffff</Guid></FullID><ID>aaaabbbb-cccc-dddd-eeee-ffffffffffff</ID><Name>Test Asset</Name><Description>Conformance test asset</Description><Type>0</Type><Local>false</Local><Temporary>false</Temporary><CreatorID>d6a10998-7b7f-4c8a-b8e5-3e3f4c5d6e7f</CreatorID><Flags>None</Flags></AssetBase>"
+  }
+}

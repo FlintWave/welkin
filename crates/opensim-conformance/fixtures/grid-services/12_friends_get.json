@@ -1,0 +1,18 @@
+{
+  "timestamp": "2026-11-13T00:00:00Z",
+  "request": {
+    "method": "POST",
+    "uri": "/friends",
+    "headers": {
+      "content-type": "application/x-www-form-urlencoded"
+    },
+    "body": "METHOD=getfriends&PRINCIPALID=d6a10998-7b7f-4c8a-b8e5-3e3f4c5d6e7f"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/xml"
+    },
+    "body": "<?xml version=\"1.0\"?><ServerResponse><result type=\"List\"><friend0 type=\"List\"><PrincipalID>d6a10998-7b7f-4c8a-b8e5-3e3f4c5d6e7f</PrincipalID><Friend>12121212-3434-5656-7878-909090909090</Friend><Flags>1</Flags></friend0></result></ServerResponse>"
+  }
+}
