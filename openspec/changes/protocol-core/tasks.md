@@ -18,7 +18,7 @@
 
 ## 4. Circuit
 
-- [ ] 4.1 Server circuit: open, close, sequence numbers, acknowledgements, resend
+- [x] 4.1 Server circuit: open, close, sequence numbers, acknowledgements, resend
 - [ ] 4.2 Throttle categories and token buckets as in `LLUDPClient`
 - [ ] 4.3 Ping and timeout handling
 
