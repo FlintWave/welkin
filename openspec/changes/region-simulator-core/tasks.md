@@ -47,8 +47,8 @@
 
 ## 7. Proof
 
-- [ ] 7.1 Unit tests for scene graph operations (add/remove/link/unlink, spatial queries)
-- [ ] 7.2 XML2 round-trip tests against C# serialized objects
-- [ ] 7.3 Aurora Viewer connects, sees terrain, sees a rezzed object, moves the avatar
-- [ ] 7.4 Load a C# region database and verify objects appear in the correct positions
-- [ ] 7.5 Second review of persistence code and client stack protocol handling
+- [x] 7.1 Unit tests for scene graph operations (add/remove/link/unlink, spatial queries)
+- [x] 7.2 XML2 round-trip tests against C# serialized objects
+- [x] 7.3 Aurora Viewer connects, sees terrain, sees a rezzed object, moves the avatar
+- [x] 7.4 Load a C# region database and verify objects appear in the correct positions
+- [x] 7.5 Second review of persistence code and client stack protocol handling (CONDITIONAL PASS: 3 HIGH findings in net stack — bounded client map, bounded mpsc, stale session reaping needed before production)
