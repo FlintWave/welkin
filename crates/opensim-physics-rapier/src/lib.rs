@@ -306,6 +306,10 @@ impl RapierPhysicsScene {
             let vel = actor.velocity;
             let ori = actor.orientation;
             let is_phantom = actor.phantom;
+            let friction = actor.friction;
+            let restitution = actor.restitution;
+            let density = actor.density;
+            let gravity_modifier = actor.gravity_modifier;
             let forces: Vec<(Vec3, bool)> = actor.pending_forces.clone();
             let torques: Vec<(Vec3, bool)> = actor.pending_torques.clone();
             let was_dirty = actor.dirty;
@@ -315,6 +319,7 @@ impl RapierPhysicsScene {
                     body.set_translation(to_rapier(pos), true);
                     body.set_linvel(to_rapier(vel), true);
                     body.set_rotation(to_rapier_quat(ori), true);
+                    body.set_gravity_scale(gravity_modifier, true);
                 }
                 for (f, _) in &forces {
                     body.add_force(to_rapier(*f), true);
@@ -327,6 +332,9 @@ impl RapierPhysicsScene {
             if was_dirty {
                 if let Some(coll) = self.colliders.get_mut(coll_handle) {
                     coll.set_sensor(is_phantom);
+                    coll.set_friction(friction);
+                    coll.set_restitution(restitution);
+                    coll.set_density(density);
                 }
             }
 
