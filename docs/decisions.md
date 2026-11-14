@@ -34,6 +34,9 @@ where none is given.
 | S3 | Simulation service is a 501 stub | Not needed for login or the replayed flows; deferred to the region phase | 2026-11-13 |
 | S4 | Password hashes are compared in constant time (`840f769`) | Security review finding M1: `==` on MD5 hashes leaks timing | 2026-11-13 |
 | S5 | Admin-style endpoints are not gated in code; deployments must restrict them by network or proxy | Security review noted it; matches C# Robust, which relies on the same arrangement | 2026-11-13 |
+| C1 | Capacity estimate comes from sourced coefficients now; the on-host benchmark, calibration and live refinement are stubs until `region-simulator-core` (`97f5ebd`, `880338a`) | The benchmark needs a running simulator; the proposal already allows a labelled estimate before that. Result carries `is_measured: false` | 2026-11-13 |
+| C2 | Estimate is a range of 80% to 120% of the point value, reserves one core, and names the limiting resource (`97f5ebd`) | Proposal risk is MEDIUM: an overestimate overloads a machine, so no unqualified number is shown | 2026-11-13 |
+| C3 | Network speed and public IP are manual configuration for now (`97f5ebd`) | Speed test and address detection deferred; bandwidth limit applies only when upload speed is set | 2026-11-13 |
 
 ## Open questions
 
