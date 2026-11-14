@@ -10,7 +10,9 @@ use rapier3d::parry::utils::Array2;
 
 use serde::{Deserialize, Serialize};
 
-use opensim_physics::{ActorType, ContactResult, PhysicsActor, PhysicsScene, RayFilterFlags};
+use opensim_physics::{
+    ActorType, ContactResult, PidHoverType, PhysicsActor, PhysicsScene, RayFilterFlags,
+};
 
 fn to_rapier(v: Vec3) -> Vector {
     Vector::new(v.x, v.y, v.z)
@@ -61,6 +63,17 @@ pub struct RapierActor {
     pending_torques: Vec<(Vec3, bool)>,
     collision_score: f32,
     pub shape_type: PhysicsShapeType,
+    pid_target: Vec3,
+    pid_tau: f32,
+    pid_active: bool,
+    pid_hover_height: f32,
+    pid_hover_tau: f32,
+    pid_hover_type: PidHoverType,
+    pid_hover_active: bool,
+    apid_target: Quat,
+    apid_strength: f32,
+    apid_damping: f32,
+    apid_active: bool,
 }
 
 impl RapierActor {
@@ -100,6 +113,17 @@ impl RapierActor {
             pending_torques: Vec::new(),
             collision_score: 0.0,
             shape_type: PhysicsShapeType::Prim,
+            pid_target: Vec3::ZERO,
+            pid_tau: 1.0,
+            pid_active: false,
+            pid_hover_height: 0.0,
+            pid_hover_tau: 1.0,
+            pid_hover_type: PidHoverType::Ground,
+            pid_hover_active: false,
+            apid_target: Quat::IDENTITY,
+            apid_strength: 0.0,
+            apid_damping: 0.0,
+            apid_active: false,
         }
     }
 }
@@ -228,6 +252,72 @@ impl PhysicsActor for RapierActor {
     }
     fn set_buoyancy(&mut self, b: f32) {
         self.buoyancy = b;
+    }
+    fn pid_target(&self) -> Vec3 {
+        self.pid_target
+    }
+    fn set_pid_target(&mut self, target: Vec3) {
+        self.pid_target = target;
+    }
+    fn pid_active(&self) -> bool {
+        self.pid_active
+    }
+    fn set_pid_active(&mut self, active: bool) {
+        self.pid_active = active;
+    }
+    fn pid_tau(&self) -> f32 {
+        self.pid_tau
+    }
+    fn set_pid_tau(&mut self, tau: f32) {
+        self.pid_tau = tau;
+    }
+    fn pid_hover_active(&self) -> bool {
+        self.pid_hover_active
+    }
+    fn set_pid_hover_active(&mut self, active: bool) {
+        self.pid_hover_active = active;
+    }
+    fn pid_hover_height(&self) -> f32 {
+        self.pid_hover_height
+    }
+    fn set_pid_hover_height(&mut self, height: f32) {
+        self.pid_hover_height = height;
+    }
+    fn pid_hover_type(&self) -> PidHoverType {
+        self.pid_hover_type
+    }
+    fn set_pid_hover_type(&mut self, hover_type: PidHoverType) {
+        self.pid_hover_type = hover_type;
+    }
+    fn pid_hover_tau(&self) -> f32 {
+        self.pid_hover_tau
+    }
+    fn set_pid_hover_tau(&mut self, tau: f32) {
+        self.pid_hover_tau = tau;
+    }
+    fn apid_target(&self) -> Quat {
+        self.apid_target
+    }
+    fn set_apid_target(&mut self, target: Quat) {
+        self.apid_target = target;
+    }
+    fn apid_active(&self) -> bool {
+        self.apid_active
+    }
+    fn set_apid_active(&mut self, active: bool) {
+        self.apid_active = active;
+    }
+    fn apid_strength(&self) -> f32 {
+        self.apid_strength
+    }
+    fn set_apid_strength(&mut self, strength: f32) {
+        self.apid_strength = strength;
+    }
+    fn apid_damping(&self) -> f32 {
+        self.apid_damping
+    }
+    fn set_apid_damping(&mut self, damping: f32) {
+        self.apid_damping = damping;
     }
     fn add_force(&mut self, force: Vec3, push: bool) {
         self.pending_forces.push((force, push));
@@ -728,6 +818,17 @@ pub struct ActorSnapshot {
     pub buoyancy: f32,
     pub children: Vec<u32>,
     pub shape_type: u8,
+    pub pid_target: [f32; 3],
+    pub pid_tau: f32,
+    pub pid_active: bool,
+    pub pid_hover_height: f32,
+    pub pid_hover_tau: f32,
+    pub pid_hover_type: u8,
+    pub pid_hover_active: bool,
+    pub apid_target: [f32; 4],
+    pub apid_strength: f32,
+    pub apid_damping: f32,
+    pub apid_active: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -760,6 +861,22 @@ impl RapierPhysicsScene {
                 buoyancy: a.buoyancy,
                 children: a.children.clone(),
                 shape_type: a.shape_type as u8,
+                pid_target: a.pid_target.to_array(),
+                pid_tau: a.pid_tau,
+                pid_active: a.pid_active,
+                pid_hover_height: a.pid_hover_height,
+                pid_hover_tau: a.pid_hover_tau,
+                pid_hover_type: a.pid_hover_type as u8,
+                pid_hover_active: a.pid_hover_active,
+                apid_target: [
+                    a.apid_target.x,
+                    a.apid_target.y,
+                    a.apid_target.z,
+                    a.apid_target.w,
+                ],
+                apid_strength: a.apid_strength,
+                apid_damping: a.apid_damping,
+                apid_active: a.apid_active,
             })
             .collect();
         SceneSnapshot {
@@ -815,6 +932,27 @@ impl RapierPhysicsScene {
                     1 => PhysicsShapeType::Convex,
                     _ => PhysicsShapeType::None,
                 };
+                actor.pid_target = Vec3::from_array(a.pid_target);
+                actor.pid_tau = a.pid_tau;
+                actor.pid_active = a.pid_active;
+                actor.pid_hover_height = a.pid_hover_height;
+                actor.pid_hover_tau = a.pid_hover_tau;
+                actor.pid_hover_type = match a.pid_hover_type {
+                    0 => PidHoverType::Ground,
+                    1 => PidHoverType::GroundAndWater,
+                    2 => PidHoverType::Water,
+                    _ => PidHoverType::Absolute,
+                };
+                actor.pid_hover_active = a.pid_hover_active;
+                actor.apid_target = Quat::from_xyzw(
+                    a.apid_target[0],
+                    a.apid_target[1],
+                    a.apid_target[2],
+                    a.apid_target[3],
+                );
+                actor.apid_strength = a.apid_strength;
+                actor.apid_damping = a.apid_damping;
+                actor.apid_active = a.apid_active;
                 actor.dirty = true;
             }
         }

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use glam::{Quat, Vec3};
 
-use crate::{ActorType, ContactResult, PhysicsActor, PhysicsScene, RayFilterFlags};
+use crate::{ActorType, ContactResult, PidHoverType, PhysicsActor, PhysicsScene, RayFilterFlags};
 
 pub struct NullActor {
     local_id: u32,
@@ -133,6 +133,50 @@ impl PhysicsActor for NullActor {
     fn set_buoyancy(&mut self, b: f32) {
         self.buoyancy = b;
     }
+    fn pid_target(&self) -> Vec3 {
+        Vec3::ZERO
+    }
+    fn set_pid_target(&mut self, _target: Vec3) {}
+    fn pid_active(&self) -> bool {
+        false
+    }
+    fn set_pid_active(&mut self, _active: bool) {}
+    fn pid_tau(&self) -> f32 {
+        0.0
+    }
+    fn set_pid_tau(&mut self, _tau: f32) {}
+    fn pid_hover_active(&self) -> bool {
+        false
+    }
+    fn set_pid_hover_active(&mut self, _active: bool) {}
+    fn pid_hover_height(&self) -> f32 {
+        0.0
+    }
+    fn set_pid_hover_height(&mut self, _height: f32) {}
+    fn pid_hover_type(&self) -> PidHoverType {
+        PidHoverType::Ground
+    }
+    fn set_pid_hover_type(&mut self, _hover_type: PidHoverType) {}
+    fn pid_hover_tau(&self) -> f32 {
+        0.0
+    }
+    fn set_pid_hover_tau(&mut self, _tau: f32) {}
+    fn apid_target(&self) -> Quat {
+        Quat::IDENTITY
+    }
+    fn set_apid_target(&mut self, _target: Quat) {}
+    fn apid_active(&self) -> bool {
+        false
+    }
+    fn set_apid_active(&mut self, _active: bool) {}
+    fn apid_strength(&self) -> f32 {
+        0.0
+    }
+    fn set_apid_strength(&mut self, _strength: f32) {}
+    fn apid_damping(&self) -> f32 {
+        0.0
+    }
+    fn set_apid_damping(&mut self, _damping: f32) {}
     fn add_force(&mut self, _force: Vec3, _push: bool) {}
     fn add_angular_force(&mut self, _force: Vec3, _push: bool) {}
     fn set_momentum(&mut self, _momentum: Vec3) {}

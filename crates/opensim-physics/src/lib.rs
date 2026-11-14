@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 pub mod avatar;
+pub mod behaviors;
 pub mod null;
 pub mod vehicle;
 
@@ -17,6 +18,7 @@ pub enum ActorType {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
 pub enum PidHoverType {
     Ground,
     GroundAndWater,
@@ -113,6 +115,28 @@ pub trait PhysicsActor {
     fn set_gravity_modifier(&mut self, g: f32);
     fn buoyancy(&self) -> f32;
     fn set_buoyancy(&mut self, b: f32);
+    fn pid_target(&self) -> Vec3;
+    fn set_pid_target(&mut self, target: Vec3);
+    fn pid_active(&self) -> bool;
+    fn set_pid_active(&mut self, active: bool);
+    fn pid_tau(&self) -> f32;
+    fn set_pid_tau(&mut self, tau: f32);
+    fn pid_hover_active(&self) -> bool;
+    fn set_pid_hover_active(&mut self, active: bool);
+    fn pid_hover_height(&self) -> f32;
+    fn set_pid_hover_height(&mut self, height: f32);
+    fn pid_hover_type(&self) -> PidHoverType;
+    fn set_pid_hover_type(&mut self, hover_type: PidHoverType);
+    fn pid_hover_tau(&self) -> f32;
+    fn set_pid_hover_tau(&mut self, tau: f32);
+    fn apid_target(&self) -> Quat;
+    fn set_apid_target(&mut self, target: Quat);
+    fn apid_active(&self) -> bool;
+    fn set_apid_active(&mut self, active: bool);
+    fn apid_strength(&self) -> f32;
+    fn set_apid_strength(&mut self, strength: f32);
+    fn apid_damping(&self) -> f32;
+    fn set_apid_damping(&mut self, damping: f32);
     fn add_force(&mut self, force: Vec3, push: bool);
     fn add_angular_force(&mut self, force: Vec3, push: bool);
     fn set_momentum(&mut self, momentum: Vec3);
