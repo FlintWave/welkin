@@ -33,3 +33,5 @@ pub mod simulation;
 pub mod login;
 pub mod remote;
 pub mod registration;
+pub mod hypergrid;
+pub mod wizard;
