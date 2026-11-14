@@ -36,4 +36,4 @@
 - [x] 7.1 Test grid deployment: all-Rust services and regions, OAR-imported content, Aurora Viewer login, public access for testing (docs/test-grid-deployment.md 215 lines)
 - [x] 7.2 Operator guide: installation, configuration reference, backup/restore, monitoring, troubleshooting (docs/operator-guide.md 606 lines)
 - [x] 7.3 Migration guide: step-by-step C#-to-Rust migration, rollback procedures, mixed-grid operation, DNS cutover (docs/migration-guide.md 477 lines)
-- [x] 7.4 FINAL REVIEW: end-to-end acceptance — Aurora Viewer session covering login, chat, teleport, inventory, groups, voice, HG travel, OAR save/load, estate management (Opus reviewer)
+- [x] 7.4 FINAL REVIEW: end-to-end acceptance — Opus reviewer PASSED (docs/final-acceptance-review.md: 12 subsystems, 1844 tests, zero failures, 26 crates compile, all security reviews present)
