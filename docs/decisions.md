@@ -45,6 +45,12 @@ where none is given.
 | M2 | Convex decomposition uses parry3d V-HACD, with C# voxel budget mapped to a grid size clamped to 16 to 256, results cached | No new dependency; C# parameters kept for parity (`max_vertices_per_hull` advisory only) | 2026-11-13 |
 | M3 | Sculpt textures come through a `SculptTextureSource` trait; JPEG 2000 decoding deferred | Keeps meshing testable and leaves the `aurora-assets` versus pure Rust question open | 2026-11-13 |
 | M4 | Mesh asset decoding is treated as untrusted: indices validated, zlib output capped at 32 MiB, cache mutexes recover from poisoning (`1812e45`) | Security review CRITICAL-1, HIGH-1, MEDIUM-3 | 2026-11-13 |
+| N1 | Scene objects persist and interchange as XML2, round-tripped against C# output | R2; lets a C# region database and OAR content load unchanged | 2026-11-13 |
+| N2 | `SimulationDataStore` trait in `opensim-data` with one `sqlx` implementation over the existing `regionstore` tables | R5; no migration for C#-created region databases | 2026-11-13 |
+| N3 | LLUDP viewer messages dispatch through a table keyed on message id to typed handler functions, not a large class | Replaces the 13k-line `LLClientView`; handlers are testable alone | 2026-11-13 |
+| N4 | Several `Scene`s per process via `RegionManager`; caps HTTP server runs beside the LLUDP listener | Matches C# multi-region hosting | 2026-11-13 |
+| N5 | Terrain modification brushes ship with the scene crate, not a later module | Heightfield belongs to the scene graph and OAR load needs it | 2026-11-13 |
+| N6 | Region simulator accepted as CONDITIONAL PASS: client map and mpsc channels must be bounded and stale sessions reaped before production; restrict by network meanwhile | Second review, 3 HIGH findings in the net stack; same arrangement as S5 and G4 | 2026-11-13 |
 
 ## Open questions
 

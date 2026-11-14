@@ -5,9 +5,9 @@ simulator). Wire and schema compatibility with the C# server is the contract;
 internals are free to change. Licence: GPL-3.0-or-later. The C# reference tree
 is read-only at `/var/home/erik/Projects/opensim-0.9.3.0-source/`.
 
-Status: Phase 2 complete. Phases 0, 1 and 2 (port-foundation, open-source-audit,
+Status: Phase 3 in progress. Phases 0, 1 and 2 (port-foundation, open-source-audit,
 protocol-core, physics-backend, grid-services, capacity-assessor, grid-portal)
-are done. Most simulator and module crates below are still empty skeletons (a
+are done, and region-simulator-core is accepted. Most simulator and module crates below are still empty skeletons (a
 `lib.rs` with no logic). The table marks which.
 
 ## Workspace
@@ -21,24 +21,24 @@ crates are prefixed `opensim-`.
 | `opensim-llsd` | Wrapper over `aurora-llsd`, plus server-side XML-RPC codec (`src/xmlrpc.rs`) for login and legacy calls | implemented |
 | `opensim-msg` | Wrapper over `aurora-msg` (framing, zero-coding, typed messages). `src/objects.rs` adds server-direction object update encoders | implemented |
 | `opensim-prim` | Re-exports from `aurora-prim`, plus physics meshing: analytic box/sphere, volume and sculpt trimeshes, LOD selection, mesh asset decoder (`mesh_asset.rs`), V-HACD convex decomposition, shape and decomposition caches, linkset compound colliders (`meshing.rs`). See `docs/prim-meshing-summary.md` | implemented |
-| `opensim-net` | Server-side LLUDP circuit: `circuit.rs` (sequence, ack, resend, dedup, ping, timeout) and `throttle.rs` (7 categories, token buckets) | implemented |
+| `opensim-net` | Server-side LLUDP: `circuit.rs`, `throttle.rs`, plus `server.rs` (listener), `client.rs` (per-viewer state), `dispatch.rs` (message-id table), `handlers.rs` (viewer handlers) | implemented |
 | `opensim-config` | TOML configuration with env overrides; `OpenSim.ini` / `Robust.ini` importer | implemented |
 | `opensim-runtime` | Logging (`tracing`), Prometheus metrics, health endpoint, graceful shutdown | implemented |
 | `opensim-conformance` | Recorder/replayer (HTTP, XML-RPC, LLUDP), `pCampBot` wrapper, test bot (`tests/test_bot.rs`) | implemented |
 | `opensim-physics` | `PhysicsScene`/`PhysicsActor` traits, null backend, and solver-independent behaviour: vehicles (`vehicle.rs`), avatar controller (`avatar.rs`), move-to-target/hover/look-at (`behaviors.rs`), keyframed motion (`keyframe.rs`), terse-update thresholds (`terse_update.rs`) | implemented |
 | `opensim-physics-rapier` | Rapier 0.36.1 backend: prims and linksets, terrain heightfield, collisions, probes, materials, snapshot/restore; consumes `aurora-prim` geometry | implemented |
-| `opensim-caps` | HTTP capabilities | skeleton |
+| `opensim-caps` | HTTP capabilities: per-session seed cap, LLSD event queue long-poll, fetch, region info and upload cap handlers | implemented (thin handlers) |
 | `opensim-capacity` | Host scan (CPU, memory with cgroup limits, disk, container), network stub, `HostReport`, 12 sourced coefficients, estimate engine with quiet/typical/busy profiles. `benchmark`, `model` and `live` modules are stubs pending the region simulator | partial |
 | `opensim-data` | `sqlx` data layer: 13 stores over MariaDB, PostgreSQL and SQLite, plus a migration runner with 53 embedded C# schema files | implemented |
 | `opensim-services` | 14 Robust grid service handlers behind axum: asset, inventory, grid, presence, griduser, accounts, auth, authorization, friends, avatar, mute, profiles, map, estate, agent preferences, simulation (501 stub) and XML-RPC login | implemented |
-| `opensim-scene` | Scene graph | skeleton |
+| `opensim-scene` | Scene, object groups and parts, presences, XML2 serializer, terrain (channel, file I/O, brushes, compression), region manager, shutdown | implemented |
 | `opensim-modules` | Region modules (land, permissions, chat, ...) | skeleton |
 | `opensim-archive` | OAR/IAR archives | skeleton |
 | `opensim-script-compiler`, `-vm`, `-api` | SLua embedding, LSL/Luau, `ll*`/`os*` API | skeleton |
 | `opensim-portal` | Grid portal: staff auth (argon2), sessions, RBAC roles, audit log, region control, pages, grid map, people/sign-up, first-run wizard, content/catalogue | implemented |
 | `opensim-companion` | Tauri 2 desktop app: tray icon, service start/stop, log viewer, notifications, remote grid connect. **Standalone**: excluded from workspace (`Cargo.toml` exclude) | implemented |
 | `opensim-robust` | Binary: grid services | skeleton (`main.rs`) |
-| `opensim-region` | Binary: region simulator | skeleton (`main.rs`) |
+| `opensim-region` | Binary: region simulator (config, multi-region, LLUDP and caps startup, graceful shutdown) | implemented |
 
 ## Dependency graph (current)
 
@@ -110,7 +110,25 @@ the `opensim-physics` trait), `glam` (vectors, as in Aurora), `tracing`,
 5. Grid services: 14 replay tests and 4 multi-step wire-traffic tests (`opensim-conformance/tests`).
 6. Later: live `pCampBot`, physics trajectory comparison against recorded C# runs, Aurora Viewer sessions.
 
-Physics details: `docs/physics-backend-summary.md`. Grid services details: `docs/grid-services-summary.md`. Capacity assessor details: `docs/capacity-assessor-summary.md`. Grid portal details: `docs/grid-portal-summary.md`.
+Physics details: `docs/physics-backend-summary.md`. Grid services details: `docs/grid-services-summary.md`. Region simulator details: `docs/region-simulator-core-summary.md`. Capacity assessor details: `docs/capacity-assessor-summary.md`. Grid portal details: `docs/grid-portal-summary.md`.
+
+## Region simulator
+
+Details in `docs/region-simulator-core-summary.md`.
+
+- `opensim-region` loads config, opens databases, builds one `Scene` per
+  region (`RegionManager` for several), starts the LLUDP listener and the caps
+  HTTP server, and registers with the grid.
+- `opensim-net` receives UDP, routes to a per-viewer `LLUDPClient`, and
+  dispatches by message id to typed handlers that mutate the `Scene`.
+- `opensim-caps` serves per-session capabilities and the LLSD event queue.
+- `opensim-scene` holds groups, parts, presences and the terrain channel;
+  `xml2.rs` is the C#-compatible object format.
+- `opensim-data::simulation` persists objects (XML2), terrain, settings and
+  spawn points over the C# `regionstore` tables. The scene loop saves dirty
+  objects on a timer and on shutdown.
+- Open before production: bounded client map, bounded channels, stale session
+  reaping (second review, 3 HIGH).
 
 ## Grid Portal
 
@@ -178,7 +196,9 @@ Phase 2 complete: 53 tasks across 3 changes. All accepted.
 | `capacity-assessor` | 13/13 | ~600 | Host scanning (CPU, memory with cgroup limits, disk, container), 12 sourced coefficients, estimate engine with 3 workload profiles, stubs for benchmark/model/live pending region-simulator-core (Phase 3) |
 | `grid-portal` | 26/26 | ~3,800 | 2,084-line portal crate, installer scripts, Tauri 2 companion app, 14-stage e2e test, Opus security review with 3 fixes |
 
-Phase 2 total: 111/142 overall tasks complete. Next: Phase 3 (region-simulator-core, prim-meshing).
+Phase 2 total: 111/142 overall tasks complete.
+
+Phase 3: region-simulator-core (all 7 task groups) and prim-meshing accepted.
 
 ## Roadmap
 
