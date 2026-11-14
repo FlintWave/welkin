@@ -33,7 +33,7 @@ crates are prefixed `opensim-`.
 | `opensim-services` | 14 Robust grid service handlers behind axum: asset, inventory, grid, presence, griduser, accounts, auth, authorization, friends, avatar, mute, profiles, map, estate, agent preferences, simulation (501 stub) and XML-RPC login | implemented |
 | `opensim-scene` | Scene, object groups and parts, presences, XML2 serializer, terrain (channel, file I/O, brushes, compression), region manager, shutdown | implemented |
 | `opensim-modules` | Region modules (land, permissions, chat, ...) | skeleton |
-| `opensim-archive` | OAR/IAR archives | skeleton |
+| `opensim-archive` | OAR/IAR archives: OAR single/multi-region save/load, IAR save/load, OspResolver, ExternalRepresentationUtils, console commands (9,555 lines, 205 tests) | implemented |
 | `opensim-script-vm` | Luau VM via mlua: `ScriptInstance`, `ScriptScheduler`, `RegionTransferBundle`, `ScriptState` save/restore, 82 `ll*` (49 implemented), 27 `os*` with threat levels, events and detected parameters. See `docs/script-engine-summary.md` | implemented (172 tests) |
 | `opensim-script-compiler`, `-api` | LSL-to-Luau transpiler; scene-bound script API | skeleton |
 | `opensim-portal` | Grid portal: staff auth (argon2), sessions, RBAC roles, audit log, region control, pages, grid map, people/sign-up, first-run wizard, content/catalogue | implemented |
@@ -271,6 +271,26 @@ transfer, framework). See `docs/region-modules-summary.md`.
 
 278 tests. Review found 1 CRITICAL (nil UUID owner match) and 3 HIGH (god
 gating, bypass default); see `docs/security-review-permissions.md`.
+
+## Archives
+
+`opensim-archive` handles OAR (region) and IAR (inventory) archives. See
+`docs/archives-summary.md`.
+
+| Component | Role |
+|---|---|
+| `RegionSettingsSerializer` | XML read/write for region settings |
+| `LandDataSerializer` | XML read/write for parcel data |
+| OAR write/read | Single and multi-region, merge, displace, rotate, bbox, permission filter |
+| IAR write/read | Inventory tree walk, folder creation, item insertion |
+| `OspResolver` | `first.last` name-to-UUID mapping for cross-grid portability |
+| `ExternalRepresentationUtils` | Creator/owner UUID rewriting on dearchive |
+| `ArchiverModule` | `save oar` / `load oar` console commands |
+| `InventoryArchiverModule` | `save iar` / `load iar` console commands |
+
+Uses `tar` + `flate2` instead of the C# custom tar implementation. 205 tests
+(174 unit, 31 integration). Review found 0 critical, 0 high, 5 medium
+(defense-in-depth gaps); see `docs/security-review-archives.md`.
 
 ## Roadmap
 

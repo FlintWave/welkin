@@ -78,6 +78,13 @@ where none is given.
 | RM7 | Hypergrid parts, OAR/IAR and groups/profiles are out of this change (`hypergrid`, `archives`, `social-modules`) | Keeps the change bounded | 2026-11-13 |
 | RM8 | Region modules accepted as CONDITIONAL PASS: fix C-1 (nil UUID) and H-1 before a multi-user grid, H-2, H-3 and M-4 before production; restrict by network meanwhile (`d33ef2c`) | Opus adversarial review of permissions; same arrangement as S5 and G4 | 2026-11-13 |
 
+| AR1 | Replace C# custom tar (455 lines) with `tar` + `flate2` crates | Crate handles edge cases (long paths, symlinks, permissions) correctly; less code to maintain | 2026-11-14 |
+| AR2 | Async asset gathering with `tokio::time::timeout` replaces C# `ManualResetEvent` + timer | Idiomatic Rust async; same timeout semantics | 2026-11-14 |
+| AR3 | OAR load options (merge, displace, rotate, bbox) are a flags struct, not positional arguments | Type-safe; matches the C# `Dictionary<string, object>` semantics without the stringly-typed API | 2026-11-14 |
+| AR4 | OspResolver writes `first.last` profiles on save and resolves on load, with UserManagement fallback | Preserves cross-grid UUID portability; fallback handles grids without profile data | 2026-11-14 |
+| AR5 | Path traversal protection: all tar paths validated against expected prefix before processing | Defense in depth over `tar` crate's built-in protection; rejects `../`, absolute, null bytes, drive letters | 2026-11-14 |
+| AR6 | Archives accepted as CONDITIONAL PASS: fix M-1 through M-5 before production (decompression bomb limit, Vec allocation cap, reject non-UTF-8 paths, null byte check, drive-letter check) | Opus adversarial review; same arrangement as S5 and G4 | 2026-11-14 |
+
 ## Open questions
 
 - OSgrid: whether it accepts regions on third-party software; administrators
