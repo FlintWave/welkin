@@ -37,6 +37,7 @@ clap = { version = "4", features = ["derive"] }
 configparser = "3"
 metrics = "0.24"
 metrics-exporter-prometheus = "0.16"
+tempfile = "3"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "warn"
