@@ -3,9 +3,13 @@
 pub mod assets_request;
 pub mod constants;
 pub mod control_file;
+pub mod external_representation;
+pub mod iar_read;
+pub mod iar_write;
 pub mod land_data;
 pub mod oar_read;
 pub mod oar_write;
+pub mod osp_resolver;
 pub mod region_settings;
 
 #[derive(Debug, thiserror::Error)]

@@ -2142,6 +2142,7 @@ dependencies = [
  "base64 0.23.1",
  "chrono",
  "flate2",
+ "md5 0.7.0",
  "opensim-prim",
  "opensim-types",
  "quick-xml",
