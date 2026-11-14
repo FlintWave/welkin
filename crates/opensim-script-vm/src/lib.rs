@@ -6,8 +6,16 @@
 //! host the full LSL-on-Luau runtime.  For now it contains only the spike
 //! proof that the toolchain works.
 
+pub mod instance;
+pub mod scheduler;
+pub mod transfer;
+
 use mlua::prelude::*;
 use mlua::chunk::Compiler;
+
+pub use instance::{ScriptEvent, ScriptInstance, ScriptInstanceState};
+pub use scheduler::{ScriptScheduler, TimerEntry};
+pub use transfer::RegionTransferBundle;
 
 /// Errors returned by the script VM.
 #[derive(Debug, thiserror::Error)]
