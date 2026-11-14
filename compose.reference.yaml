@@ -1,0 +1,43 @@
+# Reference stack: unmodified C# OpenSimulator 0.9.3.0 for conformance testing.
+# Uses soup-bowl/opensimulator-docker (MIT) as the container image.
+#
+# Start:   podman-compose -f compose.reference.yaml up -d
+# Logs:    podman-compose -f compose.reference.yaml logs -f opensim-csharp
+# Stop:    podman-compose -f compose.reference.yaml down
+#
+# The HTTP recorder (conformance harness) captures traffic from this server
+# and replays it against the Rust implementation for comparison.
+
+services:
+  db-ref:
+    image: docker.io/library/mariadb:10.5
+    environment:
+      MYSQL_ROOT_PASSWORD: opensim-ref
+      MYSQL_DATABASE: opensim
+      MYSQL_USER: opensim
+      MYSQL_PASSWORD: opensim-ref
+    volumes:
+      - db-ref-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  opensim-csharp:
+    image: docker.io/soupbowl/opensimulator:latest
+    depends_on:
+      db-ref:
+        condition: service_healthy
+    environment:
+      OPENSIM_DB_HOST: db-ref
+      OPENSIM_DB_NAME: opensim
+      OPENSIM_DB_USER: opensim
+      OPENSIM_DB_PASS: opensim-ref
+      OPENSIM_PHYSICS: BulletSim
+    ports:
+      - "9100:9000/tcp"
+      - "9100:9000/udp"
+
+volumes:
+  db-ref-data:

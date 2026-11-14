@@ -1,0 +1,10 @@
+target/
+.git/
+*.md
+docs/
+openspec/
+scripts/
+deny.toml
+.dockerignore
+Containerfile
+compose.yaml

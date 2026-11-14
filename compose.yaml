@@ -1,0 +1,65 @@
+# Development stack: database + robust (grid services) + region (simulator).
+#
+# Start:   podman-compose up -d
+# Logs:    podman-compose logs -f robust region
+# Stop:    podman-compose down
+#
+# LLUDP note: the region container publishes UDP 9000 for viewer traffic.
+# If running multiple regions, each needs a unique UDP port mapped.
+
+services:
+  db:
+    image: docker.io/library/mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: opensim-dev
+      MARIADB_DATABASE: opensim
+      MARIADB_USER: opensim
+      MARIADB_PASSWORD: opensim-dev
+    volumes:
+      - db-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  robust:
+    build:
+      context: .
+      dockerfile: Containerfile
+    command: ["opensim-robust"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      OPENSIM__Database__ConnectionString: "Server=db;Port=3306;Database=opensim;User=opensim;Password=opensim-dev"
+      OPENSIM__Network__http_listener_port: "8003"
+      RUST_LOG: info
+    ports:
+      - "8003:8003"
+
+  region:
+    build:
+      context: .
+      dockerfile: Containerfile
+    command: ["opensim-region"]
+    depends_on:
+      db:
+        condition: service_healthy
+      robust:
+        condition: service_started
+    environment:
+      OPENSIM__Database__ConnectionString: "Server=db;Port=3306;Database=opensim;User=opensim;Password=opensim-dev"
+      OPENSIM__Network__http_listener_port: "9000"
+      OPENSIM__GridService__GridServerURI: "http://robust:8003"
+      RUST_LOG: info
+    ports:
+      # TCP: HTTP services (caps, etc.)
+      - "9000:9000/tcp"
+      # UDP: LLUDP viewer protocol traffic
+      - "9000:9000/udp"
+
+volumes:
+  db-data:
