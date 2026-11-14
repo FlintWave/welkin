@@ -18,6 +18,8 @@ uuid = { workspace = true }
 parking_lot = { workspace = true }
 tiny-skia = { workspace = true }
 irc = "1"
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util", "macros", "rt-multi-thread"] }
