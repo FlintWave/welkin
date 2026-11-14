@@ -7,8 +7,13 @@ publish.workspace = true
 
 [dependencies]
 aurora-msg = { workspace = true }
+glam = { workspace = true }
 opensim-types = { path = "../opensim-types" }
 thiserror = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+aurora-net = { workspace = true }
 
 [lints]
 workspace = true

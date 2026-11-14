@@ -11,4 +11,6 @@ pub use aurora_msg::{
     field_str, message_info, parse_packet, str_field, unpack_quat,
 };
 
+pub mod objects;
+
 pub use opensim_types;
