@@ -4,7 +4,7 @@
 - [x] 1.2 Add a trajectory recorder to C# OpenSim and record the spike scenes with ubODE
 - [x] 1.3 Build the headless Rust harness and replay the scenes on Rapier
 - [x] 1.4 Check that `aurora-assets` and Rapier agree on a `parry3d` version; build one prim and one mesh collider from Aurora geometry
-- [ ] 1.5 Write up results and record go or no-go in this change
+- [x] 1.5 Write up results and record go or no-go in this change
 
 ## 2. Traits
 
