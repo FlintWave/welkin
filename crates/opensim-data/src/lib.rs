@@ -12,10 +12,12 @@ pub mod friends;
 pub mod avatar;
 pub mod mute;
 pub mod profiles;
+pub mod offline_im;
 pub mod estate;
 pub mod agent_prefs;
 pub mod migrations;
 pub mod simulation;
+pub mod groups;
 
 pub use pool::DataPool;
 

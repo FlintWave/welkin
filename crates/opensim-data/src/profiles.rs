@@ -122,6 +122,20 @@ pub struct UserSettingsRow {
     pub email: String,
 }
 
+/// Per-user application data, matching the C# `UserAppData` model.
+/// Stores arbitrary app-specific data keyed by (user, app tag).
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct UserAppDataRow {
+    #[sqlx(rename = "UserId")]
+    pub user_id: String,
+    #[sqlx(rename = "TagId")]
+    pub tag_id: String,
+    #[sqlx(rename = "DataKey")]
+    pub data_key: String,
+    #[sqlx(rename = "DataVal")]
+    pub data_val: String,
+}
+
 const CLASSIFIED_COLS: &str = "classifieduuid, creatoruuid, creationdate, expirationdate, \
     category, name, description, parceluuid, parentestate, snapshotuuid, simname, posglobal, \
     parcelname, classifiedflags, priceforlisting";
@@ -373,6 +387,45 @@ impl ProfilesStore {
         .bind(row.im_via_email.clone())
         .bind(row.visible.clone())
         .bind(row.email.clone())
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    // ---- app data ----
+
+    pub async fn get_app_data(
+        &self,
+        user_id: &str,
+        tag_id: &str,
+    ) -> Result<Option<UserAppDataRow>, DataError> {
+        let row = sqlx::query_as::<_, UserAppDataRow>(
+            "SELECT UserId, TagId, DataKey, DataVal FROM userdata \
+             WHERE UserId = $1 AND TagId = $2",
+        )
+        .bind(user_id.to_string())
+        .bind(tag_id.to_string())
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    pub async fn store_app_data(&self, row: &UserAppDataRow) -> Result<(), DataError> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("DELETE FROM userdata WHERE UserId = $1 AND TagId = $2")
+            .bind(row.user_id.clone())
+            .bind(row.tag_id.clone())
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query(
+            "INSERT INTO userdata (UserId, TagId, DataKey, DataVal) \
+             VALUES ($1, $2, $3, $4)",
+        )
+        .bind(row.user_id.clone())
+        .bind(row.tag_id.clone())
+        .bind(row.data_key.clone())
+        .bind(row.data_val.clone())
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;

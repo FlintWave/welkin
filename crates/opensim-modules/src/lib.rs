@@ -9,15 +9,20 @@
 pub mod attachments;
 pub mod avatar;
 pub mod chat;
+pub mod concierge;
 pub mod environment;
 pub mod estate;
 pub mod events;
 pub mod inventory;
+pub mod irc_bridge;
 pub mod land;
 pub mod lifecycle;
 pub mod messaging;
 pub mod module;
+pub mod npc;
+pub mod offline_im;
 pub mod permissions;
+pub mod profiles;
 pub mod registry;
 pub mod transfer;
 pub mod world_map;
@@ -72,6 +77,10 @@ pub use framework::{
     LibraryModule, MapImageServiceConnector, MonitorModule, MuteListServiceConnector,
     NeighbourServiceConnector, RegionStats, SearchModule, SearchResult, ServiceConnectorConfig,
     TextureSenderModule, UserData, UserManagementModule,
+};
+pub use offline_im::OfflineIMModule;
+pub use profiles::{
+    AvatarProperties, BasicProfileModule, ClassifiedSummary, PickSummary, UserNote,
 };
 
 #[cfg(test)]
