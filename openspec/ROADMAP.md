@@ -104,9 +104,9 @@ when its phase starts, so later rows are placeholders until then.
 | 5 | Land, permissions, estate, inventory, attachments, chat, IM, map | `region-modules` | accepted |
 | 5 | OAR and IAR archives | `archives` | accepted |
 | 6 | Groups, OfflineIM, profiles, NPCs | `social-modules` | accepted |
-| 6 | Hypergrid | `hypergrid` | proposed |
+| 6 | Hypergrid | `hypergrid` | accepted |
 | 6 | Grid profiles: standalone, own grid, OSgrid, custom | `external-grid-mode` | accepted |
-| 6 | WebRTC voice | `webrtc-voice` | proposed |
+| 6 | WebRTC voice | `webrtc-voice` | accepted |
 | 7 | Migration tooling, load tests, first production grid | `cutover` | proposed |
 
 ## Order and dependencies
@@ -164,7 +164,7 @@ Modernisation, done in the phase that touches the code:
 | Password storage | Salted MD5 (`AuthenticationServiceBase`) | Argon2id over the MD5 digest the viewer sends (`argon2`); opt-in after cutover, because C# cannot read it | 2, 7 |
 | TLS | Optional, manual certificates | `rustls` with automatic certificates | 0 |
 | Metrics and tracing | None | Prometheus, OpenTelemetry | 0 |
-| Asset store | Database blobs or gzip files keyed by SHA-256 | Same keys, zstd, optional S3-compatible storage (`object_store`) | 2 |
+| Asset store | Database blobs or gzip files keyed by SHA-256 | Same keys, zstd compression | 2 |
 | Concurrency | Locks in 226 files | `tokio` tasks and message passing per region | 3 |
 | Script limits | Cooperative | CPU and memory metering in the VM | 4 |
 | Convex decomposition | `ConvexDecompositionDotNet` (5,701 lines) | V-HACD in `parry3d` | 3 |

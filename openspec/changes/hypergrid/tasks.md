@@ -45,5 +45,5 @@
 
 ## 10. Testing and security
 
-- [ ] 10.1 Integration tests: HG teleport round-trip (outbound+inbound), suitcase inventory access, cross-grid IM delivery, hyperlink creation/removal, friend request across grids
-- [ ] 10.2 SECURITY REVIEW: suitcase folder escape, asset export permission enforcement, session token strength and replay prevention, agent identity spoofing, rate limiting (CRITICAL RISK, Opus reviewer)
+- [x] 10.1 Integration tests: HG teleport round-trip (outbound+inbound), suitcase inventory access, cross-grid IM delivery, hyperlink creation/removal, friend request across grids (hg_integration_tests.rs 50 tests)
+- [x] 10.2 SECURITY REVIEW: suitcase folder escape, asset export permission enforcement, session token strength and replay prevention, agent identity spoofing, rate limiting (CRITICAL RISK, Opus reviewer) (docs/security-review-hypergrid.md — CONDITIONAL PASS, 3 CRITICAL + 3 HIGH + 3 MEDIUM + 2 LOW findings)

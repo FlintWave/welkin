@@ -17,6 +17,6 @@
 
 ## 4. Testing and security
 
-- [ ] 4.1 Mock wolfvoice JSON-RPC server for integration tests: provision, channel create/destroy, error responses
-- [ ] 4.2 Integration tests: provision flow, parcel crossing channel switch, estate voice disable, concurrent provisioning
-- [ ] 4.3 SECURITY REVIEW: credential isolation (no cross-agent leakage), JSON-RPC auth (shared secret or mTLS), rate limiting, wolfvoice trust boundary
+- [x] 4.1 Mock wolfvoice JSON-RPC server for integration tests: provision, channel create/destroy, error responses (voice_integration_tests.rs MockTransport + CapturedRequests)
+- [x] 4.2 Integration tests: provision flow, parcel crossing channel switch, estate voice disable, concurrent provisioning (voice_integration_tests.rs 43 tests)
+- [x] 4.3 SECURITY REVIEW: credential isolation (no cross-agent leakage), JSON-RPC auth (shared secret or mTLS), rate limiting, wolfvoice trust boundary (docs/security-review-voice.md — CONDITIONAL PASS, 2 HIGH + 3 MEDIUM + 3 LOW findings)
