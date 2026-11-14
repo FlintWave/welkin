@@ -434,6 +434,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link",
 ]
@@ -1974,12 +1975,14 @@ dependencies = [
 name = "opensim-data"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "opensim-types",
  "serde",
  "sqlx",
  "thiserror 2.0.21",
  "tokio",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -2046,6 +2049,8 @@ dependencies = [
  "opensim-physics",
  "opensim-types",
  "rapier3d",
+ "serde",
+ "serde_json",
  "thiserror 2.0.21",
  "tracing",
 ]
