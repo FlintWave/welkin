@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 pub mod null;
+pub mod vehicle;
 
 use glam::{Quat, Vec3};
 
