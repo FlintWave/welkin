@@ -2,7 +2,7 @@
 
 - [x] 1.1 Analytic shapes: box and sphere prims produce BoxShape and BallShape colliders directly
 - [x] 1.2 Volume mesh path: VolumeParams through aurora-prim, triangle mesh to TriMeshShape collider
-- [ ] 1.3 LOD selection: physics LOD table matching C# Meshmerizer thresholds
+- [x] 1.3 LOD selection: physics LOD table matching C# Meshmerizer thresholds
 - [x] 1.4 Shape cache: hash VolumeParams to avoid redundant mesh generation
 
 ## 2. Sculpt maps

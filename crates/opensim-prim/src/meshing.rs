@@ -326,7 +326,7 @@ pub fn create_physics_shape(
     }
 
     // Fall through to mesh generation.
-    let detail = 1.0; // lowest LOD for physics
+    let detail = PhysicsLod::from_size(size).detail();
     let result = match shape_type {
         PhysicsShapeType::Convex => shape_convex_from_volume(params, size, detail),
         PhysicsShapeType::Prim => shape_from_volume(params, size, detail),
@@ -338,6 +338,45 @@ pub fn create_physics_shape(
     }
 
     Some(result)
+}
+
+// ---------------------------------------------------------------------------
+// LOD selection
+// ---------------------------------------------------------------------------
+
+/// LOD detail levels for physics meshing, matching C# Meshmerizer thresholds.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PhysicsLod {
+    Lowest,
+    Low,
+    Medium,
+    High,
+}
+
+impl PhysicsLod {
+    /// Select LOD based on the prim's maximum scale dimension.
+    pub fn from_size(size: Vec3) -> Self {
+        let max_dim = size.x.max(size.y).max(size.z);
+        if max_dim < 4.0 {
+            PhysicsLod::Lowest
+        } else if max_dim < 16.0 {
+            PhysicsLod::Low
+        } else if max_dim < 64.0 {
+            PhysicsLod::Medium
+        } else {
+            PhysicsLod::High
+        }
+    }
+
+    /// The detail parameter to pass to `generate_volume`.
+    pub fn detail(&self) -> f32 {
+        match self {
+            PhysicsLod::Lowest => 0.25,
+            PhysicsLod::Low => 0.5,
+            PhysicsLod::Medium => 1.0,
+            PhysicsLod::High => 2.0,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -529,5 +568,40 @@ mod tests {
         let mut p = sphere_params();
         p.profile.begin = 0.1;
         assert!(!is_sphere(&p));
+    }
+
+    #[test]
+    fn lod_from_size_tiny() {
+        assert_eq!(PhysicsLod::from_size(Vec3::splat(1.0)), PhysicsLod::Lowest);
+        assert_eq!(PhysicsLod::from_size(Vec3::splat(3.9)), PhysicsLod::Lowest);
+    }
+
+    #[test]
+    fn lod_from_size_medium() {
+        assert_eq!(PhysicsLod::from_size(Vec3::splat(4.0)), PhysicsLod::Low);
+        assert_eq!(PhysicsLod::from_size(Vec3::splat(10.0)), PhysicsLod::Low);
+        assert_eq!(PhysicsLod::from_size(Vec3::splat(16.0)), PhysicsLod::Medium);
+        assert_eq!(PhysicsLod::from_size(Vec3::splat(50.0)), PhysicsLod::Medium);
+    }
+
+    #[test]
+    fn lod_from_size_large() {
+        assert_eq!(PhysicsLod::from_size(Vec3::splat(64.0)), PhysicsLod::High);
+        assert_eq!(PhysicsLod::from_size(Vec3::splat(200.0)), PhysicsLod::High);
+    }
+
+    #[test]
+    fn lod_uses_max_dimension() {
+        // Non-uniform: largest dimension should determine LOD
+        assert_eq!(PhysicsLod::from_size(Vec3::new(1.0, 1.0, 100.0)), PhysicsLod::High);
+        assert_eq!(PhysicsLod::from_size(Vec3::new(100.0, 1.0, 1.0)), PhysicsLod::High);
+    }
+
+    #[test]
+    fn lod_detail_values() {
+        assert_eq!(PhysicsLod::Lowest.detail(), 0.25);
+        assert_eq!(PhysicsLod::Low.detail(), 0.5);
+        assert_eq!(PhysicsLod::Medium.detail(), 1.0);
+        assert_eq!(PhysicsLod::High.detail(), 2.0);
     }
 }
