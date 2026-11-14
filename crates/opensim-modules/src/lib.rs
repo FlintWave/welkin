@@ -7,6 +7,7 @@
 //! and skeleton module implementations.
 
 pub mod attachments;
+pub mod avatar;
 pub mod chat;
 pub mod environment;
 pub mod estate;
@@ -18,7 +19,9 @@ pub mod messaging;
 pub mod module;
 pub mod permissions;
 pub mod registry;
+pub mod transfer;
 pub mod world_map;
+pub mod framework;
 
 // Re-exports for convenience.
 pub use attachments::{AttachmentInfo, AttachmentPoint, AttachmentsModule};
@@ -49,9 +52,26 @@ pub use permissions::{
     checks::ObjectPerms, DefaultPermissionsModule, PermissionsConfig, UserSet,
 };
 pub use registry::{ModuleRegistry, SceneRef};
+pub use avatar::{
+    AvatarAppearance, AvatarFactoryModule, BakeType, BakedTexturesModule,
+    CombatModule as AvatarCombatModule, DialogModule, FriendInfo, FriendPerms,
+    FriendsModule, GesturesModule, GodLevel, GodsModule, LureModule,
+    WearableItem, WearableType,
+};
+pub use transfer::{
+    AgentTransferState, EntityTransferContext, EntityTransferModule,
+    EntityTransferStateMachine, GridRegion, TeleportFlags,
+};
 pub use world_map::{
     map_image::{MapImageModule, MapTileConfig, ShadedTerrainRenderer, TerrainRenderer},
     MapBlock, MapItem, MapItemType, MapSearchModule, SimAccess, WorldMapModule,
+};
+pub use framework::{
+    AgentPreferencesConnector, AgentPrefs, AssetCacheConfig, CacheStats, CachedAsset,
+    FlotsamAssetCache, IPBanModule, J2KPriority, LandConnectorData, LandServiceConnector,
+    LibraryModule, MapImageServiceConnector, MonitorModule, MuteListServiceConnector,
+    NeighbourServiceConnector, RegionStats, SearchModule, SearchResult, ServiceConnectorConfig,
+    TextureSenderModule, UserData, UserManagementModule,
 };
 
 #[cfg(test)]
@@ -2793,5 +2813,1467 @@ mod tests {
         module.set_environment_settings(settings);
         assert_eq!(module.get_environment_settings().day_cycle, vec![1, 2, 3]);
         assert_eq!(module.get_environment_settings().sky_map, vec![4, 5]);
+    }
+
+    // ===================================================================
+    // Avatar-module tests (section 10)
+    // ===================================================================
+
+    use crate::avatar::{
+        AvatarAppearance, AvatarFactoryModule, BakeType, BakedTexturesModule,
+        CombatModule, DialogModule as DialogMod, FriendPerms,
+        FriendsModule, GesturesModule, GodLevel, GodsModule, LureModule,
+        WearableItem, WearableType,
+    };
+
+    // -- 164. AvatarFactoryModule lifecycle -----------------------------------
+
+    #[test]
+    fn avatar_factory_lifecycle() {
+        let mut module = AvatarFactoryModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        module.initialise(&config).unwrap();
+        module.add_region(&scene).unwrap();
+        assert_eq!(module.name(), "AvatarFactoryModule");
+        assert_eq!(module.module_type(), ModuleType::NonShared);
+        module.remove_region(&scene).unwrap();
+        module.close().unwrap();
+    }
+
+    // -- 165. AvatarFactoryModule set/get appearance --------------------------
+
+    #[test]
+    fn avatar_factory_set_get_appearance() {
+        let mut module = AvatarFactoryModule::new();
+        let agent = Uuid::new_v4();
+
+        assert!(module.get_appearance(agent).is_none());
+
+        let appearance = AvatarAppearance {
+            visual_params: vec![10, 20, 30],
+            height: 1.9,
+            ..Default::default()
+        };
+        module.set_appearance(agent, appearance);
+
+        let stored = module.get_appearance(agent).unwrap();
+        assert_eq!(stored.serial, 1);
+        assert_eq!(stored.visual_params, vec![10, 20, 30]);
+        assert!((stored.height - 1.9).abs() < f32::EPSILON);
+
+        // Second set increments serial.
+        module.set_appearance(agent, AvatarAppearance::default());
+        assert_eq!(module.get_appearance(agent).unwrap().serial, 2);
+    }
+
+    // -- 166. AvatarFactoryModule hover_z preference -------------------------
+
+    #[test]
+    fn avatar_factory_hover_z() {
+        let mut module = AvatarFactoryModule::new();
+        let agent = Uuid::new_v4();
+
+        // No-op when appearance not set.
+        module.set_preferences_hover_z(agent, 1.5);
+        assert!(module.get_appearance(agent).is_none());
+
+        module.set_appearance(agent, AvatarAppearance::default());
+        assert!((module.get_appearance(agent).unwrap().hover_z).abs() < f32::EPSILON);
+
+        module.set_preferences_hover_z(agent, 0.75);
+        assert!((module.get_appearance(agent).unwrap().hover_z - 0.75).abs() < f32::EPSILON);
+    }
+
+    // -- 167. AvatarFactoryModule baked texture save/get/validate -------------
+
+    #[test]
+    fn avatar_factory_bake_cache() {
+        let mut module = AvatarFactoryModule::new();
+        let agent = Uuid::new_v4();
+
+        assert!(!module.validate_baked_texture_cache(agent));
+        assert!(module.get_baked_texture_faces(agent).is_empty());
+
+        let mut textures = HashMap::new();
+        textures.insert(BakeType::Head, Uuid::new_v4());
+        textures.insert(BakeType::UpperBody, Uuid::new_v4());
+        assert!(module.save_baked_textures(agent, textures));
+
+        let faces = module.get_baked_texture_faces(agent);
+        assert_eq!(faces.len(), 2);
+        assert!(faces.contains_key(&BakeType::Head));
+        assert!(module.validate_baked_texture_cache(agent));
+    }
+
+    // -- 168. AvatarFactoryModule send_appearance and request_rebake stubs ----
+
+    #[test]
+    fn avatar_factory_stubs() {
+        let module = AvatarFactoryModule::new();
+        assert!(module.send_appearance(Uuid::new_v4()));
+        assert!(module.request_rebake(Uuid::new_v4()));
+    }
+
+    // -- 169. BakedTexturesModule store/get/clear ----------------------------
+
+    #[test]
+    fn baked_textures_store_get_clear() {
+        let mut module = BakedTexturesModule::new();
+        let agent = Uuid::new_v4();
+        let tex1 = Uuid::new_v4();
+        let tex2 = Uuid::new_v4();
+
+        assert!(module.get_cached_items(agent).is_empty());
+
+        module.store_baked_texture(agent, BakeType::Head, tex1);
+        module.store_baked_texture(agent, BakeType::Eyes, tex2);
+
+        let items = module.get_cached_items(agent);
+        assert_eq!(items.len(), 2);
+
+        // Overwrite one.
+        let tex3 = Uuid::new_v4();
+        module.store_baked_texture(agent, BakeType::Head, tex3);
+        let items2 = module.get_cached_items(agent);
+        assert_eq!(items2.len(), 2);
+        let head = items2.iter().find(|(bt, _)| *bt == BakeType::Head).unwrap();
+        assert_eq!(head.1, tex3);
+
+        module.clear_cache(agent);
+        assert!(module.get_cached_items(agent).is_empty());
+    }
+
+    // -- 170. BakedTexturesModule lifecycle -----------------------------------
+
+    #[test]
+    fn baked_textures_lifecycle() {
+        let mut module = BakedTexturesModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        module.initialise(&config).unwrap();
+        module.add_region(&scene).unwrap();
+        assert_eq!(module.name(), "BakedTexturesModule");
+        assert_eq!(module.module_type(), ModuleType::Shared);
+        module.remove_region(&scene).unwrap();
+        module.close().unwrap();
+    }
+
+    // -- 171. FriendsModule add/remove friends --------------------------------
+
+    #[test]
+    fn friends_add_remove() {
+        let mut module = FriendsModule::new();
+        let alice = Uuid::new_v4();
+        let bob = Uuid::new_v4();
+
+        module.add_friend(alice, bob);
+        assert_eq!(module.get_friends(alice).len(), 1);
+        assert_eq!(module.get_friends(bob).len(), 1);
+        assert_eq!(module.get_friends(alice)[0].friend_id, bob);
+        assert_eq!(module.get_friends(bob)[0].friend_id, alice);
+
+        module.remove_friend(alice, bob);
+        assert!(module.get_friends(alice).is_empty());
+        assert!(module.get_friends(bob).is_empty());
+    }
+
+    // -- 172. FriendsModule grant_rights updates both directions ---------------
+
+    #[test]
+    fn friends_grant_rights() {
+        let mut module = FriendsModule::new();
+        let alice = Uuid::new_v4();
+        let bob = Uuid::new_v4();
+
+        module.add_friend(alice, bob);
+        let rights = FriendPerms::CAN_SEE_ONLINE | FriendPerms::CAN_SEE_ON_MAP;
+        module.grant_rights(alice, bob, rights);
+
+        // Alice's entry should have updated my_flags.
+        let alice_friends = module.get_friends(alice);
+        assert_eq!(alice_friends[0].my_flags, rights);
+
+        // Bob's entry should have updated their_flags for alice.
+        let bob_friends = module.get_friends(bob);
+        assert_eq!(bob_friends[0].their_flags, rights);
+    }
+
+    // -- 173. FriendsModule online status -------------------------------------
+
+    #[test]
+    fn friends_online_status() {
+        let mut module = FriendsModule::new();
+        let agent = Uuid::new_v4();
+
+        assert!(!module.is_friend_online(agent));
+
+        module.status_notify(agent, true);
+        assert!(module.is_friend_online(agent));
+
+        module.status_notify(agent, false);
+        assert!(!module.is_friend_online(agent));
+    }
+
+    // -- 174. FriendsModule lifecycle -----------------------------------------
+
+    #[test]
+    fn friends_module_lifecycle() {
+        let mut module = FriendsModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        module.initialise(&config).unwrap();
+        module.add_region(&scene).unwrap();
+        assert_eq!(module.name(), "FriendsModule");
+        assert_eq!(module.module_type(), ModuleType::NonShared);
+        module.remove_region(&scene).unwrap();
+        module.close().unwrap();
+    }
+
+    // -- 175. LureModule send/accept/reject ----------------------------------
+
+    #[test]
+    fn lure_send_accept() {
+        let mut module = LureModule::new();
+        let from = Uuid::new_v4();
+        let to = Uuid::new_v4();
+
+        let lure_id = module.send_lure(from, to, "Come visit!");
+        assert_eq!(module.pending_count(), 1);
+
+        // Wrong agents fail.
+        assert!(!module.teleport_lure_request(to, from, lure_id));
+        assert_eq!(module.pending_count(), 1);
+
+        // Correct agents succeed and consume the lure.
+        assert!(module.teleport_lure_request(from, to, lure_id));
+        assert_eq!(module.pending_count(), 0);
+
+        // Double-accept fails.
+        assert!(!module.teleport_lure_request(from, to, lure_id));
+    }
+
+    // -- 176. LureModule lifecycle -------------------------------------------
+
+    #[test]
+    fn lure_module_lifecycle() {
+        let mut module = LureModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        module.initialise(&config).unwrap();
+        module.add_region(&scene).unwrap();
+        assert_eq!(module.name(), "LureModule");
+        assert_eq!(module.module_type(), ModuleType::NonShared);
+        module.remove_region(&scene).unwrap();
+        module.close().unwrap();
+    }
+
+    // -- 177. GodsModule request/get level -----------------------------------
+
+    #[test]
+    fn gods_request_level() {
+        let mut module = GodsModule::new();
+        let agent = Uuid::new_v4();
+
+        assert_eq!(module.get_god_level(agent), GodLevel::Not);
+
+        module.request_god_powers(agent, GodLevel::God);
+        assert_eq!(module.get_god_level(agent), GodLevel::God);
+
+        module.request_god_powers(agent, GodLevel::FullGod);
+        assert_eq!(module.get_god_level(agent), GodLevel::FullGod);
+    }
+
+    // -- 178. GodsModule lifecycle and config ---------------------------------
+
+    #[test]
+    fn gods_module_lifecycle() {
+        let mut module = GodsModule::new();
+        let mut config = TestConfig::new();
+        config.set_bool("GodsModule", "DialogOnExit", false);
+        let scene = test_scene_ref();
+        module.initialise(&config).unwrap();
+        assert!(!module.dialog_on_exit);
+        module.add_region(&scene).unwrap();
+        assert_eq!(module.name(), "GodsModule");
+        assert_eq!(module.module_type(), ModuleType::NonShared);
+        module.kick_user(Uuid::new_v4(), "test");
+        module.remove_region(&scene).unwrap();
+        module.close().unwrap();
+    }
+
+    // -- 179. DialogModule lifecycle and stubs don't panic --------------------
+
+    #[test]
+    fn dialog_module_lifecycle() {
+        let mut module = DialogMod::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        module.initialise(&config).unwrap();
+        module.add_region(&scene).unwrap();
+        assert_eq!(module.name(), "DialogModule");
+        assert_eq!(module.module_type(), ModuleType::NonShared);
+
+        let agent = Uuid::new_v4();
+        module.send_alert(agent, "alert!");
+        module.send_alert_to_user(agent, "modal alert", true);
+        module.send_url_to_user(
+            agent,
+            "Box",
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            false,
+            "Visit us",
+            "https://example.com",
+        );
+        module.send_text_box_to_user(
+            agent,
+            "Enter name",
+            42,
+            "InputBox",
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+        );
+
+        module.remove_region(&scene).unwrap();
+        module.close().unwrap();
+    }
+
+    // -- 180. CombatModule damage and kill ------------------------------------
+
+    #[test]
+    fn combat_damage_and_kill() {
+        let mut module = CombatModule::new();
+        module.damage_enabled = true;
+        module.max_damage = 50.0;
+
+        let agent = Uuid::new_v4();
+        let killer = Uuid::new_v4();
+
+        assert!((module.get_health(agent) - 100.0).abs() < f32::EPSILON);
+
+        let hp = module.apply_damage(agent, 30.0);
+        assert!((hp - 70.0).abs() < f32::EPSILON);
+        assert!((module.get_health(agent) - 70.0).abs() < f32::EPSILON);
+
+        // Clamped to max_damage.
+        let hp2 = module.apply_damage(agent, 999.0);
+        assert!((hp2 - 20.0).abs() < f32::EPSILON);
+
+        // Kill and respawn.
+        module.killed(agent, killer);
+        assert!((module.get_health(agent) - 100.0).abs() < f32::EPSILON);
+    }
+
+    // -- 181. CombatModule damage disabled returns full health ----------------
+
+    #[test]
+    fn combat_damage_disabled() {
+        let mut module = CombatModule::new();
+        assert!(!module.damage_enabled);
+
+        let hp = module.apply_damage(Uuid::new_v4(), 50.0);
+        assert!((hp - 100.0).abs() < f32::EPSILON);
+    }
+
+    // -- 182. CombatModule lifecycle and config -------------------------------
+
+    #[test]
+    fn combat_module_lifecycle() {
+        let mut module = CombatModule::new();
+        let mut config = TestConfig::new();
+        config.set_bool("CombatModule", "DamageEnabled", true);
+        config.set_float("CombatModule", "MaxDamage", 75.0);
+        let scene = test_scene_ref();
+        module.initialise(&config).unwrap();
+        assert!(module.damage_enabled);
+        assert!((module.max_damage - 75.0).abs() < f32::EPSILON);
+        module.add_region(&scene).unwrap();
+        assert_eq!(module.name(), "CombatModule");
+        assert_eq!(module.module_type(), ModuleType::NonShared);
+        module.remove_region(&scene).unwrap();
+        module.close().unwrap();
+    }
+
+    // -- 183. GesturesModule activate/deactivate ------------------------------
+
+    #[test]
+    fn gestures_activate_deactivate() {
+        let mut module = GesturesModule::new();
+        let agent = Uuid::new_v4();
+        let asset1 = Uuid::new_v4();
+        let gesture1 = Uuid::new_v4();
+        let asset2 = Uuid::new_v4();
+        let gesture2 = Uuid::new_v4();
+
+        assert!(module.get_active_gestures(agent).is_empty());
+
+        module.activate_gesture(agent, asset1, gesture1);
+        module.activate_gesture(agent, asset2, gesture2);
+        assert_eq!(module.get_active_gestures(agent).len(), 2);
+
+        // Duplicate activation is idempotent.
+        module.activate_gesture(agent, asset1, gesture1);
+        assert_eq!(module.get_active_gestures(agent).len(), 2);
+
+        assert!(module.deactivate_gesture(agent, gesture1));
+        assert_eq!(module.get_active_gestures(agent).len(), 1);
+
+        // Deactivating a non-active gesture returns false.
+        assert!(!module.deactivate_gesture(agent, gesture1));
+    }
+
+    // -- 184. GesturesModule lifecycle ----------------------------------------
+
+    #[test]
+    fn gestures_module_lifecycle() {
+        let mut module = GesturesModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        module.initialise(&config).unwrap();
+        module.add_region(&scene).unwrap();
+        assert_eq!(module.name(), "GesturesModule");
+        assert_eq!(module.module_type(), ModuleType::NonShared);
+        module.remove_region(&scene).unwrap();
+        module.close().unwrap();
+    }
+
+    // -- 185. WearableType variant count --------------------------------------
+
+    #[test]
+    fn wearable_type_variant_count() {
+        assert_eq!(WearableType::ALL.len(), 17);
+        // First and last.
+        assert_eq!(WearableType::ALL[0], WearableType::Shape);
+        assert_eq!(WearableType::ALL[16], WearableType::Universal);
+        // repr values.
+        assert_eq!(WearableType::Shape as u8, 0);
+        assert_eq!(WearableType::Universal as u8, 16);
+    }
+
+    // -- 186. BakeType variant count and repr values --------------------------
+
+    #[test]
+    fn bake_type_variant_count() {
+        assert_eq!(BakeType::ALL.len(), 11);
+        assert_eq!(BakeType::Head as u8, 0);
+        assert_eq!(BakeType::BakedAux3 as u8, 10);
+        assert_eq!(BakeType::NumBakeTypes as u8, 11);
+    }
+
+    // -- 187. FriendPerms bitflag combinations --------------------------------
+
+    #[test]
+    fn friend_perms_combinations() {
+        let none = FriendPerms::NONE;
+        assert!(none.is_empty());
+
+        let see = FriendPerms::CAN_SEE_ONLINE;
+        assert!(see.contains(FriendPerms::CAN_SEE_ONLINE));
+        assert!(!see.contains(FriendPerms::CAN_SEE_ON_MAP));
+
+        let combined = FriendPerms::CAN_SEE_ONLINE
+            | FriendPerms::CAN_SEE_ON_MAP
+            | FriendPerms::CAN_MODIFY_OBJECTS;
+        assert!(combined.contains(FriendPerms::CAN_SEE_ONLINE));
+        assert!(combined.contains(FriendPerms::CAN_SEE_ON_MAP));
+        assert!(combined.contains(FriendPerms::CAN_MODIFY_OBJECTS));
+        assert_eq!(combined.bits(), 7);
+    }
+
+    // -- 188. GodLevel ordering -----------------------------------------------
+
+    #[test]
+    fn god_level_ordering() {
+        assert!(GodLevel::Not < GodLevel::God);
+        assert!(GodLevel::God < GodLevel::FullGod);
+        assert_eq!(GodLevel::Not as u8, 0);
+        assert_eq!(GodLevel::God as u8, 200);
+        assert_eq!(GodLevel::FullGod as u8, 255);
+    }
+
+    // -- 189. AvatarAppearance default values ---------------------------------
+
+    #[test]
+    fn avatar_appearance_defaults() {
+        let a = AvatarAppearance::default();
+        assert_eq!(a.serial, 0);
+        assert!(a.visual_params.is_empty());
+        assert!(a.texture_entry.is_empty());
+        assert!(a.wearables.is_empty());
+        assert!((a.height - 1.8).abs() < f32::EPSILON);
+        assert!(a.hover_z.abs() < f32::EPSILON);
+    }
+
+    // -- 190. AvatarAppearance with wearables --------------------------------
+
+    #[test]
+    fn avatar_appearance_with_wearables() {
+        let mut appearance = AvatarAppearance::default();
+        let item = WearableItem {
+            item_id: Uuid::new_v4(),
+            asset_id: Uuid::new_v4(),
+        };
+        appearance
+            .wearables
+            .entry(WearableType::Shirt)
+            .or_default()
+            .push(item.clone());
+        appearance
+            .wearables
+            .entry(WearableType::Shirt)
+            .or_default()
+            .push(WearableItem {
+                item_id: Uuid::new_v4(),
+                asset_id: Uuid::new_v4(),
+            });
+
+        assert_eq!(appearance.wearables[&WearableType::Shirt].len(), 2);
+        assert_eq!(appearance.wearables[&WearableType::Shirt][0], item);
+    }
+
+    // -- 191. BakedTexturesModule isolation between agents --------------------
+
+    #[test]
+    fn baked_textures_agent_isolation() {
+        let mut module = BakedTexturesModule::new();
+        let agent_a = Uuid::new_v4();
+        let agent_b = Uuid::new_v4();
+        let tex = Uuid::new_v4();
+
+        module.store_baked_texture(agent_a, BakeType::Head, tex);
+        assert_eq!(module.get_cached_items(agent_a).len(), 1);
+        assert!(module.get_cached_items(agent_b).is_empty());
+
+        module.clear_cache(agent_a);
+        assert!(module.get_cached_items(agent_a).is_empty());
+    }
+
+    // -- 192. FriendsModule get_friends returns empty for unknown agent -------
+
+    #[test]
+    fn friends_unknown_agent() {
+        let module = FriendsModule::new();
+        assert!(module.get_friends(Uuid::new_v4()).is_empty());
+    }
+
+    // -- 193. CombatModule negative damage clamped to zero -------------------
+
+    #[test]
+    fn combat_negative_damage_clamped() {
+        let mut module = CombatModule::new();
+        module.damage_enabled = true;
+
+        let agent = Uuid::new_v4();
+        let hp = module.apply_damage(agent, -50.0);
+        // Negative damage is clamped to 0, so health stays at 100.
+        assert!((hp - 100.0).abs() < f32::EPSILON);
+    }
+
+    // ===================================================================
+    // Framework & service connector tests (section 12)
+    // ===================================================================
+
+    use crate::framework::{
+        AgentPreferencesConnector, AssetCacheConfig, CachedAsset,
+        FlotsamAssetCache, IPBanModule, J2KPriority, LandServiceConnector,
+        LibraryModule, MapImageServiceConnector, MonitorModule, MuteListServiceConnector,
+        NeighbourServiceConnector, RegionStats, SearchModule,
+        ServiceConnectorConfig, TextureSenderModule, UserManagementModule,
+    };
+
+    // -- 199. UserManagementModule add/get user ----------------------------
+
+    #[test]
+    fn user_mgmt_add_get() {
+        let mut m = UserManagementModule::new();
+        let id = Uuid::new_v4();
+        m.add_user(id, "First".to_string(), "Last".to_string());
+        let (f, l) = m.get_user_name(id).unwrap();
+        assert_eq!(f, "First");
+        assert_eq!(l, "Last");
+    }
+
+    // -- 200. UserManagementModule add_user_with_url ----------------------
+
+    #[test]
+    fn user_mgmt_add_with_url() {
+        let mut m = UserManagementModule::new();
+        let id = Uuid::new_v4();
+        m.add_user_with_url(id, "HG".to_string(), "User".to_string(), "http://grid.example.com".to_string());
+        let (f, l) = m.get_user_name(id).unwrap();
+        assert_eq!(f, "HG");
+        assert_eq!(l, "User");
+    }
+
+    // -- 201. UserManagementModule get_user_id reverse lookup --------------
+
+    #[test]
+    fn user_mgmt_get_user_id() {
+        let mut m = UserManagementModule::new();
+        let id = Uuid::new_v4();
+        m.add_user(id, "Alice".to_string(), "Linden".to_string());
+        assert_eq!(m.get_user_id("Alice", "Linden"), Some(id));
+        assert_eq!(m.get_user_id("Bob", "Linden"), None);
+    }
+
+    // -- 202. UserManagementModule get_user_count -------------------------
+
+    #[test]
+    fn user_mgmt_count() {
+        let mut m = UserManagementModule::new();
+        assert_eq!(m.get_user_count(), 0);
+        m.add_user(Uuid::new_v4(), "A".to_string(), "B".to_string());
+        m.add_user(Uuid::new_v4(), "C".to_string(), "D".to_string());
+        assert_eq!(m.get_user_count(), 2);
+    }
+
+    // -- 203. UserManagementModule lifecycle --------------------------------
+
+    #[test]
+    fn user_mgmt_lifecycle() {
+        let mut m = UserManagementModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        m.initialise(&config).unwrap();
+        m.add_region(&scene).unwrap();
+        assert_eq!(m.name(), "UserManagementModule");
+        assert_eq!(m.module_type(), ModuleType::Shared);
+        m.remove_region(&scene).unwrap();
+        m.close().unwrap();
+    }
+
+    // -- 204. MonitorModule lifecycle and defaults -------------------------
+
+    #[test]
+    fn monitor_module_lifecycle() {
+        let mut m = MonitorModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        m.initialise(&config).unwrap();
+        m.add_region(&scene).unwrap();
+        assert_eq!(m.name(), "MonitorModule");
+        assert_eq!(m.module_type(), ModuleType::NonShared);
+
+        let stats = m.get_stats();
+        assert_eq!(stats.total_prims, 0);
+        assert!((stats.time_dilation - 1.0).abs() < f64::EPSILON);
+
+        m.remove_region(&scene).unwrap();
+        m.close().unwrap();
+    }
+
+    // -- 205. MonitorModule update/get stats --------------------------------
+
+    #[test]
+    fn monitor_module_update_stats() {
+        let mut m = MonitorModule::new();
+        let mut s = RegionStats::default();
+        s.total_prims = 42;
+        s.sim_fps = 55.0;
+        s.root_agents = 3;
+        m.update_stats(s);
+
+        let got = m.get_stats();
+        assert_eq!(got.total_prims, 42);
+        assert!((got.sim_fps - 55.0).abs() < f64::EPSILON);
+        assert_eq!(got.root_agents, 3);
+    }
+
+    // -- 206. FlotsamAssetCache put/get ------------------------------------
+
+    #[test]
+    fn flotsam_put_get() {
+        let mut cache = FlotsamAssetCache::new();
+        let asset = CachedAsset {
+            id: "asset-001".to_string(),
+            asset_type: 0,
+            data: vec![1, 2, 3],
+            inserted_at: 1000,
+        };
+        cache.put(asset);
+        let got = cache.get("asset-001").unwrap();
+        assert_eq!(got.data, vec![1, 2, 3]);
+        assert!(cache.get("nonexistent").is_none());
+    }
+
+    // -- 207. FlotsamAssetCache stats counting -----------------------------
+
+    #[test]
+    fn flotsam_stats_counting() {
+        let mut cache = FlotsamAssetCache::new();
+        cache.put(CachedAsset {
+            id: "a".to_string(),
+            asset_type: 0,
+            data: vec![],
+            inserted_at: 1000,
+        });
+        cache.get("a");
+        cache.get("missing");
+
+        let stats = cache.get_stats();
+        assert_eq!(stats.total_puts, 1);
+        assert_eq!(stats.total_gets, 2);
+        assert_eq!(stats.memory_hits, 1);
+        assert_eq!(stats.memory_misses, 1);
+    }
+
+    // -- 208. FlotsamAssetCache clear resets everything ---------------------
+
+    #[test]
+    fn flotsam_clear() {
+        let mut cache = FlotsamAssetCache::new();
+        cache.put(CachedAsset {
+            id: "x".to_string(),
+            asset_type: 0,
+            data: vec![9],
+            inserted_at: 1000,
+        });
+        cache.clear();
+        assert!(cache.get("x").is_none());
+        let stats = cache.get_stats();
+        assert_eq!(stats.total_puts, 0);
+    }
+
+    // -- 209. FlotsamAssetCache eviction when over max items ---------------
+
+    #[test]
+    fn flotsam_eviction() {
+        let mut cache = FlotsamAssetCache::new();
+        cache.config.memory_cache_max_items = 3;
+
+        for i in 0..5 {
+            cache.put(CachedAsset {
+                id: format!("asset-{i}"),
+                asset_type: 0,
+                data: vec![i as u8],
+                inserted_at: 1000 + i,
+            });
+        }
+        // Only the 3 most recently inserted should remain.
+        assert!(cache.get("asset-0").is_none());
+        assert!(cache.get("asset-1").is_none());
+        assert!(cache.get("asset-2").is_some());
+        assert!(cache.get("asset-3").is_some());
+        assert!(cache.get("asset-4").is_some());
+    }
+
+    // -- 210. FlotsamAssetCache lifecycle -----------------------------------
+
+    #[test]
+    fn flotsam_lifecycle() {
+        let mut m = FlotsamAssetCache::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        m.initialise(&config).unwrap();
+        m.add_region(&scene).unwrap();
+        assert_eq!(m.name(), "FlotsamAssetCache");
+        assert_eq!(m.module_type(), ModuleType::Shared);
+        m.remove_region(&scene).unwrap();
+        m.close().unwrap();
+    }
+
+    // -- 211. TextureSenderModule enqueue/dequeue priority ordering --------
+
+    #[test]
+    fn texture_sender_priority_ordering() {
+        let mut m = TextureSenderModule::new();
+        m.enqueue_texture(J2KPriority {
+            texture_id: Uuid::new_v4(),
+            priority: 1.0,
+            discard_level: 0,
+        });
+        m.enqueue_texture(J2KPriority {
+            texture_id: Uuid::new_v4(),
+            priority: 10.0,
+            discard_level: 0,
+        });
+        m.enqueue_texture(J2KPriority {
+            texture_id: Uuid::new_v4(),
+            priority: 5.0,
+            discard_level: 0,
+        });
+
+        assert_eq!(m.queue_len(), 3);
+        // Highest priority (10.0) comes out first.
+        let first = m.dequeue_next().unwrap();
+        assert!((first.priority - 10.0).abs() < f32::EPSILON);
+        let second = m.dequeue_next().unwrap();
+        assert!((second.priority - 5.0).abs() < f32::EPSILON);
+        let third = m.dequeue_next().unwrap();
+        assert!((third.priority - 1.0).abs() < f32::EPSILON);
+        assert!(m.dequeue_next().is_none());
+    }
+
+    // -- 212. TextureSenderModule queue_len --------------------------------
+
+    #[test]
+    fn texture_sender_queue_len() {
+        let mut m = TextureSenderModule::new();
+        assert_eq!(m.queue_len(), 0);
+        m.enqueue_texture(J2KPriority {
+            texture_id: Uuid::new_v4(),
+            priority: 1.0,
+            discard_level: 0,
+        });
+        assert_eq!(m.queue_len(), 1);
+        m.dequeue_next();
+        assert_eq!(m.queue_len(), 0);
+    }
+
+    // -- 213. TextureSenderModule lifecycle --------------------------------
+
+    #[test]
+    fn texture_sender_lifecycle() {
+        let mut m = TextureSenderModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        m.initialise(&config).unwrap();
+        m.add_region(&scene).unwrap();
+        assert_eq!(m.name(), "TextureSenderModule");
+        assert_eq!(m.module_type(), ModuleType::NonShared);
+        m.remove_region(&scene).unwrap();
+        m.close().unwrap();
+    }
+
+    // -- 214. IPBanModule add/remove/is_banned ----------------------------
+
+    #[test]
+    fn ip_ban_add_remove() {
+        let mut m = IPBanModule::new();
+        m.add_ban("10.0.0.1".to_string());
+        assert!(m.is_banned("10.0.0.1"));
+        assert!(!m.is_banned("10.0.0.2"));
+
+        m.remove_ban("10.0.0.1");
+        assert!(!m.is_banned("10.0.0.1"));
+    }
+
+    // -- 215. IPBanModule network prefix banning --------------------------
+
+    #[test]
+    fn ip_ban_network_prefix() {
+        let mut m = IPBanModule::new();
+        let mut config = TestConfig::new();
+        config.set_string("Network", "IPBanList", "192.168.1., 10.0.0.5");
+        m.load_from_config(&config);
+
+        // Exact match.
+        assert!(m.is_banned("10.0.0.5"));
+        // Network prefix match.
+        assert!(m.is_banned("192.168.1.42"));
+        assert!(m.is_banned("192.168.1.1"));
+        // Not in the ban list.
+        assert!(!m.is_banned("172.16.0.1"));
+    }
+
+    // -- 216. IPBanModule lifecycle -----------------------------------------
+
+    #[test]
+    fn ip_ban_lifecycle() {
+        let mut m = IPBanModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        m.initialise(&config).unwrap();
+        m.add_region(&scene).unwrap();
+        assert_eq!(m.name(), "IPBanModule");
+        assert_eq!(m.module_type(), ModuleType::Shared);
+        m.remove_region(&scene).unwrap();
+        m.close().unwrap();
+    }
+
+    // -- 217. LandServiceConnector lifecycle --------------------------------
+
+    #[test]
+    fn land_connector_lifecycle() {
+        let mut m = LandServiceConnector::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        m.initialise(&config).unwrap();
+        m.add_region(&scene).unwrap();
+        assert_eq!(m.name(), "LandServiceConnector");
+        assert_eq!(m.module_type(), ModuleType::Shared);
+        // Stub returns None.
+        assert!(m.get_land_data(Uuid::new_v4(), 128.0, 128.0).is_none());
+        m.remove_region(&scene).unwrap();
+        m.close().unwrap();
+    }
+
+    // -- 218. NeighbourServiceConnector lifecycle ---------------------------
+
+    #[test]
+    fn neighbour_connector_lifecycle() {
+        let mut m = NeighbourServiceConnector::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        m.initialise(&config).unwrap();
+        m.add_region(&scene).unwrap();
+        assert_eq!(m.name(), "NeighbourServiceConnector");
+        assert_eq!(m.module_type(), ModuleType::Shared);
+        assert!(m.get_neighbours(Uuid::new_v4()).is_empty());
+        m.inform_neighbours_of_status(Uuid::new_v4(), true);
+        m.remove_region(&scene).unwrap();
+        m.close().unwrap();
+    }
+
+    // -- 219. MuteListServiceConnector lifecycle ----------------------------
+
+    #[test]
+    fn mute_list_connector_lifecycle() {
+        let mut m = MuteListServiceConnector::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        m.initialise(&config).unwrap();
+        m.add_region(&scene).unwrap();
+        assert_eq!(m.name(), "MuteListServiceConnector");
+        assert_eq!(m.module_type(), ModuleType::Shared);
+        assert!(m.get_mutes(Uuid::new_v4()).is_empty());
+        m.update_mute();
+        m.remove_region(&scene).unwrap();
+        m.close().unwrap();
+    }
+
+    // -- 220. AgentPreferencesConnector lifecycle and defaults ---------------
+
+    #[test]
+    fn agent_prefs_connector_lifecycle() {
+        let mut m = AgentPreferencesConnector::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        m.initialise(&config).unwrap();
+        m.add_region(&scene).unwrap();
+        assert_eq!(m.name(), "AgentPreferencesConnector");
+        assert_eq!(m.module_type(), ModuleType::Shared);
+
+        let prefs = m.get_preferences(Uuid::new_v4());
+        assert_eq!(prefs.access_prefs, "M");
+        assert!((prefs.hover_height - 0.0).abs() < f32::EPSILON);
+        assert_eq!(prefs.language, "en");
+        assert!(prefs.language_is_public);
+
+        m.remove_region(&scene).unwrap();
+        m.close().unwrap();
+    }
+
+    // -- 221. MapImageServiceConnector lifecycle ----------------------------
+
+    #[test]
+    fn map_image_connector_lifecycle() {
+        let mut m = MapImageServiceConnector::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        m.initialise(&config).unwrap();
+        m.add_region(&scene).unwrap();
+        assert_eq!(m.name(), "MapImageServiceConnector");
+        assert_eq!(m.module_type(), ModuleType::Shared);
+        // Stubs return false.
+        assert!(!m.upload_tile(1000, 1000, vec![0u8; 16]));
+        assert!(!m.remove_tile(1000, 1000));
+        m.remove_region(&scene).unwrap();
+        m.close().unwrap();
+    }
+
+    // -- 222. LibraryModule lifecycle and fields ----------------------------
+
+    #[test]
+    fn library_module_lifecycle() {
+        let mut m = LibraryModule::new();
+        assert!(m.library_root_folder_id.is_nil());
+        assert!(m.library_owner_id.is_nil());
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        m.initialise(&config).unwrap();
+        m.add_region(&scene).unwrap();
+        assert_eq!(m.name(), "LibraryModule");
+        assert_eq!(m.module_type(), ModuleType::Shared);
+        m.remove_region(&scene).unwrap();
+        m.close().unwrap();
+    }
+
+    // -- 223. SearchModule lifecycle and stub results ----------------------
+
+    #[test]
+    fn search_module_lifecycle() {
+        let mut m = SearchModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        m.initialise(&config).unwrap();
+        m.add_region(&scene).unwrap();
+        assert_eq!(m.name(), "SearchModule");
+        assert_eq!(m.module_type(), ModuleType::Shared);
+        assert!(m.search_places("test", 0).is_empty());
+        assert!(m.search_people("test").is_empty());
+        m.remove_region(&scene).unwrap();
+        m.close().unwrap();
+    }
+
+    // -- 224. ServiceConnectorConfig defaults ------------------------------
+
+    #[test]
+    fn service_connector_config_defaults() {
+        let cfg = ServiceConnectorConfig::default();
+        assert!(cfg.service_url.is_empty());
+        assert_eq!(cfg.timeout_ms, 25_000);
+    }
+
+    // -- 225. AssetCacheConfig defaults ------------------------------------
+
+    #[test]
+    fn asset_cache_config_defaults() {
+        let cfg = AssetCacheConfig::default();
+        assert!(cfg.memory_cache_enabled);
+        assert_eq!(cfg.memory_cache_max_items, 30_000);
+        assert_eq!(cfg.memory_cache_ttl_secs, 120);
+        assert!(cfg.file_cache_enabled);
+        assert_eq!(cfg.file_cache_dir, "assetcache");
+        assert_eq!(cfg.file_cache_ttl_secs, 172_800);
+        assert_eq!(cfg.deep_scan_interval_hours, 36);
+    }
+
+    // -- 226. UserManagementModule get missing user returns None -----------
+
+    #[test]
+    fn user_mgmt_get_missing() {
+        let m = UserManagementModule::new();
+        assert!(m.get_user_name(Uuid::new_v4()).is_none());
+    }
+
+    // -- 227. MonitorModule remove_region resets stats ----------------------
+
+    #[test]
+    fn monitor_remove_resets_stats() {
+        let mut m = MonitorModule::new();
+        let mut s = RegionStats::default();
+        s.total_prims = 100;
+        m.update_stats(s);
+
+        let scene = test_scene_ref();
+        m.remove_region(&scene).unwrap();
+        assert_eq!(m.get_stats().total_prims, 0);
+    }
+
+    // -- 228. FlotsamAssetCache disabled memory cache skips memory tier -----
+
+    #[test]
+    fn flotsam_disabled_memory_cache() {
+        let mut cache = FlotsamAssetCache::new();
+        cache.config.memory_cache_enabled = false;
+        cache.put(CachedAsset {
+            id: "disabled".to_string(),
+            asset_type: 0,
+            data: vec![1],
+            inserted_at: 1000,
+        });
+        // With memory cache disabled, get returns None (file tier stub also misses).
+        assert!(cache.get("disabled").is_none());
+        let stats = cache.get_stats();
+        assert_eq!(stats.total_puts, 1);
+        assert_eq!(stats.memory_hits, 0);
+    }
+
+    // ===================================================================
+    // Entity-transfer module tests (section 11)
+    // ===================================================================
+
+    use crate::transfer::{
+        AgentTransferState, EntityTransferContext, EntityTransferModule as TransferMod,
+        EntityTransferStateMachine, GridRegion, TeleportFlags,
+    };
+
+    // -- 229. EntityTransferModule RegionModule lifecycle --------------------
+
+    #[test]
+    fn transfer_module_lifecycle() {
+        let mut module = TransferMod::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        module.initialise(&config).unwrap();
+        module.add_region(&scene).unwrap();
+        assert_eq!(module.name(), "EntityTransferModule");
+        assert_eq!(module.module_type(), ModuleType::NonShared);
+        module.remove_region(&scene).unwrap();
+        module.close().unwrap();
+    }
+
+    // -- 230. EntityTransferModule reads config -----------------------------
+
+    #[test]
+    fn transfer_module_reads_config() {
+        let mut module = TransferMod::new();
+        let mut config = TestConfig::new();
+        config.set_float("EntityTransfer", "max_transfer_distance", 8000.0);
+        config.set_int("EntityTransfer", "wait_for_agent_arrived_timeout_secs", 30);
+        module.initialise(&config).unwrap();
+        assert!((module.max_transfer_distance - 8000.0).abs() < f32::EPSILON);
+        assert_eq!(module.wait_for_agent_arrived_timeout_secs, 30);
+    }
+
+    // -- 231. EntityTransferModule default config values ---------------------
+
+    #[test]
+    fn transfer_module_default_config() {
+        let module = TransferMod::new();
+        assert!((module.max_transfer_distance - 4095.0).abs() < f32::EPSILON);
+        assert_eq!(module.wait_for_agent_arrived_timeout_secs, 15);
+    }
+
+    // -- 232. GridRegion construction and defaults ---------------------------
+
+    #[test]
+    fn grid_region_construction() {
+        let id = Uuid::new_v4();
+        let region = GridRegion::new(id, "TestRegion");
+        assert_eq!(region.region_id, id);
+        assert_eq!(region.region_name, "TestRegion");
+        assert_eq!(region.region_handle, 0);
+        assert_eq!(region.region_size_x, 256);
+        assert_eq!(region.region_size_y, 256);
+        assert!(region.external_host_name.is_empty());
+        assert_eq!(region.http_port, 0);
+    }
+
+    // -- 233. GridRegion default is nil/empty --------------------------------
+
+    #[test]
+    fn grid_region_default() {
+        let region = GridRegion::default();
+        assert_eq!(region.region_id, Uuid::nil());
+        assert!(region.region_name.is_empty());
+        assert_eq!(region.region_size_x, 256);
+        assert_eq!(region.region_size_y, 256);
+    }
+
+    // -- 234. TeleportFlags bitflag combinations ----------------------------
+
+    #[test]
+    fn teleport_flags_combinations() {
+        let flags = TeleportFlags::VIA_LOCATION | TeleportFlags::IS_FLYING;
+        assert!(flags.contains(TeleportFlags::VIA_LOCATION));
+        assert!(flags.contains(TeleportFlags::IS_FLYING));
+        assert!(!flags.contains(TeleportFlags::VIA_HOME));
+        assert_eq!(flags.bits(), 16 | 4096);
+
+        let empty = TeleportFlags::DEFAULT;
+        assert_eq!(empty.bits(), 0);
+
+        let all_nav = TeleportFlags::VIA_LURE
+            | TeleportFlags::VIA_LANDMARK
+            | TeleportFlags::VIA_LOCATION
+            | TeleportFlags::VIA_HOME
+            | TeleportFlags::VIA_TELEHUB
+            | TeleportFlags::VIA_LOGIN
+            | TeleportFlags::VIA_REGION_ID;
+        assert!(all_nav.contains(TeleportFlags::VIA_LURE));
+        assert!(all_nav.contains(TeleportFlags::VIA_LOGIN));
+    }
+
+    // -- 235. TeleportFlags individual values match C# ----------------------
+
+    #[test]
+    fn teleport_flags_values() {
+        assert_eq!(TeleportFlags::DEFAULT.bits(), 0);
+        assert_eq!(TeleportFlags::SET_HOME_TO_TARGET.bits(), 1);
+        assert_eq!(TeleportFlags::SET_LAST_TO_TARGET.bits(), 2);
+        assert_eq!(TeleportFlags::VIA_LURE.bits(), 4);
+        assert_eq!(TeleportFlags::VIA_LANDMARK.bits(), 8);
+        assert_eq!(TeleportFlags::VIA_LOCATION.bits(), 16);
+        assert_eq!(TeleportFlags::VIA_HOME.bits(), 32);
+        assert_eq!(TeleportFlags::VIA_TELEHUB.bits(), 64);
+        assert_eq!(TeleportFlags::VIA_LOGIN.bits(), 128);
+        assert_eq!(TeleportFlags::GOD_LIKE.bits(), 256);
+        assert_eq!(TeleportFlags::NINE_ONE_ONE.bits(), 512);
+        assert_eq!(TeleportFlags::DISABLE_CANCEL.bits(), 1024);
+        assert_eq!(TeleportFlags::VIA_REGION_ID.bits(), 2048);
+        assert_eq!(TeleportFlags::IS_FLYING.bits(), 4096);
+        assert_eq!(TeleportFlags::RESET_HOME.bits(), 8192);
+        assert_eq!(TeleportFlags::FORCE_REDIRECT.bits(), 16384);
+    }
+
+    // -- 236. State machine: set_in_transit ---------------------------------
+
+    #[test]
+    fn state_machine_set_in_transit() {
+        let mut sm = EntityTransferStateMachine::new();
+        let agent = Uuid::new_v4();
+        assert!(!sm.is_in_transit(agent));
+        assert!(sm.set_in_transit(agent));
+        assert!(sm.is_in_transit(agent));
+        assert_eq!(
+            sm.get_agent_transfer_state(agent),
+            Some(AgentTransferState::Preparing)
+        );
+    }
+
+    // -- 237. Double-teleport prevention ------------------------------------
+
+    #[test]
+    fn state_machine_double_teleport_prevention() {
+        let mut sm = EntityTransferStateMachine::new();
+        let agent = Uuid::new_v4();
+        assert!(sm.set_in_transit(agent));
+        // Second call returns false.
+        assert!(!sm.set_in_transit(agent));
+    }
+
+    // -- 238. Valid state transition: Preparing -> Transferring ---------------
+
+    #[test]
+    fn state_machine_preparing_to_transferring() {
+        let mut sm = EntityTransferStateMachine::new();
+        let agent = Uuid::new_v4();
+        sm.set_in_transit(agent);
+        assert!(sm.update_in_transit(agent, AgentTransferState::Transferring));
+        assert_eq!(
+            sm.get_agent_transfer_state(agent),
+            Some(AgentTransferState::Transferring)
+        );
+    }
+
+    // -- 239. Valid transition: Transferring -> ReceivedAtDestination --------
+
+    #[test]
+    fn state_machine_transferring_to_received() {
+        let mut sm = EntityTransferStateMachine::new();
+        let agent = Uuid::new_v4();
+        sm.set_in_transit(agent);
+        sm.update_in_transit(agent, AgentTransferState::Transferring);
+        assert!(sm.update_in_transit(agent, AgentTransferState::ReceivedAtDestination));
+        assert_eq!(
+            sm.get_agent_transfer_state(agent),
+            Some(AgentTransferState::ReceivedAtDestination)
+        );
+    }
+
+    // -- 240. Valid transition: ReceivedAtDestination -> CleaningUp ----------
+
+    #[test]
+    fn state_machine_received_to_cleaning_up() {
+        let mut sm = EntityTransferStateMachine::new();
+        let agent = Uuid::new_v4();
+        sm.set_in_transit(agent);
+        sm.update_in_transit(agent, AgentTransferState::Transferring);
+        sm.update_in_transit(agent, AgentTransferState::ReceivedAtDestination);
+        assert!(sm.update_in_transit(agent, AgentTransferState::CleaningUp));
+        assert_eq!(
+            sm.get_agent_transfer_state(agent),
+            Some(AgentTransferState::CleaningUp)
+        );
+    }
+
+    // -- 241. Invalid transition: Preparing -> ReceivedAtDestination ---------
+
+    #[test]
+    fn state_machine_invalid_preparing_to_received() {
+        let mut sm = EntityTransferStateMachine::new();
+        let agent = Uuid::new_v4();
+        sm.set_in_transit(agent);
+        // Cannot skip from Preparing directly to ReceivedAtDestination.
+        assert!(!sm.update_in_transit(agent, AgentTransferState::ReceivedAtDestination));
+        // State should remain Preparing.
+        assert_eq!(
+            sm.get_agent_transfer_state(agent),
+            Some(AgentTransferState::Preparing)
+        );
+    }
+
+    // -- 242. Terminal state: CleaningUp cannot transition -------------------
+
+    #[test]
+    fn state_machine_cleaning_up_is_terminal() {
+        let mut sm = EntityTransferStateMachine::new();
+        let agent = Uuid::new_v4();
+        sm.set_in_transit(agent);
+        sm.update_in_transit(agent, AgentTransferState::CleaningUp);
+        // No transition from CleaningUp is allowed.
+        assert!(!sm.update_in_transit(agent, AgentTransferState::Aborting));
+        assert!(!sm.update_in_transit(agent, AgentTransferState::Preparing));
+        assert!(!sm.update_in_transit(agent, AgentTransferState::Transferring));
+    }
+
+    // -- 243. Terminal state: Aborting cannot transition ---------------------
+
+    #[test]
+    fn state_machine_aborting_is_terminal() {
+        let mut sm = EntityTransferStateMachine::new();
+        let agent = Uuid::new_v4();
+        sm.set_in_transit(agent);
+        sm.update_in_transit(agent, AgentTransferState::Aborting);
+        assert!(!sm.update_in_transit(agent, AgentTransferState::CleaningUp));
+        assert!(!sm.update_in_transit(agent, AgentTransferState::Preparing));
+    }
+
+    // -- 244. Reset from transit removes agent ------------------------------
+
+    #[test]
+    fn state_machine_reset_from_transit() {
+        let mut sm = EntityTransferStateMachine::new();
+        let agent = Uuid::new_v4();
+        sm.set_in_transit(agent);
+        assert!(sm.reset_from_transit(agent));
+        assert!(!sm.is_in_transit(agent));
+        assert_eq!(sm.get_agent_transfer_state(agent), None);
+        // Second reset returns false.
+        assert!(!sm.reset_from_transit(agent));
+    }
+
+    // -- 245. Cancelling path: Preparing -> Cancelling -> CleaningUp --------
+
+    #[test]
+    fn state_machine_cancelling_path() {
+        let mut sm = EntityTransferStateMachine::new();
+        let agent = Uuid::new_v4();
+        sm.set_in_transit(agent);
+        assert!(sm.update_in_transit(agent, AgentTransferState::Cancelling));
+        assert_eq!(
+            sm.get_agent_transfer_state(agent),
+            Some(AgentTransferState::Cancelling)
+        );
+        assert!(sm.update_in_transit(agent, AgentTransferState::CleaningUp));
+    }
+
+    // -- 246. Aborting from Transferring ------------------------------------
+
+    #[test]
+    fn state_machine_abort_from_transferring() {
+        let mut sm = EntityTransferStateMachine::new();
+        let agent = Uuid::new_v4();
+        sm.set_in_transit(agent);
+        sm.update_in_transit(agent, AgentTransferState::Transferring);
+        assert!(sm.update_in_transit(agent, AgentTransferState::Aborting));
+        assert_eq!(
+            sm.get_agent_transfer_state(agent),
+            Some(AgentTransferState::Aborting)
+        );
+    }
+
+    // -- 247. EntityTransferContext default ----------------------------------
+
+    #[test]
+    fn transfer_context_defaults() {
+        let ctx = EntityTransferContext::default();
+        assert!(ctx.incoming_teleport_type.is_empty());
+        assert!(ctx.src_external_name.is_empty());
+        assert!(ctx.destination.is_none());
+    }
+
+    // -- 248. EntityTransferModule teleport stub succeeds --------------------
+
+    #[test]
+    fn transfer_module_teleport_stub() {
+        let mut module = TransferMod::new();
+        let agent = Uuid::new_v4();
+        let result = module.teleport(
+            agent,
+            1000,
+            [128.0, 128.0, 25.0],
+            [0.0, 1.0, 0.0],
+            TeleportFlags::VIA_LOCATION,
+        );
+        assert!(result.is_ok());
+        // Agent should no longer be in transit after the stub completes.
+        assert!(!module.state_machine().is_in_transit(agent));
+    }
+
+    // -- 249. EntityTransferModule do_teleport stub succeeds -----------------
+
+    #[test]
+    fn transfer_module_do_teleport_stub() {
+        let mut module = TransferMod::new();
+        let agent = Uuid::new_v4();
+        let dest = GridRegion::new(Uuid::new_v4(), "DestRegion");
+        let result = module.do_teleport(
+            agent,
+            &dest,
+            [128.0, 128.0, 25.0],
+            [0.0, 1.0, 0.0],
+            TeleportFlags::VIA_LANDMARK,
+        );
+        assert!(result.is_ok());
+        assert!(!module.state_machine().is_in_transit(agent));
+    }
+
+    // -- 250. EntityTransferModule cancel_teleport --------------------------
+
+    #[test]
+    fn transfer_module_cancel_teleport() {
+        let mut module = TransferMod::new();
+        let agent = Uuid::new_v4();
+        // Manually set in transit so we can cancel.
+        assert!(module.state_machine_mut().set_in_transit(agent));
+        module.cancel_teleport(agent);
+        assert!(!module.state_machine().is_in_transit(agent));
+    }
+
+    // -- 251. EntityTransferModule teleport_home stub -----------------------
+
+    #[test]
+    fn transfer_module_teleport_home() {
+        let mut module = TransferMod::new();
+        assert!(module.teleport_home(Uuid::new_v4()));
+    }
+
+    // -- 252. EntityTransferModule cross_agent stub -------------------------
+
+    #[test]
+    fn transfer_module_cross_agent() {
+        let mut module = TransferMod::new();
+        let dest = GridRegion::new(Uuid::new_v4(), "Neighbour");
+        assert!(module.cross_agent_to_new_region(
+            Uuid::new_v4(),
+            [256.0, 128.0, 25.0],
+            &dest,
+            true,
+        ));
+    }
+
+    // -- 253. State machine wait_for_agent_arrived stub ---------------------
+
+    #[test]
+    fn state_machine_wait_for_arrived_stub() {
+        let sm = EntityTransferStateMachine::new();
+        assert!(sm.wait_for_agent_arrived_at_destination(Uuid::new_v4()));
+        assert!(sm.enable_wait_for_agent_arrived);
+    }
+
+    // -- 254. State machine in_transit_count --------------------------------
+
+    #[test]
+    fn state_machine_in_transit_count() {
+        let mut sm = EntityTransferStateMachine::new();
+        assert_eq!(sm.in_transit_count(), 0);
+        sm.set_in_transit(Uuid::new_v4());
+        sm.set_in_transit(Uuid::new_v4());
+        assert_eq!(sm.in_transit_count(), 2);
+    }
+
+    // -- 255. Update on unknown agent returns false -------------------------
+
+    #[test]
+    fn state_machine_update_unknown_agent() {
+        let mut sm = EntityTransferStateMachine::new();
+        assert!(!sm.update_in_transit(Uuid::new_v4(), AgentTransferState::Transferring));
+    }
+
+    // -- 256. AgentTransferState::is_terminal --------------------------------
+
+    #[test]
+    fn agent_transfer_state_is_terminal() {
+        assert!(AgentTransferState::CleaningUp.is_terminal());
+        assert!(AgentTransferState::Aborting.is_terminal());
+        assert!(!AgentTransferState::Preparing.is_terminal());
+        assert!(!AgentTransferState::Transferring.is_terminal());
+        assert!(!AgentTransferState::ReceivedAtDestination.is_terminal());
+        assert!(!AgentTransferState::Cancelling.is_terminal());
+    }
+
+    // -- 257. Cancelling -> Aborting is valid --------------------------------
+
+    #[test]
+    fn state_machine_cancelling_to_aborting() {
+        let mut sm = EntityTransferStateMachine::new();
+        let agent = Uuid::new_v4();
+        sm.set_in_transit(agent);
+        sm.update_in_transit(agent, AgentTransferState::Cancelling);
+        assert!(sm.update_in_transit(agent, AgentTransferState::Aborting));
     }
 }

@@ -1,0 +1,1112 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+//! Framework and service connector modules (section 12).
+//!
+//! Provides core framework services — user management, monitoring, library
+//! inventory, search — plus the Flotsam asset cache, texture sending,
+//! IP banning, and stub service connectors for land, neighbour, mute-list,
+//! agent-preferences and map-image services.
+
+use std::collections::{HashMap, HashSet, VecDeque};
+
+use uuid::Uuid;
+
+use crate::module::{ModuleConfig, ModuleError, ModuleType, RegionModule};
+use crate::registry::SceneRef;
+
+// ===========================================================================
+// 12.1 — UserManagementModule, MonitorModule, LibraryModule, SearchModule
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// UserManagementModule
+// ---------------------------------------------------------------------------
+
+/// Cached data for a single user account.
+#[derive(Debug, Clone)]
+pub struct UserData {
+    pub first_name: String,
+    pub last_name: String,
+    pub home_url: Option<String>,
+    pub created_at: i64,
+}
+
+/// In-memory user-name cache, mirroring the C# `UserManagementModule`.
+///
+/// Shared across regions so that every scene can resolve UUIDs to display
+/// names without hitting the user service on every request.
+pub struct UserManagementModule {
+    user_name_cache: HashMap<Uuid, UserData>,
+}
+
+impl UserManagementModule {
+    pub fn new() -> Self {
+        Self {
+            user_name_cache: HashMap::new(),
+        }
+    }
+
+    /// Look up a user's first and last name by UUID.
+    pub fn get_user_name(&self, id: Uuid) -> Option<(String, String)> {
+        self.user_name_cache
+            .get(&id)
+            .map(|d| (d.first_name.clone(), d.last_name.clone()))
+    }
+
+    /// Cache a user entry (no home URL).
+    pub fn add_user(&mut self, id: Uuid, first: String, last: String) {
+        self.user_name_cache.insert(
+            id,
+            UserData {
+                first_name: first,
+                last_name: last,
+                home_url: None,
+                created_at: 0,
+            },
+        );
+    }
+
+    /// Cache a user entry with a home URL (HG users).
+    pub fn add_user_with_url(&mut self, id: Uuid, first: String, last: String, url: String) {
+        self.user_name_cache.insert(
+            id,
+            UserData {
+                first_name: first,
+                last_name: last,
+                home_url: Some(url),
+                created_at: 0,
+            },
+        );
+    }
+
+    /// Reverse lookup: find a user UUID by first+last name.
+    pub fn get_user_id(&self, first: &str, last: &str) -> Option<Uuid> {
+        self.user_name_cache
+            .iter()
+            .find(|(_, d)| d.first_name == first && d.last_name == last)
+            .map(|(id, _)| *id)
+    }
+
+    /// Number of cached user entries.
+    pub fn get_user_count(&self) -> usize {
+        self.user_name_cache.len()
+    }
+}
+
+impl Default for UserManagementModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RegionModule for UserManagementModule {
+    fn name(&self) -> &str {
+        "UserManagementModule"
+    }
+
+    fn module_type(&self) -> ModuleType {
+        ModuleType::Shared
+    }
+
+    fn initialise(&mut self, _config: &dyn ModuleConfig) -> Result<(), ModuleError> {
+        tracing::info!("UserManagementModule initialised");
+        Ok(())
+    }
+
+    fn add_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "UserManagementModule attached");
+        Ok(())
+    }
+
+    fn remove_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "UserManagementModule detached");
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<(), ModuleError> {
+        self.user_name_cache.clear();
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MonitorModule
+// ---------------------------------------------------------------------------
+
+/// Snapshot of region statistics, mirroring `MonitorModule` counters.
+#[derive(Debug, Clone)]
+pub struct RegionStats {
+    pub total_prims: u64,
+    pub active_scripts: u64,
+    pub child_agents: u32,
+    pub root_agents: u32,
+    pub active_objects: u64,
+    pub total_frames: u64,
+    pub sim_fps: f64,
+    pub physics_fps: f64,
+    pub time_dilation: f64,
+    pub unacked_bytes: u64,
+    pub pending_downloads: u32,
+    pub pending_uploads: u32,
+}
+
+impl Default for RegionStats {
+    fn default() -> Self {
+        Self {
+            total_prims: 0,
+            active_scripts: 0,
+            child_agents: 0,
+            root_agents: 0,
+            active_objects: 0,
+            total_frames: 0,
+            sim_fps: 0.0,
+            physics_fps: 0.0,
+            time_dilation: 1.0,
+            unacked_bytes: 0,
+            pending_downloads: 0,
+            pending_uploads: 0,
+        }
+    }
+}
+
+/// Per-region statistics monitor.
+pub struct MonitorModule {
+    stats: RegionStats,
+}
+
+impl MonitorModule {
+    pub fn new() -> Self {
+        Self {
+            stats: RegionStats::default(),
+        }
+    }
+
+    /// Return a clone of the current stats snapshot.
+    pub fn get_stats(&self) -> RegionStats {
+        self.stats.clone()
+    }
+
+    /// Replace the stats with a new snapshot.
+    pub fn update_stats(&mut self, stats: RegionStats) {
+        self.stats = stats;
+    }
+}
+
+impl Default for MonitorModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RegionModule for MonitorModule {
+    fn name(&self) -> &str {
+        "MonitorModule"
+    }
+
+    fn module_type(&self) -> ModuleType {
+        ModuleType::NonShared
+    }
+
+    fn initialise(&mut self, _config: &dyn ModuleConfig) -> Result<(), ModuleError> {
+        tracing::info!("MonitorModule initialised");
+        Ok(())
+    }
+
+    fn add_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "MonitorModule attached");
+        Ok(())
+    }
+
+    fn remove_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "MonitorModule detached");
+        self.stats = RegionStats::default();
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<(), ModuleError> {
+        self.stats = RegionStats::default();
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// LibraryModule
+// ---------------------------------------------------------------------------
+
+/// Provides the read-only system library inventory (shared across regions).
+pub struct LibraryModule {
+    pub library_root_folder_id: Uuid,
+    pub library_owner_id: Uuid,
+}
+
+impl LibraryModule {
+    pub fn new() -> Self {
+        Self {
+            library_root_folder_id: Uuid::nil(),
+            library_owner_id: Uuid::nil(),
+        }
+    }
+}
+
+impl Default for LibraryModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RegionModule for LibraryModule {
+    fn name(&self) -> &str {
+        "LibraryModule"
+    }
+
+    fn module_type(&self) -> ModuleType {
+        ModuleType::Shared
+    }
+
+    fn initialise(&mut self, _config: &dyn ModuleConfig) -> Result<(), ModuleError> {
+        tracing::info!("LibraryModule initialised");
+        Ok(())
+    }
+
+    fn add_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "LibraryModule attached");
+        Ok(())
+    }
+
+    fn remove_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "LibraryModule detached");
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<(), ModuleError> {
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SearchModule
+// ---------------------------------------------------------------------------
+
+/// A single search result returned by the directory search services.
+#[derive(Debug, Clone)]
+pub struct SearchResult {
+    pub id: Uuid,
+    pub name: String,
+    pub description: String,
+}
+
+/// Basic directory search module (Shared).
+pub struct SearchModule {
+    // Stub: a real implementation would call the directory service.
+}
+
+impl SearchModule {
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    /// Search for places matching `query` with the given flags.
+    pub fn search_places(&self, _query: &str, _flags: u32) -> Vec<SearchResult> {
+        // Stub — returns empty until connected to a directory service.
+        Vec::new()
+    }
+
+    /// Search for people matching `query`.
+    pub fn search_people(&self, _query: &str) -> Vec<SearchResult> {
+        Vec::new()
+    }
+}
+
+impl Default for SearchModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RegionModule for SearchModule {
+    fn name(&self) -> &str {
+        "SearchModule"
+    }
+
+    fn module_type(&self) -> ModuleType {
+        ModuleType::Shared
+    }
+
+    fn initialise(&mut self, _config: &dyn ModuleConfig) -> Result<(), ModuleError> {
+        tracing::info!("SearchModule initialised");
+        Ok(())
+    }
+
+    fn add_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "SearchModule attached");
+        Ok(())
+    }
+
+    fn remove_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "SearchModule detached");
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<(), ModuleError> {
+        Ok(())
+    }
+}
+
+// ===========================================================================
+// 12.2 — FlotsamAssetCache
+// ===========================================================================
+
+/// Configuration for the Flotsam asset cache.
+#[derive(Debug, Clone)]
+pub struct AssetCacheConfig {
+    pub memory_cache_enabled: bool,
+    pub memory_cache_max_items: u64,
+    pub memory_cache_ttl_secs: u64,
+    pub file_cache_enabled: bool,
+    pub file_cache_dir: String,
+    pub file_cache_ttl_secs: u64,
+    pub deep_scan_interval_hours: u64,
+}
+
+impl Default for AssetCacheConfig {
+    fn default() -> Self {
+        Self {
+            memory_cache_enabled: true,
+            memory_cache_max_items: 30_000,
+            memory_cache_ttl_secs: 120,
+            file_cache_enabled: true,
+            file_cache_dir: "assetcache".to_string(),
+            file_cache_ttl_secs: 172_800,
+            deep_scan_interval_hours: 36,
+        }
+    }
+}
+
+/// Counters for cache hit/miss statistics.
+#[derive(Debug, Clone, Default)]
+pub struct CacheStats {
+    pub memory_hits: u64,
+    pub memory_misses: u64,
+    pub file_hits: u64,
+    pub file_misses: u64,
+    pub total_gets: u64,
+    pub total_puts: u64,
+}
+
+/// A single cached asset entry.
+#[derive(Debug, Clone)]
+pub struct CachedAsset {
+    pub id: String,
+    pub asset_type: u8,
+    pub data: Vec<u8>,
+    /// Unix epoch seconds when the entry was inserted.
+    pub inserted_at: u64,
+}
+
+/// Flotsam-style two-tier asset cache (memory + file).
+///
+/// The memory tier uses a plain `HashMap` with timestamp-based eviction.
+/// The file tier is stubbed (no actual disk I/O in this implementation).
+pub struct FlotsamAssetCache {
+    pub config: AssetCacheConfig,
+    memory_cache: HashMap<String, CachedAsset>,
+    /// Insertion-order queue used for simple LRU-style eviction.
+    insertion_order: VecDeque<String>,
+    stats: CacheStats,
+}
+
+impl FlotsamAssetCache {
+    pub fn new() -> Self {
+        Self {
+            config: AssetCacheConfig::default(),
+            memory_cache: HashMap::new(),
+            insertion_order: VecDeque::new(),
+            stats: CacheStats::default(),
+        }
+    }
+
+    /// Retrieve a cached asset by ID.
+    pub fn get(&mut self, asset_id: &str) -> Option<CachedAsset> {
+        self.stats.total_gets += 1;
+        if self.config.memory_cache_enabled {
+            if let Some(entry) = self.memory_cache.get(asset_id) {
+                self.stats.memory_hits += 1;
+                return Some(entry.clone());
+            }
+            self.stats.memory_misses += 1;
+        }
+        // File cache tier would go here; stub returns miss.
+        self.stats.file_misses += 1;
+        None
+    }
+
+    /// Insert or replace a cached asset.
+    pub fn put(&mut self, asset: CachedAsset) {
+        self.stats.total_puts += 1;
+        if self.config.memory_cache_enabled {
+            let id = asset.id.clone();
+            if !self.memory_cache.contains_key(&id) {
+                self.insertion_order.push_back(id.clone());
+            }
+            self.memory_cache.insert(id, asset);
+            self.evict_if_over_limit();
+        }
+    }
+
+    /// Remove entries whose `inserted_at` is older than the configured TTL
+    /// relative to `now_secs`.
+    pub fn expire_old_entries(&mut self) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let ttl = self.config.memory_cache_ttl_secs;
+        self.memory_cache.retain(|_, v| now.saturating_sub(v.inserted_at) < ttl);
+        self.insertion_order
+            .retain(|id| self.memory_cache.contains_key(id));
+    }
+
+    /// Return a clone of the current statistics.
+    pub fn get_stats(&self) -> CacheStats {
+        self.stats.clone()
+    }
+
+    /// Clear the entire memory cache and reset stats.
+    pub fn clear(&mut self) {
+        self.memory_cache.clear();
+        self.insertion_order.clear();
+        self.stats = CacheStats::default();
+    }
+
+    /// Evict the oldest entries when the cache exceeds its max-items limit.
+    fn evict_if_over_limit(&mut self) {
+        let max = self.config.memory_cache_max_items as usize;
+        while self.memory_cache.len() > max {
+            if let Some(oldest_id) = self.insertion_order.pop_front() {
+                self.memory_cache.remove(&oldest_id);
+            } else {
+                break;
+            }
+        }
+    }
+}
+
+impl Default for FlotsamAssetCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RegionModule for FlotsamAssetCache {
+    fn name(&self) -> &str {
+        "FlotsamAssetCache"
+    }
+
+    fn module_type(&self) -> ModuleType {
+        ModuleType::Shared
+    }
+
+    fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
+        self.config.memory_cache_enabled =
+            config.get_bool("AssetCache", "MemoryCacheEnabled", true);
+        self.config.memory_cache_max_items =
+            config.get_int("AssetCache", "MemoryCacheMaxItems", 30_000) as u64;
+        self.config.memory_cache_ttl_secs =
+            config.get_int("AssetCache", "MemoryCacheTTL", 120) as u64;
+        self.config.file_cache_enabled =
+            config.get_bool("AssetCache", "FileCacheEnabled", true);
+        self.config.file_cache_dir =
+            config.get_string("AssetCache", "CacheDirectory", "assetcache");
+        self.config.file_cache_ttl_secs =
+            config.get_int("AssetCache", "FileCacheTTL", 172_800) as u64;
+        self.config.deep_scan_interval_hours =
+            config.get_int("AssetCache", "DeepScanInterval", 36) as u64;
+
+        tracing::info!(
+            memory_enabled = self.config.memory_cache_enabled,
+            file_enabled = self.config.file_cache_enabled,
+            "FlotsamAssetCache initialised"
+        );
+        Ok(())
+    }
+
+    fn add_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "FlotsamAssetCache attached");
+        Ok(())
+    }
+
+    fn remove_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "FlotsamAssetCache detached");
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<(), ModuleError> {
+        self.clear();
+        Ok(())
+    }
+}
+
+// ===========================================================================
+// 12.3 — TextureSenderModule, IPBanModule
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// TextureSenderModule
+// ---------------------------------------------------------------------------
+
+/// A single queued texture-send request with JPEG-2000 decode priority.
+#[derive(Debug, Clone)]
+pub struct J2KPriority {
+    pub texture_id: Uuid,
+    pub priority: f32,
+    pub discard_level: i32,
+}
+
+/// Manages a priority queue of outbound texture sends.
+pub struct TextureSenderModule {
+    pending_queue: Vec<J2KPriority>,
+}
+
+impl TextureSenderModule {
+    pub fn new() -> Self {
+        Self {
+            pending_queue: Vec::new(),
+        }
+    }
+
+    /// Add a texture request to the priority queue.
+    pub fn enqueue_texture(&mut self, priority: J2KPriority) {
+        self.pending_queue.push(priority);
+        // Sort descending by priority so the highest-priority item is last
+        // (cheapest to pop).
+        self.pending_queue
+            .sort_by(|a, b| a.priority.partial_cmp(&b.priority).unwrap_or(std::cmp::Ordering::Equal));
+    }
+
+    /// Remove and return the highest-priority texture request.
+    pub fn dequeue_next(&mut self) -> Option<J2KPriority> {
+        self.pending_queue.pop()
+    }
+
+    /// Number of pending texture requests.
+    pub fn queue_len(&self) -> usize {
+        self.pending_queue.len()
+    }
+}
+
+impl Default for TextureSenderModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RegionModule for TextureSenderModule {
+    fn name(&self) -> &str {
+        "TextureSenderModule"
+    }
+
+    fn module_type(&self) -> ModuleType {
+        ModuleType::NonShared
+    }
+
+    fn initialise(&mut self, _config: &dyn ModuleConfig) -> Result<(), ModuleError> {
+        tracing::info!("TextureSenderModule initialised");
+        Ok(())
+    }
+
+    fn add_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "TextureSenderModule attached");
+        Ok(())
+    }
+
+    fn remove_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "TextureSenderModule detached");
+        self.pending_queue.clear();
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<(), ModuleError> {
+        self.pending_queue.clear();
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// IPBanModule
+// ---------------------------------------------------------------------------
+
+/// Manages IP address and network-range bans.
+pub struct IPBanModule {
+    banned_ips: HashSet<String>,
+    banned_networks: Vec<String>,
+}
+
+impl IPBanModule {
+    pub fn new() -> Self {
+        Self {
+            banned_ips: HashSet::new(),
+            banned_networks: Vec::new(),
+        }
+    }
+
+    /// Check whether an IP address is banned (exact match or network match).
+    pub fn is_banned(&self, ip: &str) -> bool {
+        if self.banned_ips.contains(ip) {
+            return true;
+        }
+        // Simple prefix-based network matching (e.g. "192.168.1." matches
+        // "192.168.1.42").
+        for network in &self.banned_networks {
+            if ip.starts_with(network.as_str()) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Add an IP address to the ban list.
+    pub fn add_ban(&mut self, ip: String) {
+        self.banned_ips.insert(ip);
+    }
+
+    /// Remove an IP address from the ban list.
+    pub fn remove_ban(&mut self, ip: &str) {
+        self.banned_ips.remove(ip);
+    }
+
+    /// Load bans from the `[Network]` configuration section.
+    pub fn load_from_config(&mut self, config: &dyn ModuleConfig) {
+        let ban_list = config.get_string("Network", "IPBanList", "");
+        if !ban_list.is_empty() {
+            for entry in ban_list.split(',') {
+                let trimmed = entry.trim().to_string();
+                if !trimmed.is_empty() {
+                    // Entries ending with '.' are treated as network prefixes.
+                    if trimmed.ends_with('.') {
+                        self.banned_networks.push(trimmed);
+                    } else {
+                        self.banned_ips.insert(trimmed);
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl Default for IPBanModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RegionModule for IPBanModule {
+    fn name(&self) -> &str {
+        "IPBanModule"
+    }
+
+    fn module_type(&self) -> ModuleType {
+        ModuleType::Shared
+    }
+
+    fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
+        self.load_from_config(config);
+        tracing::info!(
+            banned_ips = self.banned_ips.len(),
+            banned_networks = self.banned_networks.len(),
+            "IPBanModule initialised"
+        );
+        Ok(())
+    }
+
+    fn add_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "IPBanModule attached");
+        Ok(())
+    }
+
+    fn remove_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "IPBanModule detached");
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<(), ModuleError> {
+        self.banned_ips.clear();
+        self.banned_networks.clear();
+        Ok(())
+    }
+}
+
+// ===========================================================================
+// 12.4 — Service connectors (stubs)
+// ===========================================================================
+
+/// Common configuration for service connector endpoints.
+#[derive(Debug, Clone)]
+pub struct ServiceConnectorConfig {
+    pub service_url: String,
+    pub timeout_ms: u64,
+}
+
+impl Default for ServiceConnectorConfig {
+    fn default() -> Self {
+        Self {
+            service_url: String::new(),
+            timeout_ms: 25_000,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// LandServiceConnector
+// ---------------------------------------------------------------------------
+
+/// Data returned by the land service for a single parcel.
+#[derive(Debug, Clone)]
+pub struct LandConnectorData {
+    pub local_id: u32,
+    pub owner_id: Uuid,
+    pub name: String,
+}
+
+/// Stub connector to the remote land service.
+pub struct LandServiceConnector {
+    pub config: ServiceConnectorConfig,
+}
+
+impl LandServiceConnector {
+    pub fn new() -> Self {
+        Self {
+            config: ServiceConnectorConfig::default(),
+        }
+    }
+
+    /// Query the land service for parcel data at a given coordinate.
+    pub fn get_land_data(
+        &self,
+        _region_id: Uuid,
+        _x: f32,
+        _y: f32,
+    ) -> Option<LandConnectorData> {
+        // Stub — a real implementation would make an HTTP call.
+        None
+    }
+}
+
+impl Default for LandServiceConnector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RegionModule for LandServiceConnector {
+    fn name(&self) -> &str {
+        "LandServiceConnector"
+    }
+
+    fn module_type(&self) -> ModuleType {
+        ModuleType::Shared
+    }
+
+    fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
+        self.config.service_url =
+            config.get_string("LandService", "ServiceURL", "");
+        self.config.timeout_ms =
+            config.get_int("LandService", "Timeout", 25_000) as u64;
+        tracing::info!(url = %self.config.service_url, "LandServiceConnector initialised");
+        Ok(())
+    }
+
+    fn add_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "LandServiceConnector attached");
+        Ok(())
+    }
+
+    fn remove_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "LandServiceConnector detached");
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<(), ModuleError> {
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// NeighbourServiceConnector
+// ---------------------------------------------------------------------------
+
+/// Stub connector for neighbour-region queries.
+pub struct NeighbourServiceConnector {
+    pub config: ServiceConnectorConfig,
+}
+
+impl NeighbourServiceConnector {
+    pub fn new() -> Self {
+        Self {
+            config: ServiceConnectorConfig::default(),
+        }
+    }
+
+    /// Query the grid service for this region's neighbours.
+    pub fn get_neighbours(&self, _region_id: Uuid) -> Vec<Uuid> {
+        Vec::new()
+    }
+
+    /// Inform neighbour regions of this region's online/offline status.
+    pub fn inform_neighbours_of_status(&self, _region_id: Uuid, _online: bool) {
+        // Stub
+    }
+}
+
+impl Default for NeighbourServiceConnector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RegionModule for NeighbourServiceConnector {
+    fn name(&self) -> &str {
+        "NeighbourServiceConnector"
+    }
+
+    fn module_type(&self) -> ModuleType {
+        ModuleType::Shared
+    }
+
+    fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
+        self.config.service_url =
+            config.get_string("NeighbourService", "ServiceURL", "");
+        self.config.timeout_ms =
+            config.get_int("NeighbourService", "Timeout", 25_000) as u64;
+        tracing::info!(url = %self.config.service_url, "NeighbourServiceConnector initialised");
+        Ok(())
+    }
+
+    fn add_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "NeighbourServiceConnector attached");
+        Ok(())
+    }
+
+    fn remove_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "NeighbourServiceConnector detached");
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<(), ModuleError> {
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MuteListServiceConnector
+// ---------------------------------------------------------------------------
+
+/// Stub connector for the mute-list service.
+pub struct MuteListServiceConnector {
+    pub config: ServiceConnectorConfig,
+}
+
+impl MuteListServiceConnector {
+    pub fn new() -> Self {
+        Self {
+            config: ServiceConnectorConfig::default(),
+        }
+    }
+
+    /// Retrieve the mute list for an agent.
+    pub fn get_mutes(&self, _agent_id: Uuid) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// Update a mute entry (stub).
+    pub fn update_mute(&self) {
+        // Stub
+    }
+}
+
+impl Default for MuteListServiceConnector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RegionModule for MuteListServiceConnector {
+    fn name(&self) -> &str {
+        "MuteListServiceConnector"
+    }
+
+    fn module_type(&self) -> ModuleType {
+        ModuleType::Shared
+    }
+
+    fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
+        self.config.service_url =
+            config.get_string("MuteListService", "ServiceURL", "");
+        self.config.timeout_ms =
+            config.get_int("MuteListService", "Timeout", 25_000) as u64;
+        tracing::info!(url = %self.config.service_url, "MuteListServiceConnector initialised");
+        Ok(())
+    }
+
+    fn add_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "MuteListServiceConnector attached");
+        Ok(())
+    }
+
+    fn remove_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "MuteListServiceConnector detached");
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<(), ModuleError> {
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AgentPreferencesConnector
+// ---------------------------------------------------------------------------
+
+/// Per-agent preferences returned by the preferences service.
+#[derive(Debug, Clone)]
+pub struct AgentPrefs {
+    pub access_prefs: String,
+    pub hover_height: f32,
+    pub language: String,
+    pub language_is_public: bool,
+}
+
+impl Default for AgentPrefs {
+    fn default() -> Self {
+        Self {
+            access_prefs: "M".to_string(),
+            hover_height: 0.0,
+            language: "en".to_string(),
+            language_is_public: true,
+        }
+    }
+}
+
+/// Stub connector for the agent preferences service.
+pub struct AgentPreferencesConnector {
+    pub config: ServiceConnectorConfig,
+}
+
+impl AgentPreferencesConnector {
+    pub fn new() -> Self {
+        Self {
+            config: ServiceConnectorConfig::default(),
+        }
+    }
+
+    /// Retrieve an agent's preferences.
+    pub fn get_preferences(&self, _agent_id: Uuid) -> AgentPrefs {
+        AgentPrefs::default()
+    }
+}
+
+impl Default for AgentPreferencesConnector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RegionModule for AgentPreferencesConnector {
+    fn name(&self) -> &str {
+        "AgentPreferencesConnector"
+    }
+
+    fn module_type(&self) -> ModuleType {
+        ModuleType::Shared
+    }
+
+    fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
+        self.config.service_url =
+            config.get_string("AgentPreferences", "ServiceURL", "");
+        self.config.timeout_ms =
+            config.get_int("AgentPreferences", "Timeout", 25_000) as u64;
+        tracing::info!(url = %self.config.service_url, "AgentPreferencesConnector initialised");
+        Ok(())
+    }
+
+    fn add_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "AgentPreferencesConnector attached");
+        Ok(())
+    }
+
+    fn remove_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "AgentPreferencesConnector detached");
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<(), ModuleError> {
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MapImageServiceConnector
+// ---------------------------------------------------------------------------
+
+/// Stub connector for the map-image service.
+pub struct MapImageServiceConnector {
+    pub config: ServiceConnectorConfig,
+}
+
+impl MapImageServiceConnector {
+    pub fn new() -> Self {
+        Self {
+            config: ServiceConnectorConfig::default(),
+        }
+    }
+
+    /// Upload a map tile image for coordinates (x, y).
+    pub fn upload_tile(&self, _x: u32, _y: u32, _image_data: Vec<u8>) -> bool {
+        // Stub — would POST the image to the map service.
+        false
+    }
+
+    /// Remove a previously uploaded map tile.
+    pub fn remove_tile(&self, _x: u32, _y: u32) -> bool {
+        // Stub
+        false
+    }
+}
+
+impl Default for MapImageServiceConnector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RegionModule for MapImageServiceConnector {
+    fn name(&self) -> &str {
+        "MapImageServiceConnector"
+    }
+
+    fn module_type(&self) -> ModuleType {
+        ModuleType::Shared
+    }
+
+    fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
+        self.config.service_url =
+            config.get_string("MapImageService", "ServiceURL", "");
+        self.config.timeout_ms =
+            config.get_int("MapImageService", "Timeout", 25_000) as u64;
+        tracing::info!(url = %self.config.service_url, "MapImageServiceConnector initialised");
+        Ok(())
+    }
+
+    fn add_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "MapImageServiceConnector attached");
+        Ok(())
+    }
+
+    fn remove_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "MapImageServiceConnector detached");
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<(), ModuleError> {
+        Ok(())
+    }
+}
