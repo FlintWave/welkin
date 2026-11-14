@@ -254,6 +254,24 @@ info); the rest are stubs awaiting region modules. Review found 1 HIGH (PBKDF2
 hash, fixed in the working tree) and 2 MEDIUM (role checks not enforced at
 registration, `expect()` in crypto); see `docs/security-review-ossl-api.md`.
 
+## Region modules
+
+`opensim-modules` holds the region modules (land, permissions, estate,
+inventory, attachments, chat, IM, world map, environment, avatar, entity
+transfer, framework). See `docs/region-modules-summary.md`.
+
+| Component | Role |
+|---|---|
+| `RegionModule` | Lifecycle trait: `initialise`, `add_region`, `remove_region`, `close`; `ModuleType` is `Shared` or `NonShared` |
+| `ModuleRegistry` | Owns modules; `TypeId`-keyed interface lookup via `register_interface` and `get_module` |
+| `SceneEvents` | Typed `tokio::sync::broadcast` event bus; modules communicate through events |
+| `DefaultPermissionsModule` | 13 check functions; reviewed, CONDITIONAL PASS |
+| `EntityTransferStateMachine` | 6 states, validated transitions, blocks double teleport |
+| `MapImageModule` | tiny-skia 256x256 JPEG tiles |
+
+278 tests. Review found 1 CRITICAL (nil UUID owner match) and 3 HIGH (god
+gating, bypass default); see `docs/security-review-permissions.md`.
+
 ## Roadmap
 
 See `openspec/ROADMAP.md` for phases 1 to 7, and `docs/decisions.md` for the

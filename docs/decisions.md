@@ -69,6 +69,14 @@ where none is given.
 | O4 | Functions whose subsystem is absent are registered as stubs that log and return a default; 233 registered, catalog test fixed | Scripts compile and run; each stub is replaced by the change that adds its module (same approach as V5) | 2026-11-13 |
 | O5 | AES key and IV derive by PBKDF2-HMAC-SHA1, 1000 iterations, salt `OpenSimulator OSSL`, not SHA256 (review S1) | .NET `Rfc2898DeriveBytes` uses SHA1; SHA256 broke ciphertext interchange with C# regions | 2026-11-13 |
 | O6 | OSSL accepted as CONDITIONAL PASS: commit the S1 fix, enforce role checks at call time (S2) and remove `expect()` from crypto (S3) before production | Second review; same arrangement as S5 and G4 | 2026-11-13 |
+| RM1 | Region modules live in one crate, `opensim-modules`, split by module directory | Single dependency for the region binary; shorter than the `opensim-region-modules` name in the design | 2026-11-13 |
+| RM2 | Modules implement a `RegionModule` trait with `Shared`/`NonShared` types and a four-step lifecycle | Maps C# `IRegionModuleBase`, `ISharedRegionModule` and `INonSharedRegionModule` one to one | 2026-11-13 |
+| RM3 | Interfaces are found through a `TypeId`-keyed registry, not reflection or globals | Rust has no runtime type discovery; explicit registration is checkable | 2026-11-13 |
+| RM4 | Module-to-module notifications use a typed `tokio::sync::broadcast` event bus (`SceneEvents`) | Subscribers are independent; replaces C# scene event delegates | 2026-11-13 |
+| RM5 | One tiny-skia renderer replaces LegacyMap and Warp3DMap | One pure Rust path, no GDI or Warp3D dependency | 2026-11-13 |
+| RM6 | FlotsamAssetCache uses a HashMap and VecDeque LRU, no `moka`; disk tier is a stub | Simple and sufficient for now | 2026-11-13 |
+| RM7 | Hypergrid parts, OAR/IAR and groups/profiles are out of this change (`hypergrid`, `archives`, `social-modules`) | Keeps the change bounded | 2026-11-13 |
+| RM8 | Region modules accepted as CONDITIONAL PASS: fix C-1 (nil UUID) and H-1 before a multi-user grid, H-2, H-3 and M-4 before production; restrict by network meanwhile (`d33ef2c`) | Opus adversarial review of permissions; same arrangement as S5 and G4 | 2026-11-13 |
 
 ## Open questions
 
