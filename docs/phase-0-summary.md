@@ -1,5 +1,7 @@
 # Phase 0 summary
 
+[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md) · Next: [Protocol core](protocol-core-summary.md)
+
 Changes: `port-foundation` and `open-source-audit` (both accepted). No
 runtime behaviour of the C# server was ported; the aim was a home, a build,
 containers, a way to prove equivalence, and a clean provenance record.

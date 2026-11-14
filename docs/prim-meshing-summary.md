@@ -1,5 +1,7 @@
 # Prim meshing summary
 
+[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#m1) · Previous: [Region simulator core](region-simulator-core-summary.md) · Next: [Script engine](script-engine-summary.md)
+
 Change `prim-meshing` (Phase 3): 15 of 15 tasks accepted. It turns prim
 parameters, sculpt maps and mesh assets into Rapier colliders. Commits
 `759e3c6` through `129d401`; main code in `crates/opensim-prim/src/meshing.rs`

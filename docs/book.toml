@@ -1,0 +1,24 @@
+[book]
+title = "OpenSim Rust"
+description = "Rust port of OpenSimulator 0.9.3.0"
+authors = ["opensim-rust contributors"]
+language = "en"
+src = "."
+
+[build]
+build-dir = "book"
+create-missing = false
+
+[output.html]
+default-theme = "rust"
+preferred-dark-theme = "ayu"
+
+[output.html.fold]
+enable = true
+level = 1
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[preprocessor.admonish]
+command = "mdbook-admonish"

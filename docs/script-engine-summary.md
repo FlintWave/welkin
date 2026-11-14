@@ -1,5 +1,7 @@
 # script-engine summary
 
+[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#v1) · Previous: [Prim meshing](prim-meshing-summary.md) · Next: [OSSL API](ossl-api-summary.md)
+
 Status: accepted (all tracked tasks checked in `openspec/changes/script-engine/tasks.md`).
 Commits `cdb1913` through `b57c2db`. Second review verdict: CONDITIONAL PASS.
 Tests: 172 in `opensim-script-vm`.

@@ -1,5 +1,7 @@
 # region-simulator-core summary
 
+[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#n1) · Previous: [Grid portal](grid-portal-summary.md) · Next: [Prim meshing](prim-meshing-summary.md)
+
 Status: accepted (Phase 3). All 7 task groups in
 `openspec/changes/region-simulator-core/tasks.md` are checked. Commits
 `759e3c6` through `129d401`. Second review verdict: CONDITIONAL PASS.
@@ -16,7 +18,7 @@ management, archiver, scripting hooks, other CoreModules.
 
 ## Architecture
 
-```
+```text
 viewer --UDP--> opensim-net (server, client, dispatch, handlers)
 viewer --HTTP-> opensim-caps (seed cap, event queue, cap handlers)
                     |

@@ -1,9 +1,11 @@
 # Architecture
 
+[← Back to docs](README.md) · [Decision log](decisions.md) · [Roadmap](../openspec/ROADMAP.md)
+
 Rust port of the OpenSimulator 0.9.3.0 server (grid services and region
 simulator). Wire and schema compatibility with the C# server is the contract;
 internals are free to change. Licence: GPL-3.0-or-later. The C# reference tree
-is read-only at `/var/home/erik/Projects/opensim-0.9.3.0-source/`.
+(`opensim-0.9.3.0-source`) is read-only and kept alongside this repository.
 
 Status: Phase 3 in progress. Phases 0, 1 and 2 (port-foundation, open-source-audit,
 protocol-core, physics-backend, grid-services, capacity-assessor, grid-portal)
@@ -14,6 +16,9 @@ are done, and region-simulator-core is accepted. Most simulator and module crate
 
 Cargo workspace (`Cargo.toml`, edition 2024, `members = ["crates/*"]`). All
 crates are prefixed `opensim-`.
+
+<details>
+<summary>Full crate table (23 crates — click to expand)</summary>
 
 | Crate | Role | State |
 |---|---|---|
@@ -41,9 +46,91 @@ crates are prefixed `opensim-`.
 | `opensim-robust` | Binary: grid services | skeleton (`main.rs`) |
 | `opensim-region` | Binary: region simulator (config, multi-region, LLUDP and caps startup, graceful shutdown) | implemented |
 
+
+</details>
+
 ## Dependency graph (current)
 
+```mermaid
+graph TD
+    subgraph Aurora["Aurora Viewer crates (pinned)"]
+        A_LLSD[aurora-llsd]
+        A_MSG[aurora-msg]
+        A_PRIM[aurora-prim]
+        A_NET[aurora-net]
+    end
+
+    subgraph Core["Core crates"]
+        TYPES[opensim-types]
+        LLSD[opensim-llsd]
+        MSG[opensim-msg]
+        NET[opensim-net]
+        CONFIG[opensim-config]
+        RUNTIME[opensim-runtime]
+    end
+
+    subgraph Services["Services layer"]
+        DATA[opensim-data]
+        CAPS[opensim-caps]
+        SERVICES[opensim-services]
+        PORTAL[opensim-portal]
+        CAPACITY[opensim-capacity]
+    end
+
+    subgraph Simulation["Simulation layer"]
+        SCENE[opensim-scene]
+        MODULES[opensim-modules]
+        PHYSICS[opensim-physics]
+        RAPIER[opensim-physics-rapier]
+        PRIM[opensim-prim]
+        ARCHIVE[opensim-archive]
+    end
+
+    subgraph Scripts["Script engine"]
+        VM[opensim-script-vm]
+        COMPILER[opensim-script-compiler]
+        API[opensim-script-api]
+    end
+
+    subgraph Binaries["Binaries"]
+        ROBUST[opensim-robust]
+        REGION[opensim-region]
+        COMPANION[opensim-companion]
+        CONFORM[opensim-conformance]
+    end
+
+    A_LLSD --> LLSD
+    A_MSG --> MSG
+    A_PRIM --> PRIM
+    A_PRIM --> RAPIER
+    A_NET -.->|test bot only| CONFORM
+
+    LLSD --> NET
+    MSG --> NET
+    PHYSICS --> RAPIER
+
+    TYPES --> LLSD & MSG & NET & CAPS & DATA & SCENE & PHYSICS & ARCHIVE & VM
+
+    CONFIG --> ROBUST
+    RUNTIME --> ROBUST
+    DATA --> SERVICES
+    CAPS --> SERVICES
+    SERVICES --> ROBUST
+    SCENE --> MODULES
+    SERVICES --> MODULES
+    CAPACITY --> PORTAL
+    PORTAL --> ROBUST
+
+    COMPILER --> VM
+    VM --> API
+
+    COMPANION -.->|HTTP| PORTAL
 ```
+
+<details>
+<summary>Text version (for terminals)</summary>
+
+```text
 aurora-llsd -> opensim-llsd -------------------+
 aurora-msg  -> opensim-msg --------------------+--> opensim-net
 aurora-prim -> opensim-prim, opensim-physics-rapier
@@ -58,6 +145,8 @@ opensim-companion (standalone, Tauri 2) --HTTP--> opensim-portal control interfa
 opensim-script-compiler -> opensim-script-vm -> opensim-script-api
 aurora-net (test bot only) -> opensim-conformance, dev-dep of opensim-msg
 ```
+
+</details>
 
 Layering rule: nothing outside a wrapper crate imports an `aurora-*` crate
 directly (the one exception is `opensim-types`, which re-exports shared

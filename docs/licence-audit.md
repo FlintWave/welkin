@@ -1,8 +1,8 @@
 # Licence Audit -- opensim-rust
 
 Audit of the OpenSimulator 0.9.3.0 C# source tree and its dependencies,
-performed 2026-11-13 against the tree at
-`/var/home/erik/Projects/opensim-0.9.3.0-source/`.
+performed 2026-11-13 against the C# reference tree
+(`opensim-0.9.3.0-source`).
 
 Project licence: **GPL-3.0-or-later**.
 

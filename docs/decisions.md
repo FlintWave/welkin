@@ -1,10 +1,15 @@
 # Decision log
 
+[← Back to docs](README.md) · [Architecture](architecture.md)
+
 Sources: `openspec/ROADMAP.md` (Decisions, Open questions) and the change
 proposals. Neither `port-foundation`, `open-source-audit` nor `protocol-core`
 has a `design.md`; their rationale comes from `proposal.md`. Dates are the
 dates recorded in the source, or the ROADMAP's last-updated date (2026-11-13)
 where none is given.
+
+<details>
+<summary>Full decision table (86 entries — click to expand)</summary>
 
 | ID | Decision | Rationale | Date |
 |---|---|---|---|
@@ -84,6 +89,9 @@ where none is given.
 | AR4 | OspResolver writes `first.last` profiles on save and resolves on load, with UserManagement fallback | Preserves cross-grid UUID portability; fallback handles grids without profile data | 2026-11-14 |
 | AR5 | Path traversal protection: all tar paths validated against expected prefix before processing | Defense in depth over `tar` crate's built-in protection; rejects `../`, absolute, null bytes, drive letters | 2026-11-14 |
 | AR6 | Archives accepted as CONDITIONAL PASS: fix M-1 through M-5 before production (decompression bomb limit, Vec allocation cap, reject non-UTF-8 paths, null byte check, drive-letter check) | Opus adversarial review; same arrangement as S5 and G4 | 2026-11-14 |
+
+
+</details>
 
 ## Open questions
 

@@ -1,8 +1,10 @@
 # OSSL API summary
 
+[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#o1) · Previous: [Script engine](script-engine-summary.md) · Next: [Region modules](region-modules-summary.md)
+
 Change: `openspec/changes/ossl-api` (18/18 tasks, accepted as CONDITIONAL PASS).
 Code: `crates/opensim-script-vm/src/ossl/` (13 files, about 5,900 lines).
-Review: `docs/security-review-ossl-api.md`.
+Review: [security-review-ossl-api.md](security-review-ossl-api.md).
 
 ## What was built
 
@@ -59,7 +61,11 @@ vector is still needed to prove interoperability.
 
 ## Security review findings
 
-CONDITIONAL PASS. 0 CRITICAL, 1 HIGH, 2 MEDIUM, 2 LOW, 3 INFO.
+> [!WARNING]
+> **CONDITIONAL PASS** — 1 HIGH, 2 MEDIUM tracked for remediation.
+> See [security review](security-review-ossl-api.md) for details.
+
+0 CRITICAL, 1 HIGH, 2 MEDIUM, 2 LOW, 3 INFO.
 
 | ID | Sev | Finding |
 |---|---|---|

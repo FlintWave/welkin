@@ -1,5 +1,7 @@
 # grid-services summary
 
+[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#s1) · Previous: [Physics backend](physics-backend-summary.md) · Next: [Capacity assessor](capacity-assessor-summary.md)
+
 Change `grid-services` (accepted; all 14 tasks ticked). It replaces the C#
 Robust grid services with axum handlers over a `sqlx` data layer. The change
 has no `design.md`; the rationale comes from `proposal.md` and the commit

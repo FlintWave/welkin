@@ -1,5 +1,7 @@
 # Archives summary
 
+[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#ar1) · Previous: [Region modules](region-modules-summary.md) · Next: [External grid mode](external-grid-mode-summary.md)
+
 Status: accepted (18 of 18 tasks, 8 sections, 205 tests). Security review
 verdict: CONDITIONAL PASS. Change: `openspec/changes/archives/`.
 
@@ -63,8 +65,11 @@ filter, and multi-region support. Ported from `ArchiverTests.cs` and
 
 ## Security review
 
-Verdict: **CONDITIONAL PASS** (0 critical, 0 high, 5 medium). Full report:
-`docs/security-review-archives.md`.
+> [!WARNING]
+> **CONDITIONAL PASS** — 0 critical, 0 high, 5 medium tracked for remediation.
+> See [security review](security-review-archives.md) for details.
+
+Full report: [security-review-archives.md](security-review-archives.md).
 
 | ID | Severity | Finding |
 |---|---|---|
