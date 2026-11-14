@@ -25,8 +25,8 @@
 ## 5. Integration
 
 - [x] 5.1 Wire meshing into PhysicsScene::add_prim, replacing placeholder shapes
-- [ ] 5.2 Linkset compound colliders: combine per-part shapes with relative transforms
-- [ ] 5.3 Shape type switching: prim, convex, none, mesh — runtime shape changes
+- [x] 5.2 Linkset compound colliders: combine per-part shapes with relative transforms
+- [x] 5.3 Shape type switching: prim, convex, none, mesh — runtime shape changes
 
 ## 6. Proof
 

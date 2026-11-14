@@ -40,7 +40,7 @@
 
 ## 6. Region binary
 
-- [ ] 6.1 Config loading, database init, Scene creation, grid service registration
+- [x] 6.1 Config loading, database init, Scene creation, grid service registration
 - [ ] 6.2 LLUDP listener startup, capability HTTP server alongside robust
 - [ ] 6.3 Graceful shutdown: persist, deregister, close connections
 - [ ] 6.4 Multi-region support: multiple Scenes in one process
