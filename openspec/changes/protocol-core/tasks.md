@@ -1,8 +1,8 @@
 ## 1. Reuse
 
-- [ ] 1.1 Add `aurora-llsd`, `aurora-msg` and `aurora-prim` as git dependencies pinned to one commit; confirm they build outside Aurora's workspace
-- [ ] 1.2 Inventory each crate from the server's side: which messages and structures can be both read and written, and which only one way
-- [ ] 1.3 Wrapper crates exposing only what the server uses
+- [x] 1.1 Add `aurora-llsd`, `aurora-msg` and `aurora-prim` as git dependencies pinned to one commit; confirm they build outside Aurora's workspace
+- [x] 1.2 Inventory each crate from the server's side: which messages and structures can be both read and written, and which only one way
+- [x] 1.3 Wrapper crates exposing only what the server uses
 
 ## 2. Types and encodings
 
