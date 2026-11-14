@@ -94,7 +94,7 @@ when its phase starts, so later rows are placeholders until then.
 | 0 | Licence and provenance audit | `open-source-audit` | accepted |
 | 1 | Types, LLSD, message codec, LLUDP circuit | `protocol-core` | accepted |
 | 1 | Physics trait, Rapier backend, parity spike | `physics-backend` | accepted |
-| 2 | Robust grid services on the existing schema | `grid-services` | proposed |
+| 2 | Robust grid services on the existing schema | `grid-services` | accepted |
 | 3 | Scene graph, client stack, capabilities, terrain, persistence | `region-simulator-core` | planned |
 | 3 | Physics shapes from `aurora-prim` geometry, convex decomposition | `prim-meshing` | planned |
 | 2 | Installer, web portal, first-run wizard, map placement, archive import, desktop companion | `grid-portal` | proposed |
