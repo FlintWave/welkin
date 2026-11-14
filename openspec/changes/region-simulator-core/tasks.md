@@ -18,11 +18,11 @@
 
 ## 3. Capabilities
 
-- [ ] 3.1 Capability module: per-session seed cap, cap registration, cap URL dispatch via axum
-- [ ] 3.2 EventQueue: LLSD long-poll handler, event enqueue, viewer poll/ack cycle
-- [ ] 3.3 Texture and mesh fetch capabilities (GetTexture, GetMesh, GetMesh2)
-- [ ] 3.4 Region info caps: SimulatorFeatures, RegionInfo, AgentPreferences, MapLayer
-- [ ] 3.5 Upload caps: NewFileAgentInventory, UpdateNotecardAgentInventory, UpdateScriptAgent
+- [x] 3.1 Capability module: per-session seed cap, cap registration, cap URL dispatch via axum
+- [x] 3.2 EventQueue: LLSD long-poll handler, event enqueue, viewer poll/ack cycle
+- [x] 3.3 Texture and mesh fetch capabilities (GetTexture, GetMesh, GetMesh2)
+- [x] 3.4 Region info caps: SimulatorFeatures, RegionInfo, AgentPreferences, MapLayer
+- [x] 3.5 Upload caps: NewFileAgentInventory, UpdateNotecardAgentInventory, UpdateScriptAgent
 
 ## 4. Terrain
 

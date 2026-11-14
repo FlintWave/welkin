@@ -2018,11 +2018,15 @@ name = "opensim-caps"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "http-body-util",
  "opensim-llsd",
  "opensim-types",
+ "serde",
  "thiserror 2.0.21",
  "tokio",
+ "tower",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -2181,6 +2185,7 @@ dependencies = [
  "opensim-types",
  "rapier3d",
  "thiserror 2.0.21",
+ "uuid",
 ]
 
 [[package]]
