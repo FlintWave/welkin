@@ -9,7 +9,7 @@ dates recorded in the source, or the ROADMAP's last-updated date (2026-11-13)
 where none is given.
 
 <details>
-<summary>Full decision table (86 entries — click to expand)</summary>
+<summary>Full decision table (91 entries — click to expand)</summary>
 
 | ID | Decision | Rationale | Date |
 |---|---|---|---|
@@ -90,6 +90,11 @@ where none is given.
 | AR5 | Path traversal protection: all tar paths validated against expected prefix before processing | Defense in depth over `tar` crate's built-in protection; rejects `../`, absolute, null bytes, drive letters | 2026-11-14 |
 | AR6 | Archives accepted as CONDITIONAL PASS: fix M-1 through M-5 before production (decompression bomb limit, Vec allocation cap, reject non-UTF-8 paths, null byte check, drive-letter check) | Opus adversarial review; same arrangement as S5 and G4 | 2026-11-14 |
 
+| SM1 | Port Groups V2 only; drop legacy XmlRpc connector (3,991 lines) | V2 is cleaner, supports HG, and is the default in 0.9.3.0 | 2026-11-14 |
+| SM2 | NPCAvatar implements only methods actually called by NPCModule; rest are no-ops | C# has ~1,400 stub lines; 241 lines is sufficient for the real call paths | 2026-11-14 |
+| SM3 | IRC bridge uses `irc` crate (MPL-2.0) instead of porting C# IRC client | MPL-2.0 is GPLv3-compatible; proven crate, less code to maintain | 2026-11-14 |
+| SM4 | OfflineIM uses same `sqlx` backend as other services | No separate storage engine needed; consistent with grid-services pattern | 2026-11-14 |
+| SM5 | Social modules accepted as CONDITIONAL PASS: fix H-1 (IRC injection), H-2 (group creation power), H-3 (notice attachment size) before production; IRC bridge must not go live until H-1 is resolved | Opus adversarial review; same arrangement as S5 and G4 | 2026-11-14 |
 
 </details>
 

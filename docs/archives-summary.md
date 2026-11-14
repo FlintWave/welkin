@@ -1,6 +1,6 @@
 # Archives summary
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#ar1) · Previous: [Region modules](region-modules-summary.md) · Next: [External grid mode](external-grid-mode-summary.md)
+[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#ar1) · Previous: [Region modules](region-modules-summary.md) · Next: [Social modules](social-modules-summary.md)
 
 Status: accepted (18 of 18 tasks, 8 sections, 205 tests). Security review
 verdict: CONDITIONAL PASS. Change: `openspec/changes/archives/`.

@@ -4,7 +4,7 @@ Rust port of [OpenSimulator 0.9.3.0](http://opensimulator.org/) — a complete
 reimplementation of the grid services and region simulator in Rust, with wire
 and schema compatibility so existing grids can migrate without losing content.
 
-**Status:** 264/333 tasks (79%), 14 of 18 phases accepted.
+**Status:** 283/333 tasks (84%), 15 of 18 phases accepted.
 See the [Roadmap](../openspec/ROADMAP.md) for the full plan.
 
 > [!NOTE]
@@ -27,6 +27,7 @@ See the [Roadmap](../openspec/ROADMAP.md) for the full plan.
 | 4 | [OSSL API](ossl-api-summary.md) | [OSSL API](security-review-ossl-api.md) |
 | 5 | [Region modules](region-modules-summary.md) | [Permissions](security-review-permissions.md) |
 | 5 | [Archives](archives-summary.md) | [Archives](security-review-archives.md) |
+| 6 | [Social modules](social-modules-summary.md) | [Social modules](security-review-social-modules.md) |
 | 6 | [External grid mode](external-grid-mode-summary.md) | [Remote writes](security-review-remote-writes.md) |
 
 ## Reference
@@ -50,6 +51,7 @@ acceptance. Current verdicts:
 | [Script sandboxing](security-review-script-sandboxing.md) | CONDITIONAL PASS | 0 | 2 | 0 |
 | [Remote writes](security-review-remote-writes.md) | CONDITIONAL PASS | 1 | 4 | 0 |
 | [Archives](security-review-archives.md) | CONDITIONAL PASS | 0 | 0 | 5 |
+| [Social modules](security-review-social-modules.md) | CONDITIONAL PASS | 0 | 3 | 10 |
 
 > [!WARNING]
 > All phases carry a CONDITIONAL PASS. The tracked findings must be resolved

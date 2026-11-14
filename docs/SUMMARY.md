@@ -25,6 +25,7 @@
 - [Phase 4: OSSL API](ossl-api-summary.md)
 - [Phase 5: Region modules](region-modules-summary.md)
 - [Phase 5: Archives](archives-summary.md)
+- [Phase 6: Social modules](social-modules-summary.md)
 - [Phase 6: External grid mode](external-grid-mode-summary.md)
 
 ---
@@ -36,6 +37,7 @@
 - [Script sandboxing](security-review-script-sandboxing.md)
 - [Remote writes](security-review-remote-writes.md)
 - [Archives](security-review-archives.md)
+- [Social modules](security-review-social-modules.md)
 
 ---
 

@@ -37,7 +37,7 @@ crates are prefixed `opensim-`.
 | `opensim-data` | `sqlx` data layer: 13 stores over MariaDB, PostgreSQL and SQLite, plus a migration runner with 53 embedded C# schema files | implemented |
 | `opensim-services` | 14 Robust grid service handlers behind axum: asset, inventory, grid, presence, griduser, accounts, auth, authorization, friends, avatar, mute, profiles, map, estate, agent preferences, simulation (501 stub) and XML-RPC login | implemented |
 | `opensim-scene` | Scene, object groups and parts, presences, XML2 serializer, terrain (channel, file I/O, brushes, compression), region manager, shutdown | implemented |
-| `opensim-modules` | Region modules (land, permissions, chat, ...) | skeleton |
+| `opensim-modules` | Region modules (land, permissions, chat, groups, profiles, NPCs, IM, IRC, concierge) | implemented |
 | `opensim-archive` | OAR/IAR archives: OAR single/multi-region save/load, IAR save/load, OspResolver, ExternalRepresentationUtils, console commands (9,555 lines, 205 tests) | implemented |
 | `opensim-script-vm` | Luau VM via mlua: `ScriptInstance`, `ScriptScheduler`, `RegionTransferBundle`, `ScriptState` save/restore, 82 `ll*` (49 implemented), 27 `os*` with threat levels, events and detected parameters. See `docs/script-engine-summary.md` | implemented (172 tests) |
 | `opensim-script-compiler`, `-api` | LSL-to-Luau transpiler; scene-bound script API | skeleton |
@@ -380,6 +380,27 @@ gating, bypass default); see `docs/security-review-permissions.md`.
 Uses `tar` + `flate2` instead of the C# custom tar implementation. 205 tests
 (174 unit, 31 integration). Review found 0 critical, 0 high, 5 medium
 (defense-in-depth gaps); see `docs/security-review-archives.md`.
+
+## Social modules
+
+Groups V2, OfflineIM, user profiles, NPCs, Concierge and IRC bridge. See
+`docs/social-modules-summary.md`.
+
+| Component | Role |
+|---|---|
+| `GroupsService` | Backend with sqlx, CRUD, HTTP handlers matching C# Robust |
+| `GroupsModule` | Region-side: group packets, caps, membership |
+| `GroupsMessagingModule` | Group IM routing, notices with attachments, session chat |
+| `HGGroupsServiceConnector` | Hypergrid group federation, ForeignImporter |
+| `OfflineIMService` + module | Store/retrieve offline IMs, deliver on login |
+| `UserProfilesService` + module | Profile text, partner, picks, classifieds, notes |
+| `NPCAvatar` + `NPCModule` | Fake IClientAPI, create/move/say/sit/stand/remove |
+| `ConciergeModule` | Lobby announcements, HTTP broker notifications |
+| `IRCBridgeModule` | IRC-to-in-world chat bridge via `irc` crate (MPL-2.0) |
+
+~12,500 lines, 444 tests (391 unit, 36 integration, 17 protocol replay).
+Review found 0 critical, 3 high (IRC injection, group creation power check,
+notice attachment size), 10 medium; see `docs/security-review-social-modules.md`.
 
 ## Roadmap
 
