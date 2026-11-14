@@ -13,6 +13,7 @@ pub mod concierge;
 pub mod environment;
 pub mod estate;
 pub mod events;
+pub mod groups;
 pub mod inventory;
 pub mod irc_bridge;
 pub mod land;
@@ -77,6 +78,13 @@ pub use framework::{
     LibraryModule, MapImageServiceConnector, MonitorModule, MuteListServiceConnector,
     NeighbourServiceConnector, RegionStats, SearchModule, SearchResult, ServiceConnectorConfig,
     TextureSenderModule, UserData, UserManagementModule,
+};
+pub use groups::{
+    GroupAccountSummary, GroupInviteInfo, GroupMembersData, GroupMembershipData,
+    GroupNoticeData, GroupRecord, GroupRolesData, GroupTitleData, GroupsModule,
+    GroupsPacketType, IGroupsModule, IGroupsServicesConnector,
+    hg_connector::{ForeignImporter, HGGroupsServiceConnector, RemoteConnectorCacheWrapper},
+    messaging::{ChatSessionState, GroupsMessagingModule, NoticeAttachment},
 };
 pub use offline_im::OfflineIMModule;
 pub use profiles::{

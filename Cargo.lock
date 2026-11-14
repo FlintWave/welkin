@@ -2388,6 +2388,7 @@ version = "0.1.0"
 dependencies = [
  "bitflags 2.13.2",
  "irc",
+ "opensim-data",
  "opensim-scene",
  "opensim-services",
  "opensim-types",

@@ -9,6 +9,7 @@ publish.workspace = true
 opensim-types = { path = "../opensim-types" }
 opensim-scene = { path = "../opensim-scene" }
 opensim-services = { path = "../opensim-services" }
+opensim-data = { path = "../opensim-data" }
 bitflags = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
