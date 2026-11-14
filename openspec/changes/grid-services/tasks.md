@@ -11,7 +11,7 @@
 - [x] 2.3 Grid, presence, grid user
 - [x] 2.4 User accounts, authentication, authorization
 - [x] 2.5 Friends, avatar, mute list, user profiles
-- [ ] 2.6 Map images, estate, simulation
+- [x] 2.6 Map images, estate, simulation
 - [ ] 2.7 Login
 
 ## 3. Proof
