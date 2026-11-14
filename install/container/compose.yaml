@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+services:
+  opensim-robust:
+    build:
+      context: ../..
+      dockerfile: install/container/Containerfile
+    container_name: opensim-robust
+    ports:
+      - "8002:8002"
+      - "8003:8003"
+    volumes:
+      - opensim-data:/var/lib/opensim/data
+      - opensim-logs:/var/lib/opensim/logs
+      - opensim-backups:/var/lib/opensim/backups
+      - opensim-config:/etc/opensim
+    restart: unless-stopped
+
+  # Uncomment for MySQL backend:
+  # mysql:
+  #   image: docker.io/library/mysql:8.0
+  #   container_name: opensim-mysql
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: changeme
+  #     MYSQL_DATABASE: opensim
+  #     MYSQL_USER: opensim
+  #     MYSQL_PASSWORD: changeme
+  #   volumes:
+  #     - mysql-data:/var/lib/mysql
+  #   ports:
+  #     - "3306:3306"
+  #   restart: unless-stopped
+
+  # Uncomment for PostgreSQL backend:
+  # postgres:
+  #   image: docker.io/library/postgres:16
+  #   container_name: opensim-postgres
+  #   environment:
+  #     POSTGRES_DB: opensim
+  #     POSTGRES_USER: opensim
+  #     POSTGRES_PASSWORD: changeme
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   restart: unless-stopped
+
+volumes:
+  opensim-data:
+  opensim-logs:
+  opensim-backups:
+  opensim-config:
+  # mysql-data:
+  # postgres-data:

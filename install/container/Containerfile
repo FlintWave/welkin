@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+FROM docker.io/library/rust:1.87-slim AS builder
+
+RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+COPY . .
+RUN cargo build --release --bin opensim-robust
+
+FROM docker.io/library/debian:bookworm-slim
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates && \
+    rm -rf /var/lib/apt/lists/* && \
+    useradd --system --home-dir /var/lib/opensim --shell /usr/sbin/nologin opensim && \
+    mkdir -p /var/lib/opensim/{data,logs,backups} /etc/opensim && \
+    chown -R opensim:opensim /var/lib/opensim /etc/opensim
+
+COPY --from=builder /build/target/release/opensim-robust /usr/local/bin/opensim-robust
+
+USER opensim
+WORKDIR /var/lib/opensim
+
+EXPOSE 8002 8003
+
+ENTRYPOINT ["opensim-robust", "--config", "/etc/opensim/robust.ini"]
