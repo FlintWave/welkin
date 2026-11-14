@@ -32,10 +32,10 @@
 
 ## 7. Integration
 
-- [ ] 7.1 ArchiverModule region module: console commands (save oar, load oar with all options), integration with module registry
-- [ ] 7.2 InventoryArchiverModule: console commands (save iar, load iar), user validation, progress reporting
+- [x] 7.1 ArchiverModule region module: console commands (save oar, load oar with all options), integration with module registry (62994dd: archiver_module.rs, 37 tests)
+- [x] 7.2 InventoryArchiverModule: console commands (save iar, load iar), user validation, progress reporting (62994dd: inventory_archiver_module.rs, 22 tests)
 
 ## 8. Testing and security
 
-- [ ] 8.1 Port ArchiverTests and InventoryArchiveTests (~900 lines C#): round-trip save/load, merge, displacement, permission filter, multi-region
+- [x] 8.1 Port ArchiverTests and InventoryArchiveTests (~900 lines C#): round-trip save/load, merge, displacement, permission filter, multi-region (62994dd: tests/integration_tests.rs, 31 integration tests)
 - [ ] 8.2 SECURITY REVIEW: path traversal on tar extraction, asset size limits, UUID injection via OspResolver, permission bypass (HIGH RISK, Opus reviewer)
