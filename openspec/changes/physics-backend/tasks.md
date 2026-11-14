@@ -29,5 +29,5 @@
 
 ## 5. Network parity
 
-- [ ] 5.1 Port the terse-update thresholds and rate limits with tests against recorded C# output
+- [x] 5.1 Port the terse-update thresholds and rate limits with tests against recorded C# output
 - [ ] 5.2 Aurora Viewer check: walking, flying, vehicles and falling objects show no snapping

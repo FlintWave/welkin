@@ -4,6 +4,7 @@ pub mod avatar;
 pub mod behaviors;
 pub mod keyframe;
 pub mod null;
+pub mod terse_update;
 pub mod vehicle;
 
 use glam::{Quat, Vec3};
