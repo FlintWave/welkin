@@ -13,5 +13,9 @@ glam = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
+[dev-dependencies]
+aurora-prim = { workspace = true }
+nalgebra = "0.35"
+
 [lints]
 workspace = true
