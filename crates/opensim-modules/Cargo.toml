@@ -11,6 +11,12 @@ opensim-scene = { path = "../opensim-scene" }
 opensim-services = { path = "../opensim-services" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+parking_lot = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "macros"] }
 
 [lints]
 workspace = true

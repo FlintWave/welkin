@@ -2177,8 +2177,11 @@ dependencies = [
  "opensim-scene",
  "opensim-services",
  "opensim-types",
+ "parking_lot 0.12.5",
  "thiserror 2.0.21",
+ "tokio",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
