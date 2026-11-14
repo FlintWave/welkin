@@ -11,7 +11,7 @@
 - [ ] 2.4 Check Warp3D and remaining DLLs not yet classified
 - [ ] 2.5 Evaluate JPEG 2000: `aurora-assets` (uses `openjpeg-sys`) against a pure Rust decoder
 - [ ] 2.6 Read the `[patch.crates-io]` section of Aurora's workspace and list what a git dependency would not inherit
-- [ ] 2.7 Copy the relevant `NOTICE.md` entries for each reused Aurora crate
+- [x] 2.7 Copy the relevant `NOTICE.md` entries for each reused Aurora crate
 
 ## 3. Outputs
 
