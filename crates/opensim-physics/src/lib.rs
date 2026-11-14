@@ -2,6 +2,7 @@
 
 pub mod avatar;
 pub mod behaviors;
+pub mod keyframe;
 pub mod null;
 pub mod vehicle;
 

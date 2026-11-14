@@ -25,7 +25,7 @@
 - [x] 4.1 Vehicle model from `ODEDynamics.cs`
 - [x] 4.2 Avatar controller from `ODECharacter.cs`, including sit
 - [x] 4.3 Move-to-target, hover, buoyancy, look-at, applied force, torque and impulse
-- [ ] 4.4 Keyframed motion
+- [x] 4.4 Keyframed motion
 
 ## 5. Network parity
 
