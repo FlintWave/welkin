@@ -39,12 +39,12 @@
 
 ## 7. Desktop companion
 
-- [ ] 7.1 Tauri 2 control window reusing portal pages: status, start, stop, logs and "Open portal"
-- [ ] 7.2 Tray icon and menu on Windows, macOS, KDE and GNOME with the extension; fall back to the window alone where no tray exists
-- [ ] 7.3 Notifications; connect to a remote grid
-- [ ] 7.4 Launcher entries and icons in the installer
+- [x] 7.1 Tauri 2 control window reusing portal pages: status, start, stop, logs and "Open portal"
+- [x] 7.2 Tray icon and menu on Windows, macOS, KDE and GNOME with the extension; fall back to the window alone where no tray exists
+- [x] 7.3 Notifications; connect to a remote grid
+- [x] 7.4 Launcher entries and icons in the installer
 
 ## 8. Proof
 
-- [ ] 8.1 Fresh machine to a walkable island in Aurora Viewer using only the installer and the browser
-- [ ] 8.2 Second review of sign-in, account and region-control code
+- [x] 8.1 Fresh machine to a walkable island in Aurora Viewer using only the installer and the browser
+- [x] 8.2 Second review of sign-in, account and region-control code
