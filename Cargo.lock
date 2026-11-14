@@ -2184,6 +2184,8 @@ dependencies = [
  "flate2",
  "glam 0.34.3",
  "opensim-llsd",
+ "opensim-physics",
+ "opensim-physics-rapier",
  "opensim-types",
  "rapier3d",
  "thiserror 2.0.21",
@@ -2200,6 +2202,7 @@ dependencies = [
  "opensim-config",
  "opensim-data",
  "opensim-modules",
+ "opensim-msg",
  "opensim-net",
  "opensim-physics-rapier",
  "opensim-runtime",
@@ -2208,6 +2211,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

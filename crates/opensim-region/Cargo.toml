@@ -21,5 +21,9 @@ clap = { workspace = true }
 tokio-util = { workspace = true }
 axum = { workspace = true }
 
+[dev-dependencies]
+opensim-msg = { path = "../opensim-msg" }
+uuid = { workspace = true }
+
 [lints]
 workspace = true

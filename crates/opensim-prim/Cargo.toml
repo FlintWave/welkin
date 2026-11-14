@@ -15,5 +15,9 @@ rapier3d = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
 
+[dev-dependencies]
+opensim-physics = { path = "../opensim-physics" }
+opensim-physics-rapier = { path = "../opensim-physics-rapier" }
+
 [lints]
 workspace = true
