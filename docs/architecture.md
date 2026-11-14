@@ -36,7 +36,7 @@ crates are prefixed `opensim-`.
 | `opensim-archive` | OAR/IAR archives | skeleton |
 | `opensim-script-compiler`, `-vm`, `-api` | SLua embedding, LSL/Luau, `ll*`/`os*` API | skeleton |
 | `opensim-portal` | Grid portal: staff auth (argon2), sessions, RBAC roles, audit log, region control, pages, grid map, people/sign-up, first-run wizard, content/catalogue | implemented |
-| `opensim-companion` | Tauri 2 desktop app: tray icon, service start/stop, log viewer, notifications, remote grid connect. **Standalone** — excluded from workspace (`Cargo.toml` exclude) | implemented |
+| `opensim-companion` | Tauri 2 desktop app: tray icon, service start/stop, log viewer, notifications, remote grid connect. **Standalone**: excluded from workspace (`Cargo.toml` exclude) | implemented |
 | `opensim-robust` | Binary: grid services | skeleton (`main.rs`) |
 | `opensim-region` | Binary: region simulator | skeleton (`main.rs`) |
 
@@ -121,7 +121,7 @@ as the model. It is the single management interface for the grid.
 
 | Module | Responsibility |
 |---|---|
-| `auth.rs` | Argon2id password hashing (OWASP defaults via `argon2` 0.5), login/logout handlers, TOTP stub (locked — returns false until implemented) |
+| `auth.rs` | Argon2id password hashing (OWASP defaults via `argon2` 0.5), login/logout handlers, TOTP stub (locked: returns false until implemented) |
 | `sessions.rs` | In-memory session store (HashMap), `RequireStaff` axum extractor, Bearer token and cookie extraction, expiry enforcement |
 | `roles.rs` | `StaffRole` enum: Admin, Operator, Viewer with `can_manage_accounts()` and `can_manage_regions()` checks |
 | `audit.rs` | In-memory audit log (to be persisted to SQLite) |
@@ -140,7 +140,7 @@ as the model. It is the single management interface for the grid.
 
 ### opensim-companion crate (standalone Tauri 2 app)
 
-Not part of the workspace — has its own `Cargo.toml` with Tauri 2 dependencies.
+Not part of the workspace; has its own `Cargo.toml` with Tauri 2 dependencies.
 Excluded via `exclude = ["crates/opensim-companion"]` in workspace `Cargo.toml`.
 
 - WebView pointing at the local portal (`http://localhost:8002/`)
@@ -163,7 +163,7 @@ Excluded via `exclude = ["crates/opensim-companion"]` in workspace `Cargo.toml`.
 
 ### E2E test
 
-`crates/opensim-portal/tests/e2e_portal_flow.rs` — 14-stage integration test
+`crates/opensim-portal/tests/e2e_portal_flow.rs`: 14-stage integration test
 via `tower::ServiceExt::oneshot()` covering: portal page, status, wizard (7
 steps), login, region lifecycle, map placement, people sign-up/approval,
 authenticated pages, content, access control, logout.
