@@ -11,9 +11,9 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Instant;
 
-use glam::Vec3;
+use glam::{Quat, Vec3};
 use rapier3d::geometry::SharedShape;
-use rapier3d::math::Vector;
+use rapier3d::math::{Pose, Rotation, Vector};
 use rapier3d::parry::transformation::vhacd::VHACDParameters;
 use uuid::Uuid;
 
@@ -626,6 +626,81 @@ pub fn create_physics_shape_with_sculpt(
 }
 
 // ---------------------------------------------------------------------------
+// Linkset compound colliders
+// ---------------------------------------------------------------------------
+
+/// Create a compound physics shape for a linkset (multi-part object).
+///
+/// Each element of `parts` describes one prim in the linkset:
+///   `(volume_params, offset_position, rotation_offset, scale, shape_type, cache_key)`
+///
+/// The first element is the root part (placed at the identity transform);
+/// subsequent elements are children whose `offset_position` and
+/// `rotation_offset` are relative to the root.
+///
+/// Phantom parts (`PhysicsShapeType::None`) are silently skipped.  If every
+/// part is phantom the function returns `None`.  If exactly one non-phantom
+/// part remains its shape is returned directly (no compound wrapper).
+pub fn create_linkset_shape(
+    parts: &[(VolumeParams, Vec3, Quat, Vec3, PhysicsShapeType, u64)],
+    cache: &ShapeCache,
+) -> Option<MeshingResult> {
+    let start = Instant::now();
+
+    let mut shapes: Vec<(Pose, SharedShape)> = Vec::new();
+    let mut total_vertices: usize = 0;
+    let mut total_triangles: usize = 0;
+
+    for (i, (params, offset_position, rotation_offset, scale, shape_type, cache_key)) in
+        parts.iter().enumerate()
+    {
+        let result = match create_physics_shape(params, *scale, *shape_type, cache, *cache_key) {
+            Some(r) => r,
+            None => continue, // phantom — skip
+        };
+
+        total_vertices += result.vertex_count;
+        total_triangles += result.triangle_count;
+
+        let pose = if i == 0 {
+            // Root part sits at the identity transform.
+            Pose::IDENTITY
+        } else {
+            // Convert glam 0.34 types to rapier3d's internal glam 0.33 types
+            // by going through raw f32 components.
+            let t = Vector::new(offset_position.x, offset_position.y, offset_position.z);
+            let r = Rotation::from_xyzw(
+                rotation_offset.x,
+                rotation_offset.y,
+                rotation_offset.z,
+                rotation_offset.w,
+            );
+            Pose::from_parts(t, r)
+        };
+
+        shapes.push((pose, result.shape));
+    }
+
+    if shapes.is_empty() {
+        return None;
+    }
+
+    let shape = if shapes.len() == 1 {
+        // Single non-phantom part — return its shape directly, no compound.
+        shapes.into_iter().next().unwrap().1
+    } else {
+        SharedShape::compound(shapes)
+    };
+
+    Some(MeshingResult {
+        shape,
+        vertex_count: total_vertices,
+        triangle_count: total_triangles,
+        elapsed_us: start.elapsed().as_micros() as u64,
+    })
+}
+
+// ---------------------------------------------------------------------------
 // LOD selection
 // ---------------------------------------------------------------------------
 
@@ -1072,5 +1147,115 @@ mod tests {
         assert_eq!(v.resolution, 47);
         assert_eq!(v.max_convex_hulls, 32);
         assert!((v.concavity - 0.0025).abs() < 1e-6);
+    }
+
+    // --- Linkset compound collider tests ---
+
+    #[test]
+    fn test_linkset_single_part() {
+        let cache = ShapeCache::new();
+        let parts = vec![(
+            box_params(),
+            Vec3::ZERO,
+            Quat::IDENTITY,
+            Vec3::splat(1.0),
+            PhysicsShapeType::Prim,
+            0u64,
+        )];
+
+        let result = create_linkset_shape(&parts, &cache);
+        let result = result.expect("single-part linkset should produce a shape");
+        // A single-part linkset should NOT be wrapped in a compound; it should
+        // return the individual shape directly (analytic box in this case).
+        assert_eq!(result.vertex_count, 0, "analytic box has zero vertices");
+        assert_eq!(result.triangle_count, 0, "analytic box has zero triangles");
+    }
+
+    #[test]
+    fn test_linkset_two_parts() {
+        let cache = ShapeCache::new();
+        let parts = vec![
+            // Root part: box at identity
+            (
+                box_params(),
+                Vec3::ZERO,
+                Quat::IDENTITY,
+                Vec3::splat(1.0),
+                PhysicsShapeType::Prim,
+                0u64,
+            ),
+            // Child part: box offset by (2, 0, 0) with no rotation
+            (
+                box_params(),
+                Vec3::new(2.0, 0.0, 0.0),
+                Quat::IDENTITY,
+                Vec3::splat(1.0),
+                PhysicsShapeType::Prim,
+                0u64,
+            ),
+        ];
+
+        let result = create_linkset_shape(&parts, &cache);
+        let result = result.expect("two-part linkset should produce a shape");
+        // The result should be a compound shape (two sub-shapes).
+        // We cannot directly inspect compound internals easily, but the shape
+        // should exist and have been constructed from two analytic boxes.
+        assert_eq!(result.vertex_count, 0, "both parts are analytic boxes");
+    }
+
+    #[test]
+    fn test_linkset_phantom_parts_excluded() {
+        let cache = ShapeCache::new();
+        let parts = vec![
+            // Root part: box (physical)
+            (
+                box_params(),
+                Vec3::ZERO,
+                Quat::IDENTITY,
+                Vec3::splat(1.0),
+                PhysicsShapeType::Prim,
+                0u64,
+            ),
+            // Child part: phantom (should be skipped)
+            (
+                box_params(),
+                Vec3::new(2.0, 0.0, 0.0),
+                Quat::IDENTITY,
+                Vec3::splat(1.0),
+                PhysicsShapeType::None,
+                0u64,
+            ),
+        ];
+
+        let result = create_linkset_shape(&parts, &cache);
+        let result = result.expect("linkset with one physical part should produce a shape");
+        // Only one non-phantom part, so no compound wrapper.
+        assert_eq!(result.vertex_count, 0, "single analytic box");
+    }
+
+    #[test]
+    fn test_linkset_all_phantom() {
+        let cache = ShapeCache::new();
+        let parts = vec![
+            (
+                box_params(),
+                Vec3::ZERO,
+                Quat::IDENTITY,
+                Vec3::splat(1.0),
+                PhysicsShapeType::None,
+                0u64,
+            ),
+            (
+                box_params(),
+                Vec3::new(1.0, 0.0, 0.0),
+                Quat::IDENTITY,
+                Vec3::splat(1.0),
+                PhysicsShapeType::None,
+                0u64,
+            ),
+        ];
+
+        let result = create_linkset_shape(&parts, &cache);
+        assert!(result.is_none(), "all-phantom linkset should return None");
     }
 }

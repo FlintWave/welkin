@@ -185,6 +185,22 @@ pub trait PhysicsScene {
     ) -> Vec<ContactResult>;
     fn dispose(&mut self);
 
+    /// Replace the collision shape of an existing prim at runtime.
+    ///
+    /// `shape` is `None` for phantom mode (remove solid collider) or
+    /// `Some(...)` carrying a backend-specific shape (e.g. `SharedShape`).
+    ///
+    /// Returns `true` on success, `false` if the actor was not found or the
+    /// backend does not support runtime shape changes.
+    fn update_prim_shape(
+        &mut self,
+        local_id: u32,
+        shape: Option<Box<dyn std::any::Any + Send>>,
+    ) -> bool {
+        let _ = (local_id, shape);
+        false
+    }
+
     /// Add a prim with an optional pre-computed collision shape.
     ///
     /// The `shape` parameter is type-erased so this crate does not depend on any

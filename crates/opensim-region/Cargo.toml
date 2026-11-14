@@ -12,6 +12,7 @@ opensim-scene = { path = "../opensim-scene" }
 opensim-net = { path = "../opensim-net" }
 opensim-physics-rapier = { path = "../opensim-physics-rapier" }
 opensim-modules = { path = "../opensim-modules" }
+opensim-data = { path = "../opensim-data" }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

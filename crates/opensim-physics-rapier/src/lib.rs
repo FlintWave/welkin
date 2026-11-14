@@ -660,6 +660,60 @@ impl PhysicsScene for RapierPhysicsScene {
         )
     }
 
+    fn update_prim_shape(
+        &mut self,
+        local_id: u32,
+        shape: Option<Box<dyn std::any::Any + Send>>,
+    ) -> bool {
+        let actor = match self.actors.get(&local_id) {
+            Some(a) => a,
+            None => return false,
+        };
+        let body_handle = actor.body_handle;
+        let old_collider_handle = actor.collider_handle;
+        let density = actor.density;
+        let friction = actor.friction;
+        let restitution = actor.restitution;
+
+        // Remove the old collider.
+        self.colliders.remove(
+            old_collider_handle,
+            &mut self.islands,
+            &mut self.bodies,
+            &mut self.soft_bodies,
+            true,
+        );
+
+        // Build the replacement collider.
+        let collider = match shape {
+            Some(boxed) => {
+                match boxed.downcast::<SharedShape>() {
+                    Ok(ss) => ColliderBuilder::new(*ss),
+                    Err(_) => return false, // wrong type — can't do anything
+                }
+            }
+            None => {
+                // Phantom mode: tiny sensor collider so the body stays valid.
+                ColliderBuilder::ball(0.001).sensor(true)
+            }
+        }
+        .density(density)
+        .friction(friction)
+        .restitution(restitution)
+        .build();
+
+        let new_handle =
+            self.colliders
+                .insert_with_parent(collider, body_handle, &mut self.bodies);
+
+        // Update the actor's stored handle.
+        if let Some(a) = self.actors.get_mut(&local_id) {
+            a.collider_handle = new_handle;
+        }
+
+        true
+    }
+
     fn remove_prim(&mut self, local_id: u32) {
         self.remove_actor(local_id);
     }
