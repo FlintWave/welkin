@@ -2129,10 +2129,13 @@ dependencies = [
 name = "opensim-archive"
 version = "0.1.0"
 dependencies = [
+ "base64 0.23.1",
  "opensim-prim",
  "opensim-types",
+ "quick-xml",
  "thiserror 2.0.21",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
