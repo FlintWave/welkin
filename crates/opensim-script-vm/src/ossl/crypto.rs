@@ -12,6 +12,7 @@ use cbc::cipher::{BlockEncryptMut, BlockDecryptMut};
 use hmac::Hmac;
 use mlua::prelude::*;
 use parking_lot::RwLock;
+use sha1::Sha1;
 use sha2::{Digest, Sha256};
 
 use crate::builtins::ScriptContext;
@@ -51,7 +52,7 @@ pub(crate) fn crypto_functions() -> Vec<OsslFunc> {
 }
 
 // ---------------------------------------------------------------------------
-// Key derivation: PBKDF2 with SHA-256 (matches C# Rfc2898DeriveBytes)
+// Key derivation: PBKDF2 with HMAC-SHA1 (matches C# Rfc2898DeriveBytes)
 // ---------------------------------------------------------------------------
 
 /// Default salt for PBKDF2 when no IV is given.
@@ -63,22 +64,25 @@ const KEY_LEN: usize = 32;
 /// AES block / IV length.
 const IV_LEN: usize = 16;
 
-/// Derive a 32-byte key and 16-byte IV from a passphrase using PBKDF2-HMAC-SHA256.
-fn derive_key_iv(passphrase: &str, salt: &[u8]) -> ([u8; KEY_LEN], [u8; IV_LEN]) {
+/// Derive a 32-byte key and 16-byte IV from a passphrase via PBKDF2-HMAC-SHA1.
+///
+/// Uses HMAC-SHA1 to match the .NET `Rfc2898DeriveBytes` default, ensuring
+/// interoperability with data encrypted by the C# OpenSimulator.
+fn derive_key_iv(passphrase: &str, salt: &[u8]) -> Result<([u8; KEY_LEN], [u8; IV_LEN]), mlua::Error> {
     let mut key = [0u8; KEY_LEN];
     let mut iv = [0u8; IV_LEN];
     // Derive key + iv in one pass (48 bytes)
     let mut buf = [0u8; KEY_LEN + IV_LEN];
-    pbkdf2::pbkdf2::<Hmac<Sha256>>(
+    pbkdf2::pbkdf2::<Hmac<Sha1>>(
         passphrase.as_bytes(),
         salt,
         PBKDF2_ITERATIONS,
         &mut buf,
     )
-    .expect("PBKDF2 should not fail with valid params");
+    .map_err(|e| mlua::Error::RuntimeError(format!("PBKDF2 key derivation failed: {e}")))?;
     key.copy_from_slice(&buf[..KEY_LEN]);
     iv.copy_from_slice(&buf[KEY_LEN..]);
-    (key, iv)
+    Ok((key, iv))
 }
 
 /// PKCS7 padding: add 1..16 bytes so length is a multiple of 16.
@@ -110,14 +114,18 @@ fn pkcs7_unpad(data: &[u8]) -> Result<&[u8], &'static str> {
 
 /// Encrypt data using AES-256-CBC. Data must already be PKCS7-padded
 /// (length is a multiple of 16).
-fn aes_cbc_encrypt(key: &[u8; KEY_LEN], iv: &[u8; IV_LEN], padded_data: &[u8]) -> Vec<u8> {
+fn aes_cbc_encrypt(
+    key: &[u8; KEY_LEN],
+    iv: &[u8; IV_LEN],
+    padded_data: &[u8],
+) -> Result<Vec<u8>, String> {
     let cipher = Aes256CbcEnc::new(key.into(), iv.into());
     let mut buf = padded_data.to_vec();
     // encrypt_padded_mut with NoPadding: data must already be block-aligned.
     let ct = cipher
         .encrypt_padded_mut::<NoPadding>(&mut buf, padded_data.len())
-        .expect("encrypt: padded data should be block-aligned");
-    ct.to_vec()
+        .map_err(|e| format!("encryption failed: {e}"))?;
+    Ok(ct.to_vec())
 }
 
 /// Decrypt AES-256-CBC ciphertext. Returns the raw decrypted bytes
@@ -155,9 +163,11 @@ fn register_os_sha256(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult
 
 fn register_os_aes_encrypt(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(|_, (key_passphrase, data): (String, String)| {
-        let (key, iv) = derive_key_iv(&key_passphrase, DEFAULT_SALT);
+        let (key, iv) = derive_key_iv(&key_passphrase, DEFAULT_SALT)?;
         let padded = pkcs7_pad(data.as_bytes());
-        let ciphertext = aes_cbc_encrypt(&key, &iv, &padded);
+        let ciphertext = aes_cbc_encrypt(&key, &iv, &padded).map_err(|e| {
+            mlua::Error::RuntimeError(format!("osAESEncrypt: {e}"))
+        })?;
         Ok(BASE64.encode(&ciphertext))
     })?;
     lua.globals().set("osAESEncrypt", f)
@@ -165,7 +175,7 @@ fn register_os_aes_encrypt(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaR
 
 fn register_os_aes_decrypt(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(|_, (key_passphrase, data_b64): (String, String)| {
-        let (key, iv) = derive_key_iv(&key_passphrase, DEFAULT_SALT);
+        let (key, iv) = derive_key_iv(&key_passphrase, DEFAULT_SALT)?;
         let ciphertext = BASE64.decode(data_b64.as_bytes()).map_err(|e| {
             mlua::Error::RuntimeError(format!("osAESDecrypt: bad base64: {e}"))
         })?;
@@ -202,13 +212,15 @@ fn register_os_aes_encrypt_to(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> L
                 )));
             }
 
-            let (key, _) = derive_key_iv(&key_passphrase, DEFAULT_SALT);
+            let (key, _) = derive_key_iv(&key_passphrase, DEFAULT_SALT)?;
             let padded = pkcs7_pad(data.as_bytes());
 
             let mut iv_arr = [0u8; IV_LEN];
             iv_arr.copy_from_slice(&iv_bytes);
 
-            let ciphertext = aes_cbc_encrypt(&key, &iv_arr, &padded);
+            let ciphertext = aes_cbc_encrypt(&key, &iv_arr, &padded).map_err(|e| {
+                mlua::Error::RuntimeError(format!("osAESEncryptTo: {e}"))
+            })?;
             Ok(BASE64.encode(&ciphertext))
         },
     )?;
@@ -231,7 +243,7 @@ fn register_os_aes_decrypt_from(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) ->
                 mlua::Error::RuntimeError(format!("osAESDecryptFrom: bad data base64: {e}"))
             })?;
 
-            let (key, _) = derive_key_iv(&key_passphrase, DEFAULT_SALT);
+            let (key, _) = derive_key_iv(&key_passphrase, DEFAULT_SALT)?;
             let mut iv_arr = [0u8; IV_LEN];
             iv_arr.copy_from_slice(&iv_bytes);
 

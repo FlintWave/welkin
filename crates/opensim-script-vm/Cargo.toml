@@ -19,6 +19,7 @@ base64 = { workspace = true }
 sha1_smol = { workspace = true }
 md-5 = { workspace = true }
 regex = { workspace = true }
+sha1 = { workspace = true }
 sha2 = { workspace = true }
 aes = { workspace = true }
 cbc = { workspace = true }
