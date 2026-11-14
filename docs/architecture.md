@@ -5,7 +5,7 @@ simulator). Wire and schema compatibility with the C# server is the contract;
 internals are free to change. Licence: GPL-3.0-or-later. The C# reference tree
 is read-only at `/var/home/erik/Projects/opensim-0.9.3.0-source/`.
 
-Status: Phase 0 and protocol-core are complete. Most crates below are still
+Status: Phase 0, protocol-core and physics-backend are complete. Most crates below are still
 empty skeletons (a `lib.rs` with no logic). The table marks which.
 
 ## Workspace
@@ -23,8 +23,8 @@ crates are prefixed `opensim-`.
 | `opensim-config` | TOML configuration with env overrides; `OpenSim.ini` / `Robust.ini` importer | implemented |
 | `opensim-runtime` | Logging (`tracing`), Prometheus metrics, health endpoint, graceful shutdown | implemented |
 | `opensim-conformance` | Recorder/replayer (HTTP, XML-RPC, LLUDP), `pCampBot` wrapper, test bot (`tests/test_bot.rs`) | implemented |
-| `opensim-physics` | Physics engine trait | spike |
-| `opensim-physics-rapier` | Rapier backend; consumes `aurora-prim` geometry | spike |
+| `opensim-physics` | `PhysicsScene`/`PhysicsActor` traits, null backend, and solver-independent behaviour: vehicles (`vehicle.rs`), avatar controller (`avatar.rs`), move-to-target/hover/look-at (`behaviors.rs`), keyframed motion (`keyframe.rs`), terse-update thresholds (`terse_update.rs`) | implemented |
+| `opensim-physics-rapier` | Rapier 0.36.1 backend: prims and linksets, terrain heightfield, collisions, probes, materials, snapshot/restore; consumes `aurora-prim` geometry | implemented |
 | `opensim-caps` | HTTP capabilities | skeleton |
 | `opensim-data` | `sqlx` data layer over the existing schema | skeleton |
 | `opensim-services` | Robust grid services | skeleton |
@@ -41,6 +41,7 @@ crates are prefixed `opensim-`.
 aurora-llsd -> opensim-llsd -------------------+
 aurora-msg  -> opensim-msg --------------------+--> opensim-net
 aurora-prim -> opensim-prim, opensim-physics-rapier
+opensim-physics -> opensim-physics-rapier (rapier3d 0.36.1)
 opensim-types <- llsd, msg, net, caps, data, scene, physics, archive, scripts
 
 opensim-config, opensim-runtime -> opensim-robust
@@ -99,7 +100,9 @@ the `opensim-physics` trait), `glam` (vectors, as in Aurora), `tracing`,
    `test-data/lludp_session.jsonl`).
 3. Test bot on `aurora-net` logs in against a simulator.
 4. Fuzz targets in `crates/opensim-msg/fuzz/`.
-5. Later: `pCampBot`, physics trajectory comparison, Aurora Viewer sessions.
+5. Later: `pCampBot`, physics trajectory comparison against recorded C# runs, Aurora Viewer sessions.
+
+Physics details: `docs/physics-backend-summary.md`.
 
 ## Roadmap
 
