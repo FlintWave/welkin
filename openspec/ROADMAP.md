@@ -99,7 +99,7 @@ when its phase starts, so later rows are placeholders until then.
 | 3 | Physics shapes from `aurora-prim` geometry, convex decomposition | `prim-meshing` | accepted |
 | 2 | Installer, web portal, first-run wizard, map placement, archive import, desktop companion | `grid-portal` | accepted |
 | 2 | Host scan and capacity assessment (islands and users) | `capacity-assessor` | accepted |
-| 4 | SLua embedding, LSL and Luau, `ll*` API | `script-engine` | proposed |
+| 4 | SLua embedding, LSL and Luau, `ll*` API | `script-engine` | accepted |
 | 4 | `os*` API | `ossl-api` | planned |
 | 5 | Land, permissions, estate, inventory, attachments, chat, IM, map | `region-modules` | planned |
 | 5 | OAR and IAR archives | `archives` | planned |
