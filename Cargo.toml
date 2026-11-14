@@ -20,6 +20,7 @@ aurora-net = { git = "https://github.com/Aurora-Viewer/Aurora-Viewer", rev = "3d
 glam = "0.34.1"
 thiserror = "2.0.21"
 base64 = "0.23.1"
+bitflags = "2.9"
 uuid = { version = "1.27.0", features = ["v4"] }
 tokio = { version = "1.53.2", features = ["full"] }
 tracing = "0.1"

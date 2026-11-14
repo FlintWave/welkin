@@ -1732,6 +1732,7 @@ dependencies = [
  "aurora-llsd",
  "aurora-msg",
  "aurora-prim",
+ "bitflags",
  "glam 0.34.3",
  "serde",
  "thiserror 2.0.21",
