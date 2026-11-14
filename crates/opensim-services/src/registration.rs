@@ -165,13 +165,17 @@ mod tests {
         }
     }
 
-    // NOTE: test_construction and test_neighbours_cache cannot be written as
-    // plain unit tests because `GridRegistration::new` requires an
-    // `Arc<RemoteGridConnector>`, and that type is not yet available (it lives
-    // in `crate::remote`, created by a parallel agent).  Once the remote module
-    // lands, these tests can be enabled.
-    //
-    // The `test_region` helper above is ready for use.
+    #[test]
+    fn test_construction() {
+        let connector = Arc::new(RemoteGridConnector::new("http://grid.example.com:8003"));
+        let region = test_region("TestRegion");
+        let client = reqwest::Client::new();
+        let reg = GridRegistration::new(connector, region, client);
+
+        // Neighbours start empty.
+        let nbrs = reg.neighbours.blocking_read();
+        assert!(nbrs.is_empty());
+    }
 
     #[test]
     fn test_region_helper_produces_valid_row() {
