@@ -5,6 +5,9 @@ use std::collections::HashMap;
 use glam::{Quat, Vec3};
 use rapier3d::prelude::*;
 
+use rapier3d::parry::shape::SharedShape;
+use rapier3d::parry::utils::Array2;
+
 use opensim_physics::{ActorType, ContactResult, PhysicsActor, PhysicsScene, RayFilterFlags};
 
 fn to_rapier(v: Vec3) -> Vector {
@@ -259,6 +262,7 @@ pub struct RapierPhysicsScene {
     actors: HashMap<u32, RapierActor>,
     water_level: f32,
     terrain_handle: Option<RigidBodyHandle>,
+    terrain_collider_handle: Option<ColliderHandle>,
 }
 
 impl RapierPhysicsScene {
@@ -283,6 +287,7 @@ impl RapierPhysicsScene {
             actors: HashMap::new(),
             water_level: 0.0,
             terrain_handle: None,
+            terrain_collider_handle: None,
         }
     }
 
@@ -502,10 +507,19 @@ impl PhysicsScene for RapierPhysicsScene {
         1.0
     }
 
-    fn set_terrain(&mut self, _height_map: &[f32]) {
-        if let Some(old) = self.terrain_handle.take() {
+    fn set_terrain(&mut self, height_map: &[f32]) {
+        if let Some(ch) = self.terrain_collider_handle.take() {
+            self.colliders.remove(
+                ch,
+                &mut self.islands,
+                &mut self.bodies,
+                &mut self.soft_bodies,
+                true,
+            );
+        }
+        if let Some(bh) = self.terrain_handle.take() {
             self.bodies.remove(
-                old,
+                bh,
                 &mut self.islands,
                 &mut self.colliders,
                 &mut self.impulse_joints,
@@ -514,14 +528,38 @@ impl PhysicsScene for RapierPhysicsScene {
                 true,
             );
         }
-        let body = RigidBodyBuilder::fixed()
-            .translation(Vector::new(128.0, 128.0, 12.5))
+
+        let side = (height_map.len() as f32).sqrt() as usize;
+        if side < 2 {
+            return;
+        }
+
+        // Parry HeightField: rows advance along Z, cols along X, heights along Y.
+        // Our world is Z-up (gravity along -Z). Rotate +90 around X so Y→Z.
+        // After rotation, rows (Z) map to -Y, so reverse row order.
+        let mut data = Vec::with_capacity(height_map.len());
+        for row in (0..side).rev() {
+            let start = row * side;
+            data.extend_from_slice(&height_map[start..start + side]);
+        }
+
+        let heights = Array2::new(side, side, data);
+        let shape = SharedShape::heightfield(heights, Vector::new(1.0, 1.0, 1.0));
+        let collider = ColliderBuilder::new(shape)
+            .friction(0.5)
+            .restitution(0.0)
             .build();
-        let handle = self.bodies.insert(body);
-        let collider = ColliderBuilder::cuboid(128.0, 128.0, 12.5).build();
-        self.colliders
-            .insert_with_parent(collider, handle, &mut self.bodies);
-        self.terrain_handle = Some(handle);
+
+        let half = side as f32 / 2.0;
+        let body = RigidBodyBuilder::fixed()
+            .translation(Vector::new(half, half, 0.0))
+            .rotation(Vector::new(std::f32::consts::FRAC_PI_2, 0.0, 0.0))
+            .build();
+        let bh = self.bodies.insert(body);
+        let ch = self.colliders
+            .insert_with_parent(collider, bh, &mut self.bodies);
+        self.terrain_handle = Some(bh);
+        self.terrain_collider_handle = Some(ch);
     }
 
     fn set_water_level(&mut self, height: f32) {
@@ -579,5 +617,6 @@ impl PhysicsScene for RapierPhysicsScene {
         self.bodies = RigidBodySet::new();
         self.colliders = ColliderSet::new();
         self.terrain_handle = None;
+        self.terrain_collider_handle = None;
     }
 }
