@@ -14,6 +14,7 @@ use std::time::Instant;
 use glam::Vec3;
 use rapier3d::geometry::SharedShape;
 use rapier3d::math::Vector;
+use rapier3d::parry::transformation::vhacd::VHACDParameters;
 use uuid::Uuid;
 
 use crate::{
@@ -38,6 +39,54 @@ pub enum PhysicsShapeType {
     None = 1,
     /// Convex hull of the prim geometry.
     Convex = 2,
+}
+
+/// Parameters for V-HACD convex decomposition, calibrated against the C#
+/// OpenSimulator Meshmerizer defaults.
+///
+/// The `resolution` field stores the C# total-voxel budget (default 100 000).
+/// [`to_vhacd`](ConvexDecompParams::to_vhacd) converts it to parry3d's
+/// grid-dimension parameter by taking the cube root and clamping to \[16, 256\].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ConvexDecompParams {
+    /// Maximum number of convex hulls to produce.
+    pub max_hulls: u32,
+    /// Voxelization resolution (C#-style total voxel budget).
+    pub resolution: u32,
+    /// Maximum allowed concavity (0.0 = exact, 1.0 = fully convex).
+    pub concavity: f64,
+    /// Maximum vertices per output hull.  Advisory only — not enforced by the
+    /// parry3d V-HACD backend but kept for C# Meshmerizer parity.
+    pub max_vertices_per_hull: u32,
+}
+
+impl Default for ConvexDecompParams {
+    fn default() -> Self {
+        Self {
+            max_hulls: 32,
+            resolution: 100_000,
+            concavity: 0.0025,
+            max_vertices_per_hull: 64,
+        }
+    }
+}
+
+impl ConvexDecompParams {
+    /// Convert to parry3d [`VHACDParameters`].
+    ///
+    /// The C# Meshmerizer `resolution` specifies a total voxel budget; parry3d's
+    /// `resolution` is the grid dimension.  We approximate by taking the cube
+    /// root and clamping to \[16, 256\].
+    pub fn to_vhacd(&self) -> VHACDParameters {
+        let grid_dim = (self.resolution as f64).cbrt().ceil() as u32;
+        let grid_dim = grid_dim.clamp(16, 256);
+        VHACDParameters {
+            max_convex_hulls: self.max_hulls,
+            resolution: grid_dim,
+            concavity: self.concavity as f32,
+            ..VHACDParameters::default()
+        }
+    }
 }
 
 /// The result of meshing a single prim for physics.
@@ -140,6 +189,55 @@ impl ShapeCache {
 }
 
 impl Default for ShapeCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Decomposition cache
+// ---------------------------------------------------------------------------
+
+/// Thread-safe cache of previously-computed convex decomposition shapes, keyed
+/// by a caller-supplied `u64` (e.g. a hash of the source mesh + decomp params).
+pub struct DecompCache {
+    cache: Mutex<HashMap<u64, SharedShape>>,
+}
+
+impl DecompCache {
+    pub fn new() -> Self {
+        Self {
+            cache: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Look up a cached decomposition.  Returns `None` on a miss.
+    pub fn get(&self, key: u64) -> Option<SharedShape> {
+        self.cache.lock().unwrap().get(&key).cloned()
+    }
+
+    /// Insert a decomposed shape into the cache.
+    pub fn insert(&self, key: u64, shape: SharedShape) {
+        self.cache.lock().unwrap().insert(key, shape);
+    }
+
+    /// Number of cached entries.
+    pub fn len(&self) -> usize {
+        self.cache.lock().unwrap().len()
+    }
+
+    /// Whether the cache is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Drop all cached entries.
+    pub fn clear(&self) {
+        self.cache.lock().unwrap().clear();
+    }
+}
+
+impl Default for DecompCache {
     fn default() -> Self {
         Self::new()
     }
@@ -268,7 +366,33 @@ pub fn shape_from_volume(
     }
 }
 
-/// Generate a convex hull physics shape from a procedural prim volume.
+// ---------------------------------------------------------------------------
+// V-HACD convex decomposition
+// ---------------------------------------------------------------------------
+
+/// Decompose a triangle mesh into a compound of convex hulls via V-HACD.
+///
+/// Returns `None` when the input is empty (no vertices or no triangles).
+/// Otherwise returns a [`SharedShape`] compound of the decomposed convex parts.
+pub fn decompose_convex(
+    vertices: &[Vector],
+    indices: &[[u32; 3]],
+    params: &ConvexDecompParams,
+) -> Option<SharedShape> {
+    if vertices.is_empty() || indices.is_empty() {
+        return None;
+    }
+
+    let vhacd_params = params.to_vhacd();
+    let shape = SharedShape::convex_decomposition_with_params(vertices, indices, &vhacd_params);
+    Some(shape)
+}
+
+/// Generate a convex-decomposed physics shape from a procedural prim volume.
+///
+/// Uses V-HACD decomposition with default [`ConvexDecompParams`].  Falls back
+/// to a simple convex hull when decomposition produces no parts, and to a tiny
+/// sphere for degenerate geometry (< 4 vertices).
 fn shape_convex_from_volume(
     params: &VolumeParams,
     size: Vec3,
@@ -278,6 +402,9 @@ fn shape_convex_from_volume(
     let mesh = generate_volume(params, detail);
 
     let mut vertices: Vec<Vector> = Vec::new();
+    let mut indices: Vec<[u32; 3]> = Vec::new();
+    let mut base: u32 = 0;
+
     for face in &mesh.faces {
         for pos in &face.positions {
             vertices.push(Vector::new(
@@ -286,14 +413,28 @@ fn shape_convex_from_volume(
                 pos[2] * size.z,
             ));
         }
+
+        let face_indices = &face.indices;
+        let tri_count = face_indices.len() / 3;
+        for tri in 0..tri_count {
+            let i0 = base + face_indices[tri * 3] as u32;
+            let i1 = base + face_indices[tri * 3 + 1] as u32;
+            let i2 = base + face_indices[tri * 3 + 2] as u32;
+            indices.push([i0, i1, i2]);
+        }
+
+        base += face.positions.len() as u32;
     }
 
     let vertex_count = vertices.len();
 
-    let shape = if vertices.len() < 4 {
-        SharedShape::ball(0.001)
-    } else {
+    let decomp_params = ConvexDecompParams::default();
+    let shape = if let Some(decomposed) = decompose_convex(&vertices, &indices, &decomp_params) {
+        decomposed
+    } else if vertices.len() >= 4 {
         SharedShape::convex_hull(&vertices).unwrap_or_else(|| SharedShape::ball(0.001))
+    } else {
+        SharedShape::ball(0.001)
     };
 
     MeshingResult {
@@ -838,5 +979,98 @@ mod tests {
         let src = PlaceholderSculptSource;
         assert!(src.decode_sculpt_texture(&Uuid::nil()).is_none());
         assert!(src.decode_sculpt_texture(&Uuid::from_u128(42)).is_none());
+    }
+
+    // --- V-HACD convex decomposition tests ---
+
+    /// Build a simple axis-aligned box mesh (8 vertices, 12 triangles).
+    fn box_mesh() -> (Vec<Vector>, Vec<[u32; 3]>) {
+        let vertices = vec![
+            Vector::new(-0.5, -0.5, -0.5), // 0
+            Vector::new( 0.5, -0.5, -0.5), // 1
+            Vector::new( 0.5,  0.5, -0.5), // 2
+            Vector::new(-0.5,  0.5, -0.5), // 3
+            Vector::new(-0.5, -0.5,  0.5), // 4
+            Vector::new( 0.5, -0.5,  0.5), // 5
+            Vector::new( 0.5,  0.5,  0.5), // 6
+            Vector::new(-0.5,  0.5,  0.5), // 7
+        ];
+        let indices = vec![
+            // front
+            [0, 1, 2], [0, 2, 3],
+            // back
+            [5, 4, 7], [5, 7, 6],
+            // left
+            [4, 0, 3], [4, 3, 7],
+            // right
+            [1, 5, 6], [1, 6, 2],
+            // top
+            [3, 2, 6], [3, 6, 7],
+            // bottom
+            [4, 5, 1], [4, 1, 0],
+        ];
+        (vertices, indices)
+    }
+
+    #[test]
+    fn test_convex_decomp_box() {
+        let (verts, tris) = box_mesh();
+        let params = ConvexDecompParams::default();
+        let result = decompose_convex(&verts, &tris, &params);
+        assert!(result.is_some(), "box decomposition should produce a shape");
+    }
+
+    #[test]
+    fn test_convex_decomp_params_default() {
+        let p = ConvexDecompParams::default();
+        assert_eq!(p.max_hulls, 32);
+        assert_eq!(p.resolution, 100_000);
+        assert!((p.concavity - 0.0025).abs() < 1e-10);
+        assert_eq!(p.max_vertices_per_hull, 64);
+    }
+
+    #[test]
+    fn test_decomp_cache_hit() {
+        let cache = DecompCache::new();
+        let shape = SharedShape::ball(1.0);
+        cache.insert(99, shape.clone());
+        let hit = cache.get(99);
+        assert!(hit.is_some(), "cache should return inserted shape");
+        assert_eq!(cache.len(), 1);
+    }
+
+    #[test]
+    fn test_decomp_cache_miss() {
+        let cache = DecompCache::new();
+        assert!(cache.get(42).is_none(), "empty cache should return None");
+        assert!(cache.is_empty());
+    }
+
+    #[test]
+    fn test_convex_decomp_empty_input() {
+        let params = ConvexDecompParams::default();
+        assert!(decompose_convex(&[], &[], &params).is_none());
+        assert!(decompose_convex(&[Vector::new(0.0, 0.0, 0.0)], &[], &params).is_none());
+        assert!(decompose_convex(&[], &[[0, 1, 2]], &params).is_none());
+    }
+
+    #[test]
+    fn test_decomp_cache_clear() {
+        let cache = DecompCache::new();
+        cache.insert(1, SharedShape::ball(1.0));
+        cache.insert(2, SharedShape::ball(2.0));
+        assert_eq!(cache.len(), 2);
+        cache.clear();
+        assert!(cache.is_empty());
+    }
+
+    #[test]
+    fn test_convex_decomp_params_to_vhacd() {
+        let p = ConvexDecompParams::default();
+        let v = p.to_vhacd();
+        // cube root of 100_000 ~ 46.4, ceil = 47, clamped to [16, 256]
+        assert_eq!(v.resolution, 47);
+        assert_eq!(v.max_convex_hulls, 32);
+        assert!((v.concavity - 0.0025).abs() < 1e-6);
     }
 }

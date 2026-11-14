@@ -15,6 +15,7 @@ pub mod profiles;
 pub mod estate;
 pub mod agent_prefs;
 pub mod migrations;
+pub mod simulation;
 
 pub use pool::DataPool;
 
