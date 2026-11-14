@@ -10,6 +10,8 @@ opensim-types = { path = "../opensim-types" }
 opensim-physics = { path = "../opensim-physics" }
 rapier3d = { workspace = true }
 glam = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 

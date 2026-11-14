@@ -18,7 +18,7 @@
 - [x] 3.3 Collision events, volume detect, top colliders
 - [x] 3.4 Ray, box, sphere and plane probes with filter flags
 - [x] 3.5 Materials: friction, restitution, density, gravity multiplier
-- [ ] 3.6 Snapshot and restore
+- [x] 3.6 Snapshot and restore
 
 ## 4. Engine-independent behaviour
 

@@ -8,6 +8,8 @@ use rapier3d::prelude::*;
 use rapier3d::parry::shape::SharedShape;
 use rapier3d::parry::utils::Array2;
 
+use serde::{Deserialize, Serialize};
+
 use opensim_physics::{ActorType, ContactResult, PhysicsActor, PhysicsScene, RayFilterFlags};
 
 fn to_rapier(v: Vec3) -> Vector {
@@ -704,5 +706,124 @@ impl PhysicsScene for RapierPhysicsScene {
         self.colliders = ColliderSet::new();
         self.terrain_handle = None;
         self.terrain_collider_handle = None;
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ActorSnapshot {
+    pub local_id: u32,
+    pub name: String,
+    pub actor_type: u8,
+    pub position: [f32; 3],
+    pub velocity: [f32; 3],
+    pub orientation: [f32; 4],
+    pub size: [f32; 3],
+    pub is_physical: bool,
+    pub phantom: bool,
+    pub flying: bool,
+    pub density: f32,
+    pub friction: f32,
+    pub restitution: f32,
+    pub gravity_modifier: f32,
+    pub buoyancy: f32,
+    pub children: Vec<u32>,
+    pub shape_type: u8,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SceneSnapshot {
+    pub name: String,
+    pub water_level: f32,
+    pub actors: Vec<ActorSnapshot>,
+}
+
+impl RapierPhysicsScene {
+    pub fn snapshot(&self) -> SceneSnapshot {
+        let actors = self
+            .actors
+            .values()
+            .map(|a| ActorSnapshot {
+                local_id: a.local_id,
+                name: a.name.clone(),
+                actor_type: a.actor_type as u8,
+                position: a.position.to_array(),
+                velocity: a.velocity.to_array(),
+                orientation: [a.orientation.x, a.orientation.y, a.orientation.z, a.orientation.w],
+                size: a.size.to_array(),
+                is_physical: a.is_physical,
+                phantom: a.phantom,
+                flying: a.flying,
+                density: a.density,
+                friction: a.friction,
+                restitution: a.restitution,
+                gravity_modifier: a.gravity_modifier,
+                buoyancy: a.buoyancy,
+                children: a.children.clone(),
+                shape_type: a.shape_type as u8,
+            })
+            .collect();
+        SceneSnapshot {
+            name: self.scene_name.clone(),
+            water_level: self.water_level,
+            actors,
+        }
+    }
+
+    pub fn snapshot_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(&self.snapshot())
+    }
+
+    pub fn restore(snap: &SceneSnapshot) -> Self {
+        let mut scene = Self::new(&snap.name);
+        scene.water_level = snap.water_level;
+        for a in &snap.actors {
+            let actor_type = match a.actor_type {
+                1 => ActorType::Agent,
+                2 => ActorType::Prim,
+                _ => ActorType::Unknown,
+            };
+            let pos = Vec3::from_array(a.position);
+            let vel = Vec3::from_array(a.velocity);
+            let size = Vec3::from_array(a.size);
+            let rot = Quat::from_xyzw(
+                a.orientation[0],
+                a.orientation[1],
+                a.orientation[2],
+                a.orientation[3],
+            );
+            scene.insert_actor(
+                a.local_id,
+                &a.name,
+                actor_type,
+                pos,
+                vel,
+                size,
+                rot,
+                a.is_physical,
+            );
+            if let Some(actor) = scene.actors.get_mut(&a.local_id) {
+                actor.phantom = a.phantom;
+                actor.flying = a.flying;
+                actor.density = a.density;
+                actor.friction = a.friction;
+                actor.restitution = a.restitution;
+                actor.gravity_modifier = a.gravity_modifier;
+                actor.buoyancy = a.buoyancy;
+                actor.children = a.children.clone();
+                actor.shape_type = match a.shape_type {
+                    0 => PhysicsShapeType::Prim,
+                    1 => PhysicsShapeType::Convex,
+                    _ => PhysicsShapeType::None,
+                };
+                actor.dirty = true;
+            }
+        }
+        scene.flush_dirty();
+        scene
+    }
+
+    pub fn restore_json(json: &str) -> Result<Self, serde_json::Error> {
+        let snap: SceneSnapshot = serde_json::from_str(json)?;
+        Ok(Self::restore(&snap))
     }
 }
