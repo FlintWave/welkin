@@ -11,24 +11,24 @@
 
 ## 3. Permissions (HIGH RISK)
 
-- [ ] 3.1 DefaultPermissionsModule: config loading, bypass/propagate/debug flags, admin set rules, god mode and estate manager escalation
-- [ ] 3.2 All permission check functions: object (create/delete/edit/move/copy/transfer/take/return), script (run/compile), terrain, parcel, estate
-- [ ] 3.3 Permission check unit tests: truth table covering owner/group/estate-mgr/god/stranger x bypass on/off
+- [x] 3.1 DefaultPermissionsModule: config loading, bypass/propagate/debug flags, admin set rules, god mode and estate manager escalation (652d801: PermissionsConfig, UserSet, admin/god detection, Opus reviewed)
+- [x] 3.2 All permission check functions: object (create/delete/edit/move/copy/transfer/take/return), script (run/compile), terrain, parcel, estate (652d801: 13 check functions in checks.rs)
+- [x] 3.3 Permission check unit tests: truth table covering owner/group/estate-mgr/god/stranger x bypass on/off (652d801: 40 truth-table tests)
 
 ## 4. Estate management
 
-- [ ] 4.1 EstateManagementModule: estate settings, region flags, covenant, terrain textures, access/ban/manager lists, group access
-- [ ] 4.2 Estate actions (restart, kick, teleport home, send message), TelehubManager (spawn points), sun position and time dilation
+- [x] 4.1 EstateManagementModule: estate settings, region flags, covenant, terrain textures, access/ban/manager lists, group access (c6a57bf: EstateSettings, access/ban/manager lists)
+- [x] 4.2 Estate actions (restart, kick, teleport home, send message), TelehubManager (spawn points), sun position and time dilation (c6a57bf: TelehubManager, estate actions, sun position)
 
 ## 5. Inventory transfers and access
 
-- [ ] 5.1 InventoryTransferModule: give item/folder between avatars, accept/decline
-- [ ] 5.2 InventoryAccessModule: rez from inventory (single and coalesced), derez (take, take copy, return, delete)
-- [ ] 5.3 AssetTransactionModule: upload transactions for textures, sounds, animations, clothing; XferModule (file transfer)
+- [x] 5.1 InventoryTransferModule: give item/folder between avatars, accept/decline (c6a57bf)
+- [x] 5.2 InventoryAccessModule: rez from inventory (single and coalesced), derez (take, take copy, return, delete) (c6a57bf: RezResult, DerezAction)
+- [x] 5.3 AssetTransactionModule: upload transactions for textures, sounds, animations, clothing; XferModule (file transfer) (c6a57bf: UploadTransaction, AssetType, XferModule)
 
 ## 6. Attachments
 
-- [ ] 6.1 AttachmentsModule: wear/detach, attachment point validation, persistence on detach/logout/login, cross-region transfer through entity transfer
+- [x] 6.1 AttachmentsModule: wear/detach, attachment point validation, persistence on detach/logout/login, cross-region transfer through entity transfer (c6a57bf: 41 AttachmentPoint variants, 100 total tests)
 
 ## 7. Chat and instant messages
 
