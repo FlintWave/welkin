@@ -7,3 +7,7 @@ pub mod griduser;
 pub mod accounts;
 pub mod auth;
 pub mod authorization;
+pub mod friends;
+pub mod avatar;
+pub mod mute;
+pub mod profiles;

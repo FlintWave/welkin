@@ -98,4 +98,49 @@ impl AvatarStore {
         tx.commit().await?;
         Ok(())
     }
+
+    pub async fn reset(&self, principal_id: &str) -> Result<bool, DataError> {
+        self.delete(principal_id).await
+    }
+
+    pub async fn set_items(
+        &self,
+        principal_id: &str,
+        names: &[&str],
+        values: &[&str],
+    ) -> Result<(), DataError> {
+        let mut tx = self.pool.begin().await?;
+        for (name, value) in names.iter().zip(values.iter()) {
+            sqlx::query("DELETE FROM Avatars WHERE PrincipalID = $1 AND Name = $2")
+                .bind(principal_id.to_string())
+                .bind(name.to_string())
+                .execute(&mut *tx)
+                .await?;
+            sqlx::query("INSERT INTO Avatars (PrincipalID, Name, Value) VALUES ($1, $2, $3)")
+                .bind(principal_id.to_string())
+                .bind(name.to_string())
+                .bind(value.to_string())
+                .execute(&mut *tx)
+                .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn remove_items(
+        &self,
+        principal_id: &str,
+        names: &[&str],
+    ) -> Result<(), DataError> {
+        let mut tx = self.pool.begin().await?;
+        for name in names {
+            sqlx::query("DELETE FROM Avatars WHERE PrincipalID = $1 AND Name = $2")
+                .bind(principal_id.to_string())
+                .bind(name.to_string())
+                .execute(&mut *tx)
+                .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
 }

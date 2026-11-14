@@ -19,6 +19,7 @@ serde_json = { workspace = true }
 quick-xml = "0.37"
 md5 = "0.7"
 base64 = { workspace = true }
+crc32fast = "1.4"
 uuid = { workspace = true }
 
 [lints]

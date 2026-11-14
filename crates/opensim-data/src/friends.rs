@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::DataError;
+use sqlx::Row;
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct FriendRow {
@@ -63,4 +64,60 @@ impl FriendsStore {
             .await?;
         Ok(res.rows_affected() > 0)
     }
+
+    pub async fn get_friends_with_their_flags(
+        &self,
+        principal_id: &str,
+    ) -> Result<Vec<FriendWithFlags>, DataError> {
+        let sql = "SELECT a.PrincipalID, a.Friend, a.Flags, \
+                   CASE WHEN b.Flags IS NULL THEN '-1' ELSE b.Flags END AS TheirFlags \
+                   FROM Friends AS a \
+                   LEFT JOIN Friends AS b ON a.PrincipalID = b.Friend AND a.Friend = b.PrincipalID \
+                   WHERE a.PrincipalID = $1";
+        let rows = sqlx::query(sql)
+            .bind(principal_id.to_string())
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows
+            .iter()
+            .map(|r| FriendWithFlags {
+                principal_id: r.get(0),
+                friend: r.get(1),
+                my_flags: r.get(2),
+                their_flags: r.get(3),
+            })
+            .collect())
+    }
+
+    pub async fn get_friends_string_with_their_flags(
+        &self,
+        principal_id: &str,
+    ) -> Result<Vec<FriendWithFlags>, DataError> {
+        let sql = "SELECT a.PrincipalID, a.Friend, a.Flags, \
+                   CASE WHEN b.Flags IS NULL THEN '-1' ELSE b.Flags END AS TheirFlags \
+                   FROM Friends AS a \
+                   LEFT JOIN Friends AS b ON a.PrincipalID = b.Friend AND a.Friend = b.PrincipalID \
+                   WHERE a.PrincipalID LIKE $1";
+        let pattern = format!("{principal_id}%");
+        let rows = sqlx::query(sql)
+            .bind(pattern)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows
+            .iter()
+            .map(|r| FriendWithFlags {
+                principal_id: r.get(0),
+                friend: r.get(1),
+                my_flags: r.get(2),
+                their_flags: r.get(3),
+            })
+            .collect())
+    }
+}
+
+pub struct FriendWithFlags {
+    pub principal_id: String,
+    pub friend: String,
+    pub my_flags: String,
+    pub their_flags: String,
 }
