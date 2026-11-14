@@ -1523,6 +1523,7 @@ dependencies = [
 name = "opensim-conformance"
 version = "0.1.0"
 dependencies = [
+ "aurora-msg",
  "axum",
  "bytes",
  "clap",
