@@ -24,6 +24,8 @@ bytes = "1"
 
 [dev-dependencies]
 aurora-msg = { workspace = true }
+aurora-net = { workspace = true }
+uuid = { workspace = true }
 
 [lints]
 workspace = true
