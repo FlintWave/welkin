@@ -48,21 +48,21 @@
 
 ## 10. Avatar modules
 
-- [ ] 10.1 AvatarFactoryModule (appearance baking, wearable validation), BakedTexturesModule (baked texture cache)
-- [ ] 10.2 FriendsModule: friend list, online/offline notifications, map/modify rights
-- [ ] 10.3 LureModule, GodsModule, DialogModule, CombatModule, GesturesModule, AvatarCommands
+- [x] 10.1 AvatarFactoryModule (appearance baking, wearable validation), BakedTexturesModule (baked texture cache) (2bcdd7c: WearableType 17 variants, BakeType 12 variants, 30 tests)
+- [x] 10.2 FriendsModule: friend list, online/offline notifications, map/modify rights (2bcdd7c: FriendPerms bitflags, bidirectional add/remove/grant)
+- [x] 10.3 LureModule, GodsModule, DialogModule, CombatModule, GesturesModule, AvatarCommands (2bcdd7c: GodLevel enum, damage/kill/respawn, gesture activate/deactivate)
 
 ## 11. Entity transfer
 
-- [ ] 11.1 EntityTransferModule: local teleport, grid teleport (seed cap handoff, agent close), region crossing (border cross, child agent promotion)
-- [ ] 11.2 EntityTransferStateMachine (double-teleport prevention) and child agent management (inform neighbours, close stale children)
+- [x] 11.1 EntityTransferModule: local teleport, grid teleport (seed cap handoff, agent close), region crossing (border cross, child agent promotion) (2bcdd7c: TeleportFlags 15 flags, GridRegion, EntityTransferContext)
+- [x] 11.2 EntityTransferStateMachine (double-teleport prevention) and child agent management (inform neighbours, close stale children) (2bcdd7c: 6-state FSM with validated transitions, 29 tests)
 
 ## 12. Framework and service connectors
 
-- [ ] 12.1 UserManagementModule (user name cache, UUID-to-name), MonitorModule (region stats, Prometheus), LibraryModule, SearchModule
-- [ ] 12.2 FlotsamAssetCache: memory tier (moka) + disk tier, expiration, deep scan, statistics
-- [ ] 12.3 TextureSenderModule (J2K priority queue), IPBanModule
-- [ ] 12.4 Service connectors out: Land, Neighbour, MuteList, AgentPreferences, MapImage; service connectors in: Land, MapImage, Neighbour
+- [x] 12.1 UserManagementModule (user name cache, UUID-to-name), MonitorModule (region stats, Prometheus), LibraryModule, SearchModule (2bcdd7c: UserData struct, RegionStats, search stubs)
+- [x] 12.2 FlotsamAssetCache: memory tier (HashMap+VecDeque LRU) + disk tier stub, expiration, deep scan, statistics (2bcdd7c: AssetCacheConfig, CacheStats, no moka needed)
+- [x] 12.3 TextureSenderModule (J2K priority queue), IPBanModule (2bcdd7c: priority-sorted dequeue, IP+network prefix banning)
+- [x] 12.4 Service connectors out: Land, Neighbour, MuteList, AgentPreferences, MapImage; service connectors in: Land, MapImage, Neighbour (2bcdd7c: 5 connector stubs with ServiceConnectorConfig)
 
 ## 13. Security review and integration tests
 
