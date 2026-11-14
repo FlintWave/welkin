@@ -29,6 +29,11 @@ where none is given.
 | P5 | Throttle and resend behaviour match `LLUDPClient`/`LLUDPServer` closely | Viewer would stall or flood otherwise (risk MEDIUM) | 2026-11-13 |
 | P6 | Updating the Aurora pin is a reviewed change gated by replay tests | Protects against upstream churn | 2026-11-13 |
 | L1 | Drop Vivox, FreeSWITCH, Oracle `MySql.Data`, CSJ2K, Warp3D (reimplement) | Proprietary, legacy, or non-compatible/unknown licences (see `docs/licence-audit.md`) | 2026-11-13 |
+| S1 | Data layer is one `sqlx` store per service, with the C# schema files embedded and applied by a migration runner (`e3f9c79`, `33c5026`) | Implements R5; a C#-created database opens unchanged and all three backends share one API | 2026-11-13 |
+| S2 | Handlers reproduce the C# Robust wire format exactly, checked by replay fixtures (`c7229de`, `9593604`) | R2; mixed grids with C# simulators must keep working | 2026-11-13 |
+| S3 | Simulation service is a 501 stub | Not needed for login or the replayed flows; deferred to the region phase | 2026-11-13 |
+| S4 | Password hashes are compared in constant time (`840f769`) | Security review finding M1: `==` on MD5 hashes leaks timing | 2026-11-13 |
+| S5 | Admin-style endpoints are not gated in code; deployments must restrict them by network or proxy | Security review noted it; matches C# Robust, which relies on the same arrangement | 2026-11-13 |
 
 ## Open questions
 

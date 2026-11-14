@@ -5,7 +5,7 @@ simulator). Wire and schema compatibility with the C# server is the contract;
 internals are free to change. Licence: GPL-3.0-or-later. The C# reference tree
 is read-only at `/var/home/erik/Projects/opensim-0.9.3.0-source/`.
 
-Status: Phase 0, protocol-core and physics-backend are complete. Most crates below are still
+Status: Phase 0, protocol-core, physics-backend and grid-services are complete. Most crates below are still
 empty skeletons (a `lib.rs` with no logic). The table marks which.
 
 ## Workspace
@@ -26,8 +26,8 @@ crates are prefixed `opensim-`.
 | `opensim-physics` | `PhysicsScene`/`PhysicsActor` traits, null backend, and solver-independent behaviour: vehicles (`vehicle.rs`), avatar controller (`avatar.rs`), move-to-target/hover/look-at (`behaviors.rs`), keyframed motion (`keyframe.rs`), terse-update thresholds (`terse_update.rs`) | implemented |
 | `opensim-physics-rapier` | Rapier 0.36.1 backend: prims and linksets, terrain heightfield, collisions, probes, materials, snapshot/restore; consumes `aurora-prim` geometry | implemented |
 | `opensim-caps` | HTTP capabilities | skeleton |
-| `opensim-data` | `sqlx` data layer over the existing schema | skeleton |
-| `opensim-services` | Robust grid services | skeleton |
+| `opensim-data` | `sqlx` data layer: 13 stores over MariaDB, PostgreSQL and SQLite, plus a migration runner with 53 embedded C# schema files | implemented |
+| `opensim-services` | 14 Robust grid service handlers behind axum: asset, inventory, grid, presence, griduser, accounts, auth, authorization, friends, avatar, mute, profiles, map, estate, agent preferences, simulation (501 stub) and XML-RPC login | implemented |
 | `opensim-scene` | Scene graph | skeleton |
 | `opensim-modules` | Region modules (land, permissions, chat, ...) | skeleton |
 | `opensim-archive` | OAR/IAR archives | skeleton |
@@ -100,9 +100,10 @@ the `opensim-physics` trait), `glam` (vectors, as in Aurora), `tracing`,
    `test-data/lludp_session.jsonl`).
 3. Test bot on `aurora-net` logs in against a simulator.
 4. Fuzz targets in `crates/opensim-msg/fuzz/`.
-5. Later: `pCampBot`, physics trajectory comparison against recorded C# runs, Aurora Viewer sessions.
+5. Grid services: 14 replay tests and 4 multi-step wire-traffic tests (`opensim-conformance/tests`).
+6. Later: live `pCampBot`, physics trajectory comparison against recorded C# runs, Aurora Viewer sessions.
 
-Physics details: `docs/physics-backend-summary.md`.
+Physics details: `docs/physics-backend-summary.md`. Grid services details: `docs/grid-services-summary.md`.
 
 ## Roadmap
 
