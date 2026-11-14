@@ -119,6 +119,17 @@ impl UserAccountStore {
         Ok(())
     }
 
+    pub async fn get_multi_accounts(
+        &self,
+        ids: &[&str],
+    ) -> Result<Vec<Option<UserAccountRow>>, DataError> {
+        let mut out = Vec::with_capacity(ids.len());
+        for id in ids {
+            out.push(self.get_by_id(id).await?);
+        }
+        Ok(out)
+    }
+
     pub async fn set_active(&self, principal_id: &str, active: bool) -> Result<(), DataError> {
         sqlx::query("UPDATE UserAccounts SET active = $1 WHERE PrincipalID = $2")
             .bind(i32::from(active))

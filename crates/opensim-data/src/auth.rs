@@ -120,6 +120,15 @@ impl AuthStore {
         Ok(row.is_some())
     }
 
+    pub async fn release_token(&self, uuid: &str, token: &str) -> Result<bool, DataError> {
+        let res = sqlx::query("DELETE FROM tokens WHERE UUID = $1 AND token = $2")
+            .bind(uuid)
+            .bind(token)
+            .execute(&self.pool)
+            .await?;
+        Ok(res.rows_affected() > 0)
+    }
+
     pub async fn purge_expired_tokens(&self) -> Result<u64, DataError> {
         let res = sqlx::query("DELETE FROM tokens WHERE validity < $1")
             .bind(now_string())
