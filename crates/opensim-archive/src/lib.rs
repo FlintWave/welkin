@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+pub mod archiver_module;
 pub mod assets_request;
 pub mod constants;
 pub mod control_file;
 pub mod external_representation;
 pub mod iar_read;
 pub mod iar_write;
+pub mod inventory_archiver_module;
 pub mod land_data;
 pub mod oar_read;
 pub mod oar_write;
