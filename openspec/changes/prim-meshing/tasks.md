@@ -13,8 +13,8 @@
 
 ## 3. Mesh assets
 
-- [ ] 3.1 Mesh asset decoder: LLSD header, decompress LOD data, extract physics or visual mesh
-- [ ] 3.2 Produce TriMeshShape or ConvexPolyhedron from decoded mesh vertices and indices
+- [x] 3.1 Mesh asset decoder: LLSD header, decompress LOD data, extract physics or visual mesh
+- [x] 3.2 Produce TriMeshShape or ConvexPolyhedron from decoded mesh vertices and indices
 
 ## 4. Convex decomposition
 

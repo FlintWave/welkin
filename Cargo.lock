@@ -2181,7 +2181,9 @@ name = "opensim-prim"
 version = "0.1.0"
 dependencies = [
  "aurora-prim",
+ "flate2",
  "glam 0.34.3",
+ "opensim-llsd",
  "opensim-types",
  "rapier3d",
  "thiserror 2.0.21",

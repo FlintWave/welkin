@@ -32,6 +32,7 @@ pub use aurora_prim::extra::{
     pack_sculpt, parse_extra_params,
 };
 
+pub mod mesh_asset;
 pub mod meshing;
 
 pub use aurora_prim::sculpt::{generate_sculpt, sculpt_placeholder};
