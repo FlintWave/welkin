@@ -1,7 +1,7 @@
 ## 1. Decisions
 
 - [x] 1.1 D1: operator decides the project licence (GPL-3.0-or-later, 2026-11-13)
-- [ ] 1.2 D2: operator decides repository name and home
+- [x] 1.2 D2: operator decides repository name and home (opensim-rust, local-only for now; public home TBD pending trademark audit)
 
 ## 2. Audit
 
