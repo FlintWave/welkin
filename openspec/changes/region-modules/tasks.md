@@ -5,9 +5,9 @@
 
 ## 2. Land management
 
-- [ ] 2.1 LandParcel struct, LandData, parcel grid (4x4m cells), add/remove/subdivide/join, overlay, access/ban lists, flags, media/music URLs
-- [ ] 2.2 Land viewer protocol (ParcelInfoReply, ParcelProperties, ParcelOverlay, ParcelDwellReply, ParcelMediaUpdate) and persistence (regionstore land/landaccesslist tables)
-- [ ] 2.3 PrimCountModule: per-parcel prim accounting (selected/total/owner/group/other counts), DwellModule
+- [x] 2.1 LandParcel struct, LandData (~40 fields), ParcelGrid (4x4m cells), ParcelFlags bitflags, add/remove/subdivide/join, access/ban lists (1f5d627: 7 source files, 21 new tests)
+- [x] 2.2 LandManagementModule implementing RegionModule with viewer protocol stubs, bitmap operations, default parcel creation on add_region (1f5d627)
+- [x] 2.3 PrimCountModule (per-parcel prim accounting), DwellModule (1f5d627)
 
 ## 3. Permissions (HIGH RISK)
 
