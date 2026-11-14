@@ -1,7 +1,7 @@
 ## 1. Data layer
 
 - [x] 1.1 `sqlx` access for each store, three database backends
-- [ ] 1.2 Carry over migrations; verify a C#-created database opens unchanged
+- [x] 1.2 Carry over migrations; verify a C#-created database opens unchanged
 - [ ] 1.3 Record C# service traffic for every handler with the conformance recorder
 
 ## 2. Services
