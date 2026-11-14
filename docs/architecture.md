@@ -200,6 +200,23 @@ Phase 2 total: 111/142 overall tasks complete.
 
 Phase 3: region-simulator-core (all 7 task groups) and prim-meshing accepted.
 
+## External grid mode
+
+Grid profiles let a region join a grid it does not run. See
+`docs/external-grid-mode-summary.md`.
+
+| Component | Location | Role |
+|---|---|---|
+| Grid profiles | `opensim-config/src/profile.rs` | `Standalone`, `OwnGrid`, `Custom(name)`; TOML loader, override chain, importer for C# `GridCommon.ini` (generates the `osgrid` profile) |
+| Remote connectors | `opensim-services/src/remote/` | Asset, grid and inventory clients (inventory read-only) |
+| Asset cache | `opensim-services/src/cache.rs` | Local cache with expiry |
+| Registration | `opensim-services/src/registration.rs` | Register, deregister, neighbour notification |
+| Hypergrid traits | `opensim-services/src/hypergrid.rs` | Gatekeeper, UserAgent, asset, inventory, friends, IM traits with stubs |
+| Wizard checks | `opensim-services/src/wizard.rs` | Region name, coordinates, estate owner, ports |
+
+The remote grid is treated as hostile. Review `docs/security-review-remote-writes.md`
+found 1 CRITICAL (SSRF) and 4 HIGH issues that block use against an untrusted grid.
+
 ## Roadmap
 
 See `openspec/ROADMAP.md` for phases 1 to 7, and `docs/decisions.md` for the

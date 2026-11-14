@@ -90,7 +90,7 @@ From `openspec/changes/capacity-assessor/proposal.md`:
 No evidence of a dedicated OSgrid test or staging grid was found in the
 codebase. The `external-grid-mode` tasks list (`tasks.md` item 3.4) plans
 to attach first an empty region, then one with content, "with the operator
-present" — implying testing happens on the live grid under supervision.
+present" - implying testing happens on the live grid under supervision.
 
 ## TODO for the operator
 
