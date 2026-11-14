@@ -26,10 +26,10 @@
 
 ## 4. Terrain
 
-- [ ] 4.1 Terrain channel: heightfield storage, variable-size region support, patch dirty tracking
-- [ ] 4.2 Terrain file loaders: LLRAW, RAW32, PNG import/export
-- [ ] 4.3 Terrain modification: raise, lower, flatten, smooth, noise, revert brushes
-- [ ] 4.4 Viewer terrain protocol: LayerData packets, patch compression, terrain upload
+- [x] 4.1 Terrain channel: heightfield storage, variable-size region support, patch dirty tracking
+- [x] 4.2 Terrain file loaders: LLRAW, RAW32, PNG import/export
+- [x] 4.3 Terrain modification: raise, lower, flatten, smooth, noise, revert brushes
+- [x] 4.4 Viewer terrain protocol: LayerData packets, patch compression, terrain upload
 
 ## 5. Persistence
 
