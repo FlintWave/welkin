@@ -156,6 +156,7 @@ impl Config {
             .map(|m| m.keys().map(|k| k.as_str()))
     }
 
+    #[expect(dead_code)]
     fn get_value(&self, section: &str, key: &str) -> Option<&toml::Value> {
         self.sections.get(section)?.get(key)
     }
