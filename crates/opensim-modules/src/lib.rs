@@ -4276,4 +4276,1115 @@ mod tests {
         sm.update_in_transit(agent, AgentTransferState::Cancelling);
         assert!(sm.update_in_transit(agent, AgentTransferState::Aborting));
     }
+
+    // ===================================================================
+    // Integration tests (section 13.2)
+    // ===================================================================
+
+    // -- 258. Integration: rez permission round-trip (owner vs stranger) ---
+
+    #[test]
+    fn integration_rez_permission_owner_vs_stranger() {
+        // Set up permissions module with bypass OFF.
+        let perms = perms_module_no_bypass();
+
+        let agent_a = Uuid::from_u128(0x1001);
+        let agent_b = Uuid::from_u128(0x1002);
+
+        // Create a parcel owned by agent A with CREATE_OBJECTS flag.
+        let mut parcel = LandData::default();
+        parcel.owner_id = agent_a;
+        parcel.flags = ParcelFlags::CREATE_OBJECTS.bits();
+
+        // Agent A (parcel owner) can create objects on their parcel.
+        assert!(
+            perms.can_create_object(agent_a, (128.0, 128.0, 0.0), Some(&parcel)),
+            "Parcel owner should be able to create objects"
+        );
+
+        // Agent B (stranger) can also create when CREATE_OBJECTS is set.
+        assert!(
+            perms.can_create_object(agent_b, (128.0, 128.0, 0.0), Some(&parcel)),
+            "Stranger should be able to create when CREATE_OBJECTS flag is set"
+        );
+
+        // Now remove CREATE_OBJECTS flag — stranger denied but owner still allowed.
+        parcel.flags = 0;
+        assert!(
+            perms.can_create_object(agent_a, (128.0, 128.0, 0.0), Some(&parcel)),
+            "Parcel owner should still be able to create without CREATE_OBJECTS flag"
+        );
+        assert!(
+            !perms.can_create_object(agent_b, (128.0, 128.0, 0.0), Some(&parcel)),
+            "Stranger should be denied when CREATE_OBJECTS flag is cleared"
+        );
+    }
+
+    // -- 259. Integration: edit permission with admin promotion -------------
+
+    #[test]
+    fn integration_edit_permission_with_admin_promotion() {
+        let mut perms = perms_module_no_bypass();
+
+        let agent_a = Uuid::from_u128(0x2001);
+        let agent_b = Uuid::from_u128(0x2002);
+
+        let obj_perms = PermissionMask::MODIFY | PermissionMask::MOVE;
+
+        // Agent A (owner) can edit their own object.
+        assert!(
+            perms.can_edit_object(agent_a, agent_a, Uuid::nil(), obj_perms),
+            "Owner should be able to edit own object with MODIFY"
+        );
+
+        // Agent B (stranger) cannot edit agent A's object.
+        assert!(
+            !perms.can_edit_object(agent_b, agent_a, Uuid::nil(), obj_perms),
+            "Stranger should not be able to edit another's object"
+        );
+
+        // Promote agent B to administrator (god user).
+        perms.god_users.insert(agent_b);
+
+        // Now agent B can edit even with PermissionMask::NONE.
+        assert!(
+            perms.can_edit_object(agent_b, agent_a, Uuid::nil(), PermissionMask::NONE),
+            "Administrator should be able to edit any object"
+        );
+    }
+
+    // -- 260. Integration: copy permission with COPY+TRANSFER bits ---------
+
+    #[test]
+    fn integration_copy_permission_transfer_bits() {
+        let mut perms = perms_module_no_bypass();
+
+        let owner = Uuid::from_u128(0x3001);
+        let non_owner = Uuid::from_u128(0x3002);
+        let admin = Uuid::from_u128(0x3003);
+        perms.god_users.insert(admin);
+
+        // Owner can copy their own object when COPY is set.
+        let copy_only = PermissionMask::COPY;
+        assert!(
+            perms.can_copy_object(owner, owner, Uuid::nil(), copy_only),
+            "Owner should copy own object with COPY bit"
+        );
+
+        // Non-owner cannot copy when only COPY is set (TRANSFER missing).
+        assert!(
+            !perms.can_copy_object(non_owner, owner, Uuid::nil(), copy_only),
+            "Non-owner should not copy without TRANSFER bit"
+        );
+
+        // Non-owner (regular) still cannot copy even with COPY+TRANSFER
+        // because the permissions system requires admin status for non-owners.
+        let copy_transfer = PermissionMask::COPY | PermissionMask::TRANSFER;
+        assert!(
+            !perms.can_copy_object(non_owner, owner, Uuid::nil(), copy_transfer),
+            "Regular non-owner should not copy even with COPY+TRANSFER"
+        );
+
+        // Administrator CAN copy with COPY+TRANSFER bits set.
+        assert!(
+            perms.can_copy_object(admin, owner, Uuid::nil(), copy_transfer),
+            "Admin should copy when both COPY and TRANSFER are set"
+        );
+
+        // Non-owner cannot copy when only TRANSFER is set (no COPY).
+        let transfer_only = PermissionMask::TRANSFER;
+        assert!(
+            !perms.can_copy_object(non_owner, owner, Uuid::nil(), transfer_only),
+            "Non-owner should not copy with only TRANSFER (no COPY)"
+        );
+    }
+
+    // -- 261. Integration: can_take_object owner/stranger/estate_manager ---
+
+    #[test]
+    fn integration_take_object_owner_stranger_estate_manager() {
+        let mut perms = perms_module_no_bypass();
+
+        let owner = Uuid::from_u128(0x4001);
+        let stranger = Uuid::from_u128(0x4002);
+        let estate_mgr = Uuid::from_u128(0x4003);
+
+        // Owner can take their own object.
+        assert!(
+            perms.can_take_object(owner, owner, Uuid::nil()),
+            "Owner should be able to take own object"
+        );
+
+        // Stranger cannot take.
+        assert!(
+            !perms.can_take_object(stranger, owner, Uuid::nil()),
+            "Stranger should not be able to take another's object"
+        );
+
+        // Estate manager (promoted) can take because they become admin.
+        perms.estate_managers.insert(estate_mgr);
+        perms.config.region_manager_is_god = true;
+        assert!(
+            perms.can_take_object(estate_mgr, owner, Uuid::nil()),
+            "Estate manager with god powers should be able to take objects"
+        );
+    }
+
+    // -- 262. Integration: teleport state machine full cycle -----------------
+
+    #[test]
+    fn integration_teleport_state_machine_full_cycle() {
+        let mut transfer = TransferMod::new();
+        let config = TestConfig::new();
+        transfer.initialise(&config).unwrap();
+
+        let agent = Uuid::new_v4();
+
+        // Start teleport.
+        assert!(transfer.state_machine_mut().set_in_transit(agent));
+        assert_eq!(
+            transfer.state_machine().get_agent_transfer_state(agent),
+            Some(AgentTransferState::Preparing)
+        );
+
+        // Transition through all valid states.
+        assert!(transfer.state_machine_mut().update_in_transit(agent, AgentTransferState::Transferring));
+        assert_eq!(
+            transfer.state_machine().get_agent_transfer_state(agent),
+            Some(AgentTransferState::Transferring)
+        );
+
+        assert!(transfer.state_machine_mut().update_in_transit(agent, AgentTransferState::ReceivedAtDestination));
+        assert_eq!(
+            transfer.state_machine().get_agent_transfer_state(agent),
+            Some(AgentTransferState::ReceivedAtDestination)
+        );
+
+        assert!(transfer.state_machine_mut().update_in_transit(agent, AgentTransferState::CleaningUp));
+        assert_eq!(
+            transfer.state_machine().get_agent_transfer_state(agent),
+            Some(AgentTransferState::CleaningUp)
+        );
+
+        // After CleaningUp, reset removes the agent from transit.
+        assert!(transfer.state_machine_mut().reset_from_transit(agent));
+        assert!(!transfer.state_machine().is_in_transit(agent));
+        assert_eq!(transfer.state_machine().get_agent_transfer_state(agent), None);
+    }
+
+    // -- 263. Integration: double-teleport prevention and recovery ----------
+
+    #[test]
+    fn integration_double_teleport_prevention_and_recovery() {
+        let mut sm = EntityTransferStateMachine::new();
+
+        let agent = Uuid::new_v4();
+
+        // First teleport starts.
+        assert!(sm.set_in_transit(agent));
+
+        // Second teleport attempt is blocked.
+        assert!(
+            !sm.set_in_transit(agent),
+            "Second teleport should be blocked while first is in progress"
+        );
+
+        // Complete first teleport.
+        sm.update_in_transit(agent, AgentTransferState::Transferring);
+        sm.update_in_transit(agent, AgentTransferState::ReceivedAtDestination);
+        sm.update_in_transit(agent, AgentTransferState::CleaningUp);
+        sm.reset_from_transit(agent);
+
+        // Now a new teleport should succeed.
+        assert!(
+            sm.set_in_transit(agent),
+            "Teleport should succeed after previous one completed"
+        );
+        assert_eq!(
+            sm.get_agent_transfer_state(agent),
+            Some(AgentTransferState::Preparing)
+        );
+    }
+
+    // -- 264. Integration: attachment detach/reattach cycle -----------------
+
+    #[test]
+    fn integration_attachment_detach_reattach_cycle() {
+        let mut attachments = AttachmentsModule::new();
+        let agent = Uuid::new_v4();
+        let item = Uuid::new_v4();
+        let point = AttachmentPoint::RightHand;
+
+        // Attach an item.
+        let obj_id = attachments.wear(agent, item, point).unwrap();
+        assert!(!obj_id.is_nil());
+        assert_eq!(attachments.get_attachments(agent).len(), 1);
+        assert_eq!(attachments.get_attachments(agent)[0].item_id, item);
+        assert_eq!(attachments.get_attachments(agent)[0].point, point);
+
+        // Detach — verify empty.
+        attachments.detach(agent, item).unwrap();
+        assert!(
+            attachments.get_attachments(agent).is_empty(),
+            "Attachments should be empty after detach"
+        );
+
+        // Reattach at same point — verify present.
+        let obj_id_2 = attachments.wear(agent, item, point).unwrap();
+        assert!(!obj_id_2.is_nil());
+        assert_eq!(attachments.get_attachments(agent).len(), 1);
+        assert_eq!(attachments.get_attachments(agent)[0].item_id, item);
+        assert_eq!(attachments.get_attachments(agent)[0].point, point);
+    }
+
+    // -- 265. Integration: offline IM storage with presence -----------------
+
+    #[test]
+    fn integration_offline_im_with_presence() {
+        let mut presence = PresenceMod::new();
+        let mut offline = OfflineMod::new();
+
+        let agent_a = Uuid::new_v4();
+        let agent_b = Uuid::new_v4();
+
+        // Agent A is online, agent B is offline.
+        presence.register_presence(agent_a);
+        assert!(presence.is_present(agent_a));
+        assert!(!presence.is_present(agent_b));
+
+        // Send IM to agent B. Since B is offline, store it.
+        let im = make_im(agent_a, agent_b);
+        if !presence.is_present(agent_b) {
+            offline.store_message(im);
+        }
+        assert_eq!(offline.pending_count(agent_b), 1);
+
+        // Agent B comes online.
+        presence.register_presence(agent_b);
+        assert!(presence.is_present(agent_b));
+
+        // Retrieve offline messages.
+        let msgs = offline.retrieve_messages(agent_b);
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0].from_agent_id, agent_a);
+        assert_eq!(msgs[0].to_agent_id, agent_b);
+        assert_eq!(msgs[0].message, "Hello IM");
+
+        // No more pending messages.
+        assert_eq!(offline.pending_count(agent_b), 0);
+    }
+
+    // -- 266. Integration: mute list add/verify/remove cycle ----------------
+
+    #[test]
+    fn integration_mute_list_add_verify_remove() {
+        let mut mute_list = MuteMod::new();
+
+        let agent_a = Uuid::new_v4();
+        let agent_b = Uuid::new_v4();
+
+        // Add agent A to agent B's mute list.
+        let entry = MuteEntry {
+            agent_id: agent_b,
+            mute_id: agent_a,
+            name: "Agent A".to_string(),
+            mute_type: MuteType::ByAgent,
+            flags: 0,
+        };
+        mute_list.update_mute(agent_b, entry);
+
+        // Verify mute entry exists.
+        assert!(
+            mute_list.is_muted(agent_b, agent_a),
+            "Agent A should be muted by agent B"
+        );
+        assert_eq!(mute_list.get_mutes(agent_b).len(), 1);
+
+        // Verify reverse is not muted.
+        assert!(
+            !mute_list.is_muted(agent_a, agent_b),
+            "Agent B should not be muted by agent A"
+        );
+
+        // Remove the mute.
+        mute_list.remove_mute(agent_b, agent_a, "Agent A");
+        assert!(
+            !mute_list.is_muted(agent_b, agent_a),
+            "Agent A should no longer be muted after removal"
+        );
+        assert!(mute_list.get_mutes(agent_b).is_empty());
+    }
+
+    // -- 267. Integration: presence module add/check/remove cycle -----------
+
+    #[test]
+    fn integration_presence_add_check_remove() {
+        let mut presence = PresenceMod::new();
+
+        let agent_a = Uuid::new_v4();
+        let agent_b = Uuid::new_v4();
+        let agent_c = Uuid::new_v4();
+
+        // Register multiple agents.
+        presence.register_presence(agent_a);
+        presence.register_presence(agent_b);
+        presence.register_presence(agent_c);
+        assert_eq!(presence.presence_count(), 3);
+
+        // Verify all are online.
+        assert!(presence.is_present(agent_a));
+        assert!(presence.is_present(agent_b));
+        assert!(presence.is_present(agent_c));
+
+        let all = presence.get_present_agents();
+        assert!(all.contains(&agent_a));
+        assert!(all.contains(&agent_b));
+        assert!(all.contains(&agent_c));
+
+        // Remove agent B — verify offline.
+        presence.deregister_presence(agent_b);
+        assert!(!presence.is_present(agent_b));
+        assert_eq!(presence.presence_count(), 2);
+
+        // A and C still online.
+        assert!(presence.is_present(agent_a));
+        assert!(presence.is_present(agent_c));
+    }
+
+    // -- 268. Integration: parcel ownership and permission interaction -------
+
+    #[test]
+    fn integration_parcel_ownership_and_permissions() {
+        let mut mgr = LandManagementModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        mgr.initialise(&config).unwrap();
+        mgr.add_region(&scene).unwrap();
+
+        let old_owner = Uuid::new_v4();
+        let new_owner = Uuid::new_v4();
+
+        // Subdivide: create a parcel owned by old_owner.
+        let parcel_a = mgr.subdivide(0, 0, 128, 128, old_owner).unwrap();
+        // Create another parcel for new_owner (simulating a "transfer" by
+        // having new_owner claim a different section).
+        let parcel_b = mgr.subdivide(128, 128, 256, 256, new_owner).unwrap();
+
+        // Verify ownership.
+        assert_eq!(mgr.get_parcel(parcel_a).unwrap().data.owner_id, old_owner);
+        assert_eq!(mgr.get_parcel(parcel_b).unwrap().data.owner_id, new_owner);
+
+        let perms = perms_module_no_bypass();
+
+        // Old owner can create on their own parcel.
+        let parcel_a_data = &mgr.get_parcel(parcel_a).unwrap().data;
+        assert!(
+            perms.can_create_object(old_owner, (64.0, 64.0, 0.0), Some(parcel_a_data)),
+            "Owner should be able to create on their parcel"
+        );
+
+        // New owner can create on their own parcel.
+        let parcel_b_data = &mgr.get_parcel(parcel_b).unwrap().data;
+        assert!(
+            perms.can_create_object(new_owner, (192.0, 192.0, 0.0), Some(parcel_b_data)),
+            "New owner should be able to create on their parcel"
+        );
+
+        // Old owner cannot create on new_owner's restricted parcel.
+        let mut restricted = parcel_b_data.clone();
+        restricted.flags = 0;
+        assert!(
+            !perms.can_create_object(old_owner, (192.0, 192.0, 0.0), Some(&restricted)),
+            "Old owner should not create on another's restricted parcel"
+        );
+    }
+
+    // -- 269. Integration: return objects permission with parcel context -----
+
+    #[test]
+    fn integration_return_objects_parcel_context() {
+        let mut perms = perms_module_no_bypass();
+
+        let parcel_owner = Uuid::from_u128(0x5001);
+        let object_owner = Uuid::from_u128(0x5002);
+        let stranger = Uuid::from_u128(0x5003);
+        let estate_mgr = Uuid::from_u128(0x5004);
+
+        let parcel = perm_parcel_with_owner(parcel_owner);
+
+        // Parcel owner can return objects on their parcel.
+        assert!(
+            perms.can_return_object(parcel_owner, object_owner, Uuid::nil(), Some(&parcel)),
+            "Parcel owner should be able to return objects on their land"
+        );
+
+        // Stranger cannot return on someone else's parcel.
+        assert!(
+            !perms.can_return_object(stranger, object_owner, Uuid::nil(), Some(&parcel)),
+            "Stranger should not be able to return objects on another's parcel"
+        );
+
+        // Estate manager can return anywhere.
+        perms.estate_managers.insert(estate_mgr);
+        assert!(
+            perms.can_return_object(estate_mgr, object_owner, Uuid::nil(), Some(&parcel)),
+            "Estate manager should be able to return objects on any parcel"
+        );
+    }
+
+    // -- 270. Integration: module registry full lifecycle round-trip ---------
+
+    #[test]
+    fn integration_module_registry_full_lifecycle() {
+        let mut registry = ModuleRegistry::new();
+
+        // Register 3+ diverse modules.
+        registry.register(CapsModule::new());
+        registry.register(DynAttrsModule::new());
+        registry.register(ServiceThrottleModule::new());
+        registry.register(TrackingModule::new("IntegrationTracker", ModuleType::NonShared));
+
+        assert_eq!(registry.module_count(), 4);
+
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+
+        // initialise_all — no errors.
+        registry.initialise_all(&config).unwrap();
+
+        // add_region_all — no errors.
+        registry.add_region_all(&scene).unwrap();
+
+        // remove_region_all — no errors.
+        registry.remove_region_all(&scene).unwrap();
+
+        // close_all — no errors.
+        registry.close_all().unwrap();
+
+        // All modules still registered (close doesn't remove them).
+        assert_eq!(
+            registry.module_count(),
+            4,
+            "All modules should still be registered after full lifecycle"
+        );
+    }
+
+    // ===================================================================
+    // Protocol replay tests (section 13.3)
+    // ===================================================================
+
+    // -- 271. Protocol: land data roundtrip --------------------------------
+
+    #[test]
+    fn protocol_land_data_roundtrip() {
+        use crate::land::{LandData, ParcelFlags};
+
+        let owner = Uuid::new_v4();
+        let mut ld = LandData::default();
+        ld.local_id = 1;
+        ld.name = "Test Parcel".to_string();
+        ld.owner_id = owner;
+        ld.area = 512;
+        ld.flags = (ParcelFlags::CREATE_OBJECTS | ParcelFlags::ALLOW_FLY).bits();
+
+        // Verify all fields roundtrip.
+        assert_eq!(ld.local_id, 1);
+        assert_eq!(ld.name, "Test Parcel");
+        assert_eq!(ld.owner_id, owner);
+        assert_eq!(ld.area, 512);
+
+        // Verify ParcelFlags bitwise operations match expected.
+        let flags = ParcelFlags::from_bits_truncate(ld.flags);
+        assert!(flags.contains(ParcelFlags::CREATE_OBJECTS));
+        assert!(flags.contains(ParcelFlags::ALLOW_FLY));
+        assert!(!flags.contains(ParcelFlags::FOR_SALE));
+
+        // Verify CREATE_OBJECTS bit value is 1 << 6 = 64.
+        assert_eq!(ParcelFlags::CREATE_OBJECTS.bits(), 64);
+        // Verify ALLOW_FLY bit value is 1 << 0 = 1.
+        assert_eq!(ParcelFlags::ALLOW_FLY.bits(), 1);
+    }
+
+    // -- 272. Protocol: estate settings roundtrip --------------------------
+
+    #[test]
+    fn protocol_estate_settings_roundtrip() {
+        use crate::estate::{EstateSettings, EstateSettingsUpdate};
+
+        let estate_owner = Uuid::new_v4();
+        let mut es = EstateSettings::default();
+        es.estate_id = 100;
+        es.estate_name = "Test Estate".to_string();
+        es.estate_owner = estate_owner;
+        es.sun_position = 6.0;
+
+        // Verify all fields readable.
+        assert_eq!(es.estate_id, 100);
+        assert_eq!(es.estate_name, "Test Estate");
+        assert_eq!(es.estate_owner, estate_owner);
+        assert!((es.sun_position - 6.0).abs() < f64::EPSILON);
+
+        // Verify EstateSettingsUpdate applies changes correctly.
+        let update = EstateSettingsUpdate {
+            estate_name: Some("Updated Estate".to_string()),
+            sun_position: Some(12.0),
+            ..Default::default()
+        };
+        es.apply_update(&update);
+        assert_eq!(es.estate_name, "Updated Estate");
+        assert!((es.sun_position - 12.0).abs() < f64::EPSILON);
+        // Unchanged fields remain.
+        assert_eq!(es.estate_id, 100);
+        assert_eq!(es.estate_owner, estate_owner);
+    }
+
+    // -- 273. Protocol: map block and item types ---------------------------
+
+    #[test]
+    fn protocol_map_block_and_item_types() {
+        use crate::world_map::{MapBlock, MapItemType, SimAccess, WorldMapModule};
+
+        // Create MapBlock with region coordinates and SimAccess level.
+        let block = MapBlock::new(1000, 1000, "TestRegion");
+        assert_eq!(block.x, 1000);
+        assert_eq!(block.y, 1000);
+        assert_eq!(block.name, "TestRegion");
+        assert_eq!(block.access, SimAccess::PG);
+        assert_eq!(block.size_x, 256);
+        assert_eq!(block.size_y, 256);
+
+        // Verify MapItemType variants cover all expected types.
+        assert_eq!(MapItemType::Telehub as u32, 1);
+        assert_eq!(MapItemType::PGEvent as u32, 2);
+        assert_eq!(MapItemType::MatureEvent as u32, 3);
+        assert_eq!(MapItemType::AdultEvent as u32, 4);
+        assert_eq!(MapItemType::PopularEvent as u32, 5);
+        assert_eq!(MapItemType::AgentLocations as u32, 6);
+        assert_eq!(MapItemType::LandForSale as u32, 7);
+        assert_eq!(MapItemType::Classified as u32, 8);
+
+        // Verify from_u32 round-trips.
+        assert_eq!(MapItemType::from_u32(1), Some(MapItemType::Telehub));
+        assert_eq!(MapItemType::from_u32(8), Some(MapItemType::Classified));
+        assert_eq!(MapItemType::from_u32(99), None);
+
+        // Create WorldMapModule, verify map_blocks storage.
+        let mut wm = WorldMapModule::new();
+        assert_eq!(wm.cached_block_count(), 0);
+        wm.cache_block(block);
+        assert_eq!(wm.cached_block_count(), 1);
+    }
+
+    // -- 274. Protocol: chat type ranges -----------------------------------
+
+    #[test]
+    fn protocol_chat_type_ranges() {
+        use crate::chat::{ChatType, DEBUG_CHANNEL, MAX_MESSAGE_LENGTH};
+
+        // ChatType::Say range is 20m, squared = 400.0.
+        assert_eq!(ChatType::Say.range_squared(), Some(400.0));
+        // ChatType::Shout range is 100m, squared = 10000.0.
+        assert_eq!(ChatType::Shout.range_squared(), Some(10000.0));
+        // ChatType::Whisper range is 10m, squared = 100.0.
+        assert_eq!(ChatType::Whisper.range_squared(), Some(100.0));
+
+        // Unlimited-range types return None.
+        assert_eq!(ChatType::Region.range_squared(), None);
+        assert_eq!(ChatType::Owner.range_squared(), None);
+        assert_eq!(ChatType::Direct.range_squared(), None);
+        assert_eq!(ChatType::Broadcast.range_squared(), None);
+        assert_eq!(ChatType::DebugChannel.range_squared(), None);
+
+        // DEBUG_CHANNEL value is i32::MAX = 2147483647.
+        assert_eq!(DEBUG_CHANNEL, 2147483647);
+        assert_eq!(DEBUG_CHANNEL, i32::MAX);
+
+        // MAX_MESSAGE_LENGTH is 1000.
+        assert_eq!(MAX_MESSAGE_LENGTH, 1000);
+    }
+
+    // -- 275. Protocol: IM dialog enum values ------------------------------
+
+    #[test]
+    fn protocol_im_dialog_enum_values() {
+        use crate::messaging::{GridInstantMessage, IMDialog};
+
+        // Verify critical IMDialog discriminant values match the C# protocol.
+        assert_eq!(IMDialog::MessageFromAgent as u8, 0);
+        assert_eq!(IMDialog::MessageFromObject as u8, 19);
+        assert_eq!(IMDialog::StartTyping as u8, 41);
+        assert_eq!(IMDialog::StopTyping as u8, 42);
+        assert_eq!(IMDialog::FriendshipOffered as u8, 38);
+        assert_eq!(IMDialog::FriendshipAccepted as u8, 39);
+        assert_eq!(IMDialog::FriendshipDeclined as u8, 40);
+
+        // Additional critical protocol values.
+        assert_eq!(IMDialog::InventoryOffered as u8, 4);
+        assert_eq!(IMDialog::RequestTeleport as u8, 22);
+        assert_eq!(IMDialog::GroupNotice as u8, 32);
+
+        // Create GridInstantMessage with all fields.
+        let from = Uuid::new_v4();
+        let to = Uuid::new_v4();
+        let session = Uuid::new_v4();
+        let region = Uuid::new_v4();
+        let im = GridInstantMessage {
+            from_agent_id: from,
+            from_agent_name: "Tester".to_string(),
+            to_agent_id: to,
+            message: "Hello".to_string(),
+            im_session_id: session,
+            dialog: IMDialog::MessageFromAgent,
+            from_group: false,
+            offline: 0,
+            parent_estate_id: 1,
+            position: [128.0, 128.0, 25.0],
+            region_id: region,
+            timestamp: 1000,
+            binary_bucket: vec![0u8; 4],
+        };
+        assert_eq!(im.from_agent_id, from);
+        assert_eq!(im.to_agent_id, to);
+        assert_eq!(im.dialog, IMDialog::MessageFromAgent);
+    }
+
+    // -- 276. Protocol: teleport flag values -------------------------------
+
+    #[test]
+    fn protocol_teleport_flag_values() {
+        // TeleportFlags are already imported from the transfer section above.
+        // Verify key flag values match C# constants.
+        assert_eq!(TeleportFlags::VIA_LURE.bits(), 4);
+        assert_eq!(TeleportFlags::VIA_LANDMARK.bits(), 8);
+        assert_eq!(TeleportFlags::VIA_LOCATION.bits(), 16);
+        assert_eq!(TeleportFlags::GOD_LIKE.bits(), 256);
+        assert_eq!(TeleportFlags::IS_FLYING.bits(), 4096);
+
+        // Verify flag combinations with bitwise OR.
+        let combined = TeleportFlags::VIA_LOCATION | TeleportFlags::IS_FLYING;
+        assert!(combined.contains(TeleportFlags::VIA_LOCATION));
+        assert!(combined.contains(TeleportFlags::IS_FLYING));
+        assert!(!combined.contains(TeleportFlags::VIA_LURE));
+        assert_eq!(combined.bits(), 16 | 4096);
+
+        // Verify DEFAULT is zero.
+        assert_eq!(TeleportFlags::DEFAULT.bits(), 0);
+
+        // Verify all flags can be combined.
+        let all = TeleportFlags::VIA_LURE
+            | TeleportFlags::VIA_LANDMARK
+            | TeleportFlags::VIA_LOCATION
+            | TeleportFlags::GOD_LIKE
+            | TeleportFlags::IS_FLYING;
+        assert_eq!(all.bits(), 4 | 8 | 16 | 256 | 4096);
+    }
+
+    // -- 277. Protocol: attachment point enum coverage ---------------------
+
+    #[test]
+    fn protocol_attachment_point_enum_coverage() {
+        use crate::attachments::AttachmentPoint;
+
+        // Verify key attachment points exist and have expected discriminants.
+        assert_eq!(AttachmentPoint::LeftHand as u8, 5);
+        assert_eq!(AttachmentPoint::RightHand as u8, 6);
+        assert_eq!(AttachmentPoint::Chest as u8, 1);
+        assert_eq!(AttachmentPoint::Head as u8, 2);
+        assert_eq!(AttachmentPoint::LeftFoot as u8, 7);
+        assert_eq!(AttachmentPoint::RightFoot as u8, 8);
+        assert_eq!(AttachmentPoint::HudCenter as u8, 35);
+        assert_eq!(AttachmentPoint::HudTopRight as u8, 32);
+        assert_eq!(AttachmentPoint::HudTopLeft as u8, 34);
+        assert_eq!(AttachmentPoint::HudTop as u8, 33);
+        assert_eq!(AttachmentPoint::HudBottomLeft as u8, 36);
+        assert_eq!(AttachmentPoint::HudBottomRight as u8, 38);
+        assert_eq!(AttachmentPoint::HudBottom as u8, 37);
+
+        // Count total variants = 41 (Default=0 through AvatarCenter=40).
+        let all_points: Vec<AttachmentPoint> = vec![
+            AttachmentPoint::Default,
+            AttachmentPoint::Chest,
+            AttachmentPoint::Head,
+            AttachmentPoint::LeftShoulder,
+            AttachmentPoint::RightShoulder,
+            AttachmentPoint::LeftHand,
+            AttachmentPoint::RightHand,
+            AttachmentPoint::LeftFoot,
+            AttachmentPoint::RightFoot,
+            AttachmentPoint::Back,
+            AttachmentPoint::Pelvis,
+            AttachmentPoint::Mouth,
+            AttachmentPoint::Chin,
+            AttachmentPoint::LeftEar,
+            AttachmentPoint::RightEar,
+            AttachmentPoint::LeftEye,
+            AttachmentPoint::RightEye,
+            AttachmentPoint::Nose,
+            AttachmentPoint::RUArm,
+            AttachmentPoint::RLArm,
+            AttachmentPoint::LUArm,
+            AttachmentPoint::LLArm,
+            AttachmentPoint::RHip,
+            AttachmentPoint::RULeg,
+            AttachmentPoint::RLLeg,
+            AttachmentPoint::LHip,
+            AttachmentPoint::LULeg,
+            AttachmentPoint::LLLeg,
+            AttachmentPoint::Stomach,
+            AttachmentPoint::LeftPec,
+            AttachmentPoint::RightPec,
+            AttachmentPoint::HudCenter2,
+            AttachmentPoint::HudTopRight,
+            AttachmentPoint::HudTop,
+            AttachmentPoint::HudTopLeft,
+            AttachmentPoint::HudCenter,
+            AttachmentPoint::HudBottomLeft,
+            AttachmentPoint::HudBottom,
+            AttachmentPoint::HudBottomRight,
+            AttachmentPoint::Neck,
+            AttachmentPoint::AvatarCenter,
+        ];
+        assert_eq!(all_points.len(), 41);
+        // Last variant value is 40.
+        assert_eq!(AttachmentPoint::AvatarCenter as u8, 40);
+    }
+
+    // ===================================================================
+    // Aurora Viewer acceptance tests (section 13.3)
+    // ===================================================================
+
+    // -- 278. Acceptance: ChatModule lifecycle and on_chat_from_viewer ------
+
+    #[test]
+    fn acceptance_chat_module_lifecycle() {
+        use crate::chat::{ChatMessage, ChatModule, ChatSourceType, ChatType, MAX_MESSAGE_LENGTH};
+
+        let mut module = ChatModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+
+        // Initialise and add_region.
+        module.initialise(&config).unwrap();
+        module.add_region(&scene).unwrap();
+
+        // Subscribe a receiver so broadcast::send() succeeds.
+        let _rx = scene.events.on_chat_message.subscribe();
+
+        // Simulate on_chat_from_viewer with Say type.
+        let sender = Uuid::new_v4();
+        let mut msg = ChatMessage {
+            sender_id: sender,
+            sender_name: "Test User".to_string(),
+            message: "Hello region".to_string(),
+            chat_type: ChatType::Say,
+            source_type: ChatSourceType::Agent,
+            position: [128.0, 128.0, 25.0],
+            channel: 0,
+        };
+        // Module processes without error and broadcasts event.
+        let delivered = module.on_chat_from_viewer(&mut msg);
+        assert!(delivered);
+        assert_eq!(msg.chat_type, ChatType::Say);
+
+        // Test with empty message.
+        let mut empty_msg = ChatMessage {
+            sender_id: sender,
+            sender_name: "Test User".to_string(),
+            message: String::new(),
+            chat_type: ChatType::Say,
+            source_type: ChatSourceType::Agent,
+            position: [128.0, 128.0, 25.0],
+            channel: 0,
+        };
+        let delivered_empty = module.on_chat_from_viewer(&mut empty_msg);
+        assert!(delivered_empty);
+        assert!(empty_msg.message.is_empty());
+
+        // Test with MAX_MESSAGE_LENGTH boundary.
+        let long_msg_str: String = "a".repeat(MAX_MESSAGE_LENGTH + 100);
+        let mut long_msg = ChatMessage {
+            sender_id: sender,
+            sender_name: "Test User".to_string(),
+            message: long_msg_str,
+            chat_type: ChatType::Say,
+            source_type: ChatSourceType::Agent,
+            position: [128.0, 128.0, 25.0],
+            channel: 0,
+        };
+        let delivered_long = module.on_chat_from_viewer(&mut long_msg);
+        assert!(delivered_long);
+        assert!(long_msg.message.len() <= MAX_MESSAGE_LENGTH);
+
+        module.remove_region(&scene).unwrap();
+        module.close().unwrap();
+    }
+
+    // -- 279. Acceptance: IM send online vs offline -------------------------
+
+    #[test]
+    fn acceptance_im_online_vs_offline() {
+        use crate::messaging::{
+            GridInstantMessage, IMDialog, MessageTransferModule, OfflineMessageModule,
+        };
+
+        let mut msg_module = MessageTransferModule::new();
+        let mut offline_module = OfflineMessageModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+
+        msg_module.initialise(&config).unwrap();
+        msg_module.add_region(&scene).unwrap();
+        offline_module.initialise(&config).unwrap();
+        offline_module.add_region(&scene).unwrap();
+
+        let sender = Uuid::new_v4();
+        let recipient = Uuid::new_v4();
+
+        let im = GridInstantMessage {
+            from_agent_id: sender,
+            from_agent_name: "Sender".to_string(),
+            to_agent_id: recipient,
+            message: "Are you there?".to_string(),
+            im_session_id: Uuid::new_v4(),
+            dialog: IMDialog::MessageFromAgent,
+            from_group: false,
+            offline: 0,
+            parent_estate_id: 1,
+            position: [128.0, 128.0, 25.0],
+            region_id: scene.region_id,
+            timestamp: 12345,
+            binary_bucket: Vec::new(),
+        };
+
+        // Online delivery succeeds (stub always returns true for non-nil).
+        assert!(msg_module.send_instant_message(&im));
+
+        // Offline storage: store and verify pending count.
+        assert_eq!(offline_module.pending_count(recipient), 0);
+        offline_module.store_message(im.clone());
+        assert_eq!(offline_module.pending_count(recipient), 1);
+        assert_eq!(offline_module.total_pending(), 1);
+
+        // Retrieve drains the queue.
+        let retrieved = offline_module.retrieve_messages(recipient);
+        assert_eq!(retrieved.len(), 1);
+        assert_eq!(retrieved[0].from_agent_id, sender);
+        assert_eq!(offline_module.pending_count(recipient), 0);
+
+        msg_module.remove_region(&scene).unwrap();
+        msg_module.close().unwrap();
+        offline_module.remove_region(&scene).unwrap();
+        offline_module.close().unwrap();
+    }
+
+    // -- 280. Acceptance: teleport state machine happy path -----------------
+
+    #[test]
+    fn acceptance_teleport_state_machine_happy_path() {
+        let mut module = TransferMod::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        module.initialise(&config).unwrap();
+        module.add_region(&scene).unwrap();
+
+        let agent = Uuid::new_v4();
+        let dest = GridRegion::new(Uuid::new_v4(), "DestRegion");
+        let flags = TeleportFlags::VIA_LOCATION;
+
+        // do_teleport drives through: Preparing -> Transferring ->
+        // ReceivedAtDestination -> CleaningUp, then resets.
+        let result = module.do_teleport(
+            agent,
+            &dest,
+            [128.0, 128.0, 25.0],
+            [0.0, 1.0, 0.0],
+            flags,
+        );
+        assert!(result.is_ok());
+        // Agent is no longer in transit after completion.
+        assert!(!module.state_machine().is_in_transit(agent));
+
+        // Verify state machine transitions work step by step.
+        let sm = module.state_machine_mut();
+        let agent2 = Uuid::new_v4();
+        assert!(sm.set_in_transit(agent2));
+        assert_eq!(
+            sm.get_agent_transfer_state(agent2),
+            Some(AgentTransferState::Preparing)
+        );
+        assert!(sm.update_in_transit(agent2, AgentTransferState::Transferring));
+        assert_eq!(
+            sm.get_agent_transfer_state(agent2),
+            Some(AgentTransferState::Transferring)
+        );
+        assert!(sm.update_in_transit(agent2, AgentTransferState::ReceivedAtDestination));
+        assert_eq!(
+            sm.get_agent_transfer_state(agent2),
+            Some(AgentTransferState::ReceivedAtDestination)
+        );
+        assert!(sm.update_in_transit(agent2, AgentTransferState::CleaningUp));
+        assert_eq!(
+            sm.get_agent_transfer_state(agent2),
+            Some(AgentTransferState::CleaningUp)
+        );
+        // CleaningUp is terminal.
+        assert!(AgentTransferState::CleaningUp.is_terminal());
+
+        module.remove_region(&scene).unwrap();
+        module.close().unwrap();
+    }
+
+    // -- 281. Acceptance: attachments wear/detach lifecycle -----------------
+
+    #[test]
+    fn acceptance_attachments_lifecycle() {
+        use crate::attachments::{AttachmentPoint, AttachmentsModule};
+
+        let mut module = AttachmentsModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        module.initialise(&config).unwrap();
+        module.add_region(&scene).unwrap();
+
+        let agent = Uuid::new_v4();
+        let item = Uuid::new_v4();
+
+        // Attach item at LeftHand, verify attached.
+        let obj_id = module.wear(agent, item, AttachmentPoint::LeftHand).unwrap();
+        assert!(!obj_id.is_nil());
+        let attachments = module.get_attachments(agent);
+        assert_eq!(attachments.len(), 1);
+        assert_eq!(attachments[0].item_id, item);
+        assert_eq!(attachments[0].point, AttachmentPoint::LeftHand);
+        assert_eq!(attachments[0].owner_id, agent);
+
+        // Detach, verify empty.
+        module.detach(agent, item).unwrap();
+        let attachments_after = module.get_attachments(agent);
+        assert!(attachments_after.is_empty());
+
+        // Test invalid detach (item not found).
+        let bad_item = Uuid::new_v4();
+        let result = module.detach(agent, bad_item);
+        assert!(result.is_err());
+
+        // Test detach_all.
+        let item2 = Uuid::new_v4();
+        let item3 = Uuid::new_v4();
+        module.wear(agent, item2, AttachmentPoint::RightHand).unwrap();
+        module.wear(agent, item3, AttachmentPoint::Head).unwrap();
+        assert_eq!(module.get_attachments(agent).len(), 2);
+        module.detach_all(agent);
+        assert!(module.get_attachments(agent).is_empty());
+
+        module.remove_region(&scene).unwrap();
+        module.close().unwrap();
+    }
+
+    // -- 282. Acceptance: land panel management ----------------------------
+
+    #[test]
+    fn acceptance_land_panel_management() {
+        use crate::land::{LandData, LandManagementModule, ParcelFlags};
+
+        let mut module = LandManagementModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        module.initialise(&config).unwrap();
+        module.add_region(&scene).unwrap();
+        // add_region creates a default full-region parcel (local_id=1).
+        assert_eq!(module.parcel_count(), 1);
+
+        // Create a new parcel with known properties.
+        let owner = Uuid::new_v4();
+        let mut data = LandData::default();
+        data.owner_id = owner;
+        data.name = "Custom Parcel".to_string();
+        data.area = 1024;
+        data.flags = ParcelFlags::CREATE_OBJECTS.bits();
+
+        let local_id = module.add_parcel(data);
+        assert!(local_id > 0);
+        assert_eq!(module.parcel_count(), 2);
+
+        // Verify properties match.
+        let parcel = module.get_parcel(local_id).unwrap();
+        assert_eq!(parcel.data.name, "Custom Parcel");
+        assert_eq!(parcel.data.owner_id, owner);
+
+        // Test parcel grid (4x4m cells) allocation and lookup.
+        let grid = module.grid();
+        assert_eq!(grid.region_size(), 256);
+        assert_eq!(grid.grid_size(), 64); // 256 / 4 = 64 cells per axis
+
+        // The default parcel (id=1) should fill the grid initially.
+        // After adding the new parcel, the default parcel still occupies most cells.
+        // Cell at (0,0) should belong to the default parcel (id=1).
+        let default_id = grid.get_parcel_id(0, 0);
+        assert_eq!(default_id, 1);
+
+        module.remove_region(&scene).unwrap();
+        module.close().unwrap();
+    }
+
+    // -- 283. Acceptance: estate management lifecycle -----------------------
+
+    #[test]
+    fn acceptance_estate_management_lifecycle() {
+        use crate::estate::{EstateManagementModule, EstateSettingsUpdate};
+
+        let mut module = EstateManagementModule::new();
+        let config = TestConfig::new();
+        let scene = test_scene_ref();
+        module.initialise(&config).unwrap();
+        module.add_region(&scene).unwrap();
+
+        // Set estate settings, verify readable.
+        let owner = Uuid::new_v4();
+        module.settings.estate_id = 42;
+        module.settings.estate_name = "Test Estate".to_string();
+        module.settings.estate_owner = owner;
+        assert_eq!(module.settings.estate_id, 42);
+        assert_eq!(module.settings.estate_name, "Test Estate");
+        assert_eq!(module.settings.estate_owner, owner);
+
+        // Verify sun position get/set.
+        module.set_sun_position(18.0);
+        assert!((module.get_sun_position() - 18.0).abs() < f64::EPSILON);
+
+        // Apply update via update_settings.
+        let update = EstateSettingsUpdate {
+            estate_name: Some("Renamed Estate".to_string()),
+            allow_voice: Some(false),
+            ..Default::default()
+        };
+        module.update_settings(update);
+        assert_eq!(module.settings.estate_name, "Renamed Estate");
+        assert!(!module.settings.allow_voice);
+
+        // Add/remove estate manager, verify list.
+        let manager = Uuid::new_v4();
+        module.settings.estate_managers.insert(manager);
+        assert!(module.is_estate_manager(manager));
+        assert!(module.has_access(manager));
+        assert!(!module.is_banned(manager));
+
+        // Owner is also an estate manager.
+        assert!(module.is_estate_manager(owner));
+
+        // Remove manager.
+        module.settings.estate_managers.remove(&manager);
+        assert!(!module.is_estate_manager(manager));
+        // Manager still has access since estate is open (no user/group restrictions).
+        assert!(module.has_access(manager));
+
+        // Add to ban list.
+        module.settings.estate_banned.insert(manager);
+        assert!(module.is_banned(manager));
+        assert!(!module.has_access(manager));
+
+        module.remove_region(&scene).unwrap();
+        module.close().unwrap();
+    }
+
 }
