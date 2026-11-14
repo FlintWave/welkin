@@ -282,4 +282,39 @@ impl EstateStore {
             .await?;
         Ok(res.rows_affected() > 0)
     }
+
+    pub async fn get_all_estates(&self) -> Result<Vec<EstateSettingsRow>, DataError> {
+        let sql = format!("SELECT {ESTATE_COLS} FROM estate_settings");
+        let rows = sqlx::query_as::<_, EstateSettingsRow>(&sql)
+            .fetch_all(&self.pool)
+            .await?;
+        Ok(rows)
+    }
+
+    pub async fn get_estate_ids_by_name(&self, name: &str) -> Result<Vec<i32>, DataError> {
+        let rows: Vec<(i32,)> =
+            sqlx::query_as("SELECT EstateID FROM estate_settings WHERE EstateName = $1")
+                .bind(name.to_string())
+                .fetch_all(&self.pool)
+                .await?;
+        Ok(rows.into_iter().map(|r| r.0).collect())
+    }
+
+    pub async fn get_estate_ids_by_owner(&self, owner: &str) -> Result<Vec<i32>, DataError> {
+        let rows: Vec<(i32,)> =
+            sqlx::query_as("SELECT EstateID FROM estate_settings WHERE EstateOwner = $1")
+                .bind(owner.to_string())
+                .fetch_all(&self.pool)
+                .await?;
+        Ok(rows.into_iter().map(|r| r.0).collect())
+    }
+
+    pub async fn get_regions_for_estate(&self, estate_id: i32) -> Result<Vec<String>, DataError> {
+        let rows: Vec<(String,)> =
+            sqlx::query_as("SELECT RegionID FROM estate_map WHERE EstateID = $1")
+                .bind(estate_id)
+                .fetch_all(&self.pool)
+                .await?;
+        Ok(rows.into_iter().map(|r| r.0).collect())
+    }
 }

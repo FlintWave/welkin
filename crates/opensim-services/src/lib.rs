@@ -11,3 +11,7 @@ pub mod friends;
 pub mod avatar;
 pub mod mute;
 pub mod profiles;
+pub mod agentprefs;
+pub mod map;
+pub mod estate;
+pub mod simulation;
