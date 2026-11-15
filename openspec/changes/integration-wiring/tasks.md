@@ -11,14 +11,14 @@
 ## Phase 2: Script lifecycle
 
 - [x] Verify UpdateScriptAgent cap triggers LSL compilation via welkin-script-compiler and returns success/error LLSD
-- [ ] Wire RezScript: when a prim with a script in task inventory is rezzed, start the script's state_entry
+- [x] Wire RezScript: when a prim with a script in task inventory is rezzed, start the script's state_entry
 - [x] Wire ScriptContext channels: llSay/llShout/llWhisper output reaches ChatModule; llListen receives matching chat
 - [x] Wire timer events: llSetTimerEvent schedules repeating timer callbacks to the script VM
 - [x] Wire sensor events: llSensor/llSensorRepeat trigger sensor_event with detected objects/agents
 - [x] Wire touch events: viewer touch packets (ObjectGrab, ObjectGrabUpdate, ObjectDeGrab) trigger touch_start/touch/touch_end in scripts
 - [x] Wire task inventory access: llGetInventoryName, llGetInventoryNumber, llGetInventoryType read from the prim's inventory
-- [ ] Wire prim rez triggers script start: when a prim is created via llRezObject or viewer, scripts in its inventory auto-start
-- [ ] Wire script state persistence: save script state (globals, running/stopped) to DB on region shutdown; restore on restart
+- [x] Wire prim rez triggers script start: when a prim is created via llRezObject or viewer, scripts in its inventory auto-start
+- [x] Wire script state persistence: save script state (globals, running/stopped) to DB on region shutdown; restore on restart
 - [x] Wire control event forwarding: scripts that called llTakeControls receive control() events from AGENT_CONTROL flags
 - [ ] Integration test: upload a script via viewer, verify it runs, says to chat, responds to touch, persists across region restart
 
