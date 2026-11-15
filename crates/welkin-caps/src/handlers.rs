@@ -63,6 +63,19 @@ pub struct InventoryProxyState {
     pub inventory_url: String,
 }
 
+/// A compiled script ready to be loaded into the VM scheduler.
+#[derive(Debug, Clone)]
+pub struct ScriptLoadRequest {
+    pub script_id: uuid::Uuid,
+    pub prim_id: uuid::Uuid,
+    pub luau_source: String,
+}
+
+#[derive(Clone)]
+pub struct ScriptLoadState {
+    pub sender: std::sync::mpsc::Sender<ScriptLoadRequest>,
+}
+
 pub type PendingBakeUploads = Arc<RwLock<HashMap<String, ()>>>;
 
 #[derive(Clone)]
@@ -226,18 +239,14 @@ pub async fn update_notecard_agent_inventory(body: Bytes) -> Response {
     llsd_response(Llsd::Map(map))
 }
 
-pub async fn update_script_agent(body: Bytes) -> Response {
+pub async fn update_script_agent(
+    State(script_load): State<ScriptLoadState>,
+    body: Bytes,
+) -> Response {
     log_upload_body("UpdateScriptAgent", &body);
 
-    // The viewer first POSTs LLSD metadata, then the raw script source in a
-    // second request to the uploader URL.  The current single-endpoint stub
-    // receives the LLSD metadata.  If the body is valid LLSD, treat it as the
-    // metadata step and return an uploader (ourselves for now).  If it looks
-    // like raw text, attempt LSL compilation.
     let is_llsd = from_xml(&body).is_ok();
     if is_llsd {
-        // Metadata step — return "complete" with a new asset id.
-        // Full uploader URL routing is deferred; the viewer retries here.
         let new_asset = Uuid::new_v4().to_string();
         let mut map = Map::new();
         map.insert("state".into(), Llsd::String("complete".into()));
@@ -245,16 +254,21 @@ pub async fn update_script_agent(body: Bytes) -> Response {
         return llsd_response(Llsd::Map(map));
     }
 
-    // Raw source upload — compile LSL → Luau
     let source = String::from_utf8_lossy(&body);
     match welkin_script_compiler::compile_lsl(&source) {
         Ok(luau) => {
-            let new_asset = Uuid::new_v4().to_string();
+            let script_id = Uuid::new_v4();
+            let new_asset = script_id.to_string();
             tracing::info!(
                 asset = %new_asset,
                 luau_len = luau.len(),
-                "UpdateScriptAgent: compiled successfully"
+                "UpdateScriptAgent: compiled successfully, loading into VM"
             );
+            let _ = script_load.sender.send(ScriptLoadRequest {
+                script_id,
+                prim_id: Uuid::nil(),
+                luau_source: luau,
+            });
             let mut map = Map::new();
             map.insert("state".into(), Llsd::String("complete".into()));
             map.insert("new_asset".into(), Llsd::String(new_asset));
@@ -1154,6 +1168,7 @@ pub fn cap_routes(
     asset_state: AssetServiceState,
     inv_state: InventoryProxyState,
     bake_state: BakeUploadState,
+    script_load_state: ScriptLoadState,
 ) -> Vec<(&'static str, MethodRouter)> {
     vec![
         (
@@ -1175,7 +1190,7 @@ pub fn cap_routes(
             "UpdateNotecardAgentInventory",
             post(update_notecard_agent_inventory),
         ),
-        ("UpdateScriptAgent", post(update_script_agent)),
+        ("UpdateScriptAgent", post(update_script_agent).with_state(script_load_state.clone())),
         (
             "FetchInventoryDescendents2",
             post(fetch_inventory_descendents2).with_state(inv_state.clone()),
@@ -1276,10 +1291,15 @@ mod tests {
         }
     }
 
+    fn test_script_load_state() -> ScriptLoadState {
+        let (tx, _rx) = std::sync::mpsc::channel();
+        ScriptLoadState { sender: tx }
+    }
+
     fn test_router() -> Router {
         let mut router = Router::new();
         for (name, method_router) in
-            cap_routes(test_asset_state(), test_inv_state(), test_bake_state())
+            cap_routes(test_asset_state(), test_inv_state(), test_bake_state(), test_script_load_state())
         {
             router = router.route(&format!("/{name}"), method_router);
         }
@@ -1362,7 +1382,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cap_routes_count() {
-        let routes = cap_routes(test_asset_state(), test_inv_state(), test_bake_state());
+        let routes = cap_routes(test_asset_state(), test_inv_state(), test_bake_state(), test_script_load_state());
         assert_eq!(routes.len(), 42);
     }
 

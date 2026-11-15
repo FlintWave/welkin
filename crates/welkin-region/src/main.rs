@@ -447,9 +447,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         pending: std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
     };
 
+    // --- Script load channel: cap handler → scheduler ---
+    let (script_load_tx, script_load_rx) =
+        std::sync::mpsc::channel::<welkin_caps::handlers::ScriptLoadRequest>();
+    let script_load_state = welkin_caps::handlers::ScriptLoadState {
+        sender: script_load_tx,
+    };
+
     let mut caps_router = cap_server.into_router();
     for (name, method_router) in
-        welkin_caps::handlers::cap_routes(asset_state, inv_state, bake_state.clone())
+        welkin_caps::handlers::cap_routes(asset_state, inv_state, bake_state.clone(), script_load_state)
     {
         caps_router = caps_router.route(&format!("/{name}"), method_router);
     }
@@ -605,6 +612,34 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         // Drain any link_message events from builtins
                         while let Ok((target_prim, event)) = link_msg_rx.try_recv() {
                             heartbeat_scheduler.lock().post_event_to_prim(target_prim, event);
+                        }
+
+                        // Drain script load requests from cap handler
+                        while let Ok(load_req) = script_load_rx.try_recv() {
+                            match welkin_script_vm::ScriptInstance::new(
+                                load_req.script_id,
+                                load_req.prim_id,
+                                &load_req.luau_source,
+                                10_000,
+                            ) {
+                                Ok(instance) => {
+                                    let mut sched = heartbeat_scheduler.lock();
+                                    sched.add_script(instance);
+                                    sched.post_event(load_req.script_id, ScriptEvent::StateEntry);
+                                    tracing::info!(
+                                        script = %load_req.script_id,
+                                        prim = %load_req.prim_id,
+                                        "script loaded into VM, state_entry queued"
+                                    );
+                                }
+                                Err(e) => {
+                                    tracing::warn!(
+                                        script = %load_req.script_id,
+                                        error = %e,
+                                        "failed to compile script bytecode"
+                                    );
+                                }
+                            }
                         }
 
                         // Drain timer commands from scripts

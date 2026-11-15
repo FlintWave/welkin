@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use welkin_caps::handlers::{
-    AssetServiceState, BakeUploadState, InventoryProxyState, cap_routes,
+    AssetServiceState, BakeUploadState, InventoryProxyState, ScriptLoadState, cap_routes,
 };
 use welkin_caps::server::CapabilityServer;
 use welkin_msg::{Msg, build_packet};
@@ -114,7 +114,9 @@ async fn caps_http_simulator_features() {
     let cap_server = CapabilityServer::new();
     let mut router: Router = cap_server.into_router();
     let (a, i, b) = test_cap_state();
-    for (name, method_router) in cap_routes(a, i, b) {
+    let (sl_tx, _sl_rx) = std::sync::mpsc::channel();
+    let sl = ScriptLoadState { sender: sl_tx };
+    for (name, method_router) in cap_routes(a, i, b, sl) {
         router = router.route(&format!("/{name}"), method_router);
     }
 
@@ -227,7 +229,9 @@ async fn shutdown_coordination() {
     let cap_server = CapabilityServer::new();
     let mut caps_router: Router = cap_server.into_router();
     let (a, i, b) = test_cap_state();
-    for (name, method_router) in cap_routes(a, i, b) {
+    let (sl_tx, _sl_rx) = std::sync::mpsc::channel();
+    let sl = ScriptLoadState { sender: sl_tx };
+    for (name, method_router) in cap_routes(a, i, b, sl) {
         caps_router = caps_router.route(&format!("/{name}"), method_router);
     }
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
