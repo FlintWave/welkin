@@ -818,6 +818,47 @@ pub fn bake_upload_route(bake_state: BakeUploadState) -> axum::Router {
     )
 }
 
+pub async fn viewer_stats(_body: Bytes) -> Response {
+    llsd_response(Llsd::Map(Map::new()))
+}
+
+pub async fn update_agent_language(_body: Bytes) -> Response {
+    llsd_response(Llsd::Map(Map::new()))
+}
+
+pub async fn update_agent_information(_body: Bytes) -> Response {
+    llsd_response(Llsd::Map(Map::new()))
+}
+
+pub async fn get_object_cost(_body: Bytes) -> Response {
+    llsd_response(Llsd::Map(Map::new()))
+}
+
+pub async fn get_object_physics_data(_body: Bytes) -> Response {
+    llsd_response(Llsd::Map(Map::new()))
+}
+
+pub async fn object_media(_body: Bytes) -> Response {
+    llsd_response(Llsd::Map(Map::new()))
+}
+
+pub async fn object_media_navigate(_body: Bytes) -> Response {
+    llsd_response(Llsd::Map(Map::new()))
+}
+
+pub async fn parcel_voice_info() -> Response {
+    let mut map = Map::new();
+    map.insert("voice_credentials".into(), Llsd::Map(Map::new()));
+    llsd_response(Llsd::Map(map))
+}
+
+pub async fn provision_voice_account() -> Response {
+    let mut map = Map::new();
+    map.insert("username".into(), Llsd::String(String::new()));
+    map.insert("password".into(), Llsd::String(String::new()));
+    llsd_response(Llsd::Map(map))
+}
+
 pub fn cap_routes(
     asset_state: AssetServiceState,
     inv_state: InventoryProxyState,
@@ -862,6 +903,21 @@ pub fn cap_routes(
         (
             "UploadBakedTexture",
             post(upload_baked_texture).with_state(bake_state),
+        ),
+        ("ViewerStats", post(viewer_stats)),
+        ("UpdateAgentLanguage", post(update_agent_language)),
+        ("UpdateAgentInformation", post(update_agent_information)),
+        ("GetObjectCost", post(get_object_cost)),
+        ("GetObjectPhysicsData", post(get_object_physics_data)),
+        ("ObjectMedia", get(object_media).post(object_media)),
+        ("ObjectMediaNavigate", post(object_media_navigate)),
+        (
+            "ParcelVoiceInfoRequest",
+            get(parcel_voice_info).post(parcel_voice_info),
+        ),
+        (
+            "ProvisionVoiceAccountRequest",
+            get(provision_voice_account).post(provision_voice_account),
         ),
     ]
 }
@@ -983,7 +1039,7 @@ mod tests {
     #[tokio::test]
     async fn test_cap_routes_count() {
         let routes = cap_routes(test_asset_state(), test_inv_state(), test_bake_state());
-        assert_eq!(routes.len(), 18);
+        assert_eq!(routes.len(), 27);
     }
 
     #[tokio::test]

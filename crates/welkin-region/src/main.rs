@@ -3,7 +3,7 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use clap::Parser;
@@ -567,6 +567,8 @@ async fn process_messages(
     cancel: CancellationToken,
 ) {
     let mut last_agent_update: HashMap<Uuid, Instant> = HashMap::new();
+    let mut last_anim: HashMap<Uuid, &'static str> = HashMap::new();
+    let mut always_run: HashSet<Uuid> = HashSet::new();
     loop {
         let (src, pkt) = tokio::select! {
             _ = cancel.cancelled() => break,
@@ -636,6 +638,105 @@ async fn process_messages(
                 &caps_base,
             )
             .await;
+
+            // --- Issue 2A: Announce new avatar to all OTHER connected clients ---
+            if let Some(new_presence) = scene.get_presence(&agent_id) {
+                let new_avatar_obj = FullObjectUpdate {
+                    local_id: new_presence.local_id,
+                    full_id: new_presence.uuid,
+                    parent_id: 0,
+                    pcode: 47,
+                    state: 0,
+                    crc: 0,
+                    material: 0,
+                    click_action: 0,
+                    scale: glam::Vec3::new(0.45, 0.6, 1.75),
+                    position: new_presence.position,
+                    velocity: glam::Vec3::ZERO,
+                    acceleration: glam::Vec3::ZERO,
+                    rotation: new_presence.rotation,
+                    angular_velocity: glam::Vec3::ZERO,
+                    update_flags: 0x2000_0001,
+                    owner_id: new_presence.uuid,
+                    path_curve: 0,
+                    profile_curve: 0,
+                    path_begin: 0,
+                    path_end: 0,
+                    path_scale_x: 0,
+                    path_scale_y: 0,
+                    path_shear_x: 0,
+                    path_shear_y: 0,
+                    path_twist: 0,
+                    path_twist_begin: 0,
+                    path_radius_offset: 0,
+                    path_taper_x: 0,
+                    path_taper_y: 0,
+                    path_revolutions: 0,
+                    path_skew: 0,
+                    profile_begin: 0,
+                    profile_end: 0,
+                    profile_hollow: 0,
+                    texture_entry: build_default_avatar_te(),
+                    texture_anim: Vec::new(),
+                    name_value: format!(
+                        "FirstName STRING RW SV {}\nLastName STRING RW SV {}\n",
+                        new_presence.first_name, new_presence.last_name
+                    )
+                    .into_bytes(),
+                    data: Vec::new(),
+                    text: String::new(),
+                    text_color: [0, 0, 0, 0],
+                    media_url: String::new(),
+                    ps_block: Vec::new(),
+                    extra_params: Vec::new(),
+                    sound_id: Uuid::nil(),
+                    sound_gain: 0.0,
+                    sound_flags: 0,
+                    sound_radius: 0.0,
+                    foot_plane: Some(glam::Vec4::new(0.0, 0.0, 1.0, 0.0)),
+                };
+                let obj_msg = ObjectUpdate {
+                    region_data: object_update::RegionData {
+                        region_handle: scene.region_info.region_handle,
+                        time_dilation: 65535,
+                    },
+                    object_data: vec![new_avatar_obj.to_object_data()],
+                };
+                let visual_params: Vec<avatar_appearance::VisualParam> = (0..253)
+                    .map(|_| avatar_appearance::VisualParam { param_value: 128 })
+                    .collect();
+                let appearance_msg = AvatarAppearance {
+                    sender: avatar_appearance::Sender {
+                        id: new_presence.uuid,
+                        is_trial: false,
+                    },
+                    object_data: avatar_appearance::ObjectData {
+                        texture_entry: build_default_avatar_te(),
+                    },
+                    visual_param: visual_params,
+                    appearance_data: vec![avatar_appearance::AppearanceData {
+                        appearance_version: 0,
+                        cof_version: 0,
+                        flags: 0,
+                    }],
+                    appearance_hover: Vec::new(),
+                    attachment_block: Vec::new(),
+                };
+                {
+                    let all_clients = clients.read().await;
+                    for (addr, c) in all_clients.iter() {
+                        if *addr == src {
+                            continue;
+                        }
+                        let mut sess = c.lock().await;
+                        let (pkt_bytes, _) = sess.circuit.send_msg(&obj_msg, true);
+                        let _ = socket.send_to(&pkt_bytes, *addr).await;
+                        let (pkt_bytes, _) = sess.circuit.send_msg(&appearance_msg, true);
+                        let _ = socket.send_to(&pkt_bytes, *addr).await;
+                    }
+                }
+                info!(agent = %agent_id, "announced new avatar to other clients");
+            }
         }
 
         if msg_id == StartPingCheck::ID
@@ -766,7 +867,7 @@ async fn process_messages(
             // Speed constants matching OpenSim: walk 2.4576, run 4.096, fly 16.384
             let base_speed = if flying {
                 if fast { 16.384f32 } else { 9.8304f32 }
-            } else if fast {
+            } else if fast || always_run.contains(&update.agent_data.agent_id) {
                 4.096f32
             } else {
                 2.4576f32
@@ -818,7 +919,7 @@ async fn process_messages(
 
             scene.update_presence_position(&update.agent_data.agent_id, new_pos, rot);
 
-            if let Some(client) = &client {
+            if let Some(_client) = &client {
                 let terse_data = encode_terse(
                     avatar_local_id,
                     0,
@@ -840,9 +941,74 @@ async fn process_messages(
                         texture_entry: Vec::new(),
                     }],
                 };
-                let mut session = client.lock().await;
-                let (pkt_bytes, _) = session.circuit.send_msg(&terse_msg, false);
-                let _ = socket.send_to(&pkt_bytes, src).await;
+                // Broadcast terse update to ALL connected clients (not just the mover)
+                {
+                    let all_clients = clients.read().await;
+                    for (addr, c) in all_clients.iter() {
+                        let mut sess = c.lock().await;
+                        let (pkt_bytes, _) = sess.circuit.send_msg(&terse_msg, false);
+                        let _ = socket.send_to(&pkt_bytes, *addr).await;
+                    }
+                }
+            }
+
+            // --- Animation state machine ---
+            // Determine desired animation from control flags
+            let desired_anim = if flying {
+                if flags & 0x0001 != 0 || flags & 0x0002 != 0 || flags & 0x0004 != 0 || flags & 0x0008 != 0 {
+                    "aec4610c-757f-bc4e-c092-c6e9caf18daf" // FLY
+                } else if flags & 0x0010 != 0 {
+                    "62c5de58-cb33-5743-3d07-9e4cd4352864" // HOVER_UP
+                } else if flags & 0x0020 != 0 {
+                    "20f063ea-8306-2562-0b07-5c23464bcec5" // HOVER_DOWN
+                } else {
+                    "4ae8016b-31b9-03bb-c401-b1ea941db41d" // HOVER
+                }
+            } else if flags & 0x0001 != 0 || flags & 0x0002 != 0 || flags & 0x0004 != 0 || flags & 0x0008 != 0 {
+                if fast || always_run.contains(&update.agent_data.agent_id) {
+                    "05ddbff8-aaa9-92a1-2b74-8fe77a29b445" // RUN
+                } else {
+                    "6ed24bd8-91aa-4b12-ccc7-c97c857ab4e0" // WALK
+                }
+            } else if flags & 0x0100 != 0 { // AGENT_CONTROL_TURN_LEFT
+                "56e0ba0d-4a9f-7f27-6117-32f2ebbf6135" // TURNLEFT
+            } else if flags & 0x0200 != 0 { // AGENT_CONTROL_TURN_RIGHT
+                "2d6daa51-3192-6794-8e2e-a15f8338ec30" // TURNRIGHT
+            } else {
+                "2408fe9e-df1d-1d7d-f4ff-1384fa7b350f" // STAND
+            };
+
+            let prev_anim = last_anim.get(&update.agent_data.agent_id).copied();
+            if prev_anim != Some(desired_anim) {
+                last_anim.insert(update.agent_data.agent_id, desired_anim);
+                let anim_msg = AvatarAnimation {
+                    sender: avatar_animation::Sender {
+                        id: update.agent_data.agent_id,
+                    },
+                    animation_list: vec![avatar_animation::AnimationList {
+                        anim_id: Uuid::parse_str(desired_anim).unwrap(),
+                        anim_sequence_id: 1,
+                    }],
+                    animation_source_list: Vec::new(),
+                    physical_avatar_event_list: Vec::new(),
+                };
+                // Broadcast animation to ALL clients
+                let all_clients = clients.read().await;
+                for (addr, c) in all_clients.iter() {
+                    let mut sess = c.lock().await;
+                    let (pkt_bytes, _) = sess.circuit.send_msg(&anim_msg, false);
+                    let _ = socket.send_to(&pkt_bytes, *addr).await;
+                }
+            }
+        }
+
+        if msg_id == SetAlwaysRun::ID
+            && let Ok(msg) = SetAlwaysRun::decode(&pkt.body)
+        {
+            if msg.agent_data.always_run {
+                always_run.insert(msg.agent_data.agent_id);
+            } else {
+                always_run.remove(&msg.agent_data.agent_id);
             }
         }
 
@@ -1476,6 +1642,15 @@ const KNOWN_CAPS: &[&str] = &[
     "HomeLocation",
     "CreateInventoryCategory",
     "UploadBakedTexture",
+    "ViewerStats",
+    "UpdateAgentLanguage",
+    "UpdateAgentInformation",
+    "GetObjectCost",
+    "GetObjectPhysicsData",
+    "ObjectMedia",
+    "ObjectMediaNavigate",
+    "ParcelVoiceInfoRequest",
+    "ProvisionVoiceAccountRequest",
 ];
 
 async fn seed_caps_handler(State(base_url): State<String>, body: Bytes) -> impl IntoResponse {
