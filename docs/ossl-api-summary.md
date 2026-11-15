@@ -55,8 +55,7 @@ The first implementation used `Hmac<Sha256>` in `derive_key_iv()` with a comment
 claiming C# parity. .NET Framework `Rfc2898DeriveBytes` uses HMAC-SHA1, so
 ciphertext from either implementation could not be decrypted by the other. The
 fix swaps the PRF to `Hmac<Sha1>` (`sha1` crate added to
-`welkin-script-vm/Cargo.toml`). At the time of this summary the change to
-`crypto.rs` was in the working tree and not yet committed; a C#-generated test
+`welkin-script-vm/Cargo.toml`). Committed as `074b1af`; a C#-generated test
 vector is still needed to prove interoperability.
 
 ## Security review findings
@@ -83,14 +82,18 @@ threat-level gated only.
 
 ## Deferred and stubbed
 
-Stubs log with `tracing::debug!` and return a neutral default (empty string,
-nil UUID, 0, or nothing). Each is filled in by the change that delivers its
-subsystem.
+Functions that lack a backing subsystem log with `tracing::debug!` and return
+a neutral default (empty string, nil UUID, 0, or nothing). About 90 functions
+now have real implementations; the remaining stubs are filled in as each
+subsystem ships.
 
-- NPC (24), parcel/land (12), attachments (11), inventory bridge (17),
-  teleport (7), dynamic textures (7), sound (11), avatar animation (2),
-  environment (4), terrain (5), region restart/notice, kick, groups, console,
-  HTTP URLs, particles.
+Implemented since this change was written:
+- NPC (20 of 24 have real bodies), terrain (19), teleport (2),
+  sim info (16), and the osTeleportAgent/osTeleportOwner pair.
+
+Still stubbed (~17 functions):
+- Parts of agent (3), inventory/sound (9), miscellaneous (3), and
+  stubs.rs (2) where the backing module is not yet wired.
 - `osGetDrawStringSize` needs font metrics; `osGetRegionStats` and
   `osGetMapTexture` need the scene and map modules.
 - Role enforcement at call time (S2), pending a caller context on `ScriptContext`.

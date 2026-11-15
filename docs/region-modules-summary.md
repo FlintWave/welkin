@@ -119,7 +119,8 @@ acceptance tests. The nil-UUID paths flagged in the review have no tests yet.
 
 ## Known gaps
 
-Many modules are skeletons with config reading and data types; viewer protocol
-handlers for land, search and map are stubs; the flotsam disk tier and
-service connectors are stubs; viewer acceptance against a live Aurora Viewer
-has not been exercised on a running grid.
+Most modules now have real implementations, delivered by later changes
+(remaining-parity, viewer-messaging, module-activation). Viewer protocol
+handlers for land and search are still stubs; the flotsam disk tier is a
+stub. Viewer acceptance against a live Aurora Viewer has been exercised
+(login, chat, map, movement, object CRUD all verified).

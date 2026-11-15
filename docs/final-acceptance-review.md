@@ -320,23 +320,22 @@ GPL-3.0-or-later` headers.
 
 ## Open items
 
-These are tracked for post-acceptance work, not blockers:
+These were tracked for post-acceptance work, not blockers. Status updated
+2026-11-15:
 
 1. **Security remediation**: 8 security reviews carry CONDITIONAL PASS with
    specific remediation items. The Hypergrid and Permissions reviews have the
-   highest-priority items.
+   highest-priority items. _Still open._
 
 2. **Login service unit tests**: The login handler (636 lines) has no unit
-   tests. The XMLRPC parsing and response assembly are complex enough to
-   warrant dedicated tests for edge cases.
+   tests. _Still open._
 
-3. **Stub completions**: Several modules (EntityTransferModule,
-   InventoryTransferModule, MessageTransferModule) log their intent but do not
-   perform actual network I/O. These stubs have correct interfaces and state
-   management; the remaining work is runtime integration.
+3. **Stub completions**: EntityTransferModule now has real teleport, region
+   crossing, and HG teleport implementations (remaining-parity Phase 3).
+   InventoryTransferModule and MessageTransferModule still have some stub
+   paths. _Partially addressed._
 
-4. **Disk space**: The build target directory consumes 15 GB. Consider
-   `cargo clean` or sccache for development workflows.
+4. **Disk space**: The build target directory consumes 15 GB. _Still relevant._
 
 ---
 
@@ -358,3 +357,16 @@ as specified.
 
 The open items are quality-of-life improvements suitable for post-acceptance
 iteration, not blockers. The project is ready to mark as done.
+
+---
+
+## Post-acceptance progress (2026-11-15)
+
+Since the acceptance review, six additional changes have delivered 310 more
+tasks (757 total, 643 done / 85%). Test count has grown from 1,844 to 2,209.
+Key additions: LSL compiler (69 tasks, 206 ll* builtins), Firestorm viewer
+compatibility, integration wiring, RealmWalker bot SDK, 20 real NPC function
+implementations, 19 HTTP capability handlers, estate admin, cross-region and
+HG teleport, and extension modules (JsonStore, LightShare, MOD API). See
+[remaining-parity-summary.md](remaining-parity-summary.md) for the current
+feature comparison.

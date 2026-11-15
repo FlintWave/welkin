@@ -4,14 +4,14 @@
 
 Status: accepted (all tracked tasks checked in `openspec/changes/script-engine/tasks.md`).
 Commits `cdb1913` through `b57c2db`. Second review verdict: CONDITIONAL PASS.
-Tests: 172 in `welkin-script-vm`.
+Tests: 601 in `welkin-script-vm`.
 
 ## What was built
 
 Scripts run on Luau through mlua 0.12 (`luau` feature, upstream Luau 740), one
 VM per script. LSL reaches the VM by transpiling to Luau (see go/no-go below).
-All code lives in `crates/welkin-script-vm`; `welkin-script-api` and
-`welkin-script-compiler` are still skeletons.
+All code lives in `crates/welkin-script-vm`; `welkin-script-api` (1,894 lines)
+and `welkin-script-compiler` (5,295 lines) are implemented.
 
 ### Spike (`cdb1913`, `3fb1cbd`, `d413580`)
 
@@ -77,10 +77,11 @@ functions registered.
 
 ## Known gaps
 
-- 206 ll\* functions are registered and functional. Roughly 250 SL-spec ll\*
+- 206 ll\* functions are registered and functional. About 104 SL-spec ll\*
   functions are not yet bound (some permissions, land and sensor operations).
-- 231 os\* functions are registered; some still return stub defaults where the
-  backing service isn't wired.
+- 236 os\* functions are registered; about 17 still return stub defaults where
+  the backing service is not yet wired. 20 NPC and 19 terrain functions have
+  real implementations.
 - The LSL-to-Luau compiler (`welkin-script-compiler`) compiles 68% of
   real-world scripts. 32% fail on unsupported syntax or missing builtins.
 - A coroutine stack cannot be serialised; mid-event state is lost on transfer
