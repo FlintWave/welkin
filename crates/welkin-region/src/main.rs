@@ -21,14 +21,18 @@ use welkin_config::Config;
 use welkin_data::DataPool;
 use welkin_llsd::{Llsd, Map, from_xml, to_xml_string};
 use welkin_modules::{
-    AssetTransactionModule, AttachmentsModule, AvatarFactoryModule, BakedTexturesModule,
-    BasicProfileModule, CapsModule, ChatModule, DefaultPermissionsModule, DialogModule,
-    DynAttrsModule, EstateManagementModule, FriendsModule, GesturesModule, GodsModule,
-    GroupsMessagingModule, GroupsModule, InventoryAccessModule, InventoryTransferModule,
-    LandManagementModule, LibraryModule, LureModule, MapImageModule, MapSearchModule,
-    MessageTransferModule, ModuleConfig, MuteListModule, OfflineMessageModule, PresenceModule,
+    AccessModule, AssetTransactionModule, AttachmentsModule, AvatarCombatModule,
+    AvatarFactoryModule, BakedTexturesModule, BasicProfileModule, CapsModule, ChatModule,
+    DefaultPermissionsModule, DialogModule, DwellModule, DynAttrsModule, EstateManagementModule,
+    EntityTransferModule, FriendsModule, GesturesModule, GodsModule, GroupsMessagingModule,
+    GroupsModule, HGEntityTransferModule, HGFriendsModule, HGInventoryAccessModule,
+    HGLureModule, HGMessageTransferModule, HGUserManagementModule, HGWorldMapModule,
+    IPBanModule, InventoryAccessModule, InventoryTransferModule, LandManagementModule,
+    LibraryModule, LightShareModule, LureModule, MapImageModule, MapSearchModule,
+    MessageTransferModule, ModuleConfig, MonitorModule, MuteListModule, NPCModule,
+    OfflineMessageModule, PresenceModule, PrimCountModule, RegionReadyModule, RestartModule,
     SceneRef, SearchModule, ServiceThrottleModule, SoundModule, UserManagementModule,
-    WorldMapModule, XferModule,
+    WebRtcVoiceModule, WindModule, WorldMapModule, XferModule,
 };
 use welkin_msg::Msg;
 use welkin_msg::msgs::*;
@@ -256,6 +260,26 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         registry.register(GodsModule::new());
         registry.register(GroupsModule::new());
         registry.register(GroupsMessagingModule::new());
+        registry.register(NPCModule::new());
+        registry.register(WebRtcVoiceModule::new());
+        registry.register(WindModule::new());
+        registry.register(LightShareModule::new());
+        registry.register(AvatarCombatModule::new());
+        registry.register(PrimCountModule::new());
+        registry.register(DwellModule::new());
+        registry.register(MonitorModule::new());
+        registry.register(IPBanModule::new());
+        registry.register(RegionReadyModule::new());
+        registry.register(RestartModule::new());
+        registry.register(AccessModule::new());
+        registry.register(EntityTransferModule::new());
+        registry.register(HGEntityTransferModule::new());
+        registry.register(HGFriendsModule::new());
+        registry.register(HGInventoryAccessModule::new());
+        registry.register(HGLureModule::new());
+        registry.register(HGMessageTransferModule::new());
+        registry.register(HGUserManagementModule::new());
+        registry.register(HGWorldMapModule::new());
         if let Err(e) = registry.initialise_all(&ConfigBridge(&config)) {
             warn!(error = %e, "module initialisation failed");
         }

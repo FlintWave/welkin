@@ -91,6 +91,14 @@ pub use world_map::{
     MapBlock, MapItem, MapItemType, MapSearchModule, SimAccess, WorldMapModule,
     map_image::{MapImageModule, MapTileConfig, ShadedTerrainRenderer, TerrainRenderer},
 };
+pub use npc::NPCModule;
+pub use voice::WebRtcVoiceModule;
+pub use hg::{
+    entity_transfer::HGEntityTransferModule, friends::HGFriendsModule,
+    inventory_access::HGInventoryAccessModule, lure::HGLureModule,
+    messaging::HGMessageTransferModule, user_management::HGUserManagementModule,
+    world_map::HGWorldMapModule,
+};
 
 #[cfg(test)]
 mod tests {

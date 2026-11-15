@@ -32,24 +32,24 @@
 
 ## Phase 3: P2 modules — full parity
 
-- [ ] Activate NPCModule — NPC creation and control
-- [ ] Activate WebRtcVoiceModule — voice via wolfvoice sidecar
-- [ ] Activate WindModule — wind simulation
-- [ ] Activate LightShareModule — Windlight environment
-- [ ] Activate CombatModule — health/damage system
-- [ ] Activate PrimCountModule — parcel prim accounting
-- [ ] Activate DwellModule — parcel traffic tracking
-- [ ] Activate MonitorModule — server performance metrics
-- [ ] Activate IPBanModule — IP-based access control
-- [ ] Activate RegionReadyModule — region startup notification
-- [ ] Activate RestartModule — scheduled region restarts
-- [ ] Activate AccessModule — region access control
-- [ ] Activate EntityTransferModule — cross-region teleport
-- [ ] Activate HGEntityTransferModule — hypergrid entity transfer
-- [ ] Activate HGFriendsModule — hypergrid friends
-- [ ] Activate HGInventoryAccessModule — hypergrid inventory
-- [ ] Activate HGLureModule — hypergrid teleport lures
-- [ ] Activate HGMessageTransferModule — hypergrid IM routing
-- [ ] Activate HGUserManagementModule — hypergrid user resolution
-- [ ] Activate HGWorldMapModule — hypergrid map integration
-- [ ] Wire Gatekeeper service to region HG modules
+- [x] Activate NPCModule — NPC creation and control
+- [x] Activate WebRtcVoiceModule — voice via wolfvoice sidecar
+- [x] Activate WindModule — wind simulation
+- [x] Activate LightShareModule — Windlight environment
+- [x] Activate CombatModule — health/damage system
+- [x] Activate PrimCountModule — parcel prim accounting
+- [x] Activate DwellModule — parcel traffic tracking
+- [x] Activate MonitorModule — server performance metrics
+- [x] Activate IPBanModule — IP-based access control
+- [x] Activate RegionReadyModule — region startup notification
+- [x] Activate RestartModule — scheduled region restarts
+- [x] Activate AccessModule — region access control
+- [x] Activate EntityTransferModule — cross-region teleport
+- [x] Activate HGEntityTransferModule — hypergrid entity transfer
+- [x] Activate HGFriendsModule — hypergrid friends
+- [x] Activate HGInventoryAccessModule — hypergrid inventory
+- [x] Activate HGLureModule — hypergrid teleport lures
+- [x] Activate HGMessageTransferModule — hypergrid IM routing
+- [x] Activate HGUserManagementModule — hypergrid user resolution
+- [x] Activate HGWorldMapModule — hypergrid map integration
+- [x] Wire Gatekeeper service to region HG modules
