@@ -10,46 +10,79 @@ Current viewer compatibility status, updated as live testing progresses.
 | Viewer | Login | In-world | Status |
 |---|---|---|---|
 | Aurora Viewer | Yes | Partial | First connected 2026-11-14 |
-| Firestorm (OpenSim build) | Yes | Core features working | Tested 2026-11-14 |
+| Firestorm (OpenSim build) | Yes | Working | Tested 2026-11-14 |
 | LibreMetaverse bot | Yes | 13/13 tests pass | Automated test client |
 
 ## Firestorm session (2026-11-14)
 
 Tested with the Firestorm OpenSim build against a local Welkin grid
-(ROBUST + one region). Commits 053b903 through 079f043.
+(ROBUST + one region). Commits 053b903 through cc9520a cover all work
+described below.
 
-### Working
+### Login and connection
 
 - XMLRPC and LLSD login (Firestorm sends XMLRPC, LibreMetaverse 3.x sends LLSD)
 - Circuit establishment (UseCircuitCode, CompleteAgentMovement, RegionHandshake)
+- PacketAck processing (server clears acked packets)
+- Region handle formula: `((loc_x * 256) << 32) | (loc_y * 256)`
+- ROBUST config separation (robust.toml for grid DB, welkin.toml for region DB)
+
+### Movement and navigation
+
 - WASD movement with walk, run and fly transitions
-- Chat send and receive (ChatFromViewer routed through ChatModule)
+- Map and minimap via MapLayer cap (POST and GET)
+- Local teleport via map
+- Sit and stand on objects
+
+### Object interaction
+
+- Object creation (ObjectAdd with FullObjectUpdate broadcast)
+- Object editing: move, rotate and scale via MultipleObjectUpdate
+- ObjectSelect, ObjectDeselect
+- Touch events: ObjectGrab, ObjectGrabUpdate, ObjectDeGrab
+- Property editing: name, description, shape, permissions, sale info, extra params
+- RezObject, DeRezObject
+- ObjectLink, ObjectDelink, ObjectDuplicate
+
+### Inventory
+
 - Inventory panel with full folder tree (16 categories)
 - Inventory caps: FetchInventoryDescendents2, FetchInventory2, FetchLib2, CreateInventoryCategory
 - Baked texture upload (UploadBakedTexture cap, two-phase, stored in ROBUST)
-- Map and minimap via MapLayer cap (POST and GET)
-- Local teleport via map
-- Object creation (ObjectAdd with FullObjectUpdate broadcast)
-- Sit and stand on objects
+- Inventory creation idempotency guard
+- Inventory offers between users
+
+### Communication
+
+- Chat send and receive (ChatFromViewer routed through ChatModule)
+- Instant messaging with full dialog dispatch (20+ message types)
+- Group messaging
+- Friendship management (offer, accept, decline, terminate)
+- ViewerEffect relay to other clients
+- UUIDNameRequest
+- ScriptDialogReply
+
+### Avatar and presence
+
 - Avatar profile viewing
 - Multi-user presence (new users see existing avatars)
 - AgentUpdate and ViewerEffect flowing
-- PacketAck processing (server clears acked packets)
-- ViewerAsset, GetDisplayNames, HomeLocation caps
-- Region handle formula: `((loc_x * 256) << 32) | (loc_y * 256)`
-- ROBUST config separation (robust.toml for grid DB, welkin.toml for region DB)
-- Inventory creation idempotency guard
-- 22 HTTP capability handlers
-- 18 UDP packet handlers
+- 53 region modules loaded
+
+### Economy
+
+- MoneyModule trait with SampleMoneyModule
+- Economy data packets (EconomyData, MoneyBalance)
+- XML-RPC endpoints: `/currency.php`, `/landtool.php`
+- LSL money functions: llGiveMoney, llTransferLindenDollars, llSetPayPrice
+- DTL/NSL currency proxy mode
+- Gloebit REST client
 
 ### Known limitations
 
-- Object editing (MultipleObjectUpdate and related packets)
-- Instant messaging
-- Inventory wear and rez
-- ~30 region modules written but not yet loaded
-- Script engine: Luau VM runs but no LSL compiler yet
-- Currency and economy: interface defined, not implemented
+- LSL compilation pipeline: Luau VM runs, but no LSL parser or transpiler yet
+- ~387 ll* script functions not yet implemented
+- Physics step integration not yet wired
 - Cross-region teleport
 
 ### Known viewer messages
@@ -134,3 +167,7 @@ The server handles both layouts via the `aurora-msg` crate.
 | `f4ec89f` | AgentSetAppearance handler (orange cloud fix) |
 | `3d927ae` | Movement, teleport and object creation support |
 | `079f043` | Firestorm session completion (sit/stand, profiles, multi-user) |
+| `8da4f35` .. `eb634b0` | Object interaction: editing, properties, rez, link, duplicate |
+| `3b7c2d8` .. `368e61d` | Module activation: 9 to 53 region modules |
+| `c6834aa` .. `afdecf9` | Viewer messaging: IM dispatch, groups, friends, effects |
+| `dcc3e8b` .. `cc9520a` | Currency: MoneyModule, economy packets, Gloebit client |
