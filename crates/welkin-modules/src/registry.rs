@@ -24,6 +24,9 @@ use crate::module::{ModuleConfig, ModuleError, RegionModule};
 pub struct SceneRef {
     pub region_id: Uuid,
     pub region_name: String,
+    pub region_handle: u64,
+    pub region_size_x: u32,
+    pub region_size_y: u32,
     pub events: Arc<SceneEvents>,
     pub registry: Arc<RwLock<ModuleRegistry>>,
 }
@@ -34,6 +37,9 @@ impl SceneRef {
         Self {
             region_id,
             region_name,
+            region_handle: 0,
+            region_size_x: 256,
+            region_size_y: 256,
             events: Arc::new(SceneEvents::new()),
             registry: Arc::new(RwLock::new(registry)),
         }

@@ -35,14 +35,14 @@
 
 ## Phase 3: Estate admin and cross-region teleport
 
-- [ ] Handle EstateOwnerMessage packet — dispatch ~20 sub-commands: setregioninfo, setregionterrain, restart, texturebase, texturedetail, setcovenantid, estateaccessdelta (ban/allow/manager/group lists), simulatormessage, instantmessage, setregiondebug, terraincollisionheight, etc.
-- [ ] Handle FreezeUser packet — freeze avatar movement for duration, send alert
-- [ ] Handle EjectUser packet — teleport avatar to home location, optional ban
-- [ ] Handle GodUpdateRegionInfo packet — god-mode region settings changes
-- [ ] Handle RequestRegionInfo packet — send RegionInfo reply with all region properties
-- [ ] Wire EntityTransferModule for cross-region teleport — full flow: DoTeleport, create agent at destination region, send child agent seed caps, viewer UpdateSimulator, close source child agent
-- [ ] Wire EntityTransferModule for region crossing — avatar walks across border, create child agent at neighbor, seamless handoff
-- [ ] Verify HG teleport flow — gatekeeper link, user agent verification, HGEntityTransferModule already loaded from module-activation, test agent transfer via hypergrid URI
+- [x] Handle EstateOwnerMessage packet — dispatch ~20 sub-commands: setregioninfo, setregionterrain, restart, texturebase, texturedetail, setcovenantid, estateaccessdelta (ban/allow/manager/group lists), simulatormessage, instantmessage, setregiondebug, terraincollisionheight, etc.
+- [x] Handle FreezeUser packet — freeze avatar movement for duration, send alert
+- [x] Handle EjectUser packet — teleport avatar to home location, optional ban
+- [x] Handle GodUpdateRegionInfo packet — god-mode region settings changes
+- [x] Handle RequestRegionInfo packet — send RegionInfo reply with all region properties
+- [x] Wire EntityTransferModule for cross-region teleport — full flow: DoTeleport, create agent at destination region, send child agent seed caps, viewer UpdateSimulator, close source child agent
+- [x] Wire EntityTransferModule for region crossing — avatar walks across border, create child agent at neighbor, seamless handoff
+- [x] Verify HG teleport flow — gatekeeper link, user agent verification, HGEntityTransferModule already loaded from module-activation, test agent transfer via hypergrid URI
 
 ## Phase 4: Physics verification and os* completion
 

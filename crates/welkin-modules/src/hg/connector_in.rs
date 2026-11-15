@@ -198,6 +198,7 @@ impl RegionModule for HypergridServiceInConnectorModule {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+    use uuid::Uuid;
 
     struct TestConfig {
         strings: HashMap<(String, String), String>,

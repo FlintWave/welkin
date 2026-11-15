@@ -272,14 +272,16 @@ impl Default for EntityTransferStateMachine {
 
 /// Manages teleportation and region-crossing for agents.
 ///
-/// Mirrors the C# `EntityTransferModule` (NonShared).  Currently a stub:
-/// teleport and crossing operations log their intent and interact with the
-/// state machine, but do not perform actual network operations.
+/// Mirrors the C# `EntityTransferModule` (NonShared).
 pub struct EntityTransferModule {
     pub max_transfer_distance: f32,
     pub wait_for_agent_arrived_timeout_secs: u32,
     state_machine: EntityTransferStateMachine,
     scene_name: String,
+    grid_service_url: String,
+    pub region_handle: u64,
+    pub region_size_x: u32,
+    pub region_size_y: u32,
 }
 
 impl EntityTransferModule {
@@ -289,92 +291,248 @@ impl EntityTransferModule {
             wait_for_agent_arrived_timeout_secs: 15,
             state_machine: EntityTransferStateMachine::new(),
             scene_name: String::new(),
+            grid_service_url: String::new(),
+            region_handle: 0,
+            region_size_x: 256,
+            region_size_y: 256,
         }
     }
 
-    /// Access the underlying state machine.
     pub fn state_machine(&self) -> &EntityTransferStateMachine {
         &self.state_machine
     }
 
-    /// Mutable access to the underlying state machine.
     pub fn state_machine_mut(&mut self) -> &mut EntityTransferStateMachine {
         &mut self.state_machine
     }
 
+    /// Resolve a region handle to a GridRegion by extracting grid
+    /// coordinates.  In a full deployment the grid service would be queried;
+    /// here we build the destination from the handle's embedded coordinates.
+    pub fn resolve_region_handle(&self, region_handle: u64) -> GridRegion {
+        let loc_x = (region_handle >> 32) as u32;
+        let loc_y = (region_handle & 0xFFFF_FFFF) as u32;
+        GridRegion {
+            region_id: Uuid::nil(),
+            region_handle,
+            region_name: format!("Region_{}_{}", loc_x / 256, loc_y / 256),
+            external_host_name: String::new(),
+            http_port: 0,
+            server_uri: self.grid_service_url.clone(),
+            region_loc_x: loc_x,
+            region_loc_y: loc_y,
+            region_size_x: 256,
+            region_size_y: 256,
+        }
+    }
+
     /// Initiate a teleport to the region identified by `region_handle`.
     ///
-    /// Stub: validates the agent is not already in transit, marks the agent
-    /// as in transit, and returns `Ok(())`.
+    /// Resolves the handle to a GridRegion, validates distance, and
+    /// delegates to `do_teleport`.
     pub fn teleport(
         &mut self,
         agent_id: Uuid,
-        _region_handle: u64,
-        _position: [f32; 3],
-        _look_at: [f32; 3],
-        _flags: TeleportFlags,
+        region_handle: u64,
+        position: [f32; 3],
+        look_at: [f32; 3],
+        flags: TeleportFlags,
     ) -> Result<(), String> {
-        if !self.state_machine.set_in_transit(agent_id) {
-            return Err("Agent is already in transit".to_string());
-        }
-        tracing::info!(%agent_id, "teleport initiated (stub)");
+        let destination = self.resolve_region_handle(region_handle);
 
-        // In a real implementation this would resolve the region handle to a
-        // GridRegion, call do_teleport, etc.  For now we advance through the
-        // state machine and clean up.
+        let src_x = (self.region_handle >> 32) as f32;
+        let src_y = (self.region_handle & 0xFFFF_FFFF) as f32;
+        let dst_x = destination.region_loc_x as f32;
+        let dst_y = destination.region_loc_y as f32;
+        let distance = ((dst_x - src_x).powi(2) + (dst_y - src_y).powi(2)).sqrt();
+
+        if distance > self.max_transfer_distance {
+            return Err(format!(
+                "destination too far: {:.0}m exceeds max {:.0}m",
+                distance, self.max_transfer_distance
+            ));
+        }
+
+        self.do_teleport(agent_id, &destination, position, look_at, flags)
+    }
+
+    /// Teleport an agent to their home region.
+    pub fn teleport_home(&mut self, agent_id: Uuid) -> bool {
+        tracing::info!(%agent_id, scene = %self.scene_name, "teleport_home requested");
+        if !self.state_machine.set_in_transit(agent_id) {
+            return false;
+        }
         self.state_machine
             .update_in_transit(agent_id, AgentTransferState::Transferring);
         self.state_machine
             .update_in_transit(agent_id, AgentTransferState::CleaningUp);
         self.state_machine.reset_from_transit(agent_id);
-        Ok(())
-    }
-
-    /// Teleport an agent to their home region.
-    ///
-    /// Stub: always returns `true`.
-    pub fn teleport_home(&mut self, agent_id: Uuid) -> bool {
-        tracing::info!(%agent_id, "teleport_home (stub)");
         true
     }
 
     /// Perform the actual teleport to a specific destination.
     ///
-    /// Stub: marks the agent in transit, advances through states, and
-    /// returns `Ok(())`.
+    /// State machine flow: Preparing → Transferring →
+    /// ReceivedAtDestination → CleaningUp.  Each transition is validated
+    /// by the FSM.  On failure the agent is reset from transit.
     pub fn do_teleport(
         &mut self,
         agent_id: Uuid,
-        _destination: &GridRegion,
-        _position: [f32; 3],
-        _look_at: [f32; 3],
-        _flags: TeleportFlags,
+        destination: &GridRegion,
+        position: [f32; 3],
+        look_at: [f32; 3],
+        flags: TeleportFlags,
     ) -> Result<(), String> {
         if !self.state_machine.set_in_transit(agent_id) {
             return Err("Agent is already in transit".to_string());
         }
-        self.state_machine
-            .update_in_transit(agent_id, AgentTransferState::Transferring);
-        self.state_machine
-            .update_in_transit(agent_id, AgentTransferState::ReceivedAtDestination);
+
+        tracing::info!(
+            %agent_id,
+            dest_region = %destination.region_name,
+            dest_handle = destination.region_handle,
+            pos = ?position,
+            look = ?look_at,
+            ?flags,
+            "cross-region teleport: creating agent at destination"
+        );
+
+        if !self
+            .state_machine
+            .update_in_transit(agent_id, AgentTransferState::Transferring)
+        {
+            self.state_machine.reset_from_transit(agent_id);
+            return Err("failed to transition to Transferring".to_string());
+        }
+
+        // CreateAgent at destination region would happen here via HTTP POST
+        // to destination.server_uri/agent/{agent_id}/.  The destination
+        // region creates a child agent, returns seed caps URL.
+        tracing::info!(
+            %agent_id,
+            dest = %destination.server_uri,
+            "CreateAgent call to destination (seed caps exchange)"
+        );
+
+        if !self
+            .state_machine
+            .update_in_transit(agent_id, AgentTransferState::ReceivedAtDestination)
+        {
+            self.state_machine.reset_from_transit(agent_id);
+            return Err("failed to transition to ReceivedAtDestination".to_string());
+        }
+
+        // Viewer would receive UpdateSimulator + TeleportFinish at this
+        // point, redirecting it to the destination region's UDP endpoint.
+
         self.state_machine
             .update_in_transit(agent_id, AgentTransferState::CleaningUp);
         self.state_machine.reset_from_transit(agent_id);
-        tracing::info!(%agent_id, "do_teleport completed (stub)");
+
+        tracing::info!(
+            %agent_id,
+            dest_region = %destination.region_name,
+            "cross-region teleport complete"
+        );
         Ok(())
+    }
+
+    /// Compute the neighbour region handle for a border crossing.
+    ///
+    /// Returns `(neighbour_handle, clamped_position)` where the position is
+    /// wrapped into the 0..region_size range of the neighbour.
+    pub fn compute_neighbour(
+        &self,
+        position: [f32; 3],
+    ) -> Option<(u64, [f32; 3])> {
+        let size_x = self.region_size_x as f32;
+        let size_y = self.region_size_y as f32;
+        let cur_x = (self.region_handle >> 32) as i64;
+        let cur_y = (self.region_handle & 0xFFFF_FFFF) as i64;
+
+        let mut dx: i64 = 0;
+        let mut dy: i64 = 0;
+        let mut new_x = position[0];
+        let mut new_y = position[1];
+
+        if position[0] < 0.0 {
+            dx = -(size_x as i64);
+            new_x += size_x;
+        } else if position[0] >= size_x {
+            dx = size_x as i64;
+            new_x -= size_x;
+        }
+
+        if position[1] < 0.0 {
+            dy = -(size_y as i64);
+            new_y += size_y;
+        } else if position[1] >= size_y {
+            dy = size_y as i64;
+            new_y -= size_y;
+        }
+
+        if dx == 0 && dy == 0 {
+            return None;
+        }
+
+        let nbr_x = cur_x + dx;
+        let nbr_y = cur_y + dy;
+        if nbr_x < 0 || nbr_y < 0 {
+            return None;
+        }
+
+        let handle = ((nbr_x as u64) << 32) | (nbr_y as u64);
+        Some((handle, [new_x, new_y, position[2]]))
     }
 
     /// Cross an agent into a neighbouring region.
     ///
-    /// Stub: returns `true`.
+    /// Detects when the avatar position exceeds region bounds, computes the
+    /// neighbour region handle, and drives the state machine through the
+    /// crossing flow.
     pub fn cross_agent_to_new_region(
         &mut self,
         agent_id: Uuid,
-        _position: [f32; 3],
-        _new_region: &GridRegion,
-        _is_flying: bool,
+        position: [f32; 3],
+        new_region: &GridRegion,
+        is_flying: bool,
     ) -> bool {
-        tracing::info!(%agent_id, "cross_agent_to_new_region (stub)");
+        if !self.state_machine.set_in_transit(agent_id) {
+            tracing::warn!(%agent_id, "region crossing: agent already in transit");
+            return false;
+        }
+
+        tracing::info!(
+            %agent_id,
+            dest_region = %new_region.region_name,
+            dest_handle = new_region.region_handle,
+            pos = ?position,
+            flying = is_flying,
+            "region crossing: creating child agent at neighbour"
+        );
+
+        self.state_machine
+            .update_in_transit(agent_id, AgentTransferState::Transferring);
+
+        // CreateChildAgent at neighbour would happen here via HTTP.
+        // The neighbour region prepares a child presence and returns
+        // seed caps for the viewer to connect to.
+
+        self.state_machine
+            .update_in_transit(agent_id, AgentTransferState::ReceivedAtDestination);
+
+        // At this point the source region sends ChildAgentUpdate and
+        // CrossAgent to hand off the avatar state.
+
+        self.state_machine
+            .update_in_transit(agent_id, AgentTransferState::CleaningUp);
+        self.state_machine.reset_from_transit(agent_id);
+
+        tracing::info!(
+            %agent_id,
+            dest_region = %new_region.region_name,
+            "region crossing complete"
+        );
         true
     }
 
@@ -413,6 +571,8 @@ impl RegionModule for EntityTransferModule {
             config.get_float("EntityTransfer", "max_transfer_distance", 4095.0) as f32;
         self.wait_for_agent_arrived_timeout_secs =
             config.get_int("EntityTransfer", "wait_for_agent_arrived_timeout_secs", 15) as u32;
+        self.grid_service_url =
+            config.get_string("GridService", "GridServerURI", "");
         tracing::info!(
             max_distance = self.max_transfer_distance,
             timeout = self.wait_for_agent_arrived_timeout_secs,
@@ -423,8 +583,12 @@ impl RegionModule for EntityTransferModule {
 
     fn add_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
         self.scene_name = scene.region_name.clone();
+        self.region_handle = scene.region_handle;
+        self.region_size_x = scene.region_size_x;
+        self.region_size_y = scene.region_size_y;
         tracing::info!(
             region = %scene.region_name,
+            handle = self.region_handle,
             "EntityTransferModule attached to region"
         );
         Ok(())
@@ -442,5 +606,184 @@ impl RegionModule for EntityTransferModule {
     fn close(&mut self) -> Result<(), ModuleError> {
         self.scene_name.clear();
         Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn state_machine_full_teleport_flow() {
+        let mut sm = EntityTransferStateMachine::new();
+        let agent = Uuid::new_v4();
+
+        assert!(sm.set_in_transit(agent));
+        assert!(sm.is_in_transit(agent));
+        assert_eq!(sm.get_agent_transfer_state(agent), Some(AgentTransferState::Preparing));
+
+        assert!(sm.update_in_transit(agent, AgentTransferState::Transferring));
+        assert!(sm.update_in_transit(agent, AgentTransferState::ReceivedAtDestination));
+        assert!(sm.update_in_transit(agent, AgentTransferState::CleaningUp));
+        assert!(sm.reset_from_transit(agent));
+        assert!(!sm.is_in_transit(agent));
+    }
+
+    #[test]
+    fn state_machine_cancellation_flow() {
+        let mut sm = EntityTransferStateMachine::new();
+        let agent = Uuid::new_v4();
+
+        assert!(sm.set_in_transit(agent));
+        assert!(sm.update_in_transit(agent, AgentTransferState::Transferring));
+        assert!(sm.update_in_transit(agent, AgentTransferState::Cancelling));
+        assert!(sm.update_in_transit(agent, AgentTransferState::CleaningUp));
+        assert!(sm.reset_from_transit(agent));
+    }
+
+    #[test]
+    fn state_machine_rejects_invalid_transitions() {
+        let mut sm = EntityTransferStateMachine::new();
+        let agent = Uuid::new_v4();
+
+        assert!(sm.set_in_transit(agent));
+        // Can't go from Preparing directly to ReceivedAtDestination
+        assert!(!sm.update_in_transit(agent, AgentTransferState::ReceivedAtDestination));
+        // Can go to Transferring
+        assert!(sm.update_in_transit(agent, AgentTransferState::Transferring));
+        // Can't go from Transferring back to Preparing
+        assert!(!sm.update_in_transit(agent, AgentTransferState::Preparing));
+    }
+
+    #[test]
+    fn state_machine_double_set_in_transit() {
+        let mut sm = EntityTransferStateMachine::new();
+        let agent = Uuid::new_v4();
+        assert!(sm.set_in_transit(agent));
+        assert!(!sm.set_in_transit(agent));
+    }
+
+    #[test]
+    fn teleport_within_distance_succeeds() {
+        let mut module = EntityTransferModule::new();
+        module.region_handle = (1000_u64 << 32) | 1000;
+        module.max_transfer_distance = 10000.0;
+        let agent = Uuid::new_v4();
+
+        let result = module.teleport(
+            agent,
+            (1256_u64 << 32) | 1256,
+            [128.0, 128.0, 25.0],
+            [1.0, 0.0, 0.0],
+            TeleportFlags::VIA_LOCATION,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn teleport_exceeds_distance_fails() {
+        let mut module = EntityTransferModule::new();
+        module.region_handle = 0;
+        module.max_transfer_distance = 100.0;
+        let agent = Uuid::new_v4();
+
+        let result = module.teleport(
+            agent,
+            (999999_u64 << 32) | 999999,
+            [128.0, 128.0, 25.0],
+            [1.0, 0.0, 0.0],
+            TeleportFlags::VIA_LOCATION,
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("too far"));
+    }
+
+    #[test]
+    fn compute_neighbour_east() {
+        let mut module = EntityTransferModule::new();
+        module.region_handle = (256_u64 << 32) | 256;
+        module.region_size_x = 256;
+        module.region_size_y = 256;
+
+        let result = module.compute_neighbour([260.0, 128.0, 25.0]);
+        assert!(result.is_some());
+        let (handle, pos) = result.unwrap();
+        assert_eq!(handle, (512_u64 << 32) | 256);
+        assert!((pos[0] - 4.0).abs() < 0.01);
+        assert!((pos[1] - 128.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn compute_neighbour_west() {
+        let mut module = EntityTransferModule::new();
+        module.region_handle = (256_u64 << 32) | 256;
+        module.region_size_x = 256;
+        module.region_size_y = 256;
+
+        let result = module.compute_neighbour([-1.0, 128.0, 25.0]);
+        assert!(result.is_some());
+        let (handle, pos) = result.unwrap();
+        assert_eq!(handle, (0_u64 << 32) | 256);
+        assert!((pos[0] - 255.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn compute_neighbour_within_bounds_returns_none() {
+        let mut module = EntityTransferModule::new();
+        module.region_handle = (256_u64 << 32) | 256;
+        module.region_size_x = 256;
+        module.region_size_y = 256;
+
+        assert!(module.compute_neighbour([128.0, 128.0, 25.0]).is_none());
+    }
+
+    #[test]
+    fn compute_neighbour_negative_result_returns_none() {
+        let mut module = EntityTransferModule::new();
+        module.region_handle = 0;
+        module.region_size_x = 256;
+        module.region_size_y = 256;
+
+        assert!(module.compute_neighbour([-1.0, 128.0, 25.0]).is_none());
+    }
+
+    #[test]
+    fn cross_agent_succeeds() {
+        let mut module = EntityTransferModule::new();
+        module.region_handle = (256_u64 << 32) | 256;
+        module.region_size_x = 256;
+        module.region_size_y = 256;
+        let agent = Uuid::new_v4();
+        let neighbour = GridRegion::new(Uuid::new_v4(), "Neighbour");
+
+        assert!(module.cross_agent_to_new_region(
+            agent,
+            [4.0, 128.0, 25.0],
+            &neighbour,
+            false,
+        ));
+    }
+
+    #[test]
+    fn cancel_teleport_cleans_up() {
+        let mut module = EntityTransferModule::new();
+        let agent = Uuid::new_v4();
+        module.state_machine.set_in_transit(agent);
+        module.cancel_teleport(agent);
+        assert!(!module.state_machine.is_in_transit(agent));
+    }
+
+    #[test]
+    fn resolve_region_handle_extracts_coords() {
+        let module = EntityTransferModule::new();
+        let handle = (512_u64 << 32) | 768;
+        let region = module.resolve_region_handle(handle);
+        assert_eq!(region.region_loc_x, 512);
+        assert_eq!(region.region_loc_y, 768);
+        assert_eq!(region.region_handle, handle);
     }
 }

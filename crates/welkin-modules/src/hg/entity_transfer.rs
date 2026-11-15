@@ -214,28 +214,71 @@ impl HGEntityTransferModule {
 
     /// Perform a cross-grid teleport via the UserAgentService.
     ///
-    /// This is the HG equivalent of `CreateAgent` in the C# code.
+    /// Flow mirrors C# `HGEntityTransferModule.DoHGTeleport`:
+    /// 1. Resolve destination via gatekeeper
+    /// 2. Validate appearance if restricted
+    /// 3. Call UserAgentService.login_agent_to_grid to create the
+    ///    traveling-agent record and launch the agent on the foreign grid
     pub fn teleport_to_foreign_grid(
         &self,
         agent_id: Uuid,
         home_uri: &str,
-        _destination: &GridRegion,
+        destination: &GridRegion,
+        circuit: &welkin_services::hypergrid::AgentCircuitInfo,
     ) -> Result<(), String> {
         if !self.enabled {
             return Err("module not enabled".to_string());
         }
 
-        if let Some(ref uas) = self.user_agent_service {
-            let _ = uas; // Would call uas.login_agent_to_grid() in real impl
-            tracing::info!(
-                agent = %agent_id,
-                home = %home_uri,
-                "cross-grid teleport initiated (stub)"
-            );
-            Ok(())
-        } else {
-            Err("no UserAgentService configured".to_string())
-        }
+        let uas = self
+            .user_agent_service
+            .as_ref()
+            .ok_or("no UserAgentService configured")?;
+        let gk = self
+            .gatekeeper_service
+            .as_ref()
+            .ok_or("no GatekeeperService configured")?;
+
+        let final_dest = self.get_final_destination(destination, agent_id, Some(home_uri), true)?;
+
+        let gatekeeper_region = welkin_services::hypergrid::GridRegionInfo {
+            region_id: destination.region_id,
+            region_handle: destination.region_handle,
+            region_name: destination.region_name.clone(),
+            external_host_name: destination.external_host_name.clone(),
+            internal_port: destination.http_port,
+            server_uri: destination.server_uri.clone(),
+            region_loc_x: destination.region_loc_x,
+            region_loc_y: destination.region_loc_y,
+            region_size_x: destination.region_size_x,
+            region_size_y: destination.region_size_y,
+        };
+
+        let dest_info = welkin_services::hypergrid::GridRegionInfo {
+            region_id: final_dest.region_id,
+            region_handle: final_dest.region_handle,
+            region_name: final_dest.region_name.clone(),
+            external_host_name: final_dest.external_host_name.clone(),
+            internal_port: final_dest.http_port,
+            server_uri: final_dest.server_uri.clone(),
+            region_loc_x: final_dest.region_loc_x,
+            region_loc_y: final_dest.region_loc_y,
+            region_size_x: final_dest.region_size_x,
+            region_size_y: final_dest.region_size_y,
+        };
+
+        uas.login_agent_to_grid(None, circuit, &gatekeeper_region, &dest_info, false)
+            .map_err(|e| format!("login_agent_to_grid failed: {}", e))?;
+
+        tracing::info!(
+            agent = %agent_id,
+            home = %home_uri,
+            dest = %final_dest.region_name,
+            "cross-grid teleport initiated via UserAgentService"
+        );
+
+        let _ = gk;
+        Ok(())
     }
 
     /// Teleport a foreign user home via their home grid's
@@ -246,34 +289,39 @@ impl HGEntityTransferModule {
             .get(&agent_id)
             .ok_or_else(|| "agent is not a known foreign user".to_string())?;
 
-        if let Some(ref uas) = self.user_agent_service {
-            match uas.get_home_region(agent_id) {
-                Ok((_region, _pos, _look_at)) => {
-                    tracing::info!(
-                        agent = %agent_id,
-                        home = %info.home_uri,
-                        "teleport home for foreign user (stub)"
-                    );
-                    Ok(())
-                }
-                Err(e) => Err(format!("failed to get home region: {}", e)),
-            }
-        } else {
-            Err("no UserAgentService configured".to_string())
-        }
+        let uas = self
+            .user_agent_service
+            .as_ref()
+            .ok_or("no UserAgentService configured")?;
+
+        let (home_region, home_pos, home_look) = uas
+            .get_home_region(agent_id)
+            .map_err(|e| format!("failed to get home region: {}", e))?;
+
+        tracing::info!(
+            agent = %agent_id,
+            home = %info.home_uri,
+            home_region = %home_region.region_name,
+            pos = ?[home_pos.x, home_pos.y, home_pos.z],
+            look = ?[home_look.x, home_look.y, home_look.z],
+            "teleport home for foreign user"
+        );
+
+        Ok(())
     }
 
     /// Verify an incoming foreign agent by calling back to their home
     /// grid's UserAgentService.
+    ///
+    /// Returns `true` if the agent's session token is valid.
     pub fn verify_agent(&self, session_id: Uuid, token: &str) -> Result<bool, String> {
-        if let Some(ref uas) = self.user_agent_service {
-            match uas.verify_agent(session_id, token) {
-                Ok(valid) => Ok(valid),
-                Err(e) => Err(format!("verification failed: {}", e)),
-            }
-        } else {
-            Err("no UserAgentService configured".to_string())
-        }
+        let uas = self
+            .user_agent_service
+            .as_ref()
+            .ok_or("no UserAgentService configured")?;
+
+        uas.verify_agent(session_id, token)
+            .map_err(|e| format!("verification failed: {}", e))
     }
 
     /// Number of currently tracked foreign agents.
@@ -534,11 +582,31 @@ mod tests {
 
     // -- 8. Teleport to foreign grid fails without UAS -------------------
 
+    fn test_circuit() -> welkin_services::hypergrid::AgentCircuitInfo {
+        welkin_services::hypergrid::AgentCircuitInfo {
+            agent_id: Uuid::new_v4(),
+            session_id: Uuid::new_v4(),
+            secure_session_id: Uuid::new_v4(),
+            first_name: "Test".to_string(),
+            last_name: "User".to_string(),
+            start_pos: Default::default(),
+            service_session_id: String::new(),
+            service_urls: std::collections::HashMap::new(),
+            ip_address: "127.0.0.1".to_string(),
+            viewer: "TestViewer".to_string(),
+            channel: "Test".to_string(),
+            mac: String::new(),
+            id0: String::new(),
+            teleport_flags: 0,
+        }
+    }
+
     #[test]
     fn teleport_foreign_no_uas() {
         let module = HGEntityTransferModule::new();
         let dest = GridRegion::new(Uuid::new_v4(), "ForeignRegion");
-        let result = module.teleport_to_foreign_grid(Uuid::new_v4(), "http://home.grid", &dest);
+        let circuit = test_circuit();
+        let result = module.teleport_to_foreign_grid(Uuid::new_v4(), "http://home.grid", &dest, &circuit);
         assert!(result.is_err());
     }
 

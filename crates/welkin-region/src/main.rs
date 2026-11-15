@@ -44,7 +44,7 @@ use welkin_net::server::ClientSession;
 use welkin_scene::group::SceneObjectGroup;
 use welkin_scene::part::SceneObjectPart;
 use welkin_scene::presence::{PresenceType, ScenePresence};
-use welkin_scene::scene::{RegionInfo, Scene, SceneConfig};
+use welkin_scene::scene::{RegionInfo as SceneRegionInfo, Scene, SceneConfig};
 use welkin_msg::welkin_types::PermissionMask;
 use welkin_script_vm::{ScriptEvent, ScriptScheduler};
 
@@ -135,8 +135,8 @@ impl RegionConfig {
         }
     }
 
-    fn build_region_info(&self) -> RegionInfo {
-        let mut info = RegionInfo::new(&self.region_name, self.region_loc_x, self.region_loc_y);
+    fn build_region_info(&self) -> SceneRegionInfo {
+        let mut info = SceneRegionInfo::new(&self.region_name, self.region_loc_x, self.region_loc_y);
         info.external_host_name = self.external_host_name.clone();
         info.internal_port = self.internal_port;
         info
@@ -223,10 +223,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // --- Module system ---
-    let scene_ref = SceneRef::new(
+    let mut scene_ref = SceneRef::new(
         scene.region_info.region_id,
         scene.region_info.region_name.clone(),
     );
+    scene_ref.region_handle = scene.region_info.region_handle;
+    scene_ref.region_size_x = scene.region_info.region_size_x;
+    scene_ref.region_size_y = scene.region_info.region_size_y;
     {
         let mut registry = scene_ref.registry.write();
         registry.register(ChatModule::new());
@@ -2810,19 +2813,273 @@ async fn process_messages(
                         info!(agent = %agent_id, pos = ?req.info.position, "local teleport complete");
                     }
                 } else {
+                    let mut transfer = welkin_modules::EntityTransferModule::new();
+                    transfer.region_handle = scene.region_info.region_handle;
+                    transfer.max_transfer_distance = 4095.0;
+                    let tp_result = transfer.teleport(
+                        agent_id,
+                        req.info.region_handle,
+                        [req.info.position.x, req.info.position.y, req.info.position.z],
+                        [req.info.look_at.x, req.info.look_at.y, req.info.look_at.z],
+                        welkin_modules::transfer::TeleportFlags::VIA_LOCATION,
+                    );
                     if let Some(client) = &client {
                         let mut session = client.lock().await;
+                        match tp_result {
+                            Ok(()) => {
+                                info!(
+                                    agent = %agent_id,
+                                    dest_handle = req.info.region_handle,
+                                    "cross-region teleport initiated via EntityTransferModule"
+                                );
+                                let fail_msg = TeleportFailed {
+                                    info: teleport_failed::Info {
+                                        agent_id,
+                                        reason: b"Cross-region teleport: destination region not yet reachable (agent created on state machine)".to_vec(),
+                                    },
+                                    alert_info: Vec::new(),
+                                };
+                                let (pkt_bytes, _) = session.circuit.send_msg(&fail_msg, true);
+                                let _ = socket.send_to(&pkt_bytes, src).await;
+                            }
+                            Err(reason) => {
+                                let fail_msg = TeleportFailed {
+                                    info: teleport_failed::Info {
+                                        agent_id,
+                                        reason: reason.as_bytes().to_vec(),
+                                    },
+                                    alert_info: Vec::new(),
+                                };
+                                let (pkt_bytes, _) = session.circuit.send_msg(&fail_msg, true);
+                                let _ = socket.send_to(&pkt_bytes, src).await;
+                                warn!(agent = %agent_id, %reason, "cross-region teleport failed");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- EstateOwnerMessage handler ---
+        if msg_id == EstateOwnerMessage::ID {
+            if let Ok(req) = EstateOwnerMessage::decode(&pkt.body) {
+                let method = String::from_utf8_lossy(&req.method_data.method)
+                    .trim_end_matches('\0')
+                    .to_string();
+                let params: Vec<String> = req
+                    .param_list
+                    .iter()
+                    .map(|p| {
+                        String::from_utf8_lossy(&p.parameter)
+                            .trim_end_matches('\0')
+                            .to_string()
+                    })
+                    .collect();
+                match method.as_str() {
+                    "setregioninfo" => {
+                        info!(agent = %agent_id, params = ?params, "EstateOwnerMessage: setregioninfo");
+                    }
+                    "setregionterrain" => {
+                        info!(agent = %agent_id, params = ?params, "EstateOwnerMessage: setregionterrain");
+                    }
+                    "restart" => {
+                        info!(agent = %agent_id, params = ?params, "EstateOwnerMessage: restart requested");
+                    }
+                    "texturebase" => {
+                        info!(agent = %agent_id, params = ?params, "EstateOwnerMessage: texturebase");
+                    }
+                    "texturedetail" => {
+                        info!(agent = %agent_id, params = ?params, "EstateOwnerMessage: texturedetail");
+                    }
+                    "setcovenantid" => {
+                        info!(agent = %agent_id, params = ?params, "EstateOwnerMessage: setcovenantid");
+                    }
+                    "estateaccessdelta" => {
+                        if params.len() >= 2 {
+                            let mask = params[0].parse::<u32>().unwrap_or(0);
+                            let target = Uuid::parse_str(&params[1]).unwrap_or(Uuid::nil());
+                            info!(
+                                agent = %agent_id,
+                                mask = mask,
+                                target = %target,
+                                "EstateOwnerMessage: estateaccessdelta"
+                            );
+                        }
+                    }
+                    "simulatormessage" => {
+                        let text = params.first().map(|s| s.as_str()).unwrap_or("");
+                        info!(agent = %agent_id, message = %text, "EstateOwnerMessage: simulatormessage");
+                        let alert = AlertMessage {
+                            alert_data: alert_message::AlertData {
+                                message: text.as_bytes().to_vec(),
+                            },
+                            alert_info: Vec::new(),
+                            agent_info: Vec::new(),
+                        };
+                        let all_clients = clients.read().await;
+                        for (peer_addr, peer_client) in all_clients.iter() {
+                            let mut peer = peer_client.lock().await;
+                            let (pkt_bytes, _) = peer.circuit.send_msg(&alert, true);
+                            let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                        }
+                    }
+                    "instantmessage" => {
+                        let text = params.first().map(|s| s.as_str()).unwrap_or("");
+                        info!(agent = %agent_id, message = %text, "EstateOwnerMessage: instantmessage");
+                    }
+                    "setregiondebug" => {
+                        info!(agent = %agent_id, params = ?params, "EstateOwnerMessage: setregiondebug");
+                    }
+                    "terraincollisionheight" => {
+                        info!(agent = %agent_id, params = ?params, "EstateOwnerMessage: terraincollisionheight");
+                    }
+                    other => {
+                        info!(agent = %agent_id, method = %other, params = ?params, "EstateOwnerMessage: unhandled method");
+                    }
+                }
+            }
+        }
+
+        // --- FreezeUser handler ---
+        if msg_id == FreezeUser::ID {
+            if let Ok(req) = FreezeUser::decode(&pkt.body) {
+                let target_id = req.data.target_id;
+                let freeze = req.data.flags == 0;
+                info!(
+                    agent = %agent_id,
+                    target = %target_id,
+                    action = if freeze { "freeze" } else { "unfreeze" },
+                    "FreezeUser"
+                );
+                if scene.get_presence(&target_id).is_some() {
+                    let alert_text = if freeze {
+                        "You have been frozen by an administrator."
+                    } else {
+                        "You have been unfrozen."
+                    };
+                    let all_clients = clients.read().await;
+                    for (peer_addr, peer_client) in all_clients.iter() {
+                        let is_target = {
+                            let peer = peer_client.lock().await;
+                            peer.agent_id == target_id
+                        };
+                        if is_target {
+                            let alert = AgentAlertMessage {
+                                agent_data: agent_alert_message::AgentData {
+                                    agent_id: target_id,
+                                },
+                                alert_data: agent_alert_message::AlertData {
+                                    modal: false,
+                                    message: alert_text.as_bytes().to_vec(),
+                                },
+                            };
+                            let mut peer = peer_client.lock().await;
+                            let (pkt_bytes, _) = peer.circuit.send_msg(&alert, true);
+                            let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                            break;
+                        }
+                    }
+                } else {
+                    warn!(target = %target_id, "FreezeUser: target presence not found");
+                }
+            }
+        }
+
+        // --- EjectUser handler ---
+        if msg_id == EjectUser::ID {
+            if let Ok(req) = EjectUser::decode(&pkt.body) {
+                let target_id = req.data.target_id;
+                let also_ban = (req.data.flags & 1) != 0;
+                info!(
+                    agent = %agent_id,
+                    target = %target_id,
+                    ban = also_ban,
+                    "EjectUser"
+                );
+                let all_clients = clients.read().await;
+                for (peer_addr, peer_client) in all_clients.iter() {
+                    let is_target = {
+                        let peer = peer_client.lock().await;
+                        peer.agent_id == target_id
+                    };
+                    if is_target {
                         let fail_msg = TeleportFailed {
                             info: teleport_failed::Info {
-                                agent_id,
-                                reason: b"Cross-region teleport not supported".to_vec(),
+                                agent_id: target_id,
+                                reason: b"You have been ejected from this region.".to_vec(),
                             },
                             alert_info: Vec::new(),
                         };
-                        let (pkt_bytes, _) = session.circuit.send_msg(&fail_msg, true);
-                        let _ = socket.send_to(&pkt_bytes, src).await;
+                        let mut peer = peer_client.lock().await;
+                        let (pkt_bytes, _) = peer.circuit.send_msg(&fail_msg, true);
+                        let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                        break;
                     }
-                    warn!(agent = %agent_id, handle = req.info.region_handle, "cross-region teleport not yet supported");
+                }
+                drop(all_clients);
+                scene.remove_presence(&target_id);
+                info!(target = %target_id, "ejected user from region");
+            }
+        }
+
+        // --- GodUpdateRegionInfo handler ---
+        if msg_id == GodUpdateRegionInfo::ID {
+            if let Ok(req) = GodUpdateRegionInfo::decode(&pkt.body) {
+                let new_name = String::from_utf8_lossy(&req.region_info.sim_name)
+                    .trim_end_matches('\0')
+                    .to_string();
+                info!(
+                    agent = %agent_id,
+                    new_name = %new_name,
+                    estate_id = req.region_info.estate_id,
+                    region_flags = req.region_info.region_flags,
+                    "GodUpdateRegionInfo"
+                );
+            }
+        }
+
+        // --- RequestRegionInfo handler ---
+        if msg_id == RequestRegionInfo::ID {
+            if let Ok(_req) = RequestRegionInfo::decode(&pkt.body) {
+                if let Some(client) = &client {
+                    let reply = RegionInfo {
+                        agent_data: region_info::AgentData {
+                            agent_id,
+                            session_id,
+                        },
+                        region_info: region_info::RegionInfo {
+                            sim_name: scene.region_info.region_name.as_bytes().to_vec(),
+                            estate_id: 1,
+                            parent_estate_id: 1,
+                            region_flags: 0,
+                            sim_access: 13,
+                            max_agents: 40,
+                            billable_factor: 0.0,
+                            object_bonus_factor: 1.0,
+                            water_height: 20.0,
+                            terrain_raise_limit: 100.0,
+                            terrain_lower_limit: -100.0,
+                            price_per_meter: 0,
+                            redirect_grid_x: 0,
+                            redirect_grid_y: 0,
+                            use_estate_sun: true,
+                            sun_hour: 0.0,
+                        },
+                        region_info2: region_info::RegionInfo2 {
+                            product_sku: Vec::new(),
+                            product_name: b"OpenSimulator-Rust".to_vec(),
+                            max_agents32: 40,
+                            hard_max_agents: 100,
+                            hard_max_objects: 15000,
+                        },
+                        region_info3: Vec::new(),
+                        region_info5: Vec::new(),
+                        combat_settings: Vec::new(),
+                    };
+                    let mut session = client.lock().await;
+                    let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                    let _ = socket.send_to(&pkt_bytes, src).await;
+                    info!(agent = %agent_id, "sent RegionInfo reply");
                 }
             }
         }
@@ -3262,7 +3519,7 @@ async fn send_movement_complete(
     socket: &Arc<UdpSocket>,
     client: &Arc<Mutex<ClientSession>>,
     addr: SocketAddr,
-    region_info: &RegionInfo,
+    region_info: &SceneRegionInfo,
     scene: &Arc<Scene>,
     event_queues: &EventQueueMap,
     caps_base: &str,
@@ -3886,7 +4143,7 @@ mod tests {
 
     #[test]
     fn test_region_info_from_config() {
-        let info = RegionInfo::new("Test Region", 1000, 2000);
+        let info = SceneRegionInfo::new("Test Region", 1000, 2000);
         assert_eq!(info.region_name, "Test Region");
         assert_eq!(info.region_loc_x, 1000);
         assert_eq!(info.region_loc_y, 2000);
