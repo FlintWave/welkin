@@ -1166,6 +1166,9 @@ const KNOWN_CAPS: &[&str] = &[
     "NewFileAgentInventory",
     "UpdateNotecardAgentInventory",
     "UpdateScriptAgent",
+    "FetchInventoryDescendents2",
+    "FetchInventory2",
+    "UploadBakedTexture",
 ];
 
 async fn seed_caps_handler(

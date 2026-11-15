@@ -184,6 +184,52 @@ pub async fn update_script_agent(body: Bytes) -> Response {
     llsd_response(Llsd::Map(map))
 }
 
+pub async fn fetch_inventory_descendents2(body: Bytes) -> Response {
+    let parsed = from_xml(&body).unwrap_or(Llsd::Undef);
+    let folders = match parsed.get("folders") {
+        Llsd::Array(arr) => arr.as_slice(),
+        _ => &[],
+    };
+
+    let mut result_folders = Vec::new();
+    for folder in folders {
+        let folder_id = folder.get("folder_id").as_uuid();
+        let owner_id = folder.get("owner_id").as_uuid();
+
+        let mut entry = Map::new();
+        entry.insert("agent_id".into(), Llsd::Uuid(owner_id));
+        entry.insert("descendents".into(), Llsd::Integer(0));
+        entry.insert("folder_id".into(), Llsd::Uuid(folder_id));
+        entry.insert("items".into(), Llsd::Array(Vec::new()));
+        entry.insert("categories".into(), Llsd::Array(Vec::new()));
+        entry.insert("owner_id".into(), Llsd::Uuid(owner_id));
+        entry.insert("version".into(), Llsd::Integer(1));
+        result_folders.push(Llsd::Map(entry));
+    }
+
+    let mut root = Map::new();
+    root.insert("folders".into(), Llsd::Array(result_folders));
+    llsd_response(Llsd::Map(root))
+}
+
+pub async fn fetch_inventory2(body: Bytes) -> Response {
+    let parsed = from_xml(&body).unwrap_or(Llsd::Undef);
+    let agent_id = parsed.get("agent_id").as_uuid();
+
+    let mut root = Map::new();
+    root.insert("agent_id".into(), Llsd::Uuid(agent_id));
+    root.insert("items".into(), Llsd::Array(Vec::new()));
+    llsd_response(Llsd::Map(root))
+}
+
+pub async fn upload_baked_texture(body: Bytes) -> Response {
+    let _ = body;
+    let mut root = Map::new();
+    root.insert("state".into(), Llsd::String("complete".into()));
+    root.insert("new_asset".into(), Llsd::String(Uuid::new_v4().to_string()));
+    llsd_response(Llsd::Map(root))
+}
+
 fn log_upload_body(cap_name: &str, body: &[u8]) {
     match from_xml(body) {
         Ok(llsd) => {
@@ -263,6 +309,12 @@ pub fn cap_routes(asset_state: AssetServiceState) -> Vec<(&'static str, MethodRo
             post(update_notecard_agent_inventory),
         ),
         ("UpdateScriptAgent", post(update_script_agent)),
+        (
+            "FetchInventoryDescendents2",
+            post(fetch_inventory_descendents2),
+        ),
+        ("FetchInventory2", post(fetch_inventory2)),
+        ("UploadBakedTexture", post(upload_baked_texture)),
     ]
 }
 

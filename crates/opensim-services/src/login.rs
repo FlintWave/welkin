@@ -441,6 +441,7 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>)
     members.push_str(&xml_str("first_name", &account.first_name));
     members.push_str(&xml_str("last_name", &account.last_name));
     members.push_str(&xml_str("agent_id", &principal_id));
+    members.push_str(&xml_str("real_id", &principal_id));
     members.push_str(&xml_str("session_id", &session_id));
     members.push_str(&xml_str("secure_session_id", &secure_session_id));
     members.push_str(&xml_i4("circuit_code", circuit_code));
