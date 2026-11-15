@@ -7,10 +7,9 @@ simulator). Wire and schema compatibility with the C# server is the contract;
 internals are free to change. Licence: GPL-3.0-or-later. The C# reference tree
 (`opensim-0.9.3.0-source`) is read-only and kept alongside this repository.
 
-Status: Phase 3 in progress. Phases 0, 1 and 2 (port-foundation, open-source-audit,
-protocol-core, physics-backend, grid-services, capacity-assessor, grid-portal)
-are done, and region-simulator-core is accepted. Most simulator and module crates below are still empty skeletons (a
-`lib.rs` with no logic). The table marks which.
+Status: pre-alpha. 22 changes completed and archived (476 tasks); 6 active
+changes in progress (167/281 tasks done). See
+[remaining parity](remaining-parity-summary.md) for the full breakdown.
 
 ## Workspace
 
@@ -18,7 +17,7 @@ Cargo workspace (`Cargo.toml`, edition 2024, `members = ["crates/*"]`). All
 crates are prefixed `opensim-`.
 
 <details>
-<summary>Full crate table (23 crates — click to expand)</summary>
+<summary>Full crate table (26 crates — click to expand)</summary>
 
 | Crate | Role | State |
 |---|---|---|
@@ -39,8 +38,10 @@ crates are prefixed `opensim-`.
 | `welkin-scene` | Scene, object groups and parts, presences, XML2 serializer, terrain (channel, file I/O, brushes, compression), region manager, shutdown | implemented |
 | `welkin-modules` | Region modules (land, permissions, chat, groups, profiles, NPCs, IM, IRC, concierge) | implemented |
 | `welkin-archive` | OAR/IAR archives: OAR single/multi-region save/load, IAR save/load, OspResolver, ExternalRepresentationUtils, console commands (9,555 lines, 205 tests) | implemented |
-| `welkin-script-vm` | Luau VM via mlua: `ScriptInstance`, `ScriptScheduler`, `RegionTransferBundle`, `ScriptState` save/restore, 82 `ll*` (49 implemented), 27 `os*` with threat levels, events and detected parameters. See `docs/script-engine-summary.md` | implemented (172 tests) |
-| `welkin-script-compiler`, `-api` | LSL-to-Luau transpiler; scene-bound script API | skeleton |
+| `welkin-script-vm` | Luau VM via mlua: `ScriptInstance`, `ScriptScheduler`, `RegionTransferBundle`, `ScriptState` save/restore, 206 `ll*` builtins, 236 `os*` with threat levels, events and detected parameters. See `docs/script-engine-summary.md` and `docs/ossl.md` | implemented |
+| `welkin-script-compiler`, `-api` | LSL-to-Luau transpiler; scene-bound script API | implemented |
+| `welkin-realmwalker` | Rust-native bot/client SDK: async login, UDP circuit, chat, movement, objects. BSD 3-Clause (ported from LibreMetaverse). See `docs/realmwalker.md` | implemented (84 tests) |
+| `welkin-migration` | C# OpenSim to Welkin migration tool: config converter, DB validator, password upgrade (Argon2id) | implemented |
 | `welkin-portal` | Grid portal: staff auth (argon2), sessions, RBAC roles, audit log, region control, pages, grid map, people/sign-up, first-run wizard, content/catalogue | implemented |
 | `welkin-companion` | Tauri 2 desktop app: tray icon, service start/stop, log viewer, notifications, remote grid connect. **Standalone**: excluded from workspace (`Cargo.toml` exclude) | implemented |
 | `welkin-robust` | Binary: grid services | skeleton (`main.rs`) |
@@ -92,11 +93,16 @@ graph TD
         API[welkin-script-api]
     end
 
+    subgraph Clients["Client SDKs"]
+        REALMWALKER[welkin-realmwalker]
+    end
+
     subgraph Binaries["Binaries"]
         ROBUST[welkin-robust]
         REGION[welkin-region]
         COMPANION[welkin-companion]
         CONFORM[welkin-conformance]
+        MIGRATION[welkin-migration]
     end
 
     A_LLSD --> LLSD
@@ -125,6 +131,10 @@ graph TD
     VM --> API
 
     COMPANION -.->|HTTP| PORTAL
+
+    MSG --> REALMWALKER
+    TYPES --> REALMWALKER
+    MIGRATION --> DATA
 ```
 
 <details>
@@ -143,6 +153,8 @@ welkin-scene, welkin-services -> welkin-modules
 welkin-capacity -> welkin-portal -> welkin-robust (portal router)
 welkin-companion (standalone, Tauri 2) --HTTP--> welkin-portal control interface
 welkin-script-compiler -> welkin-script-vm -> welkin-script-api
+welkin-msg, welkin-types -> welkin-realmwalker (bot/client SDK)
+welkin-data -> welkin-migration (C# to Welkin migration tool)
 aurora-net (test bot only) -> welkin-conformance, dev-dep of welkin-msg
 ```
 
@@ -286,9 +298,10 @@ Phase 2 complete: 53 tasks across 3 changes. All accepted.
 | `capacity-assessor` | 13/13 | ~600 | Host scanning (CPU, memory with cgroup limits, disk, container), 12 sourced coefficients, estimate engine with 3 workload profiles, stubs for benchmark/model/live pending region-simulator-core (Phase 3) |
 | `grid-portal` | 26/26 | ~3,800 | 2,084-line portal crate, installer scripts, Tauri 2 companion app, 14-stage e2e test, Opus security review with 3 fixes |
 
-Phase 2 total: 111/142 overall tasks complete.
-
-Phase 3: region-simulator-core (all 7 task groups), prim-meshing and script-engine accepted.
+Phase 2 total: 111/142 overall tasks complete at the time of Phase 2 sign-off.
+All subsequent phases through remaining-parity have since been completed and
+archived (476 tasks total). See [remaining parity](remaining-parity-summary.md)
+for current numbers.
 
 ## External grid mode
 
@@ -318,8 +331,8 @@ Scripts run on Luau through mlua 0.12, one VM per script. See
 | Scheduler | `scheduler.rs` | Round-robin by instruction limit, timers, event broadcast |
 | Transfer | `transfer.rs` | `RegionTransferBundle` for region crossing |
 | State | `lib.rs` | `ScriptState` (bytecode and globals JSON), `new_vm_with_memory_limit` |
-| `ll*` | `builtins/` | 82 functions over a shared `ScriptContext` |
-| `os*` | `ossl/` | 233 functions gated by `OsslThreatLevel` and `OsslConfig`; see OSSL below |
+| `ll*` | `builtins/` | 206 functions over a shared `ScriptContext` |
+| `os*` | `ossl/` | 236 functions gated by `OsslThreatLevel` and `OsslConfig`; see [OSSL reference](ossl.md) |
 | Events | `events.rs` | `DetectedInfo`, `EventContext`, `llDetected*`, `dispatch_event` |
 
 Sandboxing review found 2 HIGH issues (unfrozen globals, unbounded event queue)
@@ -338,10 +351,11 @@ The `os*` layer lives in `welkin-script-vm/src/ossl/` (13 files). See
 | `register_ossl()` | Registers only permitted functions into the Luau globals |
 | `function_catalog()` | Name and threat level for every function |
 
-Roughly 60 functions have real bodies (draw, string, math, crypto, time, sim
-info); the rest are stubs awaiting region modules. Review found 1 HIGH (PBKDF2
-hash, fixed in the working tree) and 2 MEDIUM (role checks not enforced at
-registration, `expect()` in crypto); see `docs/security-review-ossl-api.md`.
+About 90 functions have real implementations (draw, string, math, crypto, time,
+sim/grid info, terrain, NPC, health, speed, sun/wind); the rest are stubs
+awaiting their subsystem. Review found 1 HIGH (PBKDF2 hash, since corrected)
+and 2 MEDIUM (role checks deferred, `expect()` in crypto); see
+`docs/security-review-ossl-api.md` and `docs/ossl.md` for the full reference.
 
 ## Region modules
 
@@ -426,27 +440,6 @@ friends, IM, HypergridLinker, and 10 region modules. See
 ~9,144 lines, 265 tests (215 unit, 50 integration). CRITICAL RISK review
 found 3 critical (suitcase escape, VerifyAgent missing, UUID impersonation),
 3 high, 3 medium, 2 low; see `docs/security-review-hypergrid.md`.
-
-## Hypergrid
-
-Cross-grid federation: teleportation, inventory, friends, IM, and map linking
-between independent grids. See `docs/hypergrid-summary.md`.
-
-| Component | Role |
-|---|---|
-| `GatekeeperService` | Foreign visitor entry, hyperlink creation, access control |
-| `UserAgentService` | Outbound HG teleport, session verification, UUI |
-| `HGSuitcaseInventoryService` | Restricted suitcase inventory for foreign visitors |
-| `HGAssetService` | Access-controlled asset transfer between grids |
-| `HGFriendsService` | Cross-grid friendship with secret verification |
-| `HGInstantMessageService` | Cross-grid IM routing via UserAgentService |
-| `HypergridLinker` | Grid-to-grid region linking, console commands |
-| Service connectors | HTTP clients for Gatekeeper, UserAgent, HGFriends, HELO |
-| HG region modules | Entity transfer, inventory, friends, lure, map, users (10 modules) |
-
-~9,144 lines, 265 tests (215 unit, 50 integration). CRITICAL RISK security
-review found 3 critical (suitcase escape, VerifyAgent, UUID impersonation),
-3 high, 3 medium; see `docs/security-review-hypergrid.md`.
 
 ## WebRTC voice
 
