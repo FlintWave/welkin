@@ -2543,6 +2543,7 @@ dependencies = [
  "opensim-data",
  "opensim-runtime",
  "opensim-services",
+ "sqlx",
  "tokio",
  "tracing",
  "tracing-subscriber",

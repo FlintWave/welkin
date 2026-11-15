@@ -67,6 +67,54 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let pool = DataPool::connect(&conn_str).await?;
     info!("Database connection established");
 
+    // --- Run schema migrations ---
+    let backend = if conn_str.starts_with("mysql") {
+        opensim_data::migrations::Backend::MySQL
+    } else if conn_str.starts_with("postgres") {
+        opensim_data::migrations::Backend::PostgreSQL
+    } else {
+        opensim_data::migrations::Backend::SQLite
+    };
+    let runner = opensim_data::migrations::MigrationRunner::new(pool.inner().clone(), backend);
+    if backend == opensim_data::migrations::Backend::SQLite {
+        runner.ensure_migrations_table().await?;
+        for ddl in &[
+            "CREATE TABLE IF NOT EXISTS users (\
+             UUID VARCHAR(36) PRIMARY KEY, username VARCHAR(32), surname VARCHAR(32), \
+             passwordHash VARCHAR(32), passwordSalt VARCHAR(32), \
+             webLoginKey VARCHAR(255), created INT DEFAULT 0)",
+            "CREATE TABLE IF NOT EXISTS userfriends (\
+             ownerID VARCHAR(36), friendID VARCHAR(36), friendPerms INT DEFAULT 0)",
+            "CREATE TABLE IF NOT EXISTS inventoryfolders(\
+             folderName varchar(64), type integer, version integer, \
+             folderID varchar(36) primary key, \
+             agentID varchar(36) not null default '00000000-0000-0000-0000-000000000000', \
+             parentFolderID varchar(36) not null default '00000000-0000-0000-0000-000000000000')",
+            "CREATE TABLE IF NOT EXISTS inventoryitems(\
+             assetID varchar(36), assetType integer, inventoryName varchar(64), \
+             inventoryDescription varchar(128), inventoryNextPermissions integer, \
+             inventoryCurrentPermissions integer, invType integer, creatorID varchar(128), \
+             inventoryBasePermissions integer, inventoryEveryOnePermissions integer, \
+             salePrice integer default 99, saleType integer default 0, \
+             creationDate integer default 2000, \
+             groupID varchar(36) default '00000000-0000-0000-0000-000000000000', \
+             groupOwned integer default 0, flags integer default 0, \
+             inventoryID varchar(36) primary key, \
+             parentFolderID varchar(36) not null default '00000000-0000-0000-0000-000000000000', \
+             avatarID varchar(36) not null default '00000000-0000-0000-0000-000000000000', \
+             inventoryGroupPermissions integer not null default 0)",
+            "CREATE INDEX IF NOT EXISTS inventoryfolders_agentid ON inventoryfolders(agentID)",
+            "CREATE INDEX IF NOT EXISTS inventoryfolders_parentid ON inventoryfolders(parentFolderID)",
+            "CREATE INDEX IF NOT EXISTS inventoryitems_parentfolderid ON inventoryitems(parentFolderID)",
+            "CREATE INDEX IF NOT EXISTS inventoryitems_avatarid ON inventoryitems(avatarID)",
+        ] {
+            sqlx::query(ddl).execute(pool.inner()).await?;
+        }
+        runner.set_version("InventoryStore", 2).await?;
+    }
+    runner.run_all().await?;
+    info!("Database migrations complete");
+
     let p = pool.inner().clone();
 
     let auth_store = Arc::new(opensim_data::auth::AuthStore::new(p.clone()));

@@ -20,7 +20,7 @@ COMMIT;
 
 BEGIN;
 
-CREATE TABLE AgentPrefs(
+CREATE TABLE IF NOT EXISTS AgentPrefs(
     PrincipalID CHAR(36) NOT NULL,
     AccessPrefs CHAR(2) NOT NULL DEFAULT 'M',
     HoverHeight DOUBLE(30, 27) NOT NULL DEFAULT 0,

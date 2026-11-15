@@ -11,6 +11,7 @@ opensim-runtime = { path = "../opensim-runtime" }
 opensim-services = { path = "../opensim-services" }
 opensim-data = { path = "../opensim-data" }
 axum = { workspace = true }
+sqlx = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
