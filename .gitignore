@@ -5,3 +5,4 @@ robust.db
 tests/script-testing/corpus/
 tests/script-testing/results/
 tests/script-testing/scanner/target/
+tests/script-testing/runner/target/
