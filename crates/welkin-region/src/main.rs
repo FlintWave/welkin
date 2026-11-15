@@ -219,8 +219,18 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         let physics =
             welkin_physics_rapier::RapierPhysicsScene::new(&scene.region_info.region_name);
         scene.set_physics(Box::new(physics));
-        let terrain_height = 21.0f32;
-        let height_map: Vec<f32> = vec![terrain_height; 256 * 256];
+        let mut height_map: Vec<f32> = Vec::with_capacity(256 * 256);
+        for y in 0..256u32 {
+            for x in 0..256u32 {
+                let xf = x as f32;
+                let yf = y as f32;
+                let height = 21.0f32
+                    + 1.5f32 * (xf * 0.02).sin() * (yf * 0.03).cos()
+                    + 0.8f32 * (xf * 0.05 + 1.0).sin() * (yf * 0.04 + 0.5).sin()
+                    + 0.3f32 * (xf * 0.08 + yf * 0.06).cos();
+                height_map.push(height);
+            }
+        }
         scene.set_terrain(&height_map);
         info!("Physics engine (Rapier) initialised with terrain heightfield");
     }
@@ -305,7 +315,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Event subscriber tasks are spawned below, after the CancellationToken.
 
     // --- Grid service registration ---
-    let grid_reg = match region_config.grid_service_url {
+    let (grid_reg, grid_connector_opt) = match region_config.grid_service_url {
         Some(ref url) => {
             let caps_port = region_config.internal_port.wrapping_add(1);
             let server_uri = format!("http://{}:{}/", region_config.external_host_name, caps_port);
@@ -341,6 +351,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             };
 
             let connector = Arc::new(welkin_services::remote::grid::RemoteGridConnector::new(url));
+            let grid_conn_for_dispatch = connector.clone();
             let registration = welkin_services::registration::GridRegistration::new(
                 connector,
                 region_row,
@@ -350,13 +361,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(()) => info!(region = %scene.region_info.region_name, "Registered with grid"),
                 Err(e) => warn!(error = %e, "Failed to register region with grid"),
             }
-            Some(registration)
+            (Some(registration), Some(grid_conn_for_dispatch))
         }
         None => {
             warn!("No GridService URL configured; skipping grid registration");
-            None
+            (None, None)
         }
     };
+    let grid_connector: Option<Arc<welkin_services::remote::grid::RemoteGridConnector>> = grid_connector_opt;
 
     // --- Cancellation token for coordinated shutdown ---
     let cancel = CancellationToken::new();
@@ -395,6 +407,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let process_eqs = event_queues.clone();
     let process_caps_base = caps_base.clone();
     let process_scheduler = Arc::clone(&script_scheduler);
+    let process_grid_connector = grid_connector.clone();
     let process_handle = tokio::spawn(async move {
         process_messages(
             msg_rx,
@@ -407,6 +420,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             process_cancel,
             process_scheduler,
             scripts_enabled,
+            process_grid_connector,
         )
         .await;
     });
@@ -768,6 +782,7 @@ async fn process_messages(
     cancel: CancellationToken,
     script_scheduler: Arc<parking_lot::Mutex<ScriptScheduler>>,
     scripts_enabled: bool,
+    grid_connector: Option<Arc<welkin_services::remote::grid::RemoteGridConnector>>,
 ) {
     let mut last_agent_update: HashMap<Uuid, Instant> = HashMap::new();
     let mut last_anim: HashMap<Uuid, &'static str> = HashMap::new();
@@ -1526,27 +1541,72 @@ async fn process_messages(
             let ri = &scene.region_info;
             let gx = ri.region_loc_x as u16;
             let gy = ri.region_loc_y as u16;
-            let pd = &req.position_data;
-            if gx >= pd.min_x && gx <= pd.max_x && gy >= pd.min_y && gy <= pd.max_y {
+            let mut data = Vec::new();
+            let mut sizes = Vec::new();
+
+            if gx >= req.position_data.min_x && gx <= req.position_data.max_x
+                && gy >= req.position_data.min_y && gy <= req.position_data.max_y
+            {
+                data.push(map_block_reply::Data {
+                    x: gx,
+                    y: gy,
+                    name: ri.region_name.clone().into_bytes(),
+                    access: 21,
+                    region_flags: 0,
+                    water_height: 20,
+                    agents: 0,
+                    map_image_id: Uuid::nil(),
+                });
+                sizes.push(map_block_reply::Size {
+                    size_x: ri.region_size_x as u16,
+                    size_y: ri.region_size_y as u16,
+                });
+            }
+
+            if let Some(ref gc) = grid_connector {
+                let zero_scope = "00000000-0000-0000-0000-000000000000";
+                let region_id = ri.region_id.to_string();
+                match gc.get_neighbours(zero_scope, &region_id).await {
+                    Ok(neighbours) => {
+                        for n in neighbours {
+                            let nx = (n.loc_x / 256) as u16;
+                            let ny = (n.loc_y / 256) as u16;
+                            if nx >= req.position_data.min_x && nx <= req.position_data.max_x
+                                && ny >= req.position_data.min_y && ny <= req.position_data.max_y
+                            {
+                                let map_tex = Uuid::parse_str(&n.region_map_texture)
+                                    .unwrap_or(Uuid::nil());
+                                data.push(map_block_reply::Data {
+                                    x: nx,
+                                    y: ny,
+                                    name: n.region_name.into_bytes(),
+                                    access: n.access as u8,
+                                    region_flags: n.flags as u32,
+                                    water_height: 20,
+                                    agents: 0,
+                                    map_image_id: map_tex,
+                                });
+                                sizes.push(map_block_reply::Size {
+                                    size_x: n.size_x as u16,
+                                    size_y: n.size_y as u16,
+                                });
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "Failed to query grid neighbours for map");
+                    }
+                }
+            }
+
+            if !data.is_empty() {
                 let reply = MapBlockReply {
                     agent_data: map_block_reply::AgentData {
                         agent_id,
                         flags: req.agent_data.flags,
                     },
-                    data: vec![map_block_reply::Data {
-                        x: gx,
-                        y: gy,
-                        name: ri.region_name.clone().into_bytes(),
-                        access: 21,
-                        region_flags: 0,
-                        water_height: 20,
-                        agents: 0,
-                        map_image_id: Uuid::nil(),
-                    }],
-                    size: vec![map_block_reply::Size {
-                        size_x: ri.region_size_x as u16,
-                        size_y: ri.region_size_y as u16,
-                    }],
+                    data,
+                    size: sizes,
                 };
                 if let Some(client) = &client {
                     let mut session = client.lock().await;
@@ -1598,11 +1658,29 @@ async fn process_messages(
                     message: chat.chat_data.message.clone(),
                 },
             };
-            let clients_map = clients.read().await;
-            for (peer_addr, peer_client) in clients_map.iter() {
-                let mut peer = peer_client.lock().await;
-                let (pkt_bytes, _) = peer.circuit.send_msg(&relay, true);
-                let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+            let chat_type = chat.chat_data.type_;
+            if chat_type != 3 && chat_type != 4 {
+                let range_sq: f32 = match chat_type {
+                    0 => 10.0 * 10.0,
+                    1 => 20.0 * 20.0,
+                    2 => 100.0 * 100.0,
+                    _ => f32::INFINITY,
+                };
+                let clients_map = clients.read().await;
+                for (peer_addr, peer_client) in clients_map.iter() {
+                    let mut peer = peer_client.lock().await;
+                    if chat_type <= 2 {
+                        if let Some(presence) = scene.get_presence(&peer.agent_id) {
+                            if sender_pos.distance_squared(presence.position) > range_sq {
+                                continue;
+                            }
+                        } else {
+                            continue;
+                        }
+                    }
+                    let (pkt_bytes, _) = peer.circuit.send_msg(&relay, true);
+                    let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                }
             }
 
             // Dispatch listen events to scripts on this channel
