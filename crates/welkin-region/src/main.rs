@@ -1336,6 +1336,238 @@ async fn process_messages(
             }
         }
 
+        // ---- MultipleObjectUpdate handler ----
+        if msg_id == MultipleObjectUpdate::ID
+            && let Ok(mou) = MultipleObjectUpdate::decode(&pkt.body)
+        {
+            info!(agent = %mou.agent_data.agent_id, count = mou.object_data.len(), "MultipleObjectUpdate");
+            for entry in &mou.object_data {
+                let local_id = entry.object_local_id;
+                let type_flags = entry.type_;
+                let data = &entry.data;
+
+                // Parse position (Vec3) from 12 bytes at the given offset
+                let parse_vec3 = |d: &[u8], off: usize| -> Option<glam::Vec3> {
+                    if d.len() < off + 12 { return None; }
+                    let x = f32::from_le_bytes([d[off], d[off+1], d[off+2], d[off+3]]);
+                    let y = f32::from_le_bytes([d[off+4], d[off+5], d[off+6], d[off+7]]);
+                    let z = f32::from_le_bytes([d[off+8], d[off+9], d[off+10], d[off+11]]);
+                    Some(glam::Vec3::new(x, y, z))
+                };
+
+                // Parse rotation (Quat) from 12 bytes (3-component normalized) at the given offset
+                let parse_quat = |d: &[u8], off: usize| -> Option<glam::Quat> {
+                    if d.len() < off + 12 { return None; }
+                    let x = f32::from_le_bytes([d[off], d[off+1], d[off+2], d[off+3]]);
+                    let y = f32::from_le_bytes([d[off+4], d[off+5], d[off+6], d[off+7]]);
+                    let z = f32::from_le_bytes([d[off+8], d[off+9], d[off+10], d[off+11]]);
+                    let w_sq = 1.0_f32 - x*x - y*y - z*z;
+                    let w = if w_sq > 0.0 { w_sq.sqrt() } else { 0.0 };
+                    Some(glam::Quat::from_xyzw(x, y, z, w))
+                };
+
+                let is_group = type_flags & 0x08 != 0;
+                let has_pos = type_flags & 0x01 != 0;
+                let has_rot = type_flags & 0x02 != 0;
+                let has_scale = type_flags & 0x04 != 0;
+
+                let uuid = match scene.get_object_by_local_id(local_id) {
+                    Some(u) => u,
+                    None => {
+                        warn!(local_id, "MultipleObjectUpdate: unknown local_id");
+                        continue;
+                    }
+                };
+
+                let mut new_pos: Option<glam::Vec3> = None;
+                let mut new_rot: Option<glam::Quat> = None;
+                let mut new_scale: Option<glam::Vec3> = None;
+                let mut offset = 0usize;
+
+                if has_pos {
+                    new_pos = parse_vec3(data, offset);
+                    offset += 12;
+                }
+                if has_rot {
+                    new_rot = parse_quat(data, offset);
+                    offset += 12;
+                }
+                if has_scale {
+                    new_scale = parse_vec3(data, offset);
+                    let _ = offset;
+                }
+
+                // Apply mutations
+                scene.with_object_mut(&uuid, |group| {
+                    if is_group {
+                        if let Some(pos) = new_pos {
+                            group.set_position(pos);
+                        }
+                        if let Some(rot) = new_rot {
+                            group.set_rotation(rot);
+                        }
+                        if let Some(scale) = new_scale {
+                            group.root_part_mut().scale = scale;
+                        }
+                    } else {
+                        if let Some(pos) = new_pos {
+                            group.root_part_mut().group_position = pos;
+                        }
+                        if let Some(rot) = new_rot {
+                            group.root_part_mut().rotation_offset = rot;
+                        }
+                        if let Some(scale) = new_scale {
+                            group.root_part_mut().scale = scale;
+                        }
+                    }
+                });
+
+                // Read back updated values for terse broadcast
+                if let Some(obj) = scene.get_object(&uuid) {
+                    let root = obj.root_part();
+                    let terse_local_id = root.local_id;
+                    let pos = root.group_position;
+                    let rot = root.rotation_offset;
+                    broadcast_terse_object_update(
+                        terse_local_id,
+                        pos,
+                        glam::Vec3::ZERO,
+                        glam::Vec3::ZERO,
+                        rot,
+                        glam::Vec3::ZERO,
+                        scene.region_info.region_handle,
+                        &socket,
+                        &clients,
+                    ).await;
+                }
+                info!(local_id, type_flags, is_group, "MultipleObjectUpdate: applied");
+            }
+        }
+
+        // ---- ObjectSelect handler ----
+        if msg_id == ObjectSelect::ID
+            && let Ok(sel) = ObjectSelect::decode(&pkt.body)
+        {
+            info!(agent = %sel.agent_data.agent_id, count = sel.object_data.len(), "ObjectSelect");
+            for obj_data in &sel.object_data {
+                let local_id = obj_data.object_local_id;
+                let uuid = match scene.get_object_by_local_id(local_id) {
+                    Some(u) => u,
+                    None => {
+                        warn!(local_id, "ObjectSelect: unknown local_id");
+                        continue;
+                    }
+                };
+
+                // Mark as selected
+                scene.with_object_mut(&uuid, |group| {
+                    group.is_selected = true;
+                });
+
+                // Build ObjectProperties reply
+                if let Some(obj) = scene.get_object(&uuid) {
+                    let root = obj.root_part();
+                    let props = ObjectProperties {
+                        object_data: vec![object_properties::ObjectData {
+                            object_id: root.uuid,
+                            creator_id: root.creator_id,
+                            owner_id: root.owner_id,
+                            group_id: root.group_id,
+                            creation_date: root.creation_date as u64,
+                            base_mask: root.base_mask.bits(),
+                            owner_mask: root.owner_mask.bits(),
+                            group_mask: root.group_mask.bits(),
+                            everyone_mask: root.everyone_mask.bits(),
+                            next_owner_mask: root.next_owner_mask.bits(),
+                            ownership_cost: root.ownership_cost,
+                            sale_type: root.object_sale_type,
+                            sale_price: root.sale_price,
+                            aggregate_perms: 0,
+                            aggregate_perm_textures: 0,
+                            aggregate_perm_textures_owner: 0,
+                            category: root.category,
+                            inventory_serial: root.inventory_serial as i16,
+                            item_id: Uuid::nil(),
+                            folder_id: root.folder_id,
+                            from_task_id: Uuid::nil(),
+                            last_owner_id: root.last_owner_id,
+                            name: root.name.as_bytes().to_vec(),
+                            description: root.description.as_bytes().to_vec(),
+                            touch_name: root.touch_name.as_bytes().to_vec(),
+                            sit_name: root.sit_name.as_bytes().to_vec(),
+                            texture_id: Vec::new(),
+                        }],
+                    };
+                    // Send only to the selecting client
+                    if let Some(client) = &client {
+                        let mut session = client.lock().await;
+                        let (pkt_bytes, _) = session.circuit.send_msg(&props, true);
+                        let _ = socket.send_to(&pkt_bytes, src).await;
+                    }
+                    info!(local_id, object = %uuid, "ObjectSelect: sent ObjectProperties");
+                }
+            }
+        }
+
+        // ---- ObjectDeselect handler ----
+        if msg_id == ObjectDeselect::ID
+            && let Ok(desel) = ObjectDeselect::decode(&pkt.body)
+        {
+            info!(agent = %desel.agent_data.agent_id, count = desel.object_data.len(), "ObjectDeselect");
+            for obj_data in &desel.object_data {
+                let local_id = obj_data.object_local_id;
+                if let Some(uuid) = scene.get_object_by_local_id(local_id) {
+                    scene.with_object_mut(&uuid, |group| {
+                        group.is_selected = false;
+                    });
+                    info!(local_id, object = %uuid, "ObjectDeselect: deselected");
+                } else {
+                    warn!(local_id, "ObjectDeselect: unknown local_id");
+                }
+            }
+        }
+
+        // ---- RequestObjectPropertiesFamily handler ----
+        if msg_id == RequestObjectPropertiesFamily::ID
+            && let Ok(req) = RequestObjectPropertiesFamily::decode(&pkt.body)
+        {
+            let object_id = req.object_data.object_id;
+            let request_flags = req.object_data.request_flags;
+            info!(agent = %req.agent_data.agent_id, object = %object_id, flags = request_flags, "RequestObjectPropertiesFamily");
+
+            if let Some(obj) = scene.get_object(&object_id) {
+                let root = obj.root_part();
+                let reply = ObjectPropertiesFamily {
+                    object_data: object_properties_family::ObjectData {
+                        request_flags,
+                        object_id: root.uuid,
+                        owner_id: root.owner_id,
+                        group_id: root.group_id,
+                        base_mask: root.base_mask.bits(),
+                        owner_mask: root.owner_mask.bits(),
+                        group_mask: root.group_mask.bits(),
+                        everyone_mask: root.everyone_mask.bits(),
+                        next_owner_mask: root.next_owner_mask.bits(),
+                        ownership_cost: root.ownership_cost,
+                        sale_type: root.object_sale_type,
+                        sale_price: root.sale_price,
+                        category: root.category,
+                        last_owner_id: root.last_owner_id,
+                        name: root.name.as_bytes().to_vec(),
+                        description: root.description.as_bytes().to_vec(),
+                    },
+                };
+                if let Some(client) = &client {
+                    let mut session = client.lock().await;
+                    let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                    let _ = socket.send_to(&pkt_bytes, src).await;
+                }
+                info!(object = %object_id, "RequestObjectPropertiesFamily: replied");
+            } else {
+                warn!(object = %object_id, "RequestObjectPropertiesFamily: object not found");
+            }
+        }
+
         if msg_id == AgentThrottle::ID
             && let Ok(throttle_msg) = AgentThrottle::decode(&pkt.body)
             && let Some(client) = &client
@@ -1703,6 +1935,126 @@ async fn send_movement_complete(
     }
     event_queues.write().await.insert(session.agent_id, eq);
     info!(agent = %session.agent_id, "event queue created with initial event");
+}
+
+/// Broadcast a full ObjectUpdate for the given scene object to all connected clients.
+async fn broadcast_full_object_update(
+    obj: &SceneObjectGroup,
+    region_handle: u64,
+    socket: &UdpSocket,
+    clients: &ClientMap,
+) {
+    let root = obj.root_part();
+    let shape = &root.shape;
+    let prim_obj = FullObjectUpdate {
+        local_id: root.local_id,
+        full_id: root.uuid,
+        parent_id: root.parent_id,
+        pcode: 9,
+        state: 0,
+        crc: 0,
+        material: root.material,
+        click_action: root.click_action,
+        scale: root.scale,
+        position: root.group_position,
+        velocity: root.velocity,
+        acceleration: root.acceleration,
+        rotation: root.rotation_offset,
+        angular_velocity: root.angular_velocity,
+        update_flags: 0x0001_000D,
+        owner_id: root.owner_id,
+        path_curve: shape.path_curve,
+        profile_curve: shape.profile_curve,
+        path_begin: shape.path_begin,
+        path_end: shape.path_end,
+        path_scale_x: shape.path_scale_x,
+        path_scale_y: shape.path_scale_y,
+        path_shear_x: shape.path_shear_x,
+        path_shear_y: shape.path_shear_y,
+        path_twist: shape.path_twist,
+        path_twist_begin: shape.path_twist_begin,
+        path_radius_offset: shape.path_radius_offset,
+        path_taper_x: shape.path_taper_x,
+        path_taper_y: shape.path_taper_y,
+        path_revolutions: shape.path_revolutions,
+        path_skew: shape.path_skew,
+        profile_begin: shape.profile_begin,
+        profile_end: shape.profile_end,
+        profile_hollow: shape.profile_hollow,
+        texture_entry: build_default_prim_te(),
+        texture_anim: root.texture_animation.clone(),
+        name_value: Vec::new(),
+        data: Vec::new(),
+        text: root.text.clone(),
+        text_color: [
+            root.text_color.r(),
+            root.text_color.g(),
+            root.text_color.b(),
+            root.text_color.a(),
+        ],
+        media_url: root.media_url.clone(),
+        ps_block: root.particle_system.clone(),
+        extra_params: Vec::new(),
+        sound_id: root.sound_id,
+        sound_gain: root.sound_gain,
+        sound_flags: root.sound_flags,
+        sound_radius: root.sound_radius,
+        foot_plane: None,
+    };
+    let obj_msg = ObjectUpdate {
+        region_data: object_update::RegionData {
+            region_handle,
+            time_dilation: 65535,
+        },
+        object_data: vec![prim_obj.to_object_data()],
+    };
+    let all_clients = clients.read().await;
+    for (addr, c) in all_clients.iter() {
+        let mut sess = c.lock().await;
+        let (pkt_bytes, _) = sess.circuit.send_msg(&obj_msg, true);
+        let _ = socket.send_to(&pkt_bytes, *addr).await;
+    }
+}
+
+/// Broadcast an ImprovedTerseObjectUpdate for one prim to all connected clients.
+async fn broadcast_terse_object_update(
+    local_id: u32,
+    pos: glam::Vec3,
+    vel: glam::Vec3,
+    accel: glam::Vec3,
+    rot: glam::Quat,
+    ang_vel: glam::Vec3,
+    region_handle: u64,
+    socket: &UdpSocket,
+    clients: &ClientMap,
+) {
+    let terse_data = encode_terse(
+        local_id,
+        0,
+        false,
+        None,
+        pos,
+        vel,
+        accel,
+        rot,
+        ang_vel,
+    );
+    let terse_msg = ImprovedTerseObjectUpdate {
+        region_data: improved_terse_object_update::RegionData {
+            region_handle,
+            time_dilation: 65535,
+        },
+        object_data: vec![improved_terse_object_update::ObjectData {
+            data: terse_data,
+            texture_entry: Vec::new(),
+        }],
+    };
+    let all_clients = clients.read().await;
+    for (addr, c) in all_clients.iter() {
+        let mut sess = c.lock().await;
+        let (pkt_bytes, _) = sess.circuit.send_msg(&terse_msg, false);
+        let _ = socket.send_to(&pkt_bytes, *addr).await;
+    }
 }
 
 fn build_default_prim_te() -> Vec<u8> {
