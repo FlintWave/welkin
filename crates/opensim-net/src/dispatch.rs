@@ -194,7 +194,18 @@ mod tests {
         assert!(d.has_handler(&AgentSetAppearance::ID));
         assert!(d.has_handler(&ViewerEffect::ID));
 
-        assert_eq!(d.handler_count(), 13);
+        // P1-5: 2 handlers
+        assert!(d.has_handler(&RegionHandshakeReply::ID));
+        assert!(d.has_handler(&AgentThrottle::ID));
+
+        // Critical reply handlers: 5 handlers
+        assert!(d.has_handler(&StartPingCheck::ID));
+        assert!(d.has_handler(&AgentCachedTexture::ID));
+        assert!(d.has_handler(&AgentWearablesRequest::ID));
+        assert!(d.has_handler(&LogoutRequest::ID));
+        assert!(d.has_handler(&EconomyDataRequest::ID));
+
+        assert_eq!(d.handler_count(), 20);
     }
 
     #[test]

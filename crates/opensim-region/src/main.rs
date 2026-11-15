@@ -25,6 +25,12 @@ use opensim_net::dispatch::{HandleError, PacketContext, PacketDispatcher};
 use opensim_net::server::ClientSession;
 use opensim_scene::scene::{RegionInfo, Scene, SceneConfig};
 use opensim_msg::objects::FullObjectUpdate;
+use opensim_modules::{
+    ModuleConfig, SceneRef,
+    ChatModule, DefaultPermissionsModule, AvatarFactoryModule,
+    AttachmentsModule, EstateManagementModule, LandManagementModule,
+    CapsModule, DynAttrsModule, ServiceThrottleModule,
+};
 
 /// OpenSimulator Region Simulator
 #[derive(Parser, Debug)]
@@ -111,6 +117,23 @@ impl RegionConfig {
     }
 }
 
+struct ConfigBridge<'a>(&'a Config);
+
+impl ModuleConfig for ConfigBridge<'_> {
+    fn get_string(&self, section: &str, key: &str, default: &str) -> String {
+        self.0.get_string_or(section, key, default)
+    }
+    fn get_int(&self, section: &str, key: &str, default: i64) -> i64 {
+        self.0.get_i64_or(section, key, default)
+    }
+    fn get_bool(&self, section: &str, key: &str, default: bool) -> bool {
+        self.0.get_bool_or(section, key, default)
+    }
+    fn get_float(&self, section: &str, key: &str, default: f64) -> f64 {
+        self.0.get_f64_or(section, key, default)
+    }
+}
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
@@ -161,8 +184,31 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         handle = region_info.region_handle,
         "Creating scene"
     );
-    let scene = Scene::new(region_info, region_config.scene_config);
+    let frame_time = region_config.scene_config.frame_time;
+    let scene = Arc::new(Scene::new(region_info, region_config.scene_config));
     scene.start();
+
+    // --- Module system ---
+    let scene_ref = SceneRef::new(scene.region_info.region_id, scene.region_info.region_name.clone());
+    {
+        let mut registry = scene_ref.registry.write();
+        registry.register(ChatModule::new());
+        registry.register(DefaultPermissionsModule::new());
+        registry.register(AvatarFactoryModule::new());
+        registry.register(AttachmentsModule::new());
+        registry.register(EstateManagementModule::new());
+        registry.register(LandManagementModule::new());
+        registry.register(CapsModule::new());
+        registry.register(DynAttrsModule::new());
+        registry.register(ServiceThrottleModule::new());
+        if let Err(e) = registry.initialise_all(&ConfigBridge(&config)) {
+            warn!(error = %e, "module initialisation failed");
+        }
+        if let Err(e) = registry.add_region_all(&scene_ref) {
+            warn!(error = %e, "module add_region failed");
+        }
+        info!(count = registry.module_count(), "modules initialised");
+    }
 
     // --- Grid service registration ---
     let grid_reg = match region_config.grid_service_url {
@@ -293,6 +339,24 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             .ok();
     });
 
+    // --- Heartbeat loop ---
+    let heartbeat_cancel = cancel.clone();
+    let heartbeat_scene = Arc::clone(&scene);
+    let frame_time_ms = (frame_time * 1000.0) as u64;
+    let heartbeat_handle = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(
+            std::time::Duration::from_millis(frame_time_ms.max(50)),
+        );
+        loop {
+            tokio::select! {
+                _ = heartbeat_cancel.cancelled() => break,
+                _ = interval.tick() => {
+                    let _stats = heartbeat_scene.tick();
+                }
+            }
+        }
+    });
+
     info!(
         region = %scene.region_info.region_name,
         "Region simulator started successfully"
@@ -308,6 +372,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let _ = udp_handle.await;
     let _ = process_handle.await;
     let _ = caps_handle.await;
+    let _ = heartbeat_handle.await;
 
     if let Some(ref reg) = grid_reg {
         if let Err(e) = reg.shutdown().await {
@@ -315,6 +380,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    {
+        let mut registry = scene_ref.registry.write();
+        let _ = registry.close_all();
+    }
     scene.shutdown();
     info!("Region simulator shut down");
 
@@ -371,6 +440,98 @@ async fn process_messages(
         if msg_id == CompleteAgentMovement::ID {
             if let Some(client) = &client {
                 send_movement_complete(&socket, client, src, &region_info).await;
+            }
+        }
+
+        if msg_id == StartPingCheck::ID {
+            if let Some(client) = &client {
+                if let Ok(ping) = StartPingCheck::decode(&pkt.body) {
+                    let reply = CompletePingCheck {
+                        ping_id: complete_ping_check::PingID {
+                            ping_id: ping.ping_id.ping_id,
+                        },
+                    };
+                    let mut session = client.lock().await;
+                    let (pkt_bytes, _) = session.circuit.send_msg(&reply, false);
+                    let _ = socket.send_to(&pkt_bytes, src).await;
+                }
+            }
+        }
+
+        if msg_id == AgentCachedTexture::ID {
+            if let Some(client) = &client {
+                let mut session = client.lock().await;
+                let reply = AgentCachedTextureResponse {
+                    agent_data: agent_cached_texture_response::AgentData {
+                        agent_id: session.agent_id,
+                        session_id: session.session_id,
+                        serial_num: 0,
+                    },
+                    wearable_data: Vec::new(),
+                };
+                let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                let _ = socket.send_to(&pkt_bytes, src).await;
+            }
+        }
+
+        if msg_id == AgentWearablesRequest::ID {
+            if let Some(client) = &client {
+                let mut session = client.lock().await;
+                let reply = AgentWearablesUpdate {
+                    agent_data: agent_wearables_update::AgentData {
+                        agent_id: session.agent_id,
+                        session_id: session.session_id,
+                        serial_num: 1,
+                    },
+                    wearable_data: Vec::new(),
+                };
+                let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                let _ = socket.send_to(&pkt_bytes, src).await;
+            }
+        }
+
+        if msg_id == LogoutRequest::ID {
+            if let Some(client) = &client {
+                let mut session = client.lock().await;
+                let reply = LogoutReply {
+                    agent_data: logout_reply::AgentData {
+                        agent_id: session.agent_id,
+                        session_id: session.session_id,
+                    },
+                    inventory_data: Vec::new(),
+                };
+                let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                let _ = socket.send_to(&pkt_bytes, src).await;
+                info!(agent = %session.agent_id, "logout acknowledged");
+            }
+        }
+
+        if msg_id == EconomyDataRequest::ID {
+            if let Some(client) = &client {
+                let mut session = client.lock().await;
+                let reply = EconomyData {
+                    info: economy_data::Info {
+                        object_capacity: 15000,
+                        object_count: 0,
+                        price_energy_unit: 0,
+                        price_object_claim: 0,
+                        price_public_object_decay: 0,
+                        price_public_object_delete: 0,
+                        price_parcel_claim: 0,
+                        price_parcel_claim_factor: 0.0,
+                        price_upload: 0,
+                        price_rent_light: 0,
+                        teleport_min_price: 0,
+                        teleport_price_exponent: 0.0,
+                        energy_efficiency: 0.0,
+                        price_object_rent: 0.0,
+                        price_object_scale_factor: 0.0,
+                        price_parcel_rent: 0,
+                        price_group_create: 0,
+                    },
+                };
+                let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                let _ = socket.send_to(&pkt_bytes, src).await;
             }
         }
     }

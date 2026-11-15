@@ -36,6 +36,13 @@ pub fn register_core_handlers(dispatcher: &mut PacketDispatcher) {
     // Task P1-5: Missing handlers viewers actually send
     register_region_handshake_reply(dispatcher);
     register_agent_throttle(dispatcher);
+
+    // Critical reply handlers — dispatched for logging, reply logic in region binary
+    register_start_ping_check(dispatcher);
+    register_agent_cached_texture(dispatcher);
+    register_agent_wearables_request(dispatcher);
+    register_logout_request(dispatcher);
+    register_economy_data_request(dispatcher);
 }
 
 // ---------------------------------------------------------------------------
@@ -232,6 +239,58 @@ fn register_agent_throttle(d: &mut PacketDispatcher) {
             throttle_len = msg.throttle.throttles.len(),
             "AgentThrottle",
         );
+        Ok(())
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Critical reply handlers — logged here, replies sent from region binary
+// ---------------------------------------------------------------------------
+
+fn register_start_ping_check(d: &mut PacketDispatcher) {
+    d.register::<StartPingCheck, _>(|_ctx, msg| {
+        tracing::trace!(
+            ping_id = msg.ping_id.ping_id,
+            "StartPingCheck",
+        );
+        Ok(())
+    });
+}
+
+fn register_agent_cached_texture(d: &mut PacketDispatcher) {
+    d.register::<AgentCachedTexture, _>(|ctx, msg| {
+        tracing::debug!(
+            agent = %ctx.agent_id,
+            textures = msg.wearable_data.len(),
+            "AgentCachedTexture",
+        );
+        Ok(())
+    });
+}
+
+fn register_agent_wearables_request(d: &mut PacketDispatcher) {
+    d.register::<AgentWearablesRequest, _>(|ctx, _msg| {
+        tracing::debug!(
+            agent = %ctx.agent_id,
+            "AgentWearablesRequest",
+        );
+        Ok(())
+    });
+}
+
+fn register_logout_request(d: &mut PacketDispatcher) {
+    d.register::<LogoutRequest, _>(|ctx, _msg| {
+        tracing::debug!(
+            agent = %ctx.agent_id,
+            "LogoutRequest",
+        );
+        Ok(())
+    });
+}
+
+fn register_economy_data_request(d: &mut PacketDispatcher) {
+    d.register::<EconomyDataRequest, _>(|_ctx, _msg| {
+        tracing::debug!("EconomyDataRequest");
         Ok(())
     });
 }
