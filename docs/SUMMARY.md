@@ -31,6 +31,12 @@
 - [Phase 6: External grid mode](external-grid-mode-summary.md)
 - [Phase 6: Hypergrid](hypergrid-summary.md)
 - [Phase 6: WebRTC voice](webrtc-voice-summary.md)
+- [Object interaction](object-interaction-summary.md)
+- [Module activation](module-activation-summary.md)
+- [Viewer messaging](viewer-messaging-summary.md)
+- [Currency module](currency-module-summary.md)
+- [Remaining parity](remaining-parity-summary.md)
+- [Cutover](cutover-summary.md)
 
 ---
 

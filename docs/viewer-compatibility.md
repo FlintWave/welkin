@@ -139,11 +139,18 @@ do not indicate server bugs:
 
 First viewer connection to Welkin. Aurora uses a non-standard LLUDP flag
 layout: ZEROCODED=0x80, ACK=0x10 (swapped vs the Linden Lab specification).
-The server handles both layouts via the `aurora-msg` crate.
+The server handles both layouts via the `aurora-msg` crate. Aurora connects
+via XMLRPC login on port 8002 using the `--loginuri` flag for grid selection.
+
+### Connection sequence
+
+Login, circuit established, region handshake, terrain data, avatar
+appearance, event queue, presence registered. The full sequence completes
+without manual intervention.
 
 ### Working
 
-- Login with full session data
+- XMLRPC login on port 8002
 - Circuit and region handshake
 - 256 terrain patches rendered (flat terrain, height 21.0)
 - Avatar visible with wearables and name display
@@ -153,10 +160,14 @@ The server handles both layouts via the `aurora-msg` crate.
 - Camera rotation
 - Capabilities HTTP
 - 9 region modules loaded
-- Zero crashes or disconnects
 
-### Not yet working
+### Soak test
 
+10+ minutes clean at 60fps with zero errors or disconnects.
+
+### Known gaps
+
+- GetDisplayNames returns 404 (not yet implemented, non-critical)
 - Avatar animations (T-pose, needs AgentAnimation packet)
 - Movement (needs position update echo)
 - Textures (asset service schema bug at time of test)
