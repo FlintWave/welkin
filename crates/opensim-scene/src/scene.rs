@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::RwLock;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use glam::Vec3;
+use glam::{Quat, Vec3};
 use uuid::Uuid;
 
 use crate::group::SceneObjectGroup;
@@ -261,6 +261,16 @@ impl Scene {
 
     pub fn presence_count(&self) -> usize {
         self.presences.read().unwrap().len()
+    }
+
+    pub fn update_presence_position(&self, uuid: &Uuid, position: Vec3, rotation: Quat) -> bool {
+        if let Some(p) = self.presences.write().unwrap().get_mut(uuid) {
+            p.position = position;
+            p.body_rotation = rotation;
+            true
+        } else {
+            false
+        }
     }
 
     // ---- Spatial queries ----

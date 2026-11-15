@@ -24,6 +24,9 @@ use opensim_msg::Msg;
 use opensim_net::dispatch::{HandleError, PacketContext, PacketDispatcher};
 use opensim_net::server::ClientSession;
 use opensim_scene::scene::{RegionInfo, Scene, SceneConfig};
+use opensim_scene::presence::{ScenePresence, PresenceType};
+use opensim_scene::group::SceneObjectGroup;
+use opensim_scene::part::SceneObjectPart;
 use opensim_msg::objects::FullObjectUpdate;
 use opensim_modules::{
     ModuleConfig, SceneRef,
@@ -292,7 +295,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     opensim_net::handlers::register_core_handlers(&mut dispatcher);
 
     let process_cancel = cancel.clone();
-    let process_region = scene.region_info.clone();
+    let process_scene = Arc::clone(&scene);
     let process_socket = udp_socket.clone();
     let process_clients = udp_clients.clone();
     let process_handle = tokio::spawn(async move {
@@ -301,7 +304,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             dispatcher,
             process_socket,
             process_clients,
-            process_region,
+            process_scene,
             process_cancel,
         )
         .await;
@@ -357,6 +360,48 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // --- CoarseLocationUpdate periodic loop ---
+    let coarse_cancel = cancel.clone();
+    let coarse_scene = Arc::clone(&scene);
+    let coarse_socket = udp_socket.clone();
+    let coarse_clients = udp_clients.clone();
+    let coarse_handle = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(3));
+        loop {
+            tokio::select! {
+                _ = coarse_cancel.cancelled() => break,
+                _ = interval.tick() => {
+                    let mut locations = Vec::new();
+                    let mut agent_ids = Vec::new();
+                    coarse_scene.for_each_presence(|p| {
+                        locations.push(coarse_location_update::Location {
+                            x: (p.position.x.clamp(0.0, 255.0)) as u8,
+                            y: (p.position.y.clamp(0.0, 255.0)) as u8,
+                            z: (p.position.z / 4.0).clamp(0.0, 255.0) as u8,
+                        });
+                        agent_ids.push(p.uuid);
+                    });
+                    if locations.is_empty() { continue; }
+                    let clients_map = coarse_clients.read().await;
+                    for (addr, client) in clients_map.iter() {
+                        let mut session = client.lock().await;
+                        let my_idx = agent_ids.iter().position(|&id| id == session.agent_id)
+                            .map(|i| i as i16).unwrap_or(-1);
+                        let msg = CoarseLocationUpdate {
+                            location: locations.clone(),
+                            index: coarse_location_update::Index { you: my_idx, prey: -1 },
+                            agent_data: agent_ids.iter().map(|&id| {
+                                coarse_location_update::AgentData { agent_id: id }
+                            }).collect(),
+                        };
+                        let (pkt, _) = session.circuit.send_msg(&msg, false);
+                        let _ = coarse_socket.send_to(&pkt, *addr).await;
+                    }
+                }
+            }
+        }
+    });
+
     info!(
         region = %scene.region_info.region_name,
         "Region simulator started successfully"
@@ -373,6 +418,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let _ = process_handle.await;
     let _ = caps_handle.await;
     let _ = heartbeat_handle.await;
+    let _ = coarse_handle.await;
 
     if let Some(ref reg) = grid_reg {
         if let Err(e) = reg.shutdown().await {
@@ -397,7 +443,7 @@ async fn process_messages(
     dispatcher: PacketDispatcher,
     socket: Arc<UdpSocket>,
     clients: ClientMap,
-    region_info: RegionInfo,
+    scene: Arc<Scene>,
     cancel: CancellationToken,
 ) {
     loop {
@@ -439,7 +485,7 @@ async fn process_messages(
 
         if msg_id == CompleteAgentMovement::ID {
             if let Some(client) = &client {
-                send_movement_complete(&socket, client, src, &region_info).await;
+                send_movement_complete(&socket, client, src, &scene.region_info, &scene).await;
             }
         }
 
@@ -502,7 +548,8 @@ async fn process_messages(
                 };
                 let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
                 let _ = socket.send_to(&pkt_bytes, src).await;
-                info!(agent = %session.agent_id, "logout acknowledged");
+                scene.remove_presence(&session.agent_id);
+                info!(agent = %session.agent_id, "logout acknowledged, presence removed");
             }
         }
 
@@ -534,6 +581,55 @@ async fn process_messages(
                 let _ = socket.send_to(&pkt_bytes, src).await;
             }
         }
+
+        if msg_id == AgentUpdate::ID {
+            if let Ok(update) = AgentUpdate::decode(&pkt.body) {
+                scene.update_presence_position(
+                    &update.agent_data.agent_id,
+                    update.agent_data.camera_center,
+                    update.agent_data.body_rotation,
+                );
+            }
+        }
+
+        if msg_id == ChatFromViewer::ID {
+            if let Ok(chat) = ChatFromViewer::decode(&pkt.body) {
+                let text = String::from_utf8_lossy(&chat.chat_data.message).to_string();
+                info!(
+                    agent = %agent_id,
+                    channel = chat.chat_data.channel,
+                    chat_type = chat.chat_data.type_,
+                    "chat: {}",
+                    text
+                );
+            }
+        }
+
+        if msg_id == ObjectAdd::ID {
+            if let Ok(add) = ObjectAdd::decode(&pkt.body) {
+                let mut root = SceneObjectPart::default();
+                root.uuid = Uuid::new_v4();
+                root.owner_id = add.agent_data.agent_id;
+                root.group_position = add.object_data.ray_end;
+                root.scale = add.object_data.scale;
+                root.rotation_offset = add.object_data.rotation;
+                root.name = "Object".to_string();
+                let group = SceneObjectGroup::new(root);
+                let obj_id = scene.add_object(group);
+                info!(agent = %add.agent_data.agent_id, object = %obj_id, "ObjectAdd: created in scene");
+            }
+        }
+
+        if msg_id == ObjectDelete::ID {
+            if let Ok(del) = ObjectDelete::decode(&pkt.body) {
+                for obj_data in &del.object_data {
+                    if let Some(uuid) = scene.get_object_by_local_id(obj_data.object_local_id) {
+                        scene.remove_object(&uuid);
+                        info!(agent = %agent_id, local_id = obj_data.object_local_id, "ObjectDelete: removed");
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -542,6 +638,7 @@ async fn send_movement_complete(
     client: &Arc<Mutex<ClientSession>>,
     addr: SocketAddr,
     region_info: &RegionInfo,
+    scene: &Arc<Scene>,
 ) {
     let mut session = client.lock().await;
 
@@ -650,6 +747,35 @@ async fn send_movement_complete(
         }
     }
     info!(agent = %session.agent_id, "sent avatar appearance packets");
+
+    let agent_data_msg = AgentDataUpdate {
+        agent_data: agent_data_update::AgentData {
+            agent_id: session.agent_id,
+            first_name: b"Test".to_vec(),
+            last_name: b"User".to_vec(),
+            group_title: Vec::new(),
+            active_group_id: Uuid::nil(),
+            group_powers: 0,
+            group_name: Vec::new(),
+        },
+    };
+    let (pkt, _) = session.circuit.send_msg(&agent_data_msg, true);
+    if let Err(e) = socket.send_to(&pkt, addr).await {
+        tracing::warn!(error = %e, "failed to send AgentDataUpdate");
+        return;
+    }
+    info!(agent = %session.agent_id, "sent AgentDataUpdate");
+
+    let mut presence = ScenePresence::new(
+        session.agent_id,
+        "Test",
+        "User",
+        PresenceType::User,
+    );
+    presence.position = glam::Vec3::new(128.0, 128.0, 25.0);
+    presence.region_handle = region_info.region_handle;
+    scene.add_presence(presence);
+    info!(agent = %session.agent_id, "registered presence in scene");
 }
 
 fn build_avatar_packets(
