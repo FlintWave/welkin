@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+mod persist;
 mod script_persist;
 
 use std::net::SocketAddr;
@@ -205,6 +206,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     info!(url = %redact_connection_string(&region_config.database_url), "Connecting to database");
     let pool = DataPool::connect(&region_config.database_url).await?;
     script_persist::create_script_states_table(pool.inner()).await?;
+    let sim_store = std::sync::Arc::new(welkin_data::simulation::SimulationDataStore::new(pool.inner().clone()));
     info!("Database connection established");
 
     // --- Scene creation ---
@@ -216,6 +218,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     );
     let frame_time = region_config.scene_config.frame_time;
     let physics_enabled = region_config.scene_config.physics_enabled;
+    let region_id_str = region_info.region_id.to_string();
     let scene = Arc::new(Scene::new(region_info, region_config.scene_config));
     scene.start();
 
@@ -638,10 +641,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let heartbeat_scheduler = Arc::clone(&script_scheduler);
     let heartbeat_socket = udp_socket.clone();
     let heartbeat_clients = udp_clients.clone();
+    let heartbeat_sim_store = Arc::clone(&sim_store);
+    let heartbeat_region_id = region_id_str.clone();
     let frame_time_ms = (frame_time * 1000.0) as u64;
     let heartbeat_handle = tokio::spawn(async move {
         let mut interval =
             tokio::time::interval(std::time::Duration::from_millis(frame_time_ms.max(50)));
+        let mut backup_counter: u32 = 0;
         let mut prev_colliding: HashSet<u32> = HashSet::new();
         let mut sensor_repeats: HashMap<Uuid, (welkin_script_vm::SensorRequest, std::time::Instant, std::time::Duration)> = HashMap::new();
         let mut control_registrations: HashMap<Uuid, (Uuid, u32, bool, bool)> = HashMap::new();
@@ -868,6 +874,19 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         prev_colliding = cur_colliding;
                     }
+
+                    backup_counter += 1;
+                    if backup_counter >= 60 {
+                        backup_counter = 0;
+                        let n = persist::backup_dirty_objects(
+                            &heartbeat_scene,
+                            &heartbeat_sim_store,
+                            &heartbeat_region_id,
+                        ).await;
+                        if n > 0 {
+                            tracing::info!(count = n, "persisted dirty objects");
+                        }
+                    }
                 }
             }
         }
@@ -995,6 +1014,24 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     {
         let mut registry = scene_ref.registry.write();
         let _ = registry.close_all();
+    }
+    let dirty = scene.force_backup_all();
+    if !dirty.is_empty() {
+        info!(count = dirty.len(), "flushing dirty objects on shutdown");
+        for uuid in &dirty {
+            if let Some(group) = scene.get_object(uuid) {
+                let gid = group.uuid().to_string();
+                let region_uuid = scene.region_info.region_id.to_string();
+                for part in group.parts() {
+                    let prim_row = persist::part_to_prim_row(part, &region_uuid, &gid);
+                    let shape_row = persist::shape_to_row(part);
+                    if let Err(e) = sim_store.store_object(&region_uuid, &gid, &prim_row, &shape_row).await {
+                        tracing::warn!(uuid = %part.uuid, error = %e, "shutdown: failed to persist prim");
+                    }
+                }
+                scene.mark_backed_up(uuid);
+            }
+        }
     }
     scene.shutdown();
     info!("Region simulator shut down");
