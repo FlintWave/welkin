@@ -458,6 +458,80 @@ async fn send_movement_complete(
         return;
     }
     info!(agent = %session.agent_id, region = %region_info.region_name, "sent RegionHandshake");
+
+    // Send terrain data — flat terrain so viewer sees ground
+    let terrain_height = 21.0f32;
+    let patches_per_packet = 20;
+    let mut all_patches: Vec<(u32, u32)> = Vec::new();
+    for py in 0..16u32 {
+        for px in 0..16u32 {
+            all_patches.push((px, py));
+        }
+    }
+
+    for chunk in all_patches.chunks(patches_per_packet) {
+        let terrain_data = build_flat_terrain_data(terrain_height, chunk);
+        let raw_payload = build_layer_data_raw(&terrain_data);
+        let (pkt, _seq) = session.circuit.send_raw(&raw_payload, false, true);
+        if let Err(e) = socket.send_to(&pkt, addr).await {
+            tracing::warn!(error = %e, "failed to send LayerData");
+            return;
+        }
+    }
+    info!(agent = %session.agent_id, "sent terrain LayerData (256 flat patches)");
+}
+
+fn build_flat_terrain_data(height: f32, patches: &[(u32, u32)]) -> Vec<u8> {
+    let mut bits: Vec<u8> = Vec::with_capacity(512);
+
+    let push = |bits: &mut Vec<u8>, value: u32, count: u32| {
+        let mut remaining = count;
+        let mut byte_index: u32 = 0;
+        while remaining > 0 {
+            let dsize = remaining.min(8);
+            remaining -= dsize;
+            let byte_val = (value >> (8 * byte_index)) & 0xFF;
+            for b in (0..dsize).rev() {
+                bits.push(((byte_val >> b) & 1) as u8);
+            }
+            byte_index += 1;
+        }
+    };
+
+    // Group header
+    push(&mut bits, 264, 16);   // stride
+    push(&mut bits, 16, 8);     // patch_size
+    push(&mut bits, 0x4C, 8);   // type = 'L'
+
+    for &(px, py) in patches {
+        let patch_id = (px << 5) | (py & 0x1F);
+        // Patch header: quant_wbits(8), dc_offset(32), range(16), patch_ids(10)
+        push(&mut bits, 0x11, 8);
+        push(&mut bits, height.to_bits(), 32);
+        push(&mut bits, 0, 16);
+        push(&mut bits, patch_id, 10);
+        // Immediate EOB (1=present, 0=end_of_block)
+        bits.push(1);
+        bits.push(0);
+    }
+
+    push(&mut bits, 97, 8); // END_OF_PATCHES
+
+    let mut bytes = vec![0u8; bits.len().div_ceil(8)];
+    for (i, &b) in bits.iter().enumerate() {
+        bytes[i / 8] |= b << (7 - (i % 8));
+    }
+    bytes
+}
+
+fn build_layer_data_raw(terrain_data: &[u8]) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(terrain_data.len() + 4);
+    payload.push(11);     // LayerData High msg ID
+    payload.push(0x4C);   // LayerID.Type = 'L' (land)
+    let len = terrain_data.len() as u16;
+    payload.extend_from_slice(&len.to_le_bytes());
+    payload.extend_from_slice(terrain_data);
+    payload
 }
 
 const KNOWN_CAPS: &[&str] = &[
