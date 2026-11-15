@@ -26,8 +26,8 @@
 
 ## Phase 3: External system support
 
-- [ ] Implement DTL/NSL proxy module (forward all money calls to CurrencyServer URL via XML-RPC)
-- [ ] Implement Gloebit client module (OAuth2 flow, REST API for balance/transfer)
-- [ ] Add Gloebit config section (GLBKey, GLBSecret, sandbox mode)
-- [ ] Test DTL/NSL proxy against reference MoneyServer.exe
-- [ ] Test Gloebit module against Gloebit sandbox API
+- [x] Implement DTL/NSL proxy module (forward all money calls to CurrencyServer URL via XML-RPC)
+- [x] Implement Gloebit client module (OAuth2 flow, REST API for balance/transfer)
+- [x] Add Gloebit config section (GLBKey, GLBSecret, sandbox mode)
+- [x] Test DTL/NSL proxy against reference MoneyServer.exe
+- [x] Test Gloebit module against Gloebit sandbox API

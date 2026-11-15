@@ -6,6 +6,9 @@
 //! [`SampleMoneyModule`] that allows all operations at zero cost, matching
 //! OpenSim's default behaviour for grids without commerce.
 
+pub mod dtl_proxy;
+pub mod gloebit;
+
 use uuid::Uuid;
 
 use crate::module::{ModuleConfig, ModuleError, ModuleType, RegionModule};
