@@ -27,7 +27,7 @@ use opensim_scene::scene::{RegionInfo, Scene, SceneConfig};
 use opensim_scene::presence::{ScenePresence, PresenceType};
 use opensim_scene::group::SceneObjectGroup;
 use opensim_scene::part::SceneObjectPart;
-use opensim_msg::objects::FullObjectUpdate;
+use opensim_msg::objects::{FullObjectUpdate, encode_terse};
 use opensim_modules::{
     ModuleConfig, SceneRef,
     ChatModule, DefaultPermissionsModule, AvatarFactoryModule,
@@ -646,11 +646,61 @@ async fn process_messages(
 
         if msg_id == AgentUpdate::ID {
             if let Ok(update) = AgentUpdate::decode(&pkt.body) {
+                let flags = update.agent_data.control_flags;
+                let rot = update.agent_data.body_rotation;
+                let speed = 3.0f32;
+
+                let forward = rot * glam::Vec3::new(0.0, 1.0, 0.0);
+                let left = rot * glam::Vec3::new(-1.0, 0.0, 0.0);
+                let mut vel = glam::Vec3::ZERO;
+                if flags & 0x0001 != 0 { vel += forward * speed; }   // AGENT_CONTROL_AT_POS (forward)
+                if flags & 0x0002 != 0 { vel -= forward * speed; }   // AGENT_CONTROL_AT_NEG (back)
+                if flags & 0x0004 != 0 { vel += left * speed; }      // AGENT_CONTROL_LEFT_POS
+                if flags & 0x0008 != 0 { vel -= left * speed; }      // AGENT_CONTROL_LEFT_NEG (right)
+                if flags & 0x0010 != 0 { vel.z += speed; }           // AGENT_CONTROL_UP_POS
+                if flags & 0x0020 != 0 { vel.z -= speed; }           // AGENT_CONTROL_UP_NEG
+
+                let prev_pos = scene.get_presence(&update.agent_data.agent_id)
+                    .map(|p| p.position)
+                    .unwrap_or(glam::Vec3::new(128.0, 128.0, 22.0));
+                let dt = 0.1f32;
+                let mut new_pos = prev_pos + vel * dt;
+                new_pos.x = new_pos.x.clamp(0.0, 256.0);
+                new_pos.y = new_pos.y.clamp(0.0, 256.0);
+                if new_pos.z < 22.0 { new_pos.z = 22.0; }
+
                 scene.update_presence_position(
                     &update.agent_data.agent_id,
-                    update.agent_data.camera_center,
-                    update.agent_data.body_rotation,
+                    new_pos,
+                    rot,
                 );
+
+                if let Some(client) = &client {
+                    let terse_data = encode_terse(
+                        1, // local_id of avatar
+                        0,
+                        true,
+                        Some(glam::Vec4::new(0.0, 0.0, 1.0, -new_pos.z)),
+                        new_pos,
+                        vel,
+                        glam::Vec3::ZERO,
+                        rot,
+                        glam::Vec3::ZERO,
+                    );
+                    let terse_msg = ImprovedTerseObjectUpdate {
+                        region_data: improved_terse_object_update::RegionData {
+                            region_handle: scene.region_info.region_handle,
+                            time_dilation: 65535,
+                        },
+                        object_data: vec![improved_terse_object_update::ObjectData {
+                            data: terse_data,
+                            texture_entry: Vec::new(),
+                        }],
+                    };
+                    let mut session = client.lock().await;
+                    let (pkt_bytes, _) = session.circuit.send_msg(&terse_msg, false);
+                    let _ = socket.send_to(&pkt_bytes, src).await;
+                }
             }
         }
 
@@ -789,7 +839,7 @@ async fn send_movement_complete(
             session_id: session.session_id,
         },
         data: agent_movement_complete::Data {
-            position: glam::Vec3::new(128.0, 128.0, 25.0),
+            position: glam::Vec3::new(128.0, 128.0, 22.0),
             look_at: glam::Vec3::new(1.0, 0.0, 0.0),
             region_handle: region_info.region_handle,
             timestamp: SystemTime::now()
@@ -889,6 +939,23 @@ async fn send_movement_complete(
     }
     info!(agent = %session.agent_id, "sent avatar appearance packets");
 
+    let stand_anim = AvatarAnimation {
+        sender: avatar_animation::Sender {
+            id: session.agent_id,
+        },
+        animation_list: vec![avatar_animation::AnimationList {
+            anim_id: Uuid::parse_str("2408fe9e-df1d-1d7d-f4ff-1384fa7b350f").unwrap(),
+            anim_sequence_id: 0,
+        }],
+        animation_source_list: Vec::new(),
+        physical_avatar_event_list: Vec::new(),
+    };
+    let (pkt, _) = session.circuit.send_msg(&stand_anim, false);
+    if let Err(e) = socket.send_to(&pkt, addr).await {
+        tracing::warn!(error = %e, "failed to send AvatarAnimation (stand)");
+    }
+    info!(agent = %session.agent_id, "sent default standing animation");
+
     let agent_data_msg = AgentDataUpdate {
         agent_data: agent_data_update::AgentData {
             agent_id: session.agent_id,
@@ -913,7 +980,7 @@ async fn send_movement_complete(
         "User",
         PresenceType::User,
     );
-    presence.position = glam::Vec3::new(128.0, 128.0, 25.0);
+    presence.position = glam::Vec3::new(128.0, 128.0, 22.0);
     presence.region_handle = region_info.region_handle;
     scene.add_presence(presence);
     info!(agent = %session.agent_id, "registered presence in scene");
@@ -950,7 +1017,7 @@ fn build_avatar_packets(
         material: 0,
         click_action: 0,
         scale: glam::Vec3::new(0.45, 0.6, 1.75),
-        position: glam::Vec3::new(128.0, 128.0, 25.0),
+        position: glam::Vec3::new(128.0, 128.0, 22.0),
         velocity: glam::Vec3::ZERO,
         acceleration: glam::Vec3::ZERO,
         rotation: glam::Quat::IDENTITY,

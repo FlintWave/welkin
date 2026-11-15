@@ -40,6 +40,21 @@ pub fn router(state: LoginServiceState) -> Router {
 }
 
 async fn login_handler(State(state): State<LoginServiceState>, body: String) -> Response {
+    let trimmed = body.trim_start();
+    let is_llsd = trimmed.starts_with("<llsd>") || trimmed.starts_with("<map>");
+    if is_llsd {
+        tracing::debug!("LLSD login request — extracting params");
+        let params = match parse_llsd_login(&body) {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!(error = %e, "malformed LLSD login request");
+                return error_response("Malformed", "Could not parse the login request");
+            }
+        };
+        let xmlrpc_response = handle_login(state, params).await;
+        return xmlrpc_response_to_llsd(xmlrpc_response).await;
+    }
+
     let (method, params) = match parse_xml_rpc(&body) {
         Ok(v) => v,
         Err(e) => {
@@ -633,4 +648,152 @@ fn error_response(reason: &str, message: &str) -> Response {
         body,
     )
         .into_response()
+}
+
+fn parse_llsd_login(input: &str) -> Result<HashMap<String, String>, String> {
+    let mut reader = Reader::from_str(input);
+    reader.config_mut().trim_text(true);
+
+    let mut params = HashMap::new();
+    let mut current_key = String::new();
+    let mut in_key = false;
+    let mut in_value = false;
+    let mut depth = 0u32;
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let local = e.name();
+                let local = local.as_ref();
+                match local {
+                    b"map" => depth += 1,
+                    b"key" if depth == 1 => {
+                        in_key = true;
+                        current_key.clear();
+                    }
+                    b"string" | b"integer" | b"boolean" if depth == 1 => {
+                        in_value = true;
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::Text(t)) => {
+                let text = t
+                    .unescape()
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|_| String::from_utf8_lossy(t.as_ref()).to_string());
+                if in_key {
+                    current_key.push_str(&text);
+                } else if in_value {
+                    params.insert(current_key.clone(), text);
+                    in_value = false;
+                }
+            }
+            Ok(Event::End(e)) => {
+                let local = e.name();
+                let local = local.as_ref();
+                match local {
+                    b"map" => {
+                        if depth > 0 {
+                            depth -= 1;
+                        }
+                    }
+                    b"key" => in_key = false,
+                    b"string" | b"integer" | b"boolean" => in_value = false,
+                    _ => {}
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(e) => return Err(format!("LLSD parse error: {e}")),
+            _ => {}
+        }
+    }
+
+    if params.is_empty() {
+        return Err("no parameters found in LLSD body".into());
+    }
+    Ok(params)
+}
+
+async fn xmlrpc_response_to_llsd(response: Response) -> Response {
+    use http_body_util::BodyExt;
+    let (parts, body) = response.into_parts();
+    let bytes = match body.collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(_) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                [("content-type", "application/llsd+xml")],
+                "<llsd><map><key>login</key><string>false</string><key>message</key><string>Internal error</string></map></llsd>",
+            ).into_response();
+        }
+    };
+    let xmlrpc_body = String::from_utf8_lossy(&bytes);
+    let llsd_body = convert_xmlrpc_to_llsd(&xmlrpc_body);
+    let mut resp = (
+        parts.status,
+        [("content-type", "application/llsd+xml")],
+        llsd_body,
+    ).into_response();
+    resp
+}
+
+fn convert_xmlrpc_to_llsd(xmlrpc: &str) -> String {
+    let mut reader = Reader::from_str(xmlrpc);
+    reader.config_mut().trim_text(true);
+    let mut out = String::from("<?xml version=\"1.0\" encoding=\"utf-8\" ?><llsd>");
+    let mut skip_depth = 0u32;
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(e)) => {
+                let tag = e.name();
+                let tag = tag.as_ref();
+                match tag {
+                    b"methodResponse" | b"params" | b"param" => { skip_depth += 1; }
+                    b"struct" => out.push_str("<map>"),
+                    b"member" => {}
+                    b"name" => out.push_str("<key>"),
+                    b"value" => {}
+                    b"string" => out.push_str("<string>"),
+                    b"i4" | b"int" => out.push_str("<integer>"),
+                    b"boolean" => out.push_str("<boolean>"),
+                    b"double" => out.push_str("<real>"),
+                    b"array" => out.push_str("<array>"),
+                    b"data" => {}
+                    _ => {}
+                }
+            }
+            Ok(Event::End(e)) => {
+                let tag = e.name();
+                let tag = tag.as_ref();
+                match tag {
+                    b"methodResponse" | b"params" | b"param" => { skip_depth -= 1; }
+                    b"struct" => out.push_str("</map>"),
+                    b"member" => {}
+                    b"name" => out.push_str("</key>"),
+                    b"value" => {}
+                    b"string" => out.push_str("</string>"),
+                    b"i4" | b"int" => out.push_str("</integer>"),
+                    b"boolean" => out.push_str("</boolean>"),
+                    b"double" => out.push_str("</real>"),
+                    b"array" => out.push_str("</array>"),
+                    b"data" => {}
+                    _ => {}
+                }
+            }
+            Ok(Event::Text(t)) => {
+                let text = t
+                    .unescape()
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|_| String::from_utf8_lossy(t.as_ref()).to_string());
+                out.push_str(&xml_escape(&text));
+            }
+            Ok(Event::Eof) => break,
+            _ => {}
+        }
+    }
+
+    out.push_str("</llsd>");
+    out
 }
