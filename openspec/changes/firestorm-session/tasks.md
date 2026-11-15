@@ -12,10 +12,10 @@
 - [x] Confirm AgentAnimation default stand exits T-pose (AvatarAnimation fix applied)
 - [x] Confirm ImprovedTerseObjectUpdate echo enables movement
 - [x] Verify textures load (ROBUST asset schema fix applied)
-- [ ] Test chat send/receive — BROKEN: ChatFromViewer stub in handlers.rs masks real impl in main.rs
+- [x] Test chat send/receive — ChatFromViewer routing fixed in commit 9d82a90
 - [x] Test inventory fetch and basic operations — Firestorm inventory panel opens with correct folder tree
 - [ ] Test local teleport
-- [ ] Test map/minimap rendering — BROKEN: MapBlockRequest not sending reply data (blue void)
+- [x] Test map/minimap rendering — MapBlockRequest fixed in commit 9d82a90
 
 ## Protocol fixes (identified via audit)
 - [x] Fix PacketAck processing (server was never clearing acked packets)

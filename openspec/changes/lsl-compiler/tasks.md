@@ -47,29 +47,29 @@
 ### Communication (highest priority — most scripts use these)
 - [x] Implement llSay, llShout, llWhisper, llRegionSay, llRegionSayTo — chat on channels with range limits (20m/100m/region)
 - [x] Implement llInstantMessage — send IM to avatar UUID via IM module
-- [ ] Implement llEmail, llGetNextEmail — SMTP send via lettre, email queue polling
-- [ ] Implement llHTTPRequest, llSetHTTPBody — outbound HTTP with throttling and URL filtering
-- [ ] Implement llRequestURL, llRequestSecureURL, llReleaseURL — inbound HTTP for scripts (register cap URL, route requests to script)
+- [x] Implement llEmail, llGetNextEmail — SMTP send via lettre, email queue polling
+- [x] Implement llHTTPRequest, llSetHTTPBody — outbound HTTP with throttling and URL filtering
+- [x] Implement llRequestURL, llRequestSecureURL, llReleaseURL — inbound HTTP for scripts (register cap URL, route requests to script)
 
 ### Object/Prim (most-used after communication)
 - [x] Implement remaining llSet* — llSetPos, llSetRot, llSetScale, llSetColor, llSetAlpha, llSetTexture, llSetPrimitiveParams (the big one — all BUILD_* constants from OpenSim)
 - [x] Implement remaining llGet* — llGetPos, llGetRot, llGetScale, llGetColor, llGetAlpha, llGetTexture, llGetPrimitiveParams, llGetObjectDetails, llGetObjectDesc, llGetObjectName
-- [ ] Implement llRezObject, llRezAtRoot — rez from script inventory at position with velocity and start param
+- [x] Implement llRezObject, llRezAtRoot — rez from script inventory at position with velocity and start param
 - [x] Implement llDie — delete the object containing the script
-- [ ] Implement llSetLinkPrimitiveParams, llSetLinkPrimitiveParamsFast — modify linked prims
+- [x] Implement llSetLinkPrimitiveParams, llSetLinkPrimitiveParamsFast — modify linked prims
 - [x] Implement llGetLinkKey, llGetLinkName, llGetLinkNumber, llGetNumberOfPrims — link set queries
-- [ ] Implement llAttachToAvatar, llDetachFromAvatar, llAttachToAvatarTemp — attachment control
+- [x] Implement llAttachToAvatar, llDetachFromAvatar, llAttachToAvatarTemp — attachment control
 
 ### Movement/Physics
 - [x] Implement llSetForce, llSetTorque, llApplyImpulse, llApplyRotationalImpulse — physics forces via Rapier
 - [x] Implement llSetBuoyancy, llSetHoverHeight — physics properties
-- [ ] Implement llSetVehicleType and all llSetVehicle* — vehicle dynamics (TYPE_CAR, TYPE_BOAT, TYPE_AIRPLANE, TYPE_BALLOON, TYPE_SLED, 40+ VEHICLE_* constants from OpenSim)
+- [x] Implement llSetVehicleType and all llSetVehicle* — vehicle dynamics (TYPE_CAR, TYPE_BOAT, TYPE_AIRPLANE, TYPE_BALLOON, TYPE_SLED, 40+ VEHICLE_* constants from OpenSim)
 - [x] Implement llMoveToTarget, llStopMoveToTarget — PID-controlled movement
-- [ ] Implement llTarget, llTargetRemove — position target events (at_target/not_at_target)
-- [ ] Implement llRotTarget, llRotTargetRemove — rotation target events
+- [x] Implement llTarget, llTargetRemove — position target events (at_target/not_at_target)
+- [x] Implement llRotTarget, llRotTargetRemove — rotation target events
 
 ### Avatar
-- [ ] Implement llRequestAgentData — query agent info (online status, birth date, payment info) via ROBUST
+- [x] Implement llRequestAgentData — query agent info (online status, birth date, payment info) via ROBUST
 - [x] Implement llGetAgentInfo, llGetAgentSize, llGetAgentLanguage — avatar properties
 - [x] Implement llRequestPermissions, llGetPermissions — runtime permission system (PERMISSION_DEBIT, PERMISSION_TRIGGER_ANIMATION, PERMISSION_ATTACH, PERMISSION_TELEPORT, etc.)
 - [x] Implement llStartAnimation, llStopAnimation — play animations on avatar (requires permission)
@@ -79,7 +79,7 @@
 ### Inventory/Notecard
 - [x] Implement llGetInventoryName, llGetInventoryNumber, llGetInventoryType, llGetInventoryKey — query task inventory
 - [x] Implement llGiveInventory, llGiveInventoryList — give items to avatars/objects
-- [ ] Implement llGetNotecardLine, llGetNumberOfNotecardLines — async notecard reading (dataserver event)
+- [x] Implement llGetNotecardLine, llGetNumberOfNotecardLines — async notecard reading (dataserver event)
 - [x] Implement llRemoveInventory, llAllowInventoryDrop — inventory management
 
 ### Math/Utility (many already done, fill gaps)
