@@ -10,13 +10,15 @@ class Program
     static async Task<int> Main()
     {
         bool loginOk = false, regionOk = false, chatSentOk = false, chatRecvOk = false;
-        bool moveOk = false, logoutOk = false;
+        bool moveOk = false, rezOk = false, logoutOk = false;
         string regionName = "";
 
         using var client = new GridClient();
 
         var regionReady = new ManualResetEventSlim(false);
         var chatReceived = new ManualResetEventSlim(false);
+        var primRezzed = new ManualResetEventSlim(false);
+        uint rezzedLocalId = 0;
 
         client.Network.SimConnected += (_, e) =>
         {
@@ -24,6 +26,16 @@ class Program
             Console.WriteLine($"[REGION] Connected to: {regionName}");
             regionOk = true;
             regionReady.Set();
+        };
+
+        client.Objects.ObjectUpdate += (_, e) =>
+        {
+            if (e.IsNew && e.Prim.PrimData.PCode == PCode.Prim && e.Prim.OwnerID == client.Self.AgentID)
+            {
+                rezzedLocalId = e.Prim.LocalID;
+                Console.WriteLine($"[REZ] New prim created: local_id={rezzedLocalId}");
+                primRezzed.Set();
+            }
         };
 
         client.Self.ChatFromSimulator += (_, e) =>
@@ -51,7 +63,7 @@ class Program
         else
         {
             Console.WriteLine($"[LOGIN] FAILED — {client.Network.LoginMessage}");
-            PrintSummary(loginOk, regionOk, chatSentOk, chatRecvOk, moveOk, logoutOk);
+            PrintSummary(loginOk, regionOk, chatSentOk, chatRecvOk, moveOk, rezOk, logoutOk);
             return 1;
         }
 
@@ -93,16 +105,32 @@ class Program
         Console.WriteLine($"[MOVE] Distance moved: {dist:F2}");
         moveOk = dist > 0.1f;
 
+        Console.WriteLine("[REZ] Creating a box prim...");
+        var primData = ObjectManager.BuildBasicShape(PrimType.Box);
+        var rezPos = client.Self.SimPosition + new Vector3(2f, 0f, 0f);
+        client.Objects.AddPrim(client.Network.CurrentSim, primData, UUID.Zero,
+            rezPos, new Vector3(0.5f, 0.5f, 0.5f), Quaternion.Identity);
+
+        if (primRezzed.Wait(TimeSpan.FromSeconds(5)))
+        {
+            rezOk = true;
+            Console.WriteLine($"[REZ] PASS — prim created at local_id={rezzedLocalId}");
+        }
+        else
+        {
+            Console.WriteLine("[REZ] Timeout waiting for prim creation confirmation");
+        }
+
         Console.WriteLine("[LOGOUT] Logging out...");
         client.Network.Logout();
         logoutOk = true;
         Console.WriteLine("[LOGOUT] Done");
 
-        PrintSummary(loginOk, regionOk, chatSentOk, chatRecvOk, moveOk, logoutOk);
+        PrintSummary(loginOk, regionOk, chatSentOk, chatRecvOk, moveOk, rezOk, logoutOk);
         return (loginOk && regionOk && chatSentOk && logoutOk) ? 0 : 1;
     }
 
-    static void PrintSummary(bool login, bool region, bool chatSent, bool chatRecv, bool move, bool logout)
+    static void PrintSummary(bool login, bool region, bool chatSent, bool chatRecv, bool move, bool rez, bool logout)
     {
         Console.WriteLine();
         Console.WriteLine("=== Bot Test Summary ===");
@@ -111,6 +139,7 @@ class Program
         Console.WriteLine($"  Chat sent:      {(chatSent ? "PASS" : "FAIL")}");
         Console.WriteLine($"  Chat echo:      {(chatRecv ? "PASS" : "FAIL")}");
         Console.WriteLine($"  Movement:       {(move ? "PASS" : "FAIL")}");
+        Console.WriteLine($"  Rez prim:       {(rez ? "PASS" : "FAIL")}");
         Console.WriteLine($"  Logout:         {(logout ? "PASS" : "FAIL")}");
     }
 }
