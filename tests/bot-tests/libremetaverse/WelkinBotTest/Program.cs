@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using LibreMetaverse;
@@ -11,6 +12,7 @@ class Program
     {
         bool loginOk = false, regionOk = false, chatSentOk = false, chatRecvOk = false;
         bool moveOk = false, rezOk = false, logoutOk = false;
+        bool scriptUploadOk = false, scriptAliveOk = false, touchOk = false;
         string regionName = "";
 
         using var client = new GridClient();
@@ -18,7 +20,10 @@ class Program
         var regionReady = new ManualResetEventSlim(false);
         var chatReceived = new ManualResetEventSlim(false);
         var primRezzed = new ManualResetEventSlim(false);
+        var scriptAlive = new ManualResetEventSlim(false);
+        var touchResponse = new ManualResetEventSlim(false);
         uint rezzedLocalId = 0;
+        UUID rezzedPrimUuid = UUID.Zero;
 
         client.Network.SimConnected += (_, e) =>
         {
@@ -33,7 +38,8 @@ class Program
             if (e.IsNew && e.Prim.PrimData.PCode == PCode.Prim && e.Prim.OwnerID == client.Self.AgentID)
             {
                 rezzedLocalId = e.Prim.LocalID;
-                Console.WriteLine($"[REZ] New prim created: local_id={rezzedLocalId}");
+                rezzedPrimUuid = e.Prim.ID;
+                Console.WriteLine($"[REZ] New prim created: local_id={rezzedLocalId}, uuid={rezzedPrimUuid}");
                 primRezzed.Set();
             }
         };
@@ -45,6 +51,16 @@ class Program
             {
                 chatRecvOk = true;
                 chatReceived.Set();
+            }
+            if (e.Message.Contains("SCRIPT_ALIVE"))
+            {
+                scriptAliveOk = true;
+                scriptAlive.Set();
+            }
+            if (e.Message.Contains("TOUCHED"))
+            {
+                touchOk = true;
+                touchResponse.Set();
             }
         };
 
@@ -63,7 +79,7 @@ class Program
         else
         {
             Console.WriteLine($"[LOGIN] FAILED — {client.Network.LoginMessage}");
-            PrintSummary(loginOk, regionOk, chatSentOk, chatRecvOk, moveOk, rezOk, logoutOk);
+            PrintSummary(loginOk, regionOk, chatSentOk, chatRecvOk, moveOk, rezOk, logoutOk, scriptUploadOk, scriptAliveOk, touchOk);
             return 1;
         }
 
@@ -121,16 +137,64 @@ class Program
             Console.WriteLine("[REZ] Timeout waiting for prim creation confirmation");
         }
 
+        if (rezOk)
+        {
+            Console.WriteLine($"[SCRIPT] Uploading script to prim {rezzedPrimUuid}...");
+            try
+            {
+                using var http = new HttpClient();
+                var lslCode = "default { state_entry() { llSay(0, \"SCRIPT_ALIVE\"); } touch_start(integer n) { llSay(0, \"TOUCHED\"); } }";
+                var content = new StringContent(lslCode);
+                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+                var response = await http.PostAsync($"http://127.0.0.1:9001/UpdateScriptAgent?prim_id={rezzedPrimUuid}", content);
+                if (response.IsSuccessStatusCode)
+                {
+                    scriptUploadOk = true;
+                    Console.WriteLine($"[SCRIPT] Uploaded script to prim {rezzedPrimUuid}");
+                }
+                else
+                {
+                    Console.WriteLine($"[SCRIPT] Upload failed: HTTP {(int)response.StatusCode}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SCRIPT] Upload error: {ex.Message}");
+            }
+        }
+
+        if (scriptUploadOk)
+        {
+            scriptAlive.Wait(TimeSpan.FromSeconds(10));
+            Console.WriteLine($"[SCRIPT] Script alive: {(scriptAliveOk ? "PASS" : "FAIL")}");
+        }
+        else
+        {
+            Console.WriteLine("[SCRIPT] Script alive: SKIP (upload not ok)");
+        }
+
+        if (scriptAliveOk)
+        {
+            await client.Objects.ClickObjectAsync(client.Network.CurrentSim, rezzedLocalId);
+            Console.WriteLine($"[TOUCH] Sent ObjectGrab to local_id={rezzedLocalId}");
+            touchResponse.Wait(TimeSpan.FromSeconds(10));
+            Console.WriteLine($"[TOUCH] Touch event: {(touchOk ? "PASS" : "FAIL")}");
+        }
+        else
+        {
+            Console.WriteLine("[TOUCH] Touch event: SKIP (script not alive)");
+        }
+
         Console.WriteLine("[LOGOUT] Logging out...");
         client.Network.Logout();
         logoutOk = true;
         Console.WriteLine("[LOGOUT] Done");
 
-        PrintSummary(loginOk, regionOk, chatSentOk, chatRecvOk, moveOk, rezOk, logoutOk);
+        PrintSummary(loginOk, regionOk, chatSentOk, chatRecvOk, moveOk, rezOk, logoutOk, scriptUploadOk, scriptAliveOk, touchOk);
         return (loginOk && regionOk && chatSentOk && logoutOk) ? 0 : 1;
     }
 
-    static void PrintSummary(bool login, bool region, bool chatSent, bool chatRecv, bool move, bool rez, bool logout)
+    static void PrintSummary(bool login, bool region, bool chatSent, bool chatRecv, bool move, bool rez, bool logout, bool scriptUpload, bool scriptAlive, bool touch)
     {
         Console.WriteLine();
         Console.WriteLine("=== Bot Test Summary ===");
@@ -140,6 +204,9 @@ class Program
         Console.WriteLine($"  Chat echo:      {(chatRecv ? "PASS" : "FAIL")}");
         Console.WriteLine($"  Movement:       {(move ? "PASS" : "FAIL")}");
         Console.WriteLine($"  Rez prim:       {(rez ? "PASS" : "FAIL")}");
+        Console.WriteLine($"  Script upload:  {(scriptUpload ? "PASS" : "FAIL")}");
+        Console.WriteLine($"  Script alive:   {(scriptAlive ? "PASS" : "FAIL")}");
+        Console.WriteLine($"  Touch event:    {(touch ? "PASS" : "FAIL")}");
         Console.WriteLine($"  Logout:         {(logout ? "PASS" : "FAIL")}");
     }
 }

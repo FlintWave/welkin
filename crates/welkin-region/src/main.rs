@@ -659,10 +659,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 0,
                             ) {
                                 Ok(mut instance) => {
+                                    let prim_pos = heartbeat_scene
+                                        .with_object(&load_req.prim_id, |g| g.position())
+                                        .unwrap_or(glam::Vec3::new(128.0, 128.0, 22.0));
                                     let ctx = std::sync::Arc::new(parking_lot::RwLock::new(
                                         welkin_script_vm::builtins::ScriptContext {
                                             script_id: load_req.script_id,
                                             prim_id: load_req.prim_id,
+                                            position: [prim_pos.x as f64, prim_pos.y as f64, prim_pos.z as f64],
                                             chat_sender: Some(heartbeat_chat_tx.clone()),
                                             timer_sender: Some(heartbeat_timer_tx.clone()),
                                             event_sender: Some(heartbeat_event_tx.clone()),

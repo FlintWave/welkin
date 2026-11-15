@@ -41,6 +41,11 @@ pub struct DisplayNameQuery {
     pub ids: Vec<String>,
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub struct ScriptUploadQuery {
+    pub prim_id: Option<uuid::Uuid>,
+}
+
 fn llsd_response(llsd: Llsd) -> Response {
     let body = to_xml_string(&llsd);
     (
@@ -241,6 +246,7 @@ pub async fn update_notecard_agent_inventory(body: Bytes) -> Response {
 
 pub async fn update_script_agent(
     State(script_load): State<ScriptLoadState>,
+    Query(params): Query<ScriptUploadQuery>,
     body: Bytes,
 ) -> Response {
     log_upload_body("UpdateScriptAgent", &body);
@@ -266,7 +272,7 @@ pub async fn update_script_agent(
             );
             let _ = script_load.sender.send(ScriptLoadRequest {
                 script_id,
-                prim_id: Uuid::nil(),
+                prim_id: params.prim_id.unwrap_or(Uuid::nil()),
                 luau_source: luau,
             });
             let mut map = Map::new();
