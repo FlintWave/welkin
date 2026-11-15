@@ -32,6 +32,106 @@ use uuid::Uuid;
 
 use crate::VmError;
 
+// ---------------------------------------------------------------------------
+// WindlightData — region environment/windlight settings for LightShare API
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct WindlightData {
+    pub water_color: [f64; 3],
+    pub water_fog_density_exponent: f64,
+    pub underwater_fog_modifier: f64,
+    pub reflection_wavelet_scale: [f64; 3],
+    pub fresnel_scale: f64,
+    pub fresnel_offset: f64,
+    pub refract_scale_above: f64,
+    pub refract_scale_below: f64,
+    pub blur_multiplier: f64,
+    pub big_wave_direction: [f64; 2],
+    pub little_wave_direction: [f64; 2],
+    pub normal_map_texture: String,
+    pub horizon: [f64; 4],
+    pub haze_density: f64,
+    pub haze_horizon: f64,
+    pub density_multiplier: f64,
+    pub distance_multiplier: f64,
+    pub max_altitude: u16,
+    pub sun_moon_color: [f64; 4],
+    pub sun_moon_position: f64,
+    pub ambient: [f64; 4],
+    pub east_angle: f64,
+    pub sun_glow_focus: f64,
+    pub sun_glow_size: f64,
+    pub scene_gamma: f64,
+    pub star_brightness: f64,
+    pub cloud_color: [f64; 4],
+    pub cloud_xy_density: [f64; 3],
+    pub cloud_coverage: f64,
+    pub cloud_scale: f64,
+    pub cloud_detail_xy_density: [f64; 3],
+    pub cloud_scroll_x: f64,
+    pub cloud_scroll_y: f64,
+    pub cloud_scroll_x_lock: bool,
+    pub cloud_scroll_y_lock: bool,
+    pub draw_classic_clouds: bool,
+}
+
+impl Default for WindlightData {
+    fn default() -> Self {
+        Self {
+            water_color: [4.0, 38.0, 64.0],
+            water_fog_density_exponent: 4.0,
+            underwater_fog_modifier: 0.25,
+            reflection_wavelet_scale: [2.0, 2.0, 2.0],
+            fresnel_scale: 0.4,
+            fresnel_offset: 0.5,
+            refract_scale_above: 0.03,
+            refract_scale_below: 0.2,
+            blur_multiplier: 0.04,
+            big_wave_direction: [1.05, -0.42],
+            little_wave_direction: [1.11, -0.76],
+            normal_map_texture: "822ded49-9a6c-f61c-cb89-6df54f42cdf4".to_string(),
+            horizon: [0.25, 0.25, 0.32, 0.32],
+            haze_density: 4.0,
+            haze_horizon: 0.19,
+            density_multiplier: 0.18,
+            distance_multiplier: 0.8,
+            max_altitude: 1605,
+            sun_moon_color: [0.24, 0.26, 0.30, 0.30],
+            sun_moon_position: 0.317,
+            ambient: [0.35, 0.35, 0.35, 0.35],
+            east_angle: 0.0,
+            sun_glow_focus: 0.1,
+            sun_glow_size: 1.75,
+            scene_gamma: 1.0,
+            star_brightness: 0.0,
+            cloud_color: [0.41, 0.41, 0.41, 0.41],
+            cloud_xy_density: [1.0, 0.53, 1.0],
+            cloud_coverage: 0.27,
+            cloud_scale: 0.42,
+            cloud_detail_xy_density: [1.0, 0.53, 0.12],
+            cloud_scroll_x: 0.2,
+            cloud_scroll_y: 0.01,
+            cloud_scroll_x_lock: false,
+            cloud_scroll_y_lock: false,
+            draw_classic_clouds: true,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MOD API types — module invocation registry for modInvoke* functions
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct ModCommand {
+    pub module: String,
+    pub command: String,
+    pub key: String,
+}
+
+pub type ModuleCallback = Arc<dyn Fn(&[serde_json::Value]) -> serde_json::Value + Send + Sync>;
+
 pub const INVENTORY_TEXTURE: i32 = 0;
 pub const INVENTORY_SOUND: i32 = 1;
 pub const INVENTORY_LANDMARK: i32 = 3;
@@ -596,6 +696,14 @@ pub struct ScriptContext {
     pub link_parts: Vec<LinkPartInfo>,
     /// Total prim count for the host object's linkset.
     pub prim_count: i32,
+    /// Current windlight/environment settings for LightShare API.
+    pub windlight: WindlightData,
+    /// Channel for pushing updated windlight data to the region subsystem.
+    pub windlight_sender: Option<std::sync::mpsc::Sender<WindlightData>>,
+    /// Registry of module callbacks for the modInvoke* API.
+    pub mod_invoke_registry: HashMap<String, ModuleCallback>,
+    /// Channel for modSendCommand messages to the region module subsystem.
+    pub mod_command_sender: Option<std::sync::mpsc::Sender<ModCommand>>,
 }
 
 impl Default for ScriptContext {
@@ -724,6 +832,10 @@ impl Default for ScriptContext {
             sitting_avatars: Vec::new(),
             link_parts: Vec::new(),
             prim_count: 1,
+            windlight: WindlightData::default(),
+            windlight_sender: None,
+            mod_invoke_registry: HashMap::new(),
+            mod_command_sender: None,
         }
     }
 }
@@ -750,6 +862,8 @@ pub fn register_all(lua: &mlua::Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result
     timer::register_timer(lua, ctx)?;
     sensor::register_sensor(lua, ctx)?;
     control::register_control(lua, ctx)?;
+    crate::lightshare::register_lightshare(lua, ctx)?;
+    crate::mod_api::register_mod_api(lua, ctx)?;
     Ok(())
 }
 
