@@ -868,6 +868,44 @@ async fn process_messages(
                 let _ = socket.send_to(&pkt_bytes, src).await;
             }
         }
+
+        if msg_id == AgentSetAppearance::ID {
+            if let Ok(appearance) = AgentSetAppearance::decode(&pkt.body) {
+                let texture_entry = appearance.object_data.texture_entry.clone();
+                let visual_params: Vec<u8> = appearance.visual_param.iter()
+                    .map(|vp| vp.param_value)
+                    .collect();
+                scene.update_presence_appearance(&agent_id, texture_entry.clone(), visual_params.clone());
+                info!(agent = %agent_id, params = visual_params.len(), tex_len = texture_entry.len(), "AgentSetAppearance: stored and broadcasting");
+
+                let visual_param_blocks: Vec<avatar_appearance::VisualParam> = visual_params.iter()
+                    .map(|&v| avatar_appearance::VisualParam { param_value: v })
+                    .collect();
+                let broadcast = AvatarAppearance {
+                    sender: avatar_appearance::Sender {
+                        id: agent_id,
+                        is_trial: false,
+                    },
+                    object_data: avatar_appearance::ObjectData {
+                        texture_entry,
+                    },
+                    visual_param: visual_param_blocks,
+                    appearance_data: vec![avatar_appearance::AppearanceData {
+                        appearance_version: 1,
+                        cof_version: 0,
+                        flags: 0,
+                    }],
+                    appearance_hover: Vec::new(),
+                    attachment_block: Vec::new(),
+                };
+                let clients_map = clients.read().await;
+                for (peer_addr, peer_client) in clients_map.iter() {
+                    let mut peer = peer_client.lock().await;
+                    let (pkt_bytes, _) = peer.circuit.send_msg(&broadcast, true);
+                    let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                }
+            }
+        }
     }
 }
 

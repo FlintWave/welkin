@@ -277,6 +277,17 @@ impl Scene {
         }
     }
 
+    pub fn update_presence_appearance(&self, uuid: &Uuid, texture_entry: Vec<u8>, visual_params: Vec<u8>) -> bool {
+        if let Some(p) = self.presences.write().unwrap().get_mut(uuid) {
+            p.texture_entry = texture_entry;
+            p.visual_params = visual_params;
+            p.appearance_serial += 1;
+            true
+        } else {
+            false
+        }
+    }
+
     // ---- Spatial queries ----
 
     pub fn objects_in_range(&self, center: Vec3, range: f32) -> Vec<Uuid> {
