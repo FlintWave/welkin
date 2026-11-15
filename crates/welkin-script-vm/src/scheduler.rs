@@ -134,6 +134,16 @@ impl ScriptScheduler {
         self.scripts.len()
     }
 
+    /// Iterate over all managed script instances.
+    pub fn all_scripts(&self) -> impl Iterator<Item = &ScriptInstance> {
+        self.scripts.values()
+    }
+
+    /// Return the IDs of all managed scripts.
+    pub fn all_script_ids(&self) -> Vec<Uuid> {
+        self.scripts.keys().copied().collect()
+    }
+
     /// Returns the timer interval for a script, if one is set.
     pub fn timer_interval(&self, script_id: &Uuid) -> Option<Duration> {
         self.timer_heap

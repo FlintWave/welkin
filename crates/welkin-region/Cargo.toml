@@ -30,6 +30,7 @@ welkin-llsd = { path = "../welkin-llsd" }
 welkin-services = { path = "../welkin-services" }
 parking_lot = { workspace = true }
 serde_json = { workspace = true }
+sqlx = { workspace = true }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 
 [dev-dependencies]

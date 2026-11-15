@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+mod script_persist;
+
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -200,7 +202,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // --- Database init ---
     info!(url = %redact_connection_string(&region_config.database_url), "Connecting to database");
-    let _pool = DataPool::connect(&region_config.database_url).await?;
+    let pool = DataPool::connect(&region_config.database_url).await?;
+    script_persist::create_script_states_table(pool.inner()).await?;
     info!("Database connection established");
 
     // --- Scene creation ---
@@ -311,6 +314,33 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let script_scheduler = Arc::new(parking_lot::Mutex::new(ScriptScheduler::new(10_000)));
     let scripts_enabled = scene.config.scripts_enabled;
     info!(scripts_enabled, "script scheduler initialised");
+
+    // Restore persisted script states from DB
+    if scripts_enabled {
+        match script_persist::load_script_states(pool.inner()).await {
+            Ok(states) if !states.is_empty() => {
+                let mut sched = script_scheduler.lock();
+                let mut restored = 0usize;
+                for (script_id, prim_id, state) in &states {
+                    match welkin_script_vm::ScriptInstance::restore_from(
+                        *script_id, *prim_id, state, 10_000,
+                    ) {
+                        Ok(instance) => {
+                            sched.add_script(instance);
+                            sched.post_event(*script_id, ScriptEvent::StateEntry);
+                            restored += 1;
+                        }
+                        Err(e) => {
+                            warn!(script = %script_id, error = %e, "failed to restore script state");
+                        }
+                    }
+                }
+                info!(restored, total = states.len(), "restored script states from DB");
+            }
+            Ok(_) => {}
+            Err(e) => warn!(error = %e, "failed to load script states from DB"),
+        }
+    }
 
     // Event subscriber tasks are spawned below, after the CancellationToken.
 
@@ -898,6 +928,26 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         && let Err(e) = reg.shutdown().await
     {
         warn!(error = %e, "Failed to deregister from grid");
+    }
+
+    // Save script states to DB before shutdown
+    if scripts_enabled {
+        let states: Vec<_> = {
+            let sched = script_scheduler.lock();
+            sched.all_scripts().filter_map(|inst| {
+                match inst.save_state() {
+                    Ok(state) => Some((inst.script_id, inst.prim_id, state)),
+                    Err(e) => {
+                        warn!(script = %inst.script_id, error = %e, "failed to save script state");
+                        None
+                    }
+                }
+            }).collect()
+        };
+        match script_persist::save_script_states(pool.inner(), &states).await {
+            Ok(n) => info!(count = n, "saved script states to DB"),
+            Err(e) => warn!(error = %e, "failed to save script states"),
+        }
     }
 
     {
