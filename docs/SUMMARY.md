@@ -9,6 +9,7 @@
 - [Architecture](architecture.md)
 - [Integration architecture](integration-architecture.md)
 - [Script engine](scripting.md)
+- [RealmWalker bot SDK](realmwalker.md)
 - [Decision log](decisions.md)
 
 ---
