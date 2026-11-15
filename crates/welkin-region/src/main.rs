@@ -599,26 +599,31 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // --- Link message channel for builtin → scheduler event routing ---
     let (link_msg_tx, link_msg_rx) =
         std::sync::mpsc::channel::<(Uuid, ScriptEvent)>();
+    let heartbeat_event_tx = link_msg_tx.clone();
     let _link_msg_tx = Arc::new(link_msg_tx);
 
     // --- Timer command channel: scripts → scheduler set_timer ---
     let (timer_cmd_tx, timer_cmd_rx) =
         std::sync::mpsc::channel::<(Uuid, f64)>();
+    let heartbeat_timer_tx = timer_cmd_tx.clone();
     let _timer_cmd_tx = Arc::new(timer_cmd_tx);
 
     // --- Script chat channel: scripts → clients + listen events ---
     let (script_chat_tx, script_chat_rx) =
         std::sync::mpsc::channel::<welkin_script_vm::ChatMessage>();
+    let heartbeat_chat_tx = script_chat_tx.clone();
     let _script_chat_tx = Arc::new(script_chat_tx);
 
     // --- Sensor request channel: scripts → heartbeat sensor scan ---
     let (sensor_cmd_tx, sensor_cmd_rx) =
         std::sync::mpsc::channel::<welkin_script_vm::SensorRequest>();
+    let heartbeat_sensor_tx = sensor_cmd_tx.clone();
     let _sensor_cmd_tx = Arc::new(sensor_cmd_tx);
 
     // --- Control request channel: scripts → control event tracking ---
     let (control_cmd_tx, control_cmd_rx) =
         std::sync::mpsc::channel::<welkin_script_vm::ControlRequest>();
+    let heartbeat_control_tx = control_cmd_tx.clone();
     let _control_cmd_tx = Arc::new(control_cmd_tx);
 
     // --- Heartbeat loop ---
@@ -651,16 +656,36 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 load_req.script_id,
                                 load_req.prim_id,
                                 &load_req.luau_source,
-                                10_000,
+                                0,
                             ) {
-                                Ok(instance) => {
+                                Ok(mut instance) => {
+                                    let ctx = std::sync::Arc::new(parking_lot::RwLock::new(
+                                        welkin_script_vm::builtins::ScriptContext {
+                                            script_id: load_req.script_id,
+                                            prim_id: load_req.prim_id,
+                                            chat_sender: Some(heartbeat_chat_tx.clone()),
+                                            timer_sender: Some(heartbeat_timer_tx.clone()),
+                                            event_sender: Some(heartbeat_event_tx.clone()),
+                                            sensor_sender: Some(heartbeat_sensor_tx.clone()),
+                                            control_sender: Some(heartbeat_control_tx.clone()),
+                                            ..Default::default()
+                                        }
+                                    ));
+                                    if let Err(e) = instance.register_builtins(ctx) {
+                                        tracing::warn!(
+                                            script = %load_req.script_id,
+                                            error = %e,
+                                            "failed to register builtins"
+                                        );
+                                        continue;
+                                    }
                                     let mut sched = heartbeat_scheduler.lock();
                                     sched.add_script(instance);
                                     sched.post_event(load_req.script_id, ScriptEvent::StateEntry);
                                     tracing::info!(
                                         script = %load_req.script_id,
                                         prim = %load_req.prim_id,
-                                        "script loaded into VM, state_entry queued"
+                                        "script loaded into VM with builtins, state_entry queued"
                                     );
                                 }
                                 Err(e) => {
@@ -688,6 +713,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         // Drain script chat messages → trigger listen events + collect for client relay
                         let mut pending_chat: Vec<welkin_script_vm::ChatMessage> = Vec::new();
                         while let Ok(chat_msg) = script_chat_rx.try_recv() {
+                            tracing::info!(
+                                channel = chat_msg.channel,
+                                message = %chat_msg.message,
+                                source = %chat_msg.source_name,
+                                "script chat message received"
+                            );
                             // Route to script listen events
                             heartbeat_scheduler.lock().broadcast_event(ScriptEvent::Listen {
                                 channel: chat_msg.channel,

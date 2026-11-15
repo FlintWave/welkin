@@ -9,7 +9,10 @@ use mlua::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use std::sync::Arc;
+use parking_lot::RwLock;
 use crate::{ScriptState, VmError, compile_source, restore_script_state, serialize_script_state};
+use crate::builtins::{self, ScriptContext};
 
 // ---------------------------------------------------------------------------
 // ScriptEvent
@@ -197,6 +200,7 @@ pub struct ScriptInstance {
     event_queue: VecDeque<ScriptEvent>,
     /// Names of globals the script has declared (tracked for serialization).
     tracked_globals: Vec<String>,
+    ctx: Option<Arc<RwLock<ScriptContext>>>,
 }
 
 impl ScriptInstance {
@@ -229,7 +233,14 @@ impl ScriptInstance {
             memory_limit,
             event_queue: VecDeque::new(),
             tracked_globals: Vec::new(),
+            ctx: None,
         })
+    }
+
+    pub fn register_builtins(&mut self, ctx: Arc<RwLock<ScriptContext>>) -> Result<(), VmError> {
+        builtins::register_all(&self.vm, &ctx)?;
+        self.ctx = Some(ctx);
+        Ok(())
     }
 
     /// Enqueue an event for later processing.
@@ -469,6 +480,9 @@ impl ScriptInstance {
             vm.set_memory_limit(self.memory_limit)?;
         }
         vm.load(&self.bytecode).exec()?;
+        if let Some(ref ctx) = self.ctx {
+            builtins::register_all(&vm, ctx)?;
+        }
         self.vm = vm;
         self.state = ScriptInstanceState::Idle;
         self.event_queue.clear();
@@ -514,6 +528,7 @@ impl ScriptInstance {
             memory_limit,
             event_queue: VecDeque::new(),
             tracked_globals: Vec::new(),
+            ctx: None,
         })
     }
 
