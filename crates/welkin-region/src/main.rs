@@ -442,6 +442,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let process_caps_base = caps_base.clone();
     let process_scheduler = Arc::clone(&script_scheduler);
     let process_grid_connector = grid_connector.clone();
+    let perms = Arc::new(DefaultPermissionsModule::new());
+    let process_perms = Arc::clone(&perms);
+    let accounts_url = region_config
+        .grid_service_url
+        .as_deref()
+        .unwrap_or("http://localhost:8003");
+    let accounts_connector = Arc::new(
+        welkin_services::remote::accounts::RemoteAccountsConnector::new(accounts_url),
+    );
+    let process_accounts = Arc::clone(&accounts_connector);
     let process_handle = tokio::spawn(async move {
         process_messages(
             msg_rx,
@@ -455,6 +465,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             process_scheduler,
             scripts_enabled,
             process_grid_connector,
+            process_perms,
+            process_accounts,
         )
         .await;
     });
@@ -1090,6 +1102,8 @@ async fn process_messages(
     script_scheduler: Arc<parking_lot::Mutex<ScriptScheduler>>,
     scripts_enabled: bool,
     grid_connector: Option<Arc<welkin_services::remote::grid::RemoteGridConnector>>,
+    perms: Arc<DefaultPermissionsModule>,
+    accounts_connector: Arc<welkin_services::remote::accounts::RemoteAccountsConnector>,
 ) {
     let mut last_agent_update: HashMap<Uuid, Instant> = HashMap::new();
     let mut last_anim: HashMap<Uuid, &'static str> = HashMap::new();
@@ -1162,6 +1176,7 @@ async fn process_messages(
                 &scene,
                 &event_queues,
                 &caps_base,
+                &accounts_connector,
             )
             .await;
 
@@ -2099,6 +2114,14 @@ async fn process_messages(
         {
             for obj_data in &del.object_data {
                 if let Some(uuid) = scene.get_object_by_local_id(obj_data.object_local_id) {
+                    let allowed = scene.get_object(&uuid).map_or(false, |obj| {
+                        let rp = obj.root_part();
+                        perms.can_delete_object(agent_id, rp.owner_id, rp.group_id)
+                    });
+                    if !allowed {
+                        warn!(agent = %agent_id, object = %uuid, "ObjectDelete: permission denied");
+                        continue;
+                    }
                     scene.remove_object(&uuid);
                     info!(agent = %agent_id, local_id = obj_data.object_local_id, "ObjectDelete: removed");
                 }
@@ -2147,6 +2170,15 @@ async fn process_messages(
                         continue;
                     }
                 };
+
+                let allowed = scene.get_object(&uuid).map_or(false, |obj| {
+                    let rp = obj.root_part();
+                    perms.can_edit_object(agent_id, rp.owner_id, rp.group_id, rp.owner_mask)
+                });
+                if !allowed {
+                    warn!(agent = %agent_id, object = %uuid, "MultipleObjectUpdate: permission denied");
+                    continue;
+                }
 
                 let mut new_pos: Option<glam::Vec3> = None;
                 let mut new_rot: Option<glam::Quat> = None;
@@ -2422,6 +2454,14 @@ async fn process_messages(
                         continue;
                     }
                 };
+                let allowed = scene.get_object(&uuid).map_or(false, |obj| {
+                    let rp = obj.root_part();
+                    perms.can_edit_object(agent_id, rp.owner_id, rp.group_id, rp.owner_mask)
+                });
+                if !allowed {
+                    warn!(agent = %agent_id, object = %uuid, "ObjectName: permission denied");
+                    continue;
+                }
                 scene.with_object_mut(&uuid, |group| {
                     group.root_part_mut().name = new_name.clone();
                 });
@@ -2446,6 +2486,14 @@ async fn process_messages(
                         continue;
                     }
                 };
+                let allowed = scene.get_object(&uuid).map_or(false, |obj| {
+                    let rp = obj.root_part();
+                    perms.can_edit_object(agent_id, rp.owner_id, rp.group_id, rp.owner_mask)
+                });
+                if !allowed {
+                    warn!(agent = %agent_id, object = %uuid, "ObjectDescription: permission denied");
+                    continue;
+                }
                 scene.with_object_mut(&uuid, |group| {
                     group.root_part_mut().description = new_desc.clone();
                 });
@@ -2469,6 +2517,14 @@ async fn process_messages(
                         continue;
                     }
                 };
+                let allowed = scene.get_object(&uuid).map_or(false, |obj| {
+                    let rp = obj.root_part();
+                    perms.can_edit_object(agent_id, rp.owner_id, rp.group_id, rp.owner_mask)
+                });
+                if !allowed {
+                    warn!(agent = %agent_id, object = %uuid, "ObjectShape: permission denied");
+                    continue;
+                }
                 scene.with_object_mut(&uuid, |group| {
                     let shape = &mut group.root_part_mut().shape;
                     shape.path_curve = entry.path_curve;
@@ -2510,6 +2566,14 @@ async fn process_messages(
                         continue;
                     }
                 };
+                let allowed = scene.get_object(&uuid).map_or(false, |obj| {
+                    let rp = obj.root_part();
+                    perms.can_edit_object(agent_id, rp.owner_id, rp.group_id, rp.owner_mask)
+                });
+                if !allowed {
+                    warn!(agent = %agent_id, object = %uuid, "ObjectPermissions: permission denied");
+                    continue;
+                }
                 let mask_bits = PermissionMask::from_bits_truncate(entry.mask);
                 scene.with_object_mut(&uuid, |group| {
                     let part = group.root_part_mut();
@@ -2550,6 +2614,14 @@ async fn process_messages(
                         continue;
                     }
                 };
+                let allowed = scene.get_object(&uuid).map_or(false, |obj| {
+                    let rp = obj.root_part();
+                    perms.can_edit_object(agent_id, rp.owner_id, rp.group_id, rp.owner_mask)
+                });
+                if !allowed {
+                    warn!(agent = %agent_id, object = %uuid, "ObjectSaleInfo: permission denied");
+                    continue;
+                }
                 scene.with_object_mut(&uuid, |group| {
                     let part = group.root_part_mut();
                     part.object_sale_type = entry.sale_type;
@@ -2575,6 +2647,14 @@ async fn process_messages(
                         continue;
                     }
                 };
+                let allowed = scene.get_object(&uuid).map_or(false, |obj| {
+                    let rp = obj.root_part();
+                    perms.can_edit_object(agent_id, rp.owner_id, rp.group_id, rp.owner_mask)
+                });
+                if !allowed {
+                    warn!(agent = %agent_id, object = %uuid, "ObjectExtraParams: permission denied");
+                    continue;
+                }
                 scene.with_object_mut(&uuid, |group| {
                     group.root_part_mut().shape.extra_params = entry.param_data.clone();
                 });
@@ -2599,6 +2679,14 @@ async fn process_messages(
                         continue;
                     }
                 };
+                let allowed = scene.get_object(&uuid).map_or(false, |obj| {
+                    let rp = obj.root_part();
+                    perms.can_edit_object(agent_id, rp.owner_id, rp.group_id, rp.owner_mask)
+                });
+                if !allowed {
+                    warn!(agent = %agent_id, object = %uuid, "ObjectGroup: permission denied");
+                    continue;
+                }
                 scene.with_object_mut(&uuid, |group| {
                     group.root_part_mut().group_id = new_group_id;
                 });
@@ -2624,6 +2712,14 @@ async fn process_messages(
                         continue;
                     }
                 };
+                let allowed = scene.get_object(&uuid).map_or(false, |obj| {
+                    let rp = obj.root_part();
+                    perms.can_edit_object(agent_id, rp.owner_id, rp.group_id, rp.owner_mask)
+                });
+                if !allowed {
+                    warn!(agent = %agent_id, object = %uuid, "ObjectOwner: permission denied");
+                    continue;
+                }
                 scene.with_object_mut(&uuid, |group| {
                     let part = group.root_part_mut();
                     part.last_owner_id = part.owner_id;
@@ -2773,6 +2869,14 @@ async fn process_messages(
                         continue;
                     }
                 };
+                let link_allowed = scene.get_object(&root_uuid).map_or(false, |obj| {
+                    let rp = obj.root_part();
+                    perms.can_edit_object(agent_id, rp.owner_id, rp.group_id, rp.owner_mask)
+                });
+                if !link_allowed {
+                    warn!(agent = %agent_id, object = %root_uuid, "ObjectLink: permission denied");
+                    continue;
+                }
                 let root_position = match scene.get_object(&root_uuid) {
                     Some(g) => g.root_part().group_position,
                     None => {
@@ -2860,6 +2964,15 @@ async fn process_messages(
                     }
                 };
 
+                let delink_allowed = scene.get_object(&group_uuid).map_or(false, |obj| {
+                    let rp = obj.root_part();
+                    perms.can_edit_object(agent_id, rp.owner_id, rp.group_id, rp.owner_mask)
+                });
+                if !delink_allowed {
+                    warn!(agent = %agent_id, object = %group_uuid, "ObjectDelink: permission denied");
+                    continue;
+                }
+
                 // Check if this is a child part (not the root)
                 let part_info = scene.with_object_mut(&group_uuid, |group| {
                     let root_local_id = group.root_part().local_id;
@@ -2929,6 +3042,14 @@ async fn process_messages(
                         continue;
                     }
                 };
+
+                {
+                    let rp = original.root_part();
+                    if !perms.can_copy_object(agent_id, rp.owner_id, rp.group_id, rp.owner_mask) {
+                        warn!(agent = %agent_id, object = %original_uuid, "ObjectDuplicate: permission denied");
+                        continue;
+                    }
+                }
 
                 // Deep copy the root part
                 let orig_root = original.root_part();
@@ -3009,6 +3130,14 @@ async fn process_messages(
                         continue;
                     }
                 };
+
+                {
+                    let rp = original.root_part();
+                    if !perms.can_copy_object(agent_id, rp.owner_id, rp.group_id, rp.owner_mask) {
+                        warn!(agent = %agent_id, object = %original_uuid, "ObjectDuplicateOnRay: permission denied");
+                        continue;
+                    }
+                }
 
                 // Deep copy root part, place at ray_end
                 let orig_root = original.root_part();
@@ -4001,8 +4130,17 @@ async fn send_movement_complete(
     scene: &Arc<Scene>,
     event_queues: &EventQueueMap,
     caps_base: &str,
+    accounts: &Arc<welkin_services::remote::accounts::RemoteAccountsConnector>,
 ) {
     let mut session = client.lock().await;
+
+    let (first_name, last_name) = accounts
+        .get_name(&session.agent_id.to_string())
+        .await
+        .unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "failed to resolve avatar name from ROBUST");
+            ("Unknown".to_string(), "User".to_string())
+        });
 
     let movement = AgentMovementComplete {
         agent_data: agent_movement_complete::AgentData {
