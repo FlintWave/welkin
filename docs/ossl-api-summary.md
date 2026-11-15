@@ -8,7 +8,7 @@ Review: [security-review-ossl-api.md](security-review-ossl-api.md).
 
 ## What was built
 
-- The `os*` extension layer for Luau scripts, grown from 27 functions to 233
+- The `os*` extension layer for Luau scripts, grown from 27 functions to 236
   registered functions. `function_catalog()` lists them; the C# reference
   (`OSSL_Api.cs`) has 258 unique names, and the remainder are deprecated aliases
   and overloads folded into one registration.

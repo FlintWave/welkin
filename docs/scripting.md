@@ -70,7 +70,7 @@ UpdateScriptAgent cap), the region compiles its LSL source to Luau bytecode
 and creates a `ScriptInstance`. The region's heartbeat loop constructs a
 `ScriptContext` for the instance, wiring it to channel senders for chat,
 timer, sensor, control and link-message events. `register_builtins()` calls
-`builtins::register_all()`, which registers all 206 ll\* functions, 231 os\*
+`builtins::register_all()`, which registers all 206 ll\* functions, 236 os\*
 functions, and extension APIs (LightShare, MOD, JsonStore) as Luau globals
 on the VM. The bytecode is then executed once to register the script's own
 handler functions, and a `state_entry` event is queued.
@@ -200,7 +200,7 @@ it to connected viewers.
 
 ### OSSL functions
 
-231 `os*` functions are registered across 13 modules: agent, crypto, draw,
+236 `os*` functions are registered across 13 modules: agent, crypto, draw,
 inventory, math, misc, npc, sim_info, string, stubs, terrain, and time.
 These provide the OpenSimulator-specific scripting extensions. 20 NPC
 functions have real implementations (osNpcCreate, osNpcMoveTo, osNpcSay,
