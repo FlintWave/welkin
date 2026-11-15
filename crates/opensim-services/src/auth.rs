@@ -175,8 +175,13 @@ async fn handle_auth(State(state): State<AuthServiceState>, body: Bytes) -> Resp
             if password.is_empty() {
                 return ok(false);
             }
+            let md5_pass = if password.starts_with("$1$") {
+                password[3..].to_string()
+            } else {
+                md5_hex(password)
+            };
             let salt = uuid::Uuid::new_v4().to_string();
-            let hash = md5_hex(&format!("{password}:{salt}"));
+            let hash = md5_hex(&format!("{md5_pass}:{salt}"));
             match store.set_password(principal, &hash, &salt).await {
                 Ok(()) => ok(true),
                 Err(e) => {

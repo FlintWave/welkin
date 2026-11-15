@@ -318,7 +318,8 @@ async fn handle_accounts(State(state): State<AccountsServiceState>, body: Bytes)
             }
 
             let salt = uuid::Uuid::new_v4().to_string();
-            let hash = md5_hex(&format!("{password}:{salt}"));
+            let md5_pass = md5_hex(&password);
+            let hash = md5_hex(&format!("{md5_pass}:{salt}"));
             let auth_row = AuthRow {
                 uuid: pid.clone(),
                 password_hash: hash,

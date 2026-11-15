@@ -107,10 +107,106 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             "CREATE INDEX IF NOT EXISTS inventoryfolders_parentid ON inventoryfolders(parentFolderID)",
             "CREATE INDEX IF NOT EXISTS inventoryitems_parentfolderid ON inventoryitems(parentFolderID)",
             "CREATE INDEX IF NOT EXISTS inventoryitems_avatarid ON inventoryitems(avatarID)",
+            "CREATE TABLE IF NOT EXISTS regions (\
+             uuid VARCHAR(36) PRIMARY KEY, regionHandle BIGINT, \
+             regionName VARCHAR(128), regionSecret VARCHAR(128), \
+             serverIP VARCHAR(64), serverPort INTEGER, serverURI VARCHAR(255), \
+             locX INTEGER, locY INTEGER, locZ INTEGER, \
+             regionMapTexture VARCHAR(36), serverHttpPort INTEGER, \
+             owner_uuid VARCHAR(36) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000', \
+             access INTEGER DEFAULT 1, \
+             ScopeID CHAR(36) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000', \
+             sizeX INTEGER NOT NULL DEFAULT 256, sizeY INTEGER NOT NULL DEFAULT 256, \
+             flags INTEGER NOT NULL DEFAULT 0, last_seen INTEGER NOT NULL DEFAULT 0, \
+             PrincipalID CHAR(36) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000', \
+             Token VARCHAR(255) NOT NULL DEFAULT '', \
+             parcelMapTexture VARCHAR(36) DEFAULT '')",
+            "CREATE TABLE IF NOT EXISTS Presence (\
+             UserID VARCHAR(255) NOT NULL, \
+             RegionID CHAR(36) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000', \
+             SessionID CHAR(36) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000', \
+             SecureSessionID CHAR(36) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000', \
+             LastSeen TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS Presence_SessionID ON Presence(SessionID)",
+            "CREATE TABLE IF NOT EXISTS GridUser (\
+             UserID VARCHAR(255) NOT NULL PRIMARY KEY, \
+             HomeRegionID CHAR(36) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000', \
+             HomePosition CHAR(64) NOT NULL DEFAULT '<0,0,0>', \
+             HomeLookAt CHAR(64) NOT NULL DEFAULT '<0,0,0>', \
+             LastRegionID CHAR(36) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000', \
+             LastPosition CHAR(64) NOT NULL DEFAULT '<0,0,0>', \
+             LastLookAt CHAR(64) NOT NULL DEFAULT '<0,0,0>', \
+             Online CHAR(5) NOT NULL DEFAULT 'false', \
+             Login CHAR(16) NOT NULL DEFAULT '0', \
+             Logout CHAR(16) NOT NULL DEFAULT '0')",
+            "CREATE TABLE IF NOT EXISTS im_offline (\
+             PrincipalID VARCHAR(36) NOT NULL, \
+             FromID VARCHAR(36) NOT NULL, \
+             Message TEXT NOT NULL, \
+             TMStamp INTEGER NOT NULL DEFAULT 0)",
+            "CREATE TABLE IF NOT EXISTS os_groups_groups (\
+             GroupID CHAR(36) PRIMARY KEY, \
+             Location VARCHAR(255) NOT NULL DEFAULT '', \
+             Name VARCHAR(255) NOT NULL DEFAULT '', \
+             Charter TEXT NOT NULL DEFAULT '', \
+             InsigniaID CHAR(36) NOT NULL DEFAULT '', \
+             FounderID CHAR(36) NOT NULL DEFAULT '', \
+             MembershipFee INTEGER NOT NULL DEFAULT 0, \
+             OpenEnrollment VARCHAR(255) NOT NULL DEFAULT '', \
+             ShowInList INTEGER NOT NULL DEFAULT 0, \
+             AllowPublish INTEGER NOT NULL DEFAULT 0, \
+             MaturePublish INTEGER NOT NULL DEFAULT 0, \
+             OwnerRoleID CHAR(36) NOT NULL DEFAULT '')",
+            "CREATE TABLE IF NOT EXISTS os_groups_membership (\
+             GroupID CHAR(36) NOT NULL, \
+             PrincipalID VARCHAR(255) NOT NULL, \
+             SelectedRoleID CHAR(36) NOT NULL DEFAULT '', \
+             Contribution INTEGER NOT NULL DEFAULT 0, \
+             ListInProfile INTEGER NOT NULL DEFAULT 1, \
+             AcceptNotices INTEGER NOT NULL DEFAULT 1, \
+             AccessToken CHAR(36) NOT NULL DEFAULT '', \
+             PRIMARY KEY (GroupID, PrincipalID))",
+            "CREATE TABLE IF NOT EXISTS os_groups_roles (\
+             GroupID CHAR(36) NOT NULL, \
+             RoleID CHAR(36) NOT NULL, \
+             Name VARCHAR(255) NOT NULL DEFAULT '', \
+             Description VARCHAR(255) NOT NULL DEFAULT '', \
+             Title VARCHAR(255) NOT NULL DEFAULT '', \
+             Powers BIGINT NOT NULL DEFAULT 0, \
+             PRIMARY KEY (GroupID, RoleID))",
+            "CREATE TABLE IF NOT EXISTS os_groups_rolemembership (\
+             GroupID CHAR(36) NOT NULL, \
+             RoleID CHAR(36) NOT NULL, \
+             PrincipalID VARCHAR(255) NOT NULL, \
+             PRIMARY KEY (GroupID, RoleID, PrincipalID))",
+            "CREATE TABLE IF NOT EXISTS os_groups_invites (\
+             InviteID CHAR(36) PRIMARY KEY, \
+             GroupID CHAR(36) NOT NULL, \
+             RoleID CHAR(36) NOT NULL, \
+             PrincipalID VARCHAR(255) NOT NULL, \
+             TMStamp INTEGER NOT NULL DEFAULT 0)",
+            "CREATE TABLE IF NOT EXISTS os_groups_notices (\
+             GroupID CHAR(36) NOT NULL, \
+             NoticeID CHAR(36) PRIMARY KEY, \
+             TMStamp INTEGER NOT NULL DEFAULT 0, \
+             FromName VARCHAR(255) NOT NULL DEFAULT '', \
+             Subject VARCHAR(255) NOT NULL DEFAULT '', \
+             Message TEXT NOT NULL DEFAULT '', \
+             HasAttachment INTEGER NOT NULL DEFAULT 0, \
+             AttachmentType INTEGER NOT NULL DEFAULT 0, \
+             AttachmentName VARCHAR(128) NOT NULL DEFAULT '', \
+             AttachmentItemID CHAR(36) NOT NULL DEFAULT '', \
+             AttachmentOwnerID CHAR(36) NOT NULL DEFAULT '')",
+            "CREATE TABLE IF NOT EXISTS os_groups_principals (\
+             PrincipalID VARCHAR(255) PRIMARY KEY, \
+             ActiveGroupID CHAR(36) NOT NULL DEFAULT '')",
         ] {
             sqlx::query(ddl).execute(pool.inner()).await?;
         }
         runner.set_version("InventoryStore", 2).await?;
+        runner.set_version("GridStore", 10).await?;
+        runner.set_version("Presence", 4).await?;
+        runner.set_version("GridUserStore", 2).await?;
     }
     runner.run_all().await?;
     info!("Database migrations complete");
