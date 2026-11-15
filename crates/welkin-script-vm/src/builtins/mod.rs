@@ -124,6 +124,7 @@ pub enum NpcCommand {
         first_name: String,
         last_name: String,
         position: [f64; 3],
+        options: i32,
         appearance_notecard: String,
     },
     Remove { npc_id: Uuid },
@@ -136,7 +137,11 @@ pub enum NpcCommand {
     SetRot { npc_id: Uuid, rotation: [f64; 4] },
     PlayAnimation { npc_id: Uuid, animation: String },
     StopAnimation { npc_id: Uuid, animation: String },
-    LookAt { npc_id: Uuid, target: [f64; 3] },
+    SaveAppearance { npc_id: Uuid, notecard_name: String, notecard_id: Uuid },
+    LoadAppearance { npc_id: Uuid, notecard_name: String },
+    SetProfileAbout { npc_id: Uuid, about: String },
+    SetProfileImage { npc_id: Uuid, image_id: Uuid },
+    LookAt { npc_id: Uuid, look_type: i32, target_id: Uuid, offset: [f64; 3] },
 }
 
 /// Commands sent from os* dynamic texture functions.
@@ -169,6 +174,52 @@ pub struct TeleportRequest {
     pub region_name: String,
     pub position: [f64; 3],
     pub look_at: [f64; 3],
+}
+
+/// Information about a presence (avatar or NPC) in the scene, provided to
+/// scripts by the hosting scene system.
+#[derive(Debug, Clone)]
+pub struct PresenceInfo {
+    pub uuid: Uuid,
+    pub first_name: String,
+    pub last_name: String,
+    pub position: [f64; 3],
+    pub is_npc: bool,
+    /// Visual appearance parameters (bake-layer byte array).
+    pub visual_params: Vec<u8>,
+}
+
+/// Commands sent from OSSL agent functions to the region agent subsystem.
+#[derive(Debug, Clone)]
+pub enum AgentCommand {
+    Kick {
+        agent_id: Uuid,
+        message: String,
+    },
+    ForceSit {
+        agent_id: Uuid,
+        target_id: Uuid,
+    },
+    LocalTeleport {
+        agent_id: Uuid,
+        position: [f64; 3],
+        velocity: [f64; 3],
+        look_at: [f64; 3],
+        flags: i32,
+    },
+    TeleportObject {
+        object_id: Uuid,
+        target_pos: [f64; 3],
+        rotation: [f64; 4],
+        flags: i32,
+    },
+}
+
+/// Commands sent from OSSL animation functions to the region animation subsystem.
+#[derive(Debug, Clone)]
+pub enum AnimationCommand {
+    Play { agent_id: Uuid, animation: String },
+    Stop { agent_id: Uuid, animation: String },
 }
 
 /// Shared context available to every ll* function closure.
@@ -236,16 +287,22 @@ pub struct ScriptContext {
     pub region_size: [i32; 2],
     pub water_height: f64,
     pub sun_hour: f64,
+    pub sun_fixed: bool,
+    pub day_length: f64,
     pub use_estate_sun: bool,
     pub speed_multiplier: f64,
     pub terrain_heights: Option<Vec<f32>>,
     pub terrain_textures: [Uuid; 4],
     pub terrain_texture_heights: [[f64; 2]; 4],
     pub terrain_dirty: bool,
+    pub last_terrain_flush: f64,
     pub wind_params: HashMap<String, f64>,
     pub float_on_water: bool,
     pub parcel_media_url: String,
+    pub parcel_music_url: String,
     pub parcel_sip_address: String,
+    pub parcel_dwell: f64,
+    pub parcel_prim_count: i32,
     pub notecard_names: HashMap<String, Uuid>,
     pub npc_registry: HashMap<Uuid, NpcInfo>,
     pub npc_sender: Option<std::sync::mpsc::Sender<NpcCommand>>,
@@ -255,6 +312,16 @@ pub struct ScriptContext {
     pub start_time: std::time::Instant,
     pub sensor_sender: Option<std::sync::mpsc::Sender<sensor::SensorRequest>>,
     pub control_sender: Option<std::sync::mpsc::Sender<control::ControlRequest>>,
+    /// Presences currently in the scene (populated by the hosting system).
+    pub presence_list: Vec<PresenceInfo>,
+    /// Per-agent health values (default 100.0 for a living agent).
+    pub agent_health: HashMap<Uuid, f64>,
+    /// Per-agent heal rates (hp/sec, default 0.0).
+    pub agent_heal_rate: HashMap<Uuid, f64>,
+    /// Sender for agent commands (kick, force-sit, teleport, etc.).
+    pub agent_sender: Option<std::sync::mpsc::Sender<AgentCommand>>,
+    /// Sender for animation commands (play/stop on a specific avatar).
+    pub animation_sender: Option<std::sync::mpsc::Sender<AnimationCommand>>,
 }
 
 impl Default for ScriptContext {
@@ -320,16 +387,22 @@ impl Default for ScriptContext {
             region_size: [256, 256],
             water_height: 20.0,
             sun_hour: 6.0,
+            sun_fixed: false,
+            day_length: 14400.0,
             use_estate_sun: true,
             speed_multiplier: 1.0,
             terrain_heights: None,
             terrain_textures: [Uuid::nil(); 4],
             terrain_texture_heights: [[0.0, 10.0], [10.0, 20.0], [20.0, 30.0], [30.0, 60.0]],
             terrain_dirty: false,
+            last_terrain_flush: 0.0,
             wind_params: HashMap::new(),
             float_on_water: false,
             parcel_media_url: String::new(),
+            parcel_music_url: String::new(),
             parcel_sip_address: String::new(),
+            parcel_dwell: 0.0,
+            parcel_prim_count: 0,
             notecard_names: HashMap::new(),
             npc_registry: HashMap::new(),
             npc_sender: None,
@@ -339,6 +412,11 @@ impl Default for ScriptContext {
             start_time: std::time::Instant::now(),
             sensor_sender: None,
             control_sender: None,
+            presence_list: Vec::new(),
+            agent_health: HashMap::new(),
+            agent_heal_rate: HashMap::new(),
+            agent_sender: None,
+            animation_sender: None,
         }
     }
 }

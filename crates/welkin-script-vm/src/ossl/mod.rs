@@ -926,47 +926,54 @@ Allow_osDrawText = true
         lua.load(r#"osNpcPlayAnimation("npc", "walk")"#)
             .exec()
             .unwrap();
-        lua.load(r#"osNpcLookAt("npc", "<128,128,25>")"#)
-            .exec()
+        let r: i32 = lua.load(r#"return osNpcLookAt("12345678-1234-1234-1234-123456789abc", 1, "00000000-0000-0000-0000-000000000000", "<128,128,25>")"#)
+            .eval()
             .unwrap();
+        // Returns -3 because the test context has no NPC registered.
+        assert_eq!(r, -3);
     }
 
-    // Task 9.1: Agent/avatar/teleport stubs
+    // Task 9.1: Agent functions (real implementations)
     #[test]
-    fn agent_stubs_no_panic() {
+    fn agent_funcs_handle_invalid_uuids() {
         let (lua, _ctx) = vm_all_enabled();
 
+        // Invalid UUID -> -1 (agent not found)
         let health: f64 = lua
             .load(r#"return osGetHealth("avatar-key")"#)
             .eval()
             .unwrap();
-        assert!((health - 100.0).abs() < f64::EPSILON);
+        assert!((health - (-1.0)).abs() < f64::EPSILON);
 
+        // Invalid UUID -> 0 (default heal rate)
         let heal_rate: f64 = lua
             .load(r#"return osGetHealRate("avatar-key")"#)
             .eval()
             .unwrap();
-        assert!((heal_rate - 1.0).abs() < f64::EPSILON);
+        assert!((heal_rate - 0.0).abs() < f64::EPSILON);
 
+        // Invalid UUID -> -1 (parse failure)
         let avatar_type: i32 = lua
             .load(r#"return osAvatarType("avatar-key")"#)
             .eval()
             .unwrap();
-        assert_eq!(avatar_type, 0);
+        assert_eq!(avatar_type, -1);
 
+        // Invalid UUID -> "unknown"
         let gender: String = lua
             .load(r#"return osGetGender("avatar-key")"#)
             .eval()
             .unwrap();
         assert_eq!(gender, "unknown");
 
+        // Invalid UUID -> -1 (parse failure)
         let tp_result: i32 = lua
             .load(r#"return osTeleportObject("obj", 1000, 1000, "<128,128,25>", "<0,0,0,1>")"#)
             .eval()
             .unwrap();
-        assert_eq!(tp_result, 0);
+        assert_eq!(tp_result, -1);
 
-        // Void stubs
+        // Void functions with invalid UUIDs: no-ops, must not panic
         lua.load(r#"osCauseHealing("avatar", 10.0)"#)
             .exec()
             .unwrap();
@@ -976,31 +983,33 @@ Allow_osDrawText = true
             .unwrap();
     }
 
-    // Task 10.1: Terrain/environment/parcel stubs
+    // Task 10.1: Terrain/environment/parcel functions (real implementations)
     #[test]
-    fn terrain_stubs_no_panic() {
+    fn terrain_functions_real() {
         let (lua, _ctx) = vm_all_enabled();
 
+        // Default terrain height is 21.0 (matches welkin-scene DEFAULT_TERRAIN_HEIGHT)
         let h: f64 = lua
             .load("return osTerrainGetHeight(128, 128)")
             .eval()
             .unwrap();
-        assert!((h - 25.0).abs() < f64::EPSILON);
+        assert!((h - 21.0).abs() < f64::EPSILON);
 
         let h2: f64 = lua
             .load("return osGetTerrainHeight(64, 64)")
             .eval()
             .unwrap();
-        assert!((h2 - 25.0).abs() < f64::EPSILON);
+        assert!((h2 - 21.0).abs() < f64::EPSILON);
 
         let water: f64 = lua.load("return osGetRegionWaterHeight()").eval().unwrap();
         assert!((water - 20.0).abs() < f64::EPSILON);
 
+        // day_length defaults to 14400 seconds (4 real-time hours)
         let sun: f64 = lua
             .load(r#"return osSunGetParam("day_length")"#)
             .eval()
             .unwrap();
-        assert!((sun - 6.0).abs() < f64::EPSILON);
+        assert!((sun - 14400.0).abs() < f64::EPSILON);
 
         let wind: f64 = lua
             .load(r#"return osGetWindParam("SimpleRandomWind", "strength")"#)
@@ -1014,10 +1023,18 @@ Allow_osDrawText = true
             .unwrap();
         assert!((dwell - 0.0).abs() < f64::EPSILON);
 
-        // Void stubs
-        lua.load("osTerrainSetHeight(128, 128, 30.0)")
-            .exec()
+        // Terrain set returns 1 on success and modifies the heightmap
+        let r: i32 = lua
+            .load("return osTerrainSetHeight(128, 128, 30.0)")
+            .eval()
             .unwrap();
+        assert_eq!(r, 1);
+        let h3: f64 = lua
+            .load("return osTerrainGetHeight(128, 128)")
+            .eval()
+            .unwrap();
+        assert!((h3 - 30.0).abs() < f64::EPSILON);
+
         lua.load("osTerrainFlush()").exec().unwrap();
     }
 

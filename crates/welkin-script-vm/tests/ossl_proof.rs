@@ -186,9 +186,13 @@ fn npc_movement_stubs_no_panic() {
         .exec()
         .unwrap();
     lua.load(r#"osNpcStand("npc")"#).exec().unwrap();
-    lua.load(r#"osNpcLookAt("npc", "<128,128,25>")"#)
-        .exec()
+    // osNpcLookAt(npckey, type, objkey, offset) -> integer
+    // Returns -3 for unknown NPC in this test context.
+    let r: i32 = lua
+        .load(r#"return osNpcLookAt("12345678-1234-1234-1234-123456789abc", 1, "00000000-0000-0000-0000-000000000000", "<128,128,25>")"#)
+        .eval()
         .unwrap();
+    assert_eq!(r, -3); // not a registered NPC in this test VM
 }
 
 /// Verify NPC communication stubs don't panic.
