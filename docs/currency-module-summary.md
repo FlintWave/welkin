@@ -1,6 +1,6 @@
 # Currency module summary
 
-[← Back to docs](README.md) · [Architecture](architecture.md)
+[← Back to docs](index.md) · [Architecture](architecture.md)
 
 Status: accepted (23 of 23 tasks, 3 phases). Change:
 `openspec/changes/currency-module/`.

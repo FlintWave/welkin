@@ -2,7 +2,7 @@
 
 # Operator guide
 
-[<- Back to docs](README.md) | [Architecture](architecture.md) | [Test grid deployment](test-grid-deployment.md) | [Migration guide](migration-guide.md)
+[<- Back to docs](index.md) | [Architecture](architecture.md) | [Test grid deployment](test-grid-deployment.md) | [Migration guide](migration-guide.md)
 
 Complete reference for installing, configuring, running, and maintaining an
 OpenSimulator grid using the Rust implementation. For a quick test deployment,

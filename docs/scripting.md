@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Script engine
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Integration architecture](integration-architecture.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Integration architecture](integration-architecture.md)
 
 Welkin runs LSL (Linden Scripting Language) scripts by compiling them to Luau
 bytecode and executing them in a sandboxed VM. OpenSimulator uses XEngine

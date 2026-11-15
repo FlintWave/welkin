@@ -1,6 +1,6 @@
 # protocol-core summary
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md) · Previous: [Phase 0](phase-0-summary.md) · Next: [Physics backend](physics-backend-summary.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Decisions](decisions.md) · Previous: [Phase 0](phase-0-summary.md) · Next: [Physics backend](physics-backend-summary.md)
 
 Change `protocol-core` (accepted; all tasks ticked). It replaces
 libopenmetaverse and the C# `Region/ClientStack` protocol layer with wrapped

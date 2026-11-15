@@ -1,6 +1,6 @@
 # Architecture
 
-[← Back to docs](README.md) · [Decision log](decisions.md) · [Roadmap](../openspec/ROADMAP.md)
+[← Back to docs](index.md) · [Decision log](decisions.md)
 
 Rust port of the OpenSimulator 0.9.3.0 server (grid services and region
 simulator). Wire and schema compatibility with the C# server is the contract;
@@ -459,7 +459,6 @@ FreeSWITCH are ported; Aurora Viewer supports WebRTC voice only.
 Review found 0 critical, 2 high (wolfvoice auth, rate limiting), 3 medium;
 see `docs/security-review-voice.md`.
 
-## Roadmap
+## Decisions
 
-See `openspec/ROADMAP.md` for phases 1 to 7, and `docs/decisions.md` for the
-decision log.
+The [decision log](decisions.md) records the design choices made in each phase.

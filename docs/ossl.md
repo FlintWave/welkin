@@ -2,7 +2,7 @@
 
 # OSSL function reference
 
-[← Back to docs](README.md) · [Script engine](scripting.md) · [Architecture](architecture.md) · [Security review](security-review-ossl-api.md)
+[← Back to docs](index.md) · [Script engine](scripting.md) · [Architecture](architecture.md) · [Security review](security-review-ossl-api.md)
 
 OSSL (OpenSim Scripting Language) is the set of `os*` extension functions that
 OpenSimulator adds on top of standard LSL. They give scripts access to

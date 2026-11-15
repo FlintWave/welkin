@@ -1,6 +1,6 @@
 # Region modules summary
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#rm1) · Previous: [OSSL API](ossl-api-summary.md) · Next: [Archives](archives-summary.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Decisions](decisions.md#rm1) · Previous: [OSSL API](ossl-api-summary.md) · Next: [Archives](archives-summary.md)
 
 Status: accepted (33 of 33 tasks, 13 sections, 278 tests). Security review
 verdict: CONDITIONAL PASS. Change: `openspec/changes/region-modules/`.
