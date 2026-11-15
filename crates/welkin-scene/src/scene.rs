@@ -341,6 +341,14 @@ impl Scene {
         self.physics.lock().unwrap().is_some()
     }
 
+    pub fn set_terrain(&self, height_map: &[f32]) {
+        if let Ok(mut guard) = self.physics.lock()
+            && let Some(ref mut physics) = *guard
+        {
+            physics.set_terrain(height_map);
+        }
+    }
+
     pub fn get_top_colliders(&self) -> Vec<(u32, f32)> {
         if let Ok(guard) = self.physics.lock()
             && let Some(ref physics) = *guard

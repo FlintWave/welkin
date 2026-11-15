@@ -130,6 +130,28 @@ pub(crate) fn stub_functions() -> Vec<OsslFunc> {
             level: OsslThreatLevel::High,
             register: register_os_set_region_water_height,
         },
+        // -- Region --
+        OsslFunc {
+            name: "osRegionNotice",
+            level: OsslThreatLevel::Severe,
+            register: register_os_region_notice,
+        },
+        // -- Terrain texture --
+        OsslFunc {
+            name: "osSetTerrainTexture",
+            level: OsslThreatLevel::High,
+            register: register_os_set_terrain_texture,
+        },
+        OsslFunc {
+            name: "osSetTerrainTextureHeight",
+            level: OsslThreatLevel::High,
+            register: register_os_set_terrain_texture_height,
+        },
+        OsslFunc {
+            name: "osGetSunParam",
+            level: OsslThreatLevel::None,
+            register: register_os_get_sun_param,
+        },
         // -- String helpers (VeryLow) --
         OsslFunc {
             name: "osFormatString",
@@ -152,7 +174,14 @@ fn register_os_get_notecard(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaR
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, name: String| {
         let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, notecard = %name, "osGetNotecard");
+        if let Some(asset_id) = c.notecard_names.get(&name) {
+            if let Some(text) = c.notecard_data.get(asset_id) {
+                return Ok(text.clone());
+            }
+        }
+        for text in c.notecard_data.values() {
+            return Ok(text.clone());
+        }
         Ok(String::new())
     })?;
     lua.globals().set("osGetNotecard", f)
@@ -162,7 +191,17 @@ fn register_os_get_notecard_line(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) ->
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, (name, line): (String, i32)| {
         let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, notecard = %name, line, "osGetNotecardLine");
+        let text = if let Some(asset_id) = c.notecard_names.get(&name) {
+            c.notecard_data.get(asset_id).cloned()
+        } else {
+            c.notecard_data.values().next().cloned()
+        };
+        if let Some(text) = text {
+            let lines: Vec<&str> = text.lines().collect();
+            if line >= 0 && (line as usize) < lines.len() {
+                return Ok(lines[line as usize].to_string());
+            }
+        }
         Ok(String::new())
     })?;
     lua.globals().set("osGetNotecardLine", f)
@@ -175,8 +214,12 @@ fn register_os_get_number_of_notecard_lines(
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, name: String| {
         let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, notecard = %name, "osGetNumberOfNotecardLines");
-        Ok(0i32)
+        let text = if let Some(asset_id) = c.notecard_names.get(&name) {
+            c.notecard_data.get(asset_id).cloned()
+        } else {
+            c.notecard_data.values().next().cloned()
+        };
+        Ok(text.map_or(0i32, |t| t.lines().count() as i32))
     })?;
     lua.globals().set("osGetNumberOfNotecardLines", f)
 }
@@ -184,8 +227,11 @@ fn register_os_get_number_of_notecard_lines(
 fn register_os_make_notecard(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, (name, contents): (String, String)| {
-        let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, notecard = %name, len = contents.len(), "osMakeNotecard");
+        let mut c = ctx.write();
+        let asset_id = Uuid::new_v4();
+        c.notecard_data.insert(asset_id, contents);
+        c.notecard_names.insert(name.clone(), asset_id);
+        tracing::info!(notecard = %name, asset = %asset_id, "osMakeNotecard created");
         Ok(())
     })?;
     lua.globals().set("osMakeNotecard", f)
@@ -202,21 +248,35 @@ fn register_os_set_dynamic_texture_url(
     let ctx = ctx.clone();
     let f = lua.create_function(
         move |_,
-              (content_type, url, _extra_params, _timer, _alpha): (
+              (content_type, url, extra_params, timer, alpha): (
             String,
             String,
             String,
             i32,
             i32,
         )| {
-            let c = ctx.read();
-            tracing::debug!(
+            let mut c = ctx.write();
+            let texture_id = Uuid::new_v4();
+            c.texture = texture_id;
+            if let Some(ref sender) = c.dynamic_texture_sender {
+                let _ = sender.send(crate::builtins::DynamicTextureCommand::FromUrl {
+                    prim_id: c.prim_id,
+                    content_type: content_type.clone(),
+                    url: url.clone(),
+                    extra_params,
+                    timer,
+                    alpha,
+                    texture_id,
+                });
+            }
+            tracing::info!(
                 script_id = %c.script_id,
                 content_type = %content_type,
                 url = %url,
+                texture = %texture_id,
                 "osSetDynamicTextureURL"
             );
-            Ok(Uuid::nil().to_string())
+            Ok(texture_id.to_string())
         },
     )?;
     lua.globals().set("osSetDynamicTextureURL", f)
@@ -229,21 +289,35 @@ fn register_os_set_dynamic_texture_data(
     let ctx = ctx.clone();
     let f = lua.create_function(
         move |_,
-              (content_type, data, _extra_params, _timer, _alpha): (
+              (content_type, data, extra_params, timer, alpha): (
             String,
             String,
             String,
             i32,
             i32,
         )| {
-            let c = ctx.read();
-            tracing::debug!(
+            let mut c = ctx.write();
+            let texture_id = Uuid::new_v4();
+            c.texture = texture_id;
+            if let Some(ref sender) = c.dynamic_texture_sender {
+                let _ = sender.send(crate::builtins::DynamicTextureCommand::FromData {
+                    prim_id: c.prim_id,
+                    content_type: content_type.clone(),
+                    data: data.clone(),
+                    extra_params,
+                    timer,
+                    alpha,
+                    texture_id,
+                });
+            }
+            tracing::info!(
                 script_id = %c.script_id,
                 content_type = %content_type,
                 data_len = data.len(),
+                texture = %texture_id,
                 "osSetDynamicTextureData"
             );
-            Ok(Uuid::nil().to_string())
+            Ok(texture_id.to_string())
         },
     )?;
     lua.globals().set("osSetDynamicTextureData", f)
@@ -256,8 +330,9 @@ fn register_os_set_dynamic_texture_data(
 fn register_os_set_parcel_media_url(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, url: String| {
-        let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, url = %url, "osSetParcelMediaURL");
+        let mut c = ctx.write();
+        c.parcel_media_url = url.clone();
+        tracing::info!(script_id = %c.script_id, url = %url, "osSetParcelMediaURL");
         Ok(())
     })?;
     lua.globals().set("osSetParcelMediaURL", f)
@@ -277,15 +352,41 @@ fn register_os_get_agent_ip(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaR
     lua.globals().set("osGetAgentIP", f)
 }
 
+fn parse_vector(s: &str) -> [f64; 3] {
+    let s = s.trim().trim_start_matches('<').trim_end_matches('>');
+    let parts: Vec<&str> = s.split(',').collect();
+    if parts.len() >= 3 {
+        [
+            parts[0].trim().parse::<f64>().unwrap_or(0.0),
+            parts[1].trim().parse::<f64>().unwrap_or(0.0),
+            parts[2].trim().parse::<f64>().unwrap_or(0.0),
+        ]
+    } else {
+        [0.0, 0.0, 0.0]
+    }
+}
+
 fn register_os_teleport_agent(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(
-        move |_, (agent_id, region_name, _position, _look_at): (String, String, String, String)| {
+        move |_, (agent_id, region_name, position, look_at): (String, String, String, String)| {
             let c = ctx.read();
-            tracing::debug!(
+            let agent = Uuid::parse_str(&agent_id).unwrap_or(Uuid::nil());
+            let pos = parse_vector(&position);
+            let look = parse_vector(&look_at);
+            if let Some(ref sender) = c.teleport_sender {
+                let _ = sender.send(crate::builtins::TeleportRequest {
+                    agent_id: agent,
+                    region_name: region_name.clone(),
+                    position: pos,
+                    look_at: look,
+                });
+            }
+            tracing::info!(
                 script_id = %c.script_id,
                 agent = %agent_id,
                 region = %region_name,
+                pos = ?pos,
                 "osTeleportAgent"
             );
             Ok(())
@@ -297,12 +398,23 @@ fn register_os_teleport_agent(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Lu
 fn register_os_teleport_owner(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(
-        move |_, (region_name, _position, _look_at): (String, String, String)| {
+        move |_, (region_name, position, look_at): (String, String, String)| {
             let c = ctx.read();
-            tracing::debug!(
+            let pos = parse_vector(&position);
+            let look = parse_vector(&look_at);
+            if let Some(ref sender) = c.teleport_sender {
+                let _ = sender.send(crate::builtins::TeleportRequest {
+                    agent_id: c.owner_id,
+                    region_name: region_name.clone(),
+                    position: pos,
+                    look_at: look,
+                });
+            }
+            tracing::info!(
                 script_id = %c.script_id,
                 owner = %c.owner_id,
                 region = %region_name,
+                pos = ?pos,
                 "osTeleportOwner"
             );
             Ok(())
@@ -331,14 +443,10 @@ fn register_os_region_restart(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Lu
 
 fn register_os_set_speed(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
-    let f = lua.create_function(move |_, (agent_id, speed): (String, f64)| {
-        let c = ctx.read();
-        tracing::debug!(
-            script_id = %c.script_id,
-            agent = %agent_id,
-            speed,
-            "osSetSpeed"
-        );
+    let f = lua.create_function(move |_, (_agent_id, speed): (String, f64)| {
+        let mut c = ctx.write();
+        c.speed_multiplier = speed.max(0.0).min(10.0);
+        tracing::info!(speed = c.speed_multiplier, "osSetSpeed");
         Ok(())
     })?;
     lua.globals().set("osSetSpeed", f)
@@ -346,10 +454,9 @@ fn register_os_set_speed(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResu
 
 fn register_os_get_speed(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
-    let f = lua.create_function(move |_, agent_id: String| {
+    let f = lua.create_function(move |_, _agent_id: String| {
         let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, agent = %agent_id, "osGetSpeed");
-        Ok(1.0f64)
+        Ok(c.speed_multiplier)
     })?;
     lua.globals().set("osGetSpeed", f)
 }
@@ -363,19 +470,37 @@ fn register_os_npc_create(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaRes
     let f =
         lua.create_function(
             move |_,
-                  (first_name, last_name, _position, _clone_from): (
+                  (first_name, last_name, position, clone_from): (
                 String,
                 String,
                 String,
                 String,
             )| {
-                let c = ctx.read();
-                tracing::debug!(
-                    script_id = %c.script_id,
-                    name = %format!("{first_name} {last_name}"),
-                    "osNpcCreate"
-                );
-                Ok(Uuid::new_v4().to_string())
+                let mut c = ctx.write();
+                let npc_id = Uuid::new_v4();
+                let pos = parse_vector(&position);
+                let owner = c.owner_id;
+                c.npc_registry.insert(npc_id, crate::builtins::NpcInfo {
+                    owner_id: owner,
+                    first_name: first_name.clone(),
+                    last_name: last_name.clone(),
+                    position: pos,
+                    rotation: [0.0, 0.0, 0.0, 1.0],
+                    profile_about: String::new(),
+                    profile_image: Uuid::nil(),
+                });
+                if let Some(ref sender) = c.npc_sender {
+                    let _ = sender.send(crate::builtins::NpcCommand::Create {
+                        npc_id,
+                        owner,
+                        first_name: first_name.clone(),
+                        last_name: last_name.clone(),
+                        position: pos,
+                        appearance_notecard: clone_from,
+                    });
+                }
+                tracing::info!(npc = %npc_id, name = %format!("{first_name} {last_name}"), "osNpcCreate");
+                Ok(npc_id.to_string())
             },
         )?;
     lua.globals().set("osNpcCreate", f)
@@ -384,8 +509,13 @@ fn register_os_npc_create(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaRes
 fn register_os_npc_remove(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, npc_id: String| {
-        let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, npc = %npc_id, "osNpcRemove");
+        let mut c = ctx.write();
+        let id = Uuid::parse_str(&npc_id).unwrap_or(Uuid::nil());
+        c.npc_registry.remove(&id);
+        if let Some(ref sender) = c.npc_sender {
+            let _ = sender.send(crate::builtins::NpcCommand::Remove { npc_id: id });
+        }
+        tracing::info!(npc = %id, "osNpcRemove");
         Ok(())
     })?;
     lua.globals().set("osNpcRemove", f)
@@ -395,7 +525,15 @@ fn register_os_npc_move_to(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaRe
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, (npc_id, position): (String, String)| {
         let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, npc = %npc_id, pos = %position, "osNpcMoveTo");
+        let id = Uuid::parse_str(&npc_id).unwrap_or(Uuid::nil());
+        let target = parse_vector(&position);
+        if let Some(ref sender) = c.npc_sender {
+            let _ = sender.send(crate::builtins::NpcCommand::MoveTo {
+                npc_id: id,
+                target,
+                options: 0,
+            });
+        }
         Ok(())
     })?;
     lua.globals().set("osNpcMoveTo", f)
@@ -406,13 +544,23 @@ fn register_os_npc_say(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult
     let f = lua.create_function(
         move |_, (npc_id, channel, message): (String, i32, String)| {
             let c = ctx.read();
-            tracing::debug!(
-                script_id = %c.script_id,
-                npc = %npc_id,
-                channel,
-                message = %message,
-                "osNpcSay"
-            );
+            let id = Uuid::parse_str(&npc_id).unwrap_or(Uuid::nil());
+            let npc = c.npc_registry.get(&id);
+            let (name, pos) = npc
+                .map(|n| (format!("{} {}", n.first_name, n.last_name), n.position))
+                .unwrap_or_else(|| ("NPC".to_string(), [0.0; 3]));
+            if let Some(ref sender) = c.chat_sender {
+                let _ = sender.send(crate::ChatMessage {
+                    source_id: id,
+                    source_name: name,
+                    source_pos: pos,
+                    owner_id: c.owner_id,
+                    channel,
+                    message,
+                    chat_type: crate::ChatType::Say,
+                    target_id: None,
+                });
+            }
             Ok(())
         },
     )?;
@@ -438,10 +586,11 @@ fn register_os_get_simulator_version(
 // Sun / environment
 // ---------------------------------------------------------------------------
 
-fn register_os_get_current_sun_hour(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
-    let f = lua.create_function(|_, ()| {
-        tracing::debug!("osGetCurrentSunHour");
-        Ok(12.0f64)
+fn register_os_get_current_sun_hour(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+    let ctx = ctx.clone();
+    let f = lua.create_function(move |_, ()| {
+        let c = ctx.read();
+        Ok(c.sun_hour)
     })?;
     lua.globals().set("osGetCurrentSunHour", f)
 }
@@ -449,13 +598,13 @@ fn register_os_get_current_sun_hour(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>
 fn register_os_set_sun_param(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, (param, value): (String, f64)| {
-        let c = ctx.read();
-        tracing::debug!(
-            script_id = %c.script_id,
-            param = %param,
-            value,
-            "osSetSunParam"
-        );
+        let mut c = ctx.write();
+        match param.to_lowercase().as_str() {
+            "currenthour" | "day_length" => c.sun_hour = value.clamp(0.0, 24.0),
+            "year_length" | "day_night_offset" => {}
+            _ => {}
+        }
+        tracing::info!(param = %param, value, "osSetSunParam");
         Ok(())
     })?;
     lua.globals().set("osSetSunParam", f)
@@ -467,15 +616,81 @@ fn register_os_set_region_water_height(
 ) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, height: f64| {
-        let c = ctx.read();
-        tracing::debug!(
-            script_id = %c.script_id,
-            height,
-            "osSetRegionWaterHeight"
-        );
+        let mut c = ctx.write();
+        c.water_height = height.clamp(0.0, 1000.0);
+        tracing::info!(height = c.water_height, "osSetRegionWaterHeight");
         Ok(())
     })?;
     lua.globals().set("osSetRegionWaterHeight", f)
+}
+
+// ---------------------------------------------------------------------------
+// Region
+// ---------------------------------------------------------------------------
+
+fn register_os_region_notice(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+    let ctx = ctx.clone();
+    let f = lua.create_function(move |_, message: String| {
+        let c = ctx.read();
+        if let Some(ref sender) = c.chat_sender {
+            let _ = sender.send(crate::ChatMessage {
+                source_id: c.prim_id,
+                source_name: "Region".to_string(),
+                source_pos: [128.0, 128.0, 0.0],
+                owner_id: c.owner_id,
+                channel: -1,
+                message,
+                chat_type: crate::ChatType::Region,
+                target_id: None,
+            });
+        }
+        Ok(())
+    })?;
+    lua.globals().set("osRegionNotice", f)
+}
+
+// ---------------------------------------------------------------------------
+// Terrain texture (not in fork files)
+// ---------------------------------------------------------------------------
+
+fn register_os_set_terrain_texture(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+    let ctx = ctx.clone();
+    let f = lua.create_function(move |_, (corner, texture): (i32, String)| {
+        let mut c = ctx.write();
+        let idx = (corner.clamp(0, 3)) as usize;
+        c.terrain_textures[idx] = Uuid::parse_str(&texture).unwrap_or(Uuid::nil());
+        c.terrain_dirty = true;
+        Ok(())
+    })?;
+    lua.globals().set("osSetTerrainTexture", f)
+}
+
+fn register_os_set_terrain_texture_height(
+    lua: &Lua,
+    ctx: &Arc<RwLock<ScriptContext>>,
+) -> LuaResult<()> {
+    let ctx = ctx.clone();
+    let f = lua.create_function(move |_, (corner, low, high): (i32, f64, f64)| {
+        let mut c = ctx.write();
+        let idx = (corner.clamp(0, 3)) as usize;
+        c.terrain_texture_heights[idx] = [low, high];
+        c.terrain_dirty = true;
+        Ok(())
+    })?;
+    lua.globals().set("osSetTerrainTextureHeight", f)
+}
+
+fn register_os_get_sun_param(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+    let ctx = ctx.clone();
+    let f = lua.create_function(move |_, param: String| {
+        let c = ctx.read();
+        let val = match param.to_lowercase().as_str() {
+            "currenthour" | "day_length" => c.sun_hour,
+            _ => 0.0,
+        };
+        Ok(val)
+    })?;
+    lua.globals().set("osGetSunParam", f)
 }
 
 // ---------------------------------------------------------------------------

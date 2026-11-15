@@ -100,6 +100,74 @@ pub struct RotationTarget {
     pub range: f64,
 }
 
+/// NPC registry entry tracking a spawned NPC's state.
+#[derive(Debug, Clone)]
+pub struct NpcInfo {
+    pub owner_id: Uuid,
+    pub first_name: String,
+    pub last_name: String,
+    pub position: [f64; 3],
+    pub rotation: [f64; 4],
+    pub profile_about: String,
+    pub profile_image: Uuid,
+}
+
+/// Commands sent from os* NPC functions to the region NPC subsystem.
+#[derive(Debug, Clone)]
+pub enum NpcCommand {
+    Create {
+        npc_id: Uuid,
+        owner: Uuid,
+        first_name: String,
+        last_name: String,
+        position: [f64; 3],
+        appearance_notecard: String,
+    },
+    Remove { npc_id: Uuid },
+    MoveTo { npc_id: Uuid, target: [f64; 3], options: i32 },
+    StopMove { npc_id: Uuid },
+    Say { npc_id: Uuid, channel: i32, message: String, chat_type: i32 },
+    Sit { npc_id: Uuid, target: Uuid, options: i32 },
+    Stand { npc_id: Uuid },
+    Touch { npc_id: Uuid, target: Uuid, link_num: i32 },
+    SetRot { npc_id: Uuid, rotation: [f64; 4] },
+    PlayAnimation { npc_id: Uuid, animation: String },
+    StopAnimation { npc_id: Uuid, animation: String },
+    LookAt { npc_id: Uuid, target: [f64; 3] },
+}
+
+/// Commands sent from os* dynamic texture functions.
+#[derive(Debug, Clone)]
+pub enum DynamicTextureCommand {
+    FromUrl {
+        prim_id: Uuid,
+        content_type: String,
+        url: String,
+        extra_params: String,
+        timer: i32,
+        alpha: i32,
+        texture_id: Uuid,
+    },
+    FromData {
+        prim_id: Uuid,
+        content_type: String,
+        data: String,
+        extra_params: String,
+        timer: i32,
+        alpha: i32,
+        texture_id: Uuid,
+    },
+}
+
+/// Teleport request sent from os* teleport functions.
+#[derive(Debug, Clone)]
+pub struct TeleportRequest {
+    pub agent_id: Uuid,
+    pub region_name: String,
+    pub position: [f64; 3],
+    pub look_at: [f64; 3],
+}
+
 /// Shared context available to every ll* function closure.
 ///
 /// Wrapped in `Arc<RwLock<..>>` and cloned into each registered closure so
@@ -162,6 +230,24 @@ pub struct ScriptContext {
     pub http_response_sender: Option<std::sync::mpsc::Sender<http::HttpResponse>>,
     pub http_pending_count: i32,
     pub http_content_type: String,
+    pub region_size: [i32; 2],
+    pub water_height: f64,
+    pub sun_hour: f64,
+    pub use_estate_sun: bool,
+    pub speed_multiplier: f64,
+    pub terrain_heights: Option<Vec<f32>>,
+    pub terrain_textures: [Uuid; 4],
+    pub terrain_texture_heights: [[f64; 2]; 4],
+    pub terrain_dirty: bool,
+    pub wind_params: HashMap<String, f64>,
+    pub float_on_water: bool,
+    pub parcel_media_url: String,
+    pub parcel_sip_address: String,
+    pub notecard_names: HashMap<String, Uuid>,
+    pub npc_registry: HashMap<Uuid, NpcInfo>,
+    pub npc_sender: Option<std::sync::mpsc::Sender<NpcCommand>>,
+    pub teleport_sender: Option<std::sync::mpsc::Sender<TeleportRequest>>,
+    pub dynamic_texture_sender: Option<std::sync::mpsc::Sender<DynamicTextureCommand>>,
 }
 
 impl Default for ScriptContext {
@@ -224,6 +310,24 @@ impl Default for ScriptContext {
             http_response_sender: None,
             http_pending_count: 0,
             http_content_type: "text/plain".into(),
+            region_size: [256, 256],
+            water_height: 20.0,
+            sun_hour: 6.0,
+            use_estate_sun: true,
+            speed_multiplier: 1.0,
+            terrain_heights: None,
+            terrain_textures: [Uuid::nil(); 4],
+            terrain_texture_heights: [[0.0, 10.0], [10.0, 20.0], [20.0, 30.0], [30.0, 60.0]],
+            terrain_dirty: false,
+            wind_params: HashMap::new(),
+            float_on_water: false,
+            parcel_media_url: String::new(),
+            parcel_sip_address: String::new(),
+            notecard_names: HashMap::new(),
+            npc_registry: HashMap::new(),
+            npc_sender: None,
+            teleport_sender: None,
+            dynamic_texture_sender: None,
         }
     }
 }

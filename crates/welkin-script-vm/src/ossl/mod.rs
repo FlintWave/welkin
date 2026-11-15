@@ -600,10 +600,10 @@ mod tests {
             .load(r#"return osGetSpeed("some-uuid")"#)
             .eval()
             .unwrap();
-        assert!((speed - 1.0).abs() < f64::EPSILON);
+        assert!((speed - 2.0).abs() < f64::EPSILON);
 
         let hour: f64 = lua.load("return osGetCurrentSunHour()").eval().unwrap();
-        assert!((hour - 12.0).abs() < f64::EPSILON);
+        assert!((hour - 6.0).abs() < f64::EPSILON);
 
         // Functions above Moderate should NOT be available:
         let v: mlua::Value = lua.load("return osNpcCreate").eval().unwrap();

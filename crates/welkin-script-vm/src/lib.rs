@@ -19,7 +19,7 @@ use mlua::prelude::*;
 pub use instance::{ScriptEvent, ScriptInstance, ScriptInstanceState};
 pub use scheduler::{ScriptScheduler, TimerEntry};
 pub use transfer::RegionTransferBundle;
-pub use builtins::{RezRequest, AttachRequest, AttachAction};
+pub use builtins::{RezRequest, AttachRequest, AttachAction, NpcCommand, NpcInfo, DynamicTextureCommand, TeleportRequest};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChatType {

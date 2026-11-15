@@ -32,6 +32,8 @@ pub enum ScriptEvent {
     OnRez { start_param: i32 },
     Changed { change: u32 },
     Collision { num_detected: i32 },
+    CollisionStart { num_detected: i32 },
+    CollisionEnd { num_detected: i32 },
     LinkMessage {
         sender_num: i32,
         num: i32,
@@ -94,6 +96,8 @@ impl ScriptEvent {
             ScriptEvent::OnRez { .. } => "on_rez",
             ScriptEvent::Changed { .. } => "changed",
             ScriptEvent::Collision { .. } => "collision",
+            ScriptEvent::CollisionStart { .. } => "collision_start",
+            ScriptEvent::CollisionEnd { .. } => "collision_end",
             ScriptEvent::LinkMessage { .. } => "link_message",
             ScriptEvent::Sensor { .. } => "sensor",
             ScriptEvent::NoSensor => "no_sensor",
@@ -275,7 +279,10 @@ impl ScriptInstance {
             ScriptEvent::Changed { change } => {
                 args.push(mlua::Value::Integer(i64::from(*change)));
             }
-            ScriptEvent::Collision { num_detected } | ScriptEvent::Sensor { num_detected } => {
+            ScriptEvent::Collision { num_detected }
+            | ScriptEvent::CollisionStart { num_detected }
+            | ScriptEvent::CollisionEnd { num_detected }
+            | ScriptEvent::Sensor { num_detected } => {
                 args.push(mlua::Value::Integer(i64::from(*num_detected)));
             }
             ScriptEvent::LinkMessage { sender_num, num, str_val, id } => {

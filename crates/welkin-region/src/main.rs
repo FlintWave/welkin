@@ -219,7 +219,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         let physics =
             welkin_physics_rapier::RapierPhysicsScene::new(&scene.region_info.region_name);
         scene.set_physics(Box::new(physics));
-        info!("Physics engine (Rapier) initialised");
+        let terrain_height = 21.0f32;
+        let height_map: Vec<f32> = vec![terrain_height; 256 * 256];
+        scene.set_terrain(&height_map);
+        info!("Physics engine (Rapier) initialised with terrain heightfield");
     }
 
     // --- Module system ---
@@ -554,6 +557,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let heartbeat_handle = tokio::spawn(async move {
         let mut interval =
             tokio::time::interval(std::time::Duration::from_millis(frame_time_ms.max(50)));
+        let mut prev_colliding: HashSet<u32> = HashSet::new();
         loop {
             tokio::select! {
                 _ = heartbeat_cancel.cancelled() => break,
@@ -568,19 +572,37 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         for (script_id, err) in errors {
                             tracing::warn!(script = %script_id, error = %err, "script execution error");
                         }
-                        // Post collision events for physics actors that collided this frame
+                        // Post collision events with start/end tracking
                         let colliders = heartbeat_scene.get_top_colliders();
-                        if !colliders.is_empty() {
+                        let cur_colliding: HashSet<u32> = colliders.iter().map(|(id, _)| *id).collect();
+                        if !cur_colliding.is_empty() || !prev_colliding.is_empty() {
                             let mut sched = heartbeat_scheduler.lock();
-                            for (local_id, _score) in colliders {
+                            for &local_id in &cur_colliding {
                                 if let Some(obj_uuid) = heartbeat_scene.get_object_by_local_id(local_id) {
+                                    if !prev_colliding.contains(&local_id) {
+                                        sched.post_event_to_prim(
+                                            obj_uuid,
+                                            ScriptEvent::CollisionStart { num_detected: 1 },
+                                        );
+                                    }
                                     sched.post_event_to_prim(
                                         obj_uuid,
                                         ScriptEvent::Collision { num_detected: 1 },
                                     );
                                 }
                             }
+                            for &local_id in &prev_colliding {
+                                if !cur_colliding.contains(&local_id) {
+                                    if let Some(obj_uuid) = heartbeat_scene.get_object_by_local_id(local_id) {
+                                        sched.post_event_to_prim(
+                                            obj_uuid,
+                                            ScriptEvent::CollisionEnd { num_detected: 0 },
+                                        );
+                                    }
+                                }
+                            }
                         }
+                        prev_colliding = cur_colliding;
                     }
                 }
             }

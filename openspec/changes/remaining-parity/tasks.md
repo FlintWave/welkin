@@ -46,14 +46,14 @@
 
 ## Phase 4: Physics verification and os* completion
 
-- [ ] Verify Rapier physics.step() is called in region main loop — if missing, add physics tick with configurable dt (default 11ms = 90fps matching OpenSim)
-- [ ] Verify collision callbacks → script collision_start/collision/collision_end events fire correctly
-- [ ] Verify terrain heightfield collision — avatars/objects collide with terrain, not fall through
-- [ ] Implement real os* NPC functions — osNpcCreate, osNpcRemove, osNpcMoveTo, osNpcSay, osNpcSit, osNpcStand, osNpcGetPos, osNpcGetRot, osNpcSetRot, osNpcTouch (20 functions, currently stubs)
-- [ ] Implement real os* teleport functions — osTeleportAgent, osTeleportOwner (via EntityTransferModule)
-- [ ] Implement real os* dynamic texture — osSetDynamicTextureURL, osSetDynamicTextureURLBlend, osSetDynamicTextureData (HTTP fetch image → apply as prim texture)
-- [ ] Implement real os* region functions — osGetSimulatorMemory, osGetSimulatorVersion, osGetRegionSize, osGetRegionStats, osRegionRestart, osRegionNotice, osSetRegionWaterHeight, osSetRegionSunSettings
-- [ ] Implement real os* avatar functions — osGetAvatarList, osGetAgentIP (admin only), osKickAvatar, osForceOtherSit, osSetSpeed, osSetOwnerSpeed
-- [ ] Implement real os* world functions — osSetTerrainHeight, osGetTerrainHeight, osSetTerrainTexture, osSetTerrainTextureHeight, osTerrainFlush, osSetSunParam, osGetSunParam, osSetWindParam, osGetWindParam
-- [ ] Implement real os* object functions — osGetNotecard, osGetNotecardLine, osGetNumberOfNotecardLines (sync versions unlike ll* async), osMakeNotecard, osForceCreateLink, osForceBreakLink, osSetPrimitiveParams
-- [ ] Implement real os* communication — osSetParcelMediaURL, osSetParcelSIPAddress, osSetPrimFloatOnWater, osInviteToGroup, osEjectFromGroup
+- [x] Verify Rapier physics.step() is called in region main loop — if missing, add physics tick with configurable dt (default 11ms = 90fps matching OpenSim)
+- [x] Verify collision callbacks → script collision_start/collision/collision_end events fire correctly
+- [x] Verify terrain heightfield collision — avatars/objects collide with terrain, not fall through
+- [x] Implement real os* NPC functions — osNpcCreate, osNpcRemove, osNpcMoveTo, osNpcSay, osNpcSit, osNpcStand, osNpcGetPos, osNpcGetRot, osNpcSetRot, osNpcTouch (20 functions, currently stubs)
+- [x] Implement real os* teleport functions — osTeleportAgent, osTeleportOwner (via EntityTransferModule)
+- [x] Implement real os* dynamic texture — osSetDynamicTextureURL, osSetDynamicTextureURLBlend, osSetDynamicTextureData (HTTP fetch image → apply as prim texture)
+- [x] Implement real os* region functions — osGetSimulatorMemory, osGetSimulatorVersion, osGetRegionSize, osGetRegionStats, osRegionRestart, osRegionNotice, osSetRegionWaterHeight, osSetRegionSunSettings
+- [x] Implement real os* avatar functions — osGetAvatarList, osGetAgentIP (admin only), osKickAvatar, osForceOtherSit, osSetSpeed, osSetOwnerSpeed
+- [x] Implement real os* world functions — osSetTerrainHeight, osGetTerrainHeight, osSetTerrainTexture, osSetTerrainTextureHeight, osTerrainFlush, osSetSunParam, osGetSunParam, osSetWindParam, osGetWindParam
+- [x] Implement real os* object functions — osGetNotecard, osGetNotecardLine, osGetNumberOfNotecardLines (sync versions unlike ll* async), osMakeNotecard, osForceCreateLink, osForceBreakLink, osSetPrimitiveParams
+- [x] Implement real os* communication — osSetParcelMediaURL, osSetParcelSIPAddress, osSetPrimFloatOnWater, osInviteToGroup, osEjectFromGroup
