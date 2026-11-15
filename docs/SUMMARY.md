@@ -8,6 +8,7 @@
 
 - [Architecture](architecture.md)
 - [Integration architecture](integration-architecture.md)
+- [Script engine](scripting.md)
 - [Decision log](decisions.md)
 
 ---
