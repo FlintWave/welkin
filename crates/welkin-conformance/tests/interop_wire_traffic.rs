@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Multi-step integration tests simulating viewer/simulator wire-traffic sequences.
 //!

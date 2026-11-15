@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 /// Permission bits (OpenSim `PermissionMask` from `Util.cs`).
 ///

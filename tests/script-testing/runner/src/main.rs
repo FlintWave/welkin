@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Layer 1 offline compilation test runner for welkin-script-compiler.
 //!
 //! Feeds LSL scripts through each compiler stage and records per-stage results.

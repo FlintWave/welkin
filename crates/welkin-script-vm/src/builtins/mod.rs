@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! LSL built-in function bindings for the Luau VM.
 //!
 //! Each sub-module registers a family of `ll*` functions as Lua globals so

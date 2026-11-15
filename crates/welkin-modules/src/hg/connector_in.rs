@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Hypergrid service-in connector module: registers HTTP handler routes
 //! for incoming Hypergrid requests (gatekeeper, user-agent, friends).

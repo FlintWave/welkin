@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 use aurora_llsd::{Llsd, llsd_map};
 use aurora_msg::{Msg, parse_packet};

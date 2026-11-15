@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Remaining parity summary
 
 [← Back to docs](README.md) · [Architecture](architecture.md) · [Viewer compatibility](viewer-compatibility.md) · [Script engine](scripting.md)

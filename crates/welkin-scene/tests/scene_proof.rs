@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Proof tests for scene graph operations: add/remove objects and presences,
 //! link/unlink prim groups, spatial queries, and edge cases.
 

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use welkin_companion::commands::{self, AppState};

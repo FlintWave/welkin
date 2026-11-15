@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Script instance: wraps a Luau VM with identity, event queue and state
 //! management for a single LSL script attached to a prim.
 

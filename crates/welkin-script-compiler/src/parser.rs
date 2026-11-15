@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Recursive-descent parser for LSL.
 //!
 //! Consumes a token stream from [`crate::lexer`] and produces an

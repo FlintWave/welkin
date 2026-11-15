@@ -4,7 +4,7 @@
 
 Copyright (c) [Copyright holders TBD]
 
-Licensed under the GNU General Public License v3.0 or later (GPL-3.0-or-later).
+Licensed under the GNU General Public License v3.0 or later (LGPL-3.0-or-later).
 
 ## Aurora Viewer crates
 
@@ -17,13 +17,13 @@ to commit `3d523b14` from https://github.com/Aurora-Viewer/Aurora-Viewer:
 - `aurora-net` — Network session types (re-exported through wrapper crates)
 - `aurora-assets` — Mesh/physics import, including V-HACD for convex decomposition
 
-The Aurora Viewer crates are licensed under GPL-3.0-or-later.
+The Aurora Viewer crates are licensed under LGPL-3.0-or-later.
 
 ## Derived from Second Life viewer / Firestorm
 
 `aurora-msg` derives `message_template.msg` from the Second Life viewer / Firestorm
 code base. That source material is licensed under the LGPL 2.1 and is distributed
-here within the GPL-3.0-or-later licensed project and crates.
+here within the LGPL-3.0-or-later licensed project and crates.
 
 ## V-HACD
 

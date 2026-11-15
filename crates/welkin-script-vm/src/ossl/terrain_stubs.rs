@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Terrain, environment, parcel, and media OSSL functions.
 //!
 //! Ported from `OpenSim/Region/ScriptEngine/Shared/Api/Implementation/OSSL_Api.cs`.

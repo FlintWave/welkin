@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Stub OSSL functions: notecard, texture, parcel, agent, teleport, NPC,
 //! region management, avatar speed, sun/environment, string helpers.
 //!

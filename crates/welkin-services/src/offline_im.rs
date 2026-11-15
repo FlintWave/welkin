@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! OfflineIM service — HTTP handlers for storing and retrieving offline
 //! instant messages.

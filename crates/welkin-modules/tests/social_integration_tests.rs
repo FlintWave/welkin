@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Integration tests for social modules: Groups, GroupsMessaging, OfflineIM,
 //! Profiles, and NPC.  Exercises cross-module interactions and lifecycle

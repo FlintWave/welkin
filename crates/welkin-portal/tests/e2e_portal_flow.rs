@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! End-to-end test: fresh machine → walkable island via installer + browser.
 //!
 //! Exercises the full portal flow through HTTP, proving every section works

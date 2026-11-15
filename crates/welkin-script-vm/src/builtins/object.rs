@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Object ll* function stubs (llGetPos, llSetPos, llGetObjectName, etc.).
 //!
 //! These read from and write to the [`ScriptContext`] to provide basic

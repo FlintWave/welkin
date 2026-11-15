@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Email ll* functions — llEmail and llGetNextEmail.
 //!
 //! Outbound emails are sent through `ScriptContext::email_sender`.

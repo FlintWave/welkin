@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 mod persist;
 mod script_persist;
@@ -1053,6 +1053,82 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // --- Wait for shutdown signal ---
     welkin_runtime::shutdown_signal().await;
     info!("Initiating graceful shutdown");
+
+    // --- Notify connected clients before tearing down ---
+    {
+        let snapshot: Vec<(SocketAddr, Arc<Mutex<ClientSession>>)> = {
+            let guard = udp_clients.read().await;
+            guard.iter().map(|(addr, c)| (*addr, c.clone())).collect()
+        };
+        let client_count = snapshot.len();
+
+        let system_chat = ChatFromSimulator {
+            chat_data: chat_from_simulator::ChatData {
+                from_name: b"SYSTEM\0".to_vec(),
+                source_id: Uuid::nil(),
+                owner_id: Uuid::nil(),
+                source_type: 1,
+                chat_type: 1,
+                audible: 1,
+                position: [0.0, 0.0, 0.0],
+                message: b"Region shutting down".to_vec(),
+            },
+        };
+        for (addr, client) in &snapshot {
+            let pkt = {
+                let mut session = client.lock().await;
+                session.circuit.send_msg(&system_chat, true).0
+            };
+            let _ = udp_socket.send_to(&pkt, *addr).await;
+        }
+
+        for (addr, client) in &snapshot {
+            let (kick_pkt, disable_pkt) = {
+                let mut session = client.lock().await;
+                let kick = KickUser {
+                    target_block: kick_user::TargetBlock {
+                        target_ip: [0, 0, 0, 0],
+                        target_port: 0,
+                    },
+                    user_info: kick_user::UserInfo {
+                        agent_id: session.agent_id,
+                        session_id: session.session_id,
+                        reason: b"The simulator is going down.".to_vec(),
+                    },
+                };
+                let disable = DisableSimulator {};
+                (
+                    session.circuit.send_msg(&kick, true).0,
+                    session.circuit.send_msg(&disable, true).0,
+                )
+            };
+            let _ = udp_socket.send_to(&kick_pkt, *addr).await;
+            let _ = udp_socket.send_to(&disable_pkt, *addr).await;
+        }
+
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+        for (addr, client) in &snapshot {
+            let (logout_pkt, agent_id) = {
+                let mut session = client.lock().await;
+                let logout = LogoutReply {
+                    agent_data: logout_reply::AgentData {
+                        agent_id: session.agent_id,
+                        session_id: session.session_id,
+                    },
+                    inventory_data: Vec::new(),
+                };
+                (session.circuit.send_msg(&logout, true).0, session.agent_id)
+            };
+            let _ = udp_socket.send_to(&logout_pkt, *addr).await;
+            scene.remove_presence(&agent_id);
+        }
+
+        event_queues.write().await.clear();
+        udp_clients.write().await.clear();
+
+        info!(clients = client_count, "disconnected all clients");
+    }
 
     cancel.cancel();
 

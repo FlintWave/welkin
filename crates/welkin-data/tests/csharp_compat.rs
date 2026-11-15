@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Integration tests that verify we can load a region database written by
 //! C# OpenSimulator 0.9.x and see objects + terrain in the correct positions.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Land management module — the main module that owns all parcels in a
 //! region and presents viewer-protocol stubs.

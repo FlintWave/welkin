@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Hypergrid protocol services for cross-grid teleportation, identity, and
 //! resource sharing.

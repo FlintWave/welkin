@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Semantic analysis pass for LSL scripts.
 //!
 //! Performs scope resolution, type checking, implicit cast insertion,

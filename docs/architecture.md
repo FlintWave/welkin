@@ -4,7 +4,7 @@
 
 Rust port of the OpenSimulator 0.9.3.0 server (grid services and region
 simulator). Wire and schema compatibility with the C# server is the contract;
-internals are free to change. Licence: GPL-3.0-or-later. The C# reference tree
+internals are free to change. Licence: LGPL-3.0-or-later. The C# reference tree
 (`opensim-0.9.3.0-source`) is read-only and kept alongside this repository.
 
 Status: pre-alpha. 22 changes completed and archived (476 tasks); 6 active
@@ -166,7 +166,7 @@ definitions, and `welkin-conformance`, which needs `aurora-net` as a client).
 
 ## Aurora crates reused
 
-Aurora Viewer (GPL-3.0-or-later) is the acceptance viewer. Its crates are
+Aurora Viewer (LGPL-3.0-or-later) is the acceptance viewer. Its crates are
 unpublished (`publish = false`, 0.1.0) and change daily, so they are git
 dependencies pinned to commit `3d523b14a17bbc6484b208378c0eef291ad5ac32`
 (workspace `Cargo.toml`) and wrapped. Updating the pin is a reviewed change

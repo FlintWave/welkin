@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Avatar ll* functions (permissions, animations, sit targets, etc.).
 
 use std::sync::Arc;

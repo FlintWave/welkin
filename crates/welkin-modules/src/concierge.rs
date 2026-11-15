@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Concierge module: lobby/welcome announcements and HTTP broker
 //! notifications for avatar enter/leave events.

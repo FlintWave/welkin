@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Hypergrid friends module: cross-grid friendship operations with secret
 //! verification and online/offline status relay.

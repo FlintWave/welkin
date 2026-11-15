@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! OSSL crypto functions: SHA-256, AES-256-CBC encrypt/decrypt.
 
 use std::sync::Arc;

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Password upgrade tool: migrates OpenSimulator auth table from MD5 to Argon2id.
 //!

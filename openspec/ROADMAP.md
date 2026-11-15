@@ -60,7 +60,7 @@ directories, almost all in the Prebuild build tool, which is not ported.
    capabilities and forwards them as JSON-RPC to `wolfvoice` (Rust,
    Apache-2.0), run as a sidecar container. The capability handling is ported
    from `os-webrtc-janus` (C#, MPL-2.0).
-7. **Licence: GPL-3.0-or-later, and Aurora Viewer's crates are reused**
+7. **Licence: LGPL-3.0-or-later, and Aurora Viewer's crates are reused**
    (operator decision, 2026-11-13). The "or later" form matches Aurora's own
    manifest. Ported OpenSimulator code keeps its BSD notice, which GPLv3
    permits. Reused, checked at Aurora commit `3d523b1`:
@@ -223,7 +223,7 @@ Full audit report: `scratchpad/parity-audit.md` in the session directory.
 
 ## Open questions
 
-- D1: resolved, GPL-3.0-or-later with Aurora crates reused.
+- D1: resolved, LGPL-3.0-or-later with Aurora crates reused.
 - OSgrid: whether it accepts regions run on third-party software. Its FAQ
   refused automated access; the administrators must be asked.
 - D2: resolved. Repository is `welkin` at

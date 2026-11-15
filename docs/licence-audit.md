@@ -4,14 +4,14 @@ Audit of the OpenSimulator 0.9.3.0 C# source tree and its dependencies,
 performed 2026-11-13 against the C# reference tree
 (`opensim-0.9.3.0-source`).
 
-Project licence: **GPL-3.0-or-later**.
+Project licence: **LGPL-3.0-or-later**.
 
 ---
 
 ## Executive summary
 
 Welkin is a clean-room Rust port of OpenSimulator, licensed
-GPL-3.0-or-later. This audit examined every third-party library, binary,
+LGPL-3.0-or-later. This audit examined every third-party library, binary,
 and data file shipped in the C# source tree to determine what can be
 reused, what must be replaced, and what licence obligations apply.
 
@@ -31,7 +31,7 @@ reused, what must be replaced, and what licence obligations apply.
 5. **All Rust dependency licences are GPLv3-compatible.** The dependency
    tree uses MIT, Apache-2.0, BSD-2/3-Clause, ISC, Zlib, Unicode-3.0,
    CDLA-Permissive-2.0, BSL-1.0, CC0-1.0, and Unlicense -- all
-   compatible with GPL-3.0-or-later.
+   compatible with LGPL-3.0-or-later.
 6. **Three items were flagged as GPL-incompatible** in the C# tree
    (Ms-PL libraries, CC-BY-SA 3.0 artwork, Warp3D). All are dropped.
 
@@ -45,7 +45,7 @@ via `cargo deny`.
 
 ## Decisions
 
-- **D1 (2026-11-13):** GPL-3.0-or-later, so that Aurora Viewer's crates can
+- **D1 (2026-11-15):** LGPL-3.0-or-later, so that Aurora Viewer's crates can
   be reused. Ported OpenSimulator code keeps its BSD-3-Clause notice.
 - **D2 (2026-11-13):** Repository name `welkin`, local development only.
 
@@ -199,7 +199,7 @@ and updated for protocol extensions.
 - The SL viewer source (including indra/llmessage/ and the template) was
   released under LGPL 2.1 by Linden Lab.
 - LGPL 2.1 is GPLv3-compatible (FSF confirmed: LGPL 2.1 code can be
-  included in a GPL-3.0-or-later project).
+  included in an LGPL-3.0-or-later project).
 - Aurora-msg's build.rs generates Rust structs from this template at compile
   time. The generated code is a derivative work of the template.
 - **Status: CLEAR.** LGPL 2.1 -> GPL-3.0-or-later is permitted.
@@ -334,7 +334,7 @@ dependency comes transitively through `aurora-assets`.
 ### Recommendation
 
 1. **Continue using openjpeg-sys** via aurora-assets. BSD-2-Clause is
-   GPL-3.0-compatible. The C library is mature, fast, and well-tested.
+   LGPL-3.0-compatible. The C library is mature, fast, and well-tested.
 2. **Accept the C dependency.** A pure Rust JPEG 2000 decoder does not exist
    and would be a massive undertaking (~50k lines of complex signal processing).
 3. **If avoiding C FFI becomes a goal**, the only option is to transcode

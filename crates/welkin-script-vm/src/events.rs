@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Detected parameters and event dispatch for LSL script events.
 //!
 //! LSL scripts receive events (touch_start, collision, listen, etc.) with

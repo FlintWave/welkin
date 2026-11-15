@@ -43,7 +43,7 @@ output in `src/pcampbot.rs` (`c779319`). A recorded C# session is stored at
 Output: `docs/licence-audit.md`, `deny.toml`, `NOTICE.md` (`fee4e61`,
 `abd7b93`).
 
-- D1: GPL-3.0-or-later (2026-11-13) so Aurora crates can be reused. Ported
+- D1: LGPL-3.0-or-later (updated 2026-11-15, originally GPL-3.0) so Aurora crates can be reused. Ported
   BSD-3-Clause code keeps its notice.
 - Aurora crates audited at `3d523b1`; all GPL-3.0-or-later. The message
   template is LGPL 2.1 from Linden Lab, which settles its provenance.

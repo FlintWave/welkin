@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Region-crossing transfer bundles: serialise a set of script instances
 //! (state, pending events, timers) for migration to another region.
 

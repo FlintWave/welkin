@@ -20,7 +20,7 @@ where none is given.
 | R4 | Scripts: embed SLua (Luau fork) for LSL and Luau | Serialisable execution state, memory limits and pre-emption hooks are needed for scripts that cross regions; gives Luau for free and replaces writing a VM | 2026-11-13 |
 | R5 | Database: `sqlx` over the existing schema (MySQL/MariaDB, PostgreSQL, SQLite) | Keeps schema compatibility; drops Oracle `MySql.Data` | 2026-11-13 |
 | R6 | Voice: WebRTC only, via `wolfvoice` sidecar | Vivox is proprietary; Aurora supports WebRTC only; FreeSWITCH not ported | 2026-11-13 |
-| R7 / D1 | Licence GPL-3.0-or-later, reuse Aurora crates | Lets Aurora's GPL crates be linked; "or later" matches Aurora's manifest; BSD notices of ported code are preserved; AGPL not adopted because GPLv3 does not oblige network-only operators to publish and that was judged sufficient | 2026-11-13 |
+| R7 / D1 | Licence LGPL-3.0-or-later, reuse Aurora crates | Lets Aurora's GPL crates be linked as dependencies; "or later" matches Aurora's manifest; BSD notices of ported code are preserved; AGPL not adopted because GPLv3 does not oblige network-only operators to publish and that was judged sufficient | 2026-11-13 |
 | R8 | Workforce: `beam:cloud` workers code and first-review; Claude writes proposals and signs off | Cost and review discipline | 2026-11-13 |
 | D2 | Repository `welkin`, local git only, no remote | Operator decision | 2026-11-13 |
 | R9 | Pathfinding not planned | Operator decision | 2026-11-13 |

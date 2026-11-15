@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Typed packet handler dispatch: routes [`IncomingPacket`]s to registered
 //! handler closures that receive a fully decoded message struct.

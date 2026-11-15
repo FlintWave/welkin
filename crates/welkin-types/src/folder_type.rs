@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 /// System folder types (OpenMetaverse `FolderType` / `AssetType` in the
 /// `type_default` field of an inventory folder).

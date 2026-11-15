@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Parcel grid — maps every 4 m x 4 m cell in the region to a parcel
 //! `local_id`.

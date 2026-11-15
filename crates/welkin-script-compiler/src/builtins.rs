@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! LSL built-in function and constant tables for the analyzer.
 //!
 //! These tables mirror the authoritative definitions in `welkin-script-api`

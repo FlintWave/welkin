@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Proof tests for prim meshing colliders (tasks 6.1, 6.2, 6.3).
 //!

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Task 4.2: A scripted vehicle crosses a region border and keeps running.
 //!
 //! This is a conceptual proof that the checkpoint-based state transfer works

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Luau runtime helpers prepended to every generated script.
 
 pub const RUNTIME_PRELUDE: &str = r#"-- LSL Runtime Helpers

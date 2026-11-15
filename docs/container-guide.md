@@ -1,6 +1,6 @@
 # Container Deployment Guide
 
-<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 
 Production container guide for Welkin (Robust, Region, Portal, Migrate).
 

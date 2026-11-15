@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Miscellaneous environment-related region modules: media, region-ready,
 //! restart, access control, vegetation, and scene serialisation.

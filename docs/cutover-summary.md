@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Cutover summary
 
 [← Back to docs](README.md) · [Architecture](architecture.md) · [Migration guide](migration-guide.md) · [Operator guide](operator-guide.md)

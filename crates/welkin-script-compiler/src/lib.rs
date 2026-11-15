@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! LSL type system and compiler types for the OpenSimulator script engine.
 //!
 //! This crate defines the LSL type system used by both the compiler and runtime.

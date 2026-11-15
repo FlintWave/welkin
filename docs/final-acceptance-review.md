@@ -312,9 +312,9 @@ issue, not a code issue.
 
 ### License
 
-GPL-3.0-or-later -- confirmed via `LICENSE` file (GNU General Public License
+LGPL-3.0-or-later -- confirmed via `LICENSE` file (GNU General Public License
 Version 3) and all source files carry `// SPDX-License-Identifier:
-GPL-3.0-or-later` headers.
+LGPL-3.0-or-later` headers.
 
 ---
 
@@ -352,7 +352,7 @@ complete and operator-ready.
 
 The implementation uses proper error handling (thiserror), structured logging
 (tracing), async I/O (tokio/axum), and clean module boundaries. The licence is
-GPL-3.0-or-later throughout, with Aurora dependencies pinned at commit 3d523b14
+LGPL-3.0-or-later throughout, with Aurora dependencies pinned at commit 3d523b14
 as specified.
 
 The open items are quality-of-life improvements suitable for post-acceptance

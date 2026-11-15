@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //
 // Aurora Viewer smoothness check: verify that physics outputs produce
 // smooth motion suitable for viewer interpolation (no position snapping).

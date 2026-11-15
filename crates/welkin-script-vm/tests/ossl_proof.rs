@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Tasks 13.1–13.2: OSSL proof tests ported from C# OpenSimulator test tree.
 //!
 //! Source C# files:

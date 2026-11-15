@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 pub const TERRAIN_PATCH_SIZE: u32 = 16;
 pub const DEFAULT_REGION_SIZE: u32 = 256;

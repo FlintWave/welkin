@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Cap URL ll* functions — llRequestURL, llRequestSecureURL, llReleaseURL.
 //!
 //! Scripts request inbound HTTP URLs from the region's cap URL server.

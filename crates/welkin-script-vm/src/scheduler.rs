@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Script scheduler: manages a collection of script instances, fires timers,
 //! and round-robins event execution with per-slice instruction limits.
 

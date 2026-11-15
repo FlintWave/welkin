@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Script engine
 
 [← Back to docs](README.md) · [Architecture](architecture.md) · [Integration architecture](integration-architecture.md)

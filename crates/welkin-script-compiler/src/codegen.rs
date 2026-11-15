@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! LSL-to-Luau code generator.
 //!
 //! Walks a parsed [`ast::Script`] and emits Luau source code that the mlua

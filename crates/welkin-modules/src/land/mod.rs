@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Land-management subsystem: data structures, parcel grid, management
 //! module, prim-count tracking, and dwell scoring.

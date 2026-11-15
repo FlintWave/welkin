@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Sensor ll* functions — llSensor, llSensorRepeat, llSensorRemove.
 
 use std::sync::Arc;

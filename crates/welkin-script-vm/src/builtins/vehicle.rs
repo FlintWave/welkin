@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Vehicle dynamics ll* functions — llSetVehicleType, llSetVehicleFloatParam, etc.
 //!
 //! Stores vehicle parameters in [`VehicleParams`] on [`ScriptContext`].

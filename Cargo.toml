@@ -6,7 +6,7 @@ exclude = ["crates/welkin-companion", "tests/script-testing/scanner", "tests/scr
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-license = "GPL-3.0-or-later"
+license = "LGPL-3.0-or-later"
 publish = false
 
 [workspace.dependencies]

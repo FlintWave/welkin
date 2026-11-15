@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! OSSL draw-list functions — pure string manipulation, threat level None.
 //!
 //! These functions build up a draw-list string that is later interpreted

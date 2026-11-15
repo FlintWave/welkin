@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 use welkin_data::simulation::{PrimRow, PrimShapeRow, SimulationDataStore};
 use welkin_scene::part::SceneObjectPart;

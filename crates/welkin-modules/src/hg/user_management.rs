@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Hypergrid user management module: UUID-to-name resolution for foreign
 //! users using the `"first.last@griduri"` display format.

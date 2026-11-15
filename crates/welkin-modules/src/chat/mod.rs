@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Chat module: handles public chat (whisper, say, shout), region-wide
 //! broadcasts, debug-channel messages, and owner/direct chat in a region.

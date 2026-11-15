@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 #![allow(clippy::approx_constant)]
 //! Task 4.1: Port of script API tests from the C# OpenSimulator tree.
 //!

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Hypergrid entity transfer module: cross-grid teleportation with
 //! gatekeeper resolution, appearance restrictions, and foreign agent

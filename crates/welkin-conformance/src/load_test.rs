@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Load-test harness and measurement for OpenSimulator C# vs Rust comparison.
 //!

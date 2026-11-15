@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! SLua / Luau spike: verify that we can build Luau from Rust and exercise
 //! the basic operations a Second Life script VM needs.
 //!

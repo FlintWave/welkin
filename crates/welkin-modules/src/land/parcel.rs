@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! [`LandParcel`] wraps [`LandData`] and provides bitmap operations that
 //! mirror the C# `LandObject` class.

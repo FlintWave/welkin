@@ -1,6 +1,6 @@
 # OSgrid Compatibility Notes
 
-SPDX-License-Identifier: GPL-3.0-or-later
+SPDX-License-Identifier: LGPL-3.0-or-later
 
 Status: research from source code only. **No direct contact with OSgrid
 administrators has been made.** This document records what the C# codebase

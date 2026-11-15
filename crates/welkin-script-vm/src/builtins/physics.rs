@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Physics ll* functions — send commands through a channel to the region's
 //! physics engine (Rapier) and read back velocity/acceleration from context.
 

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 use aurora_msg::msgs::object_update;
 use glam::{Quat, Vec3, Vec4};

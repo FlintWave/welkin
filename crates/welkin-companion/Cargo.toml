@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: LGPL-3.0-or-later
 #
 # Standalone crate — not part of the workspace (Tauri has its own toolchain needs).
 # Build with: cargo tauri build   (from this directory)
@@ -7,7 +7,7 @@
 name = "welkin-companion"
 version = "0.1.0"
 edition = "2021"
-license = "GPL-3.0-or-later"
+license = "LGPL-3.0-or-later"
 description = "Desktop companion for OpenSimulator grid portal"
 
 [dependencies]

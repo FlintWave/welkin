@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Viewer compatibility
 
 [← Back to docs](README.md) · [Integration architecture](integration-architecture.md) · [Architecture](architecture.md)

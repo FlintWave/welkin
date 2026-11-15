@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Extension modules
 
 [← Back to docs](README.md) · [Script engine](scripting.md) · [OSSL function reference](ossl.md) · [Architecture](architecture.md)

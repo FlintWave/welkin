@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 // TODO: feed measured region statistics into model (Phase 3)
 
 use serde::{Deserialize, Serialize};

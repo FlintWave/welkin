@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! llSetPrimitiveParams / llGetPrimitiveParams and link variants.
 //!
 //! Implements the full PRIM_* constant set from OpenSim's LSL_Constants.cs

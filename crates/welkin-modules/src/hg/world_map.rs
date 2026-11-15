@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Hypergrid world-map module: map blocks for hyperlinked regions and
 //! map-server-URL injection for foreign visitors.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Task 4.3: A Luau script and an LSL script in one object exchange link messages.
 //!
 //! This proof demonstrates that two separate VMs (simulating two scripts in the

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Replay test: sends the 14 grid-service fixture requests through an in-process
 //! axum router backed by an in-memory SQLite database, then checks each response.

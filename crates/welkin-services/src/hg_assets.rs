@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! Hypergrid asset service — a filtered wrapper around the local asset store
 //! that enforces per-type export/import permissions and rewrites creator

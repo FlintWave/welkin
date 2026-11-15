@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 

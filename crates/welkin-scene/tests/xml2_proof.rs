@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! XML2 round-trip proof tests: serialize/deserialize verification against
 //! known C# serialized fragments and property survival.
 

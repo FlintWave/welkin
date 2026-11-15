@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 //! NPC (Non-Player Character) module: creates, manages, and removes scripted
 //! avatar presences in a region.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: LGPL-3.0-or-later
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicI32, Ordering};

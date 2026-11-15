@@ -1,4 +1,4 @@
-<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # ROBUST grid services server
 
 [← Back to docs](README.md) · [Operator guide](operator-guide.md) · [Integration architecture](integration-architecture.md) · [Container deployment](container-guide.md)
