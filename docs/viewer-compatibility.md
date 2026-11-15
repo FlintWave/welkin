@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Viewer compatibility
 
-[← Back to docs](README.md) · [Integration architecture](integration-architecture.md) · [Architecture](architecture.md)
+[← Back to docs](index.md) · [Integration architecture](integration-architecture.md) · [Architecture](architecture.md)
 
 Current viewer compatibility status, updated as live testing progresses.
 

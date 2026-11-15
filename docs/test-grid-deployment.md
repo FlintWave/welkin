@@ -2,7 +2,7 @@
 
 # Test grid deployment
 
-[<- Back to docs](README.md) | [Architecture](architecture.md) | [Operator guide](operator-guide.md) | [Migration guide](migration-guide.md)
+[<- Back to docs](index.md) | [Architecture](architecture.md) | [Operator guide](operator-guide.md) | [Migration guide](migration-guide.md)
 
 Deploy a self-contained test grid to verify that the Rust port works end to
 end: login, object creation, scripting, voice, and hypergrid. Everything runs

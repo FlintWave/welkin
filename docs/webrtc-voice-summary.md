@@ -1,6 +1,6 @@
 # WebRTC voice summary
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#wv1) · Previous: [Hypergrid](hypergrid-summary.md) · Next: [Cutover](cutover-summary.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Decisions](decisions.md#wv1) · Previous: [Hypergrid](hypergrid-summary.md) · Next: [Cutover](cutover-summary.md)
 
 Status: accepted (11 of 11 tasks, 4 sections, 102 tests). Security review
 verdict: CONDITIONAL PASS. Change: `openspec/changes/webrtc-voice/`.

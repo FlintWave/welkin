@@ -1,6 +1,6 @@
 # Physics backend summary
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#r3a) · Previous: [Protocol core](protocol-core-summary.md) · Next: [Grid services](grid-services-summary.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Decisions](decisions.md#r3a) · Previous: [Protocol core](protocol-core-summary.md) · Next: [Grid services](grid-services-summary.md)
 
 Change: `openspec/changes/physics-backend`. Status: complete and accepted
 (all tasks in sections 1 to 5 of `tasks.md` are ticked).
