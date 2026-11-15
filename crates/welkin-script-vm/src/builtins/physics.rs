@@ -136,24 +136,63 @@ pub fn register_physics(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<(
 
     // llGround(offset) -> float (terrain height at position+offset)
     {
-        let f = lua.create_function(|_, _offset: LuaValue| {
-            Ok(0.0f64)
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, offset_tbl: LuaTable| {
+            let offset = get_vec3(&offset_tbl)?;
+            let ctx = ctx.read();
+            let qx = (ctx.position[0] + offset[0]).clamp(0.0, 255.0) as usize;
+            let qy = (ctx.position[1] + offset[1]).clamp(0.0, 255.0) as usize;
+            match ctx.terrain_heights {
+                Some(ref heights) => {
+                    let idx = qy * 256 + qx;
+                    Ok(heights.get(idx).copied().unwrap_or(0.0) as f64)
+                }
+                None => Ok(0.0f64),
+            }
         })?;
         lua.globals().set("llGround", f)?;
     }
 
-    // llGroundNormal(offset) -> vector (terrain normal, default up)
+    // llGroundNormal(offset) -> vector (terrain normal at position+offset)
     {
-        let f = lua.create_function(|lua, _offset: LuaValue| {
-            make_vec3(lua, [0.0, 0.0, 1.0])
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |lua, offset_tbl: LuaTable| {
+            let offset = get_vec3(&offset_tbl)?;
+            let ctx = ctx.read();
+            let heights = match ctx.terrain_heights {
+                Some(ref h) => h,
+                None => return make_vec3(lua, [0.0, 0.0, 1.0]),
+            };
+            let qx = (ctx.position[0] + offset[0]).clamp(0.0, 255.0) as usize;
+            let qy = (ctx.position[1] + offset[1]).clamp(0.0, 255.0) as usize;
+            let sample = |x: usize, y: usize| -> f64 {
+                let cx = x.min(255);
+                let cy = y.min(255);
+                heights.get(cy * 256 + cx).copied().unwrap_or(0.0) as f64
+            };
+            let h_l = sample(qx.saturating_sub(1), qy);
+            let h_r = sample((qx + 1).min(255), qy);
+            let h_d = sample(qx, qy.saturating_sub(1));
+            let h_u = sample(qx, (qy + 1).min(255));
+            let nx = h_l - h_r;
+            let ny = h_d - h_u;
+            let nz = 2.0;
+            let len = (nx * nx + ny * ny + nz * nz).sqrt();
+            if len > f64::EPSILON {
+                make_vec3(lua, [nx / len, ny / len, nz / len])
+            } else {
+                make_vec3(lua, [0.0, 0.0, 1.0])
+            }
         })?;
         lua.globals().set("llGroundNormal", f)?;
     }
 
-    // llWater(offset) -> float (water height, default 20.0)
+    // llWater(offset) -> float (water height)
     {
-        let f = lua.create_function(|_, _offset: LuaValue| {
-            Ok(20.0f64)
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, _offset: LuaValue| {
+            let ctx = ctx.read();
+            Ok(ctx.water_height)
         })?;
         lua.globals().set("llWater", f)?;
     }
@@ -380,7 +419,7 @@ mod tests {
     }
 
     #[test]
-    fn ll_ground_returns_zero() {
+    fn ll_ground_no_terrain_returns_zero() {
         let lua = Lua::new();
         let ctx = test_ctx();
         register_physics(&lua, &ctx).unwrap();
@@ -389,12 +428,113 @@ mod tests {
     }
 
     #[test]
-    fn ll_ground_normal_returns_up() {
+    fn ll_ground_queries_terrain_heightmap() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        {
+            let mut c = ctx.write();
+            // Position is (128, 128, 25). Offset (0,0,0) queries (128, 128).
+            let mut heights = vec![0.0f32; 256 * 256];
+            heights[128 * 256 + 128] = 42.5;
+            c.terrain_heights = Some(heights);
+        }
+        register_physics(&lua, &ctx).unwrap();
+        let r: f64 = lua.load("return llGround({x=0, y=0, z=0})").eval().unwrap();
+        assert!((r - 42.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn ll_ground_applies_offset() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        {
+            let mut c = ctx.write();
+            let mut heights = vec![0.0f32; 256 * 256];
+            // Position (128,128) + offset (2,3) = (130, 131)
+            heights[131 * 256 + 130] = 17.0;
+            c.terrain_heights = Some(heights);
+        }
+        register_physics(&lua, &ctx).unwrap();
+        let r: f64 = lua.load("return llGround({x=2, y=3, z=0})").eval().unwrap();
+        assert!((r - 17.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn ll_ground_clamps_to_bounds() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        {
+            let mut c = ctx.write();
+            let mut heights = vec![0.0f32; 256 * 256];
+            // Position (128,128) + offset (500,500) should clamp to (255, 255)
+            heights[255 * 256 + 255] = 99.0;
+            c.terrain_heights = Some(heights);
+        }
+        register_physics(&lua, &ctx).unwrap();
+        let r: f64 = lua.load("return llGround({x=500, y=500, z=0})").eval().unwrap();
+        assert!((r - 99.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn ll_ground_normal_no_terrain_returns_up() {
         let lua = Lua::new();
         let ctx = test_ctx();
         register_physics(&lua, &ctx).unwrap();
-        let z: f64 = lua.load("return llGroundNormal({x=0, y=0, z=0}).z").eval().unwrap();
+        let (x, y, z): (f64, f64, f64) = lua
+            .load("local n = llGroundNormal({x=0, y=0, z=0}); return n.x, n.y, n.z")
+            .eval()
+            .unwrap();
+        assert!(x.abs() < f64::EPSILON);
+        assert!(y.abs() < f64::EPSILON);
         assert!((z - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn ll_ground_normal_flat_terrain_returns_up() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        {
+            let mut c = ctx.write();
+            // Flat terrain at height 10 everywhere
+            c.terrain_heights = Some(vec![10.0f32; 256 * 256]);
+        }
+        register_physics(&lua, &ctx).unwrap();
+        let (x, y, z): (f64, f64, f64) = lua
+            .load("local n = llGroundNormal({x=0, y=0, z=0}); return n.x, n.y, n.z")
+            .eval()
+            .unwrap();
+        assert!(x.abs() < f64::EPSILON);
+        assert!(y.abs() < f64::EPSILON);
+        assert!((z - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn ll_ground_normal_sloped_terrain() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        {
+            let mut c = ctx.write();
+            // Create terrain that slopes in x: height = x
+            let mut heights = vec![0.0f32; 256 * 256];
+            for y in 0..256usize {
+                for x in 0..256usize {
+                    heights[y * 256 + x] = x as f32;
+                }
+            }
+            c.terrain_heights = Some(heights);
+        }
+        register_physics(&lua, &ctx).unwrap();
+        // At position (128,128), hL=127, hR=129, hD=128, hU=128
+        // normal = normalize(127-129, 128-128, 2) = normalize(-2, 0, 2)
+        let (x, y, z): (f64, f64, f64) = lua
+            .load("local n = llGroundNormal({x=0, y=0, z=0}); return n.x, n.y, n.z")
+            .eval()
+            .unwrap();
+        // Expected: (-2, 0, 2) normalized = (-1/sqrt(2), 0, 1/sqrt(2))
+        let expected_len = (2.0f64 * 2.0 + 2.0 * 2.0).sqrt();
+        assert!((x - (-2.0 / expected_len)).abs() < 1e-10);
+        assert!(y.abs() < 1e-10);
+        assert!((z - (2.0 / expected_len)).abs() < 1e-10);
     }
 
     #[test]
@@ -404,6 +544,18 @@ mod tests {
         register_physics(&lua, &ctx).unwrap();
         let r: f64 = lua.load("return llWater({x=0, y=0, z=0})").eval().unwrap();
         assert!((r - 20.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn ll_water_returns_configured_height() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        {
+            ctx.write().water_height = 35.5;
+        }
+        register_physics(&lua, &ctx).unwrap();
+        let r: f64 = lua.load("return llWater({x=0, y=0, z=0})").eval().unwrap();
+        assert!((r - 35.5).abs() < f64::EPSILON);
     }
 
     #[test]

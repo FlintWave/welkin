@@ -69,13 +69,21 @@ pub fn register_land(
 
     // llGetParcelMaxPrims(pos, sim_wide) -> integer
     {
-        let f = lua.create_function(|_, (_pos, _sim_wide): (LuaValue, i64)| Ok(15000i64))?;
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, (_pos, _sim_wide): (LuaValue, i64)| {
+            let ctx = ctx.read();
+            Ok(ctx.parcel_max_prims as i64)
+        })?;
         g.set("llGetParcelMaxPrims", f)?;
     }
 
     // llGetParcelPrimCount(pos, category, sim_wide) -> integer
     {
-        let f = lua.create_function(|_, (_pos, _cat, _sw): (LuaValue, i64, i64)| Ok(0i64))?;
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, (_pos, _cat, _sw): (LuaValue, i64, i64)| {
+            let ctx = ctx.read();
+            Ok(ctx.parcel_prim_count as i64)
+        })?;
         g.set("llGetParcelPrimCount", f)?;
     }
 
@@ -102,8 +110,11 @@ pub fn register_land(
 
     // llSetParcelMusicURL(url)
     {
-        let f = lua.create_function(|_, url: String| {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, url: String| {
+            let mut ctx = ctx.write();
             tracing::debug!(%url, "llSetParcelMusicURL");
+            ctx.parcel_music_url = url;
             Ok(())
         })?;
         g.set("llSetParcelMusicURL", f)?;
@@ -111,8 +122,11 @@ pub fn register_land(
 
     // llSetParcelMediaURL(url)
     {
-        let f = lua.create_function(|_, url: String| {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, url: String| {
+            let mut ctx = ctx.write();
             tracing::debug!(%url, "llSetParcelMediaURL");
+            ctx.parcel_media_url = url;
             Ok(())
         })?;
         g.set("llSetParcelMediaURL", f)?;
@@ -186,6 +200,78 @@ mod tests {
             .eval()
             .unwrap();
         assert_eq!(owner, ctx.read().parcel_owner.to_string());
+    }
+
+    #[test]
+    fn get_parcel_max_prims_default() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        register_land(&lua, &ctx).unwrap();
+        let r: i64 = lua
+            .load("return llGetParcelMaxPrims({x=0,y=0,z=0}, 0)")
+            .eval()
+            .unwrap();
+        assert_eq!(r, 15000);
+    }
+
+    #[test]
+    fn get_parcel_max_prims_custom() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        ctx.write().parcel_max_prims = 5000;
+        register_land(&lua, &ctx).unwrap();
+        let r: i64 = lua
+            .load("return llGetParcelMaxPrims({x=0,y=0,z=0}, 0)")
+            .eval()
+            .unwrap();
+        assert_eq!(r, 5000);
+    }
+
+    #[test]
+    fn get_parcel_prim_count_default() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        register_land(&lua, &ctx).unwrap();
+        let r: i64 = lua
+            .load("return llGetParcelPrimCount({x=0,y=0,z=0}, 0, 0)")
+            .eval()
+            .unwrap();
+        assert_eq!(r, 0);
+    }
+
+    #[test]
+    fn get_parcel_prim_count_populated() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        ctx.write().parcel_prim_count = 42;
+        register_land(&lua, &ctx).unwrap();
+        let r: i64 = lua
+            .load("return llGetParcelPrimCount({x=0,y=0,z=0}, 0, 0)")
+            .eval()
+            .unwrap();
+        assert_eq!(r, 42);
+    }
+
+    #[test]
+    fn set_parcel_music_url() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        register_land(&lua, &ctx).unwrap();
+        lua.load(r#"llSetParcelMusicURL("http://example.com/stream.mp3")"#)
+            .exec()
+            .unwrap();
+        assert_eq!(ctx.read().parcel_music_url, "http://example.com/stream.mp3");
+    }
+
+    #[test]
+    fn set_parcel_media_url() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        register_land(&lua, &ctx).unwrap();
+        lua.load(r#"llSetParcelMediaURL("http://example.com/video.mp4")"#)
+            .exec()
+            .unwrap();
+        assert_eq!(ctx.read().parcel_media_url, "http://example.com/video.mp4");
     }
 
     #[test]

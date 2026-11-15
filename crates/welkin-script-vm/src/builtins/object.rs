@@ -10,7 +10,7 @@ use std::sync::Arc;
 use mlua::prelude::*;
 use parking_lot::RwLock;
 
-use super::{ScriptContext, RezRequest, INVENTORY_OBJECT};
+use super::{ScriptContext, RezRequest, ObjectCommand, INVENTORY_OBJECT};
 
 /// Extract `[x, y, z]` from a Lua table that has named or positional keys.
 fn get_vec3_from_table(t: &LuaTable) -> LuaResult<[f64; 3]> {
@@ -201,7 +201,11 @@ pub fn register_object(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
 
     // llGetNumberOfPrims() -> integer
     {
-        let f = lua.create_function(|_, ()| Ok(1i64))?;
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, ()| {
+            let ctx = ctx.read();
+            Ok(ctx.prim_count as i64)
+        })?;
         lua.globals().set("llGetNumberOfPrims", f)?;
     }
 
@@ -234,6 +238,11 @@ pub fn register_object(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
         let ctx = Arc::clone(ctx);
         let f = lua.create_function(move |_, ()| {
             let ctx = ctx.read();
+            if let Some(ref tx) = ctx.object_command_sender {
+                let _ = tx.send(ObjectCommand::Die {
+                    object_id: ctx.prim_id,
+                });
+            }
             tracing::warn!(prim = %ctx.prim_id, "llDie: script requested object deletion");
             Ok(())
         })?;
@@ -555,7 +564,20 @@ mod tests {
         let ctx = test_ctx();
         register_object(&lua, &ctx).unwrap();
         let n: i64 = lua.load("return llGetNumberOfPrims()").eval().unwrap();
+        // test_ctx uses Default which sets prim_count = 1
         assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn ll_get_number_of_prims_from_context() {
+        let lua = Lua::new();
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            prim_count: 5,
+            ..Default::default()
+        }));
+        register_object(&lua, &ctx).unwrap();
+        let n: i64 = lua.load("return llGetNumberOfPrims()").eval().unwrap();
+        assert_eq!(n, 5);
     }
 
     #[test]
@@ -594,6 +616,27 @@ mod tests {
         let ctx = test_ctx();
         register_object(&lua, &ctx).unwrap();
         lua.load("llDie()").exec().unwrap();
+    }
+
+    #[test]
+    fn ll_die_sends_object_command() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let prim_id = Uuid::from_u128(0xdead_beef);
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            prim_id,
+            object_command_sender: Some(tx),
+            ..Default::default()
+        }));
+        let lua = Lua::new();
+        register_object(&lua, &ctx).unwrap();
+        lua.load("llDie()").exec().unwrap();
+        let cmd = rx.try_recv().unwrap();
+        match cmd {
+            super::super::ObjectCommand::Die { object_id } => {
+                assert_eq!(object_id, prim_id);
+            }
+            _ => panic!("expected Die command"),
+        }
     }
 
     #[test]

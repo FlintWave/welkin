@@ -6,7 +6,7 @@ use std::sync::Arc;
 use mlua::prelude::*;
 use parking_lot::RwLock;
 
-use super::{ScriptContext, AttachAction, AttachRequest};
+use super::{ScriptContext, AttachAction, AttachRequest, AnimationCommand, TeleportRequest};
 
 pub const DATA_ONLINE: i32 = 1;
 pub const DATA_NAME: i32 = 2;
@@ -16,6 +16,22 @@ pub const DATA_SIM_POS: i32 = 5;
 pub const DATA_SIM_STATUS: i32 = 6;
 pub const DATA_SIM_RATING: i32 = 7;
 pub const DATA_PAYINFO: i32 = 8;
+
+// AGENT_* info-flag constants (returned by llGetAgentInfo)
+pub const AGENT_FLYING: i32 = 0x0001;
+pub const AGENT_ATTACHMENTS: i32 = 0x0002;
+pub const AGENT_SCRIPTED: i32 = 0x0004;
+pub const AGENT_MOUSELOOK: i32 = 0x0008;
+pub const AGENT_SITTING: i32 = 0x0010;
+pub const AGENT_ON_OBJECT: i32 = 0x0020;
+pub const AGENT_AWAY: i32 = 0x0040;
+pub const AGENT_WALKING: i32 = 0x0080;
+pub const AGENT_IN_AIR: i32 = 0x0100;
+pub const AGENT_TYPING: i32 = 0x0200;
+pub const AGENT_CROUCHING: i32 = 0x0400;
+pub const AGENT_BUSY: i32 = 0x0800;
+pub const AGENT_ALWAYS_RUN: i32 = 0x1000;
+pub const AGENT_AUTOPILOT: i32 = 0x2000;
 
 pub fn register_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<(), crate::VmError> {
     // PERMISSION_* constants
@@ -37,6 +53,22 @@ pub fn register_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
     lua.globals().set("DATA_SIM_STATUS", DATA_SIM_STATUS as i64)?;
     lua.globals().set("DATA_SIM_RATING", DATA_SIM_RATING as i64)?;
     lua.globals().set("DATA_PAYINFO", DATA_PAYINFO as i64)?;
+
+    // AGENT_* constants
+    lua.globals().set("AGENT_FLYING", AGENT_FLYING as i64)?;
+    lua.globals().set("AGENT_ATTACHMENTS", AGENT_ATTACHMENTS as i64)?;
+    lua.globals().set("AGENT_SCRIPTED", AGENT_SCRIPTED as i64)?;
+    lua.globals().set("AGENT_MOUSELOOK", AGENT_MOUSELOOK as i64)?;
+    lua.globals().set("AGENT_SITTING", AGENT_SITTING as i64)?;
+    lua.globals().set("AGENT_ON_OBJECT", AGENT_ON_OBJECT as i64)?;
+    lua.globals().set("AGENT_AWAY", AGENT_AWAY as i64)?;
+    lua.globals().set("AGENT_WALKING", AGENT_WALKING as i64)?;
+    lua.globals().set("AGENT_IN_AIR", AGENT_IN_AIR as i64)?;
+    lua.globals().set("AGENT_TYPING", AGENT_TYPING as i64)?;
+    lua.globals().set("AGENT_CROUCHING", AGENT_CROUCHING as i64)?;
+    lua.globals().set("AGENT_BUSY", AGENT_BUSY as i64)?;
+    lua.globals().set("AGENT_ALWAYS_RUN", AGENT_ALWAYS_RUN as i64)?;
+    lua.globals().set("AGENT_AUTOPILOT", AGENT_AUTOPILOT as i64)?;
 
     // llRequestPermissions(agent_id, permissions)
     {
@@ -76,7 +108,20 @@ pub fn register_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
 
     // llStartAnimation(anim_name)
     {
-        let f = lua.create_function(|_, anim: String| {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, anim: String| {
+            let ctx = ctx.read();
+            if ctx.permissions_granted & 0x10 == 0 {
+                return Err(mlua::Error::runtime(
+                    "llStartAnimation: PERMISSION_TRIGGER_ANIMATION not granted",
+                ));
+            }
+            if let Some(ref tx) = ctx.animation_sender {
+                let _ = tx.send(AnimationCommand::Play {
+                    agent_id: ctx.owner_id,
+                    animation: anim.clone(),
+                });
+            }
             tracing::debug!(%anim, "llStartAnimation");
             Ok(())
         })?;
@@ -85,7 +130,20 @@ pub fn register_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
 
     // llStopAnimation(anim_name)
     {
-        let f = lua.create_function(|_, anim: String| {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, anim: String| {
+            let ctx = ctx.read();
+            if ctx.permissions_granted & 0x10 == 0 {
+                return Err(mlua::Error::runtime(
+                    "llStopAnimation: PERMISSION_TRIGGER_ANIMATION not granted",
+                ));
+            }
+            if let Some(ref tx) = ctx.animation_sender {
+                let _ = tx.send(AnimationCommand::Stop {
+                    agent_id: ctx.owner_id,
+                    animation: anim.clone(),
+                });
+            }
             tracing::debug!(%anim, "llStopAnimation");
             Ok(())
         })?;
@@ -138,11 +196,29 @@ pub fn register_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
 
     // llGetAgentSize(agent_id) -> vector
     {
-        let f = lua.create_function(|lua, _agent_id: String| {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |lua, agent_id: String| {
+            let ctx = ctx.read();
+            let agent_uuid = uuid::Uuid::parse_str(&agent_id).unwrap_or(uuid::Uuid::nil());
+            // Default avatar bounding box: 0.45 x 0.6 x 1.8 metres.
+            let (mut w, mut d, mut h) = (0.45_f64, 0.6_f64, 1.8_f64);
+            if let Some(presence) = ctx.presence_list.iter().find(|p| p.uuid == agent_uuid) {
+                // Visual param index 33 is the Height slider (0-255).
+                // Map linearly from the SL range ~1.2m .. ~2.4m.
+                if presence.visual_params.len() > 33 {
+                    let height_byte = presence.visual_params[33] as f64;
+                    h = 1.2 + (height_byte / 255.0) * 1.2;
+                }
+            } else if !agent_uuid.is_nil() {
+                // Agent not in scene -- return ZERO_VECTOR per LSL spec.
+                w = 0.0;
+                d = 0.0;
+                h = 0.0;
+            }
             let t = lua.create_table()?;
-            t.set("x", 0.45)?;
-            t.set("y", 0.6)?;
-            t.set("z", 1.8)?;
+            t.set("x", w)?;
+            t.set("y", d)?;
+            t.set("z", h)?;
             Ok(t)
         })?;
         lua.globals().set("llGetAgentSize", f)?;
@@ -150,15 +226,56 @@ pub fn register_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
 
     // llGetAgentInfo(agent_id) -> integer
     {
-        let f = lua.create_function(|_, _agent_id: String| Ok(0i64))?;
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, agent_id: String| {
+            let ctx = ctx.read();
+            let agent_uuid = uuid::Uuid::parse_str(&agent_id).unwrap_or(uuid::Uuid::nil());
+            let _presence = match ctx.presence_list.iter().find(|p| p.uuid == agent_uuid) {
+                Some(p) => p,
+                None => return Ok(0i64),
+            };
+            // Agent is present in-scene. Return a baseline bitmask.
+            // Full state tracking (flying, sitting, mouselook, etc.) will be
+            // added when the agent-state subsystem is wired; for now we report
+            // AGENT_SCRIPTED since the agent is running in a scripted region.
+            let flags: i32 = AGENT_SCRIPTED;
+            Ok(flags as i64)
+        })?;
         lua.globals().set("llGetAgentInfo", f)?;
     }
 
     // llTeleportAgent(agent_id, landmark, pos, look_at)
     {
+        let ctx = Arc::clone(ctx);
         let f = lua.create_function(
-            |_, (_agent_id, _landmark, _pos, _look_at): (String, String, LuaTable, LuaTable)| {
-                tracing::debug!("llTeleportAgent");
+            move |_, (agent_id, landmark, pos, look_at): (String, String, LuaTable, LuaTable)| {
+                let ctx = ctx.read();
+                if ctx.permissions_granted & 0x1000 == 0 {
+                    return Err(mlua::Error::runtime(
+                        "llTeleportAgent: PERMISSION_TELEPORT not granted",
+                    ));
+                }
+                let agent_uuid =
+                    uuid::Uuid::parse_str(&agent_id).unwrap_or(uuid::Uuid::nil());
+                let position = [
+                    pos.get::<f64>("x").or_else(|_| pos.get(1))?,
+                    pos.get::<f64>("y").or_else(|_| pos.get(2))?,
+                    pos.get::<f64>("z").or_else(|_| pos.get(3))?,
+                ];
+                let look = [
+                    look_at.get::<f64>("x").or_else(|_| look_at.get(1))?,
+                    look_at.get::<f64>("y").or_else(|_| look_at.get(2))?,
+                    look_at.get::<f64>("z").or_else(|_| look_at.get(3))?,
+                ];
+                if let Some(ref tx) = ctx.teleport_sender {
+                    let _ = tx.send(TeleportRequest {
+                        agent_id: agent_uuid,
+                        region_name: landmark,
+                        position,
+                        look_at: look,
+                    });
+                }
+                tracing::debug!(%agent_id, "llTeleportAgent");
                 Ok(())
             },
         )?;
@@ -167,8 +284,20 @@ pub fn register_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
 
     // llTeleportAgentHome(agent_id)
     {
-        let f = lua.create_function(|_, _agent_id: String| {
-            tracing::debug!("llTeleportAgentHome");
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, agent_id: String| {
+            let ctx = ctx.read();
+            let agent_uuid =
+                uuid::Uuid::parse_str(&agent_id).unwrap_or(uuid::Uuid::nil());
+            if let Some(ref tx) = ctx.teleport_sender {
+                let _ = tx.send(TeleportRequest {
+                    agent_id: agent_uuid,
+                    region_name: String::new(),
+                    position: [0.0, 0.0, 0.0],
+                    look_at: [0.0, 0.0, 0.0],
+                });
+            }
+            tracing::debug!(%agent_id, "llTeleportAgentHome");
             Ok(())
         })?;
         lua.globals().set("llTeleportAgentHome", f)?;
@@ -282,12 +411,33 @@ pub fn register_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
         let f = lua.create_function(move |_, (agent_id, data_type): (String, i64)| {
             let ctx = ctx.read();
             let request_id = uuid::Uuid::new_v4().to_string();
+            let agent_uuid =
+                uuid::Uuid::parse_str(&agent_id).unwrap_or(uuid::Uuid::nil());
+            let presence = ctx.presence_list.iter().find(|p| p.uuid == agent_uuid);
             let data = match data_type as i32 {
-                DATA_ONLINE => "1".to_string(),
-                DATA_NAME => "Unknown User".to_string(),
+                DATA_ONLINE => {
+                    if presence.is_some() {
+                        "1".to_string()
+                    } else {
+                        "0".to_string()
+                    }
+                }
+                DATA_NAME => {
+                    if let Some(p) = presence {
+                        format!("{} {}", p.first_name, p.last_name)
+                    } else {
+                        "Unknown User".to_string()
+                    }
+                }
                 DATA_BORN => "2006-01-01".to_string(),
                 DATA_RATING => "0,0,0,0,0".to_string(),
-                DATA_SIM_POS => format!("<{}, {}, {}>", ctx.position[0], ctx.position[1], ctx.position[2]),
+                DATA_SIM_POS => {
+                    if let Some(p) = presence {
+                        format!("<{}, {}, {}>", p.position[0], p.position[1], p.position[2])
+                    } else {
+                        format!("<{}, {}, {}>", ctx.position[0], ctx.position[1], ctx.position[2])
+                    }
+                }
                 DATA_SIM_STATUS => "up".to_string(),
                 DATA_SIM_RATING => "PG".to_string(),
                 DATA_PAYINFO => "0".to_string(),
@@ -397,6 +547,15 @@ mod tests {
         let ctx = Arc::new(RwLock::new(ScriptContext {
             owner_id: Uuid::from_u128(0xabcd),
             event_sender: Some(tx),
+            presence_list: vec![super::super::PresenceInfo {
+                uuid: Uuid::from_u128(0x1234),
+                first_name: "Test".into(),
+                last_name: "User".into(),
+                position: [100.0, 200.0, 50.0],
+                is_npc: false,
+                ip_address: String::new(),
+                visual_params: Vec::new(),
+            }],
             ..Default::default()
         }));
         (ctx, rx)
@@ -508,7 +667,257 @@ mod tests {
         let (_prim_id, event) = rx.try_recv().unwrap();
         match event {
             crate::ScriptEvent::Dataserver { data, .. } => {
+                assert_eq!(data, "Test User");
+            }
+            _ => panic!("expected Dataserver event"),
+        }
+    }
+
+    #[test]
+    fn request_agent_data_name_unknown() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            owner_id: Uuid::from_u128(0xabcd),
+            event_sender: Some(tx),
+            ..Default::default()
+        }));
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+
+        lua.load(r#"llRequestAgentData("00000000-0000-0000-0000-000000009999", DATA_NAME)"#)
+            .exec()
+            .unwrap();
+
+        let (_prim_id, event) = rx.try_recv().unwrap();
+        match event {
+            crate::ScriptEvent::Dataserver { data, .. } => {
                 assert_eq!(data, "Unknown User");
+            }
+            _ => panic!("expected Dataserver event"),
+        }
+    }
+
+    #[test]
+    fn start_animation_sends_command() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            owner_id: Uuid::from_u128(0xabcd),
+            permissions_granted: 0x10, // PERMISSION_TRIGGER_ANIMATION
+            animation_sender: Some(tx),
+            ..Default::default()
+        }));
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+        lua.load(r#"llStartAnimation("walk")"#).exec().unwrap();
+        let cmd = rx.try_recv().unwrap();
+        match cmd {
+            super::super::AnimationCommand::Play { agent_id, animation } => {
+                assert_eq!(agent_id, Uuid::from_u128(0xabcd));
+                assert_eq!(animation, "walk");
+            }
+            _ => panic!("expected Play command"),
+        }
+    }
+
+    #[test]
+    fn start_animation_denied_without_permission() {
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            permissions_granted: 0,
+            ..Default::default()
+        }));
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+        let result = lua.load(r#"llStartAnimation("walk")"#).exec();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn stop_animation_sends_command() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            owner_id: Uuid::from_u128(0xabcd),
+            permissions_granted: 0x10,
+            animation_sender: Some(tx),
+            ..Default::default()
+        }));
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+        lua.load(r#"llStopAnimation("walk")"#).exec().unwrap();
+        let cmd = rx.try_recv().unwrap();
+        match cmd {
+            super::super::AnimationCommand::Stop { agent_id, animation } => {
+                assert_eq!(agent_id, Uuid::from_u128(0xabcd));
+                assert_eq!(animation, "walk");
+            }
+            _ => panic!("expected Stop command"),
+        }
+    }
+
+    #[test]
+    fn get_agent_size_with_visual_params() {
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            presence_list: vec![super::super::PresenceInfo {
+                uuid: Uuid::from_u128(0x42),
+                first_name: "Tall".into(),
+                last_name: "Avatar".into(),
+                position: [0.0, 0.0, 0.0],
+                is_npc: false,
+                ip_address: String::new(),
+                // Set visual param index 33 (Height) to 255 -> max height 2.4m.
+                visual_params: {
+                    let mut vp = vec![0u8; 34];
+                    vp[33] = 255;
+                    vp
+                },
+            }],
+            ..Default::default()
+        }));
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+        let z: f64 = lua
+            .load(r#"return llGetAgentSize("00000000-0000-0000-0000-000000000042").z"#)
+            .eval()
+            .unwrap();
+        assert!((z - 2.4).abs() < 0.01);
+    }
+
+    #[test]
+    fn get_agent_size_unknown_returns_zero_vector() {
+        let ctx = test_ctx();
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+        let z: f64 = lua
+            .load(r#"return llGetAgentSize("00000000-0000-0000-0000-000000009999").z"#)
+            .eval()
+            .unwrap();
+        assert!((z - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn get_agent_info_returns_scripted_for_present_agent() {
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            presence_list: vec![super::super::PresenceInfo {
+                uuid: Uuid::from_u128(0x42),
+                first_name: "Test".into(),
+                last_name: "Agent".into(),
+                position: [0.0, 0.0, 0.0],
+                is_npc: false,
+                ip_address: String::new(),
+                visual_params: Vec::new(),
+            }],
+            ..Default::default()
+        }));
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+        let info: i64 = lua
+            .load(r#"return llGetAgentInfo("00000000-0000-0000-0000-000000000042")"#)
+            .eval()
+            .unwrap();
+        assert_eq!(info, super::AGENT_SCRIPTED as i64);
+    }
+
+    #[test]
+    fn get_agent_info_returns_zero_for_absent_agent() {
+        let ctx = test_ctx();
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+        let info: i64 = lua
+            .load(r#"return llGetAgentInfo("00000000-0000-0000-0000-000000009999")"#)
+            .eval()
+            .unwrap();
+        assert_eq!(info, 0);
+    }
+
+    #[test]
+    fn teleport_agent_sends_request() {
+        let (tp_tx, tp_rx) = std::sync::mpsc::channel();
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            owner_id: Uuid::from_u128(0xabcd),
+            permissions_granted: 0x1000, // PERMISSION_TELEPORT
+            teleport_sender: Some(tp_tx),
+            ..Default::default()
+        }));
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+        lua.load(r#"llTeleportAgent("00000000-0000-0000-0000-000000001234", "SomeRegion", {x=128,y=128,z=25}, {x=1,y=0,z=0})"#)
+            .exec()
+            .unwrap();
+        let req = tp_rx.try_recv().unwrap();
+        assert_eq!(req.agent_id, Uuid::from_u128(0x1234));
+        assert_eq!(req.region_name, "SomeRegion");
+        assert!((req.position[0] - 128.0).abs() < f64::EPSILON);
+        assert!((req.look_at[0] - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn teleport_agent_denied_without_permission() {
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            permissions_granted: 0,
+            ..Default::default()
+        }));
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+        let result = lua.load(r#"llTeleportAgent("00000000-0000-0000-0000-000000001234", "", {x=0,y=0,z=0}, {x=0,y=0,z=0})"#)
+            .exec();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn teleport_agent_home_sends_request() {
+        let (tp_tx, tp_rx) = std::sync::mpsc::channel();
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            teleport_sender: Some(tp_tx),
+            ..Default::default()
+        }));
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+        lua.load(r#"llTeleportAgentHome("00000000-0000-0000-0000-000000001234")"#)
+            .exec()
+            .unwrap();
+        let req = tp_rx.try_recv().unwrap();
+        assert_eq!(req.agent_id, Uuid::from_u128(0x1234));
+        assert!(req.region_name.is_empty());
+        assert!((req.position[0] - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn request_agent_data_sim_pos_from_presence() {
+        let (ctx, rx) = ctx_with_events();
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+
+        lua.load(r#"llRequestAgentData("00000000-0000-0000-0000-000000001234", DATA_SIM_POS)"#)
+            .exec()
+            .unwrap();
+
+        let (_prim_id, event) = rx.try_recv().unwrap();
+        match event {
+            crate::ScriptEvent::Dataserver { data, .. } => {
+                assert_eq!(data, "<100, 200, 50>");
+            }
+            _ => panic!("expected Dataserver event"),
+        }
+    }
+
+    #[test]
+    fn request_agent_data_offline() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            owner_id: Uuid::from_u128(0xabcd),
+            event_sender: Some(tx),
+            ..Default::default()
+        }));
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+
+        lua.load(r#"llRequestAgentData("00000000-0000-0000-0000-000000009999", DATA_ONLINE)"#)
+            .exec()
+            .unwrap();
+
+        let (_prim_id, event) = rx.try_recv().unwrap();
+        match event {
+            crate::ScriptEvent::Dataserver { data, .. } => {
+                assert_eq!(data, "0");
             }
             _ => panic!("expected Dataserver event"),
         }
