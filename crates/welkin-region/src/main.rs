@@ -35,6 +35,7 @@ use welkin_scene::group::SceneObjectGroup;
 use welkin_scene::part::SceneObjectPart;
 use welkin_scene::presence::{PresenceType, ScenePresence};
 use welkin_scene::scene::{RegionInfo, Scene, SceneConfig};
+use welkin_msg::welkin_types::PermissionMask;
 
 /// OpenSimulator Region Simulator
 #[derive(Parser, Debug)]
@@ -1565,6 +1566,294 @@ async fn process_messages(
                 info!(object = %object_id, "RequestObjectPropertiesFamily: replied");
             } else {
                 warn!(object = %object_id, "RequestObjectPropertiesFamily: object not found");
+            }
+        }
+
+        // ---- ObjectGrab handler (touch_start) ----
+        if msg_id == ObjectGrab::ID
+            && let Ok(msg) = ObjectGrab::decode(&pkt.body)
+        {
+            let local_id = msg.object_data.local_id;
+            let grab_offset = msg.object_data.grab_offset;
+            let surface_count = msg.surface_info.len();
+            if let Some(uuid) = scene.get_object_by_local_id(local_id) {
+                info!(
+                    local_id,
+                    object = %uuid,
+                    ?grab_offset,
+                    surface_count,
+                    "ObjectGrab: touch_start"
+                );
+            } else {
+                warn!(local_id, "ObjectGrab: unknown local_id");
+            }
+        }
+
+        // ---- ObjectGrabUpdate handler ----
+        if msg_id == ObjectGrabUpdate::ID
+            && let Ok(msg) = ObjectGrabUpdate::decode(&pkt.body)
+        {
+            let object_id = msg.object_data.object_id;
+            let grab_position = msg.object_data.grab_position;
+            let surface_count = msg.surface_info.len();
+            info!(
+                object = %object_id,
+                ?grab_position,
+                surface_count,
+                "ObjectGrabUpdate: touch"
+            );
+        }
+
+        // ---- ObjectDeGrab handler (touch_end) ----
+        if msg_id == ObjectDeGrab::ID
+            && let Ok(msg) = ObjectDeGrab::decode(&pkt.body)
+        {
+            let local_id = msg.object_data.local_id;
+            let surface_count = msg.surface_info.len();
+            if let Some(uuid) = scene.get_object_by_local_id(local_id) {
+                info!(
+                    local_id,
+                    object = %uuid,
+                    surface_count,
+                    "ObjectDeGrab: touch_end"
+                );
+            } else {
+                warn!(local_id, "ObjectDeGrab: unknown local_id");
+            }
+        }
+
+        // ---- ObjectName handler ----
+        if msg_id == ObjectName::ID
+            && let Ok(msg) = ObjectName::decode(&pkt.body)
+        {
+            for entry in &msg.object_data {
+                let local_id = entry.local_id;
+                let new_name = String::from_utf8_lossy(&entry.name).to_string();
+                let uuid = match scene.get_object_by_local_id(local_id) {
+                    Some(u) => u,
+                    None => {
+                        warn!(local_id, "ObjectName: unknown local_id");
+                        continue;
+                    }
+                };
+                scene.with_object_mut(&uuid, |group| {
+                    group.root_part_mut().name = new_name.clone();
+                });
+                if let Some(obj) = scene.get_object(&uuid) {
+                    broadcast_full_object_update(&obj, scene.region_info.region_handle, &socket, &clients).await;
+                }
+                info!(local_id, object = %uuid, name = %new_name, "ObjectName: updated");
+            }
+        }
+
+        // ---- ObjectDescription handler ----
+        if msg_id == ObjectDescription::ID
+            && let Ok(msg) = ObjectDescription::decode(&pkt.body)
+        {
+            for entry in &msg.object_data {
+                let local_id = entry.local_id;
+                let new_desc = String::from_utf8_lossy(&entry.description).to_string();
+                let uuid = match scene.get_object_by_local_id(local_id) {
+                    Some(u) => u,
+                    None => {
+                        warn!(local_id, "ObjectDescription: unknown local_id");
+                        continue;
+                    }
+                };
+                scene.with_object_mut(&uuid, |group| {
+                    group.root_part_mut().description = new_desc.clone();
+                });
+                if let Some(obj) = scene.get_object(&uuid) {
+                    broadcast_full_object_update(&obj, scene.region_info.region_handle, &socket, &clients).await;
+                }
+                info!(local_id, object = %uuid, description = %new_desc, "ObjectDescription: updated");
+            }
+        }
+
+        // ---- ObjectShape handler ----
+        if msg_id == ObjectShape::ID
+            && let Ok(msg) = ObjectShape::decode(&pkt.body)
+        {
+            for entry in &msg.object_data {
+                let local_id = entry.object_local_id;
+                let uuid = match scene.get_object_by_local_id(local_id) {
+                    Some(u) => u,
+                    None => {
+                        warn!(local_id, "ObjectShape: unknown local_id");
+                        continue;
+                    }
+                };
+                scene.with_object_mut(&uuid, |group| {
+                    let shape = &mut group.root_part_mut().shape;
+                    shape.path_curve = entry.path_curve;
+                    shape.profile_curve = entry.profile_curve;
+                    shape.path_begin = entry.path_begin;
+                    shape.path_end = entry.path_end;
+                    shape.path_scale_x = entry.path_scale_x;
+                    shape.path_scale_y = entry.path_scale_y;
+                    shape.path_shear_x = entry.path_shear_x;
+                    shape.path_shear_y = entry.path_shear_y;
+                    shape.path_twist = entry.path_twist;
+                    shape.path_twist_begin = entry.path_twist_begin;
+                    shape.path_radius_offset = entry.path_radius_offset;
+                    shape.path_taper_x = entry.path_taper_x;
+                    shape.path_taper_y = entry.path_taper_y;
+                    shape.path_revolutions = entry.path_revolutions;
+                    shape.path_skew = entry.path_skew;
+                    shape.profile_begin = entry.profile_begin;
+                    shape.profile_end = entry.profile_end;
+                    shape.profile_hollow = entry.profile_hollow;
+                });
+                if let Some(obj) = scene.get_object(&uuid) {
+                    broadcast_full_object_update(&obj, scene.region_info.region_handle, &socket, &clients).await;
+                }
+                info!(local_id, object = %uuid, "ObjectShape: updated");
+            }
+        }
+
+        // ---- ObjectPermissions handler ----
+        if msg_id == ObjectPermissions::ID
+            && let Ok(msg) = ObjectPermissions::decode(&pkt.body)
+        {
+            for entry in &msg.object_data {
+                let local_id = entry.object_local_id;
+                let uuid = match scene.get_object_by_local_id(local_id) {
+                    Some(u) => u,
+                    None => {
+                        warn!(local_id, "ObjectPermissions: unknown local_id");
+                        continue;
+                    }
+                };
+                let mask_bits = PermissionMask::from_bits_truncate(entry.mask);
+                scene.with_object_mut(&uuid, |group| {
+                    let part = group.root_part_mut();
+                    let target = match entry.field {
+                        1 => &mut part.base_mask,
+                        2 => &mut part.owner_mask,
+                        4 => &mut part.group_mask,
+                        8 => &mut part.everyone_mask,
+                        16 => &mut part.next_owner_mask,
+                        _ => {
+                            warn!(field = entry.field, "ObjectPermissions: unknown field");
+                            return;
+                        }
+                    };
+                    if entry.set == 1 {
+                        *target = *target | mask_bits;
+                    } else {
+                        *target = *target & !mask_bits;
+                    }
+                });
+                if let Some(obj) = scene.get_object(&uuid) {
+                    broadcast_full_object_update(&obj, scene.region_info.region_handle, &socket, &clients).await;
+                }
+                info!(local_id, object = %uuid, field = entry.field, set = entry.set, mask = entry.mask, "ObjectPermissions: updated");
+            }
+        }
+
+        // ---- ObjectSaleInfo handler ----
+        if msg_id == ObjectSaleInfo::ID
+            && let Ok(msg) = ObjectSaleInfo::decode(&pkt.body)
+        {
+            for entry in &msg.object_data {
+                let local_id = entry.local_id;
+                let uuid = match scene.get_object_by_local_id(local_id) {
+                    Some(u) => u,
+                    None => {
+                        warn!(local_id, "ObjectSaleInfo: unknown local_id");
+                        continue;
+                    }
+                };
+                scene.with_object_mut(&uuid, |group| {
+                    let part = group.root_part_mut();
+                    part.object_sale_type = entry.sale_type;
+                    part.sale_price = entry.sale_price;
+                });
+                if let Some(obj) = scene.get_object(&uuid) {
+                    broadcast_full_object_update(&obj, scene.region_info.region_handle, &socket, &clients).await;
+                }
+                info!(local_id, object = %uuid, sale_type = entry.sale_type, sale_price = entry.sale_price, "ObjectSaleInfo: updated");
+            }
+        }
+
+        // ---- ObjectExtraParams handler ----
+        if msg_id == ObjectExtraParams::ID
+            && let Ok(msg) = ObjectExtraParams::decode(&pkt.body)
+        {
+            for entry in &msg.object_data {
+                let local_id = entry.object_local_id;
+                let uuid = match scene.get_object_by_local_id(local_id) {
+                    Some(u) => u,
+                    None => {
+                        warn!(local_id, "ObjectExtraParams: unknown local_id");
+                        continue;
+                    }
+                };
+                scene.with_object_mut(&uuid, |group| {
+                    group.root_part_mut().shape.extra_params = entry.param_data.clone();
+                });
+                if let Some(obj) = scene.get_object(&uuid) {
+                    broadcast_full_object_update(&obj, scene.region_info.region_handle, &socket, &clients).await;
+                }
+                info!(local_id, object = %uuid, param_type = entry.param_type, param_size = entry.param_size, "ObjectExtraParams: updated");
+            }
+        }
+
+        // ---- ObjectGroup handler ----
+        if msg_id == ObjectGroup::ID
+            && let Ok(msg) = ObjectGroup::decode(&pkt.body)
+        {
+            let new_group_id = msg.agent_data.group_id;
+            for entry in &msg.object_data {
+                let local_id = entry.object_local_id;
+                let uuid = match scene.get_object_by_local_id(local_id) {
+                    Some(u) => u,
+                    None => {
+                        warn!(local_id, "ObjectGroup: unknown local_id");
+                        continue;
+                    }
+                };
+                scene.with_object_mut(&uuid, |group| {
+                    group.root_part_mut().group_id = new_group_id;
+                });
+                if let Some(obj) = scene.get_object(&uuid) {
+                    broadcast_full_object_update(&obj, scene.region_info.region_handle, &socket, &clients).await;
+                }
+                info!(local_id, object = %uuid, group = %new_group_id, "ObjectGroup: updated");
+            }
+        }
+
+        // ---- ObjectOwner handler ----
+        if msg_id == ObjectOwner::ID
+            && let Ok(msg) = ObjectOwner::decode(&pkt.body)
+        {
+            let new_owner_id = msg.header_data.owner_id;
+            let new_group_id = msg.header_data.group_id;
+            for entry in &msg.object_data {
+                let local_id = entry.object_local_id;
+                let uuid = match scene.get_object_by_local_id(local_id) {
+                    Some(u) => u,
+                    None => {
+                        warn!(local_id, "ObjectOwner: unknown local_id");
+                        continue;
+                    }
+                };
+                scene.with_object_mut(&uuid, |group| {
+                    let part = group.root_part_mut();
+                    part.last_owner_id = part.owner_id;
+                    if new_owner_id.is_nil() {
+                        // Deed to group
+                        part.group_id = new_group_id;
+                    } else {
+                        // Transfer ownership
+                        part.owner_id = new_owner_id;
+                        part.group_id = new_group_id;
+                    }
+                });
+                if let Some(obj) = scene.get_object(&uuid) {
+                    broadcast_full_object_update(&obj, scene.region_info.region_handle, &socket, &clients).await;
+                }
+                info!(local_id, object = %uuid, owner = %new_owner_id, group = %new_group_id, "ObjectOwner: updated");
             }
         }
 
