@@ -3,6 +3,103 @@
 
 use mlua::prelude::*;
 
+/// Convert a Lua value to its string representation (mirrors list.rs value_to_string).
+fn lua_value_to_string(v: &LuaValue) -> String {
+    match v {
+        LuaValue::Integer(n) => n.to_string(),
+        LuaValue::Number(n) => format!("{n:.6}"),
+        LuaValue::String(s) => s.to_string_lossy().to_string(),
+        LuaValue::Boolean(b) => if *b { "1" } else { "0" }.to_string(),
+        LuaValue::Nil => String::new(),
+        _ => String::new(),
+    }
+}
+
+/// Collect string values from a Lua table's sequential entries.
+fn collect_string_entries(t: &LuaTable) -> Vec<String> {
+    let len = t.raw_len();
+    let mut out = Vec::with_capacity(len);
+    for i in 1..=len {
+        if let Ok(v) = t.raw_get::<LuaValue>(i) {
+            let s = lua_value_to_string(&v);
+            if !s.is_empty() {
+                out.push(s);
+            }
+        }
+    }
+    out
+}
+
+/// Internal implementation of llParseString2List / llParseStringKeepNulls.
+fn parse_string_to_list(
+    src: &str,
+    separators: &[String],
+    spacers: &[String],
+    keep_nulls: bool,
+) -> Vec<String> {
+    let src_len = src.len();
+    let sep_count = separators.len();
+
+    // Combine separators and spacers into one delimiter array.
+    // Indices < sep_count are separators; >= sep_count are spacers.
+    let mut delimiters: Vec<Option<&str>> = Vec::with_capacity(sep_count + spacers.len());
+    for s in separators {
+        delimiters.push(Some(s.as_str()));
+    }
+    for s in spacers {
+        delimiters.push(Some(s.as_str()));
+    }
+
+    let mut output: Vec<String> = Vec::new();
+    let mut i = 0;
+
+    loop {
+        // Find the earliest delimiter at or after position i.
+        let mut earliest_del: Option<usize> = None;
+        let mut earliest_src = src_len;
+        let mut earliest_str: &str = "";
+
+        for (j, delim_opt) in delimiters.iter_mut().enumerate() {
+            if let Some(d) = delim_opt {
+                if let Some(pos) = src[i..].find(*d) {
+                    let abs_pos = i + pos;
+                    if abs_pos < earliest_src {
+                        earliest_src = abs_pos;
+                        earliest_del = Some(j);
+                        earliest_str = d;
+                        if abs_pos == i {
+                            break; // can't do better
+                        }
+                    }
+                } else {
+                    // This delimiter doesn't appear any more; stop checking it.
+                    *delim_opt = None;
+                }
+            }
+        }
+
+        // Output the text from i to the start of the earliest delimiter.
+        if keep_nulls || earliest_src > i {
+            output.push(src[i..earliest_src].to_string());
+        }
+
+        // If no delimiter found, we're done.
+        let del_idx = match earliest_del {
+            Some(idx) => idx,
+            None => break,
+        };
+
+        // If the delimiter is a spacer (index >= sep_count), output it.
+        if del_idx >= sep_count {
+            output.push(earliest_str.to_string());
+        }
+
+        i = earliest_src + earliest_str.len();
+    }
+
+    output
+}
+
 /// Resolve an LSL-style index (0-based, negative counts from end) into a
 /// clamped `usize` suitable for indexing a `Vec<char>` of length `len`.
 /// Returns `None` when the string is empty.
@@ -194,7 +291,219 @@ pub fn register_string(lua: &Lua) -> Result<(), crate::VmError> {
     })?;
     g.set("llBase64ToInteger", f)?;
 
+    // llXorBase64StringsCorrect — XOR two base64 strings, cycling shorter,
+    // with padding normalization matching OpenSim behaviour.
+    let f = lua.create_function(|_, (str1, str2): (String, String)| {
+        use base64::Engine;
+
+        if str1.is_empty() {
+            return Ok(String::new());
+        }
+        if str2.is_empty() {
+            return Ok(str1);
+        }
+
+        // Normalize str2 padding.
+        let mut s2 = str2.trim_end_matches('=').to_string();
+        if s2.is_empty() {
+            return Ok(str1);
+        }
+        let modulo = s2.len() % 4;
+        match modulo {
+            1 => { s2.pop(); }
+            2 => s2.push_str("=="),
+            3 => s2.push('='),
+            _ => {}
+        }
+        if s2.is_empty() {
+            return Ok(str1);
+        }
+
+        let data1 = match base64::engine::general_purpose::STANDARD.decode(&str1) {
+            Ok(d) => d,
+            Err(_) => return Ok(String::new()),
+        };
+        let data2 = match base64::engine::general_purpose::STANDARD.decode(&s2) {
+            Ok(d) => d,
+            Err(_) => return Ok(String::new()),
+        };
+
+        if data1.is_empty() {
+            return Ok(String::new());
+        }
+        if data2.is_empty() {
+            return Ok(str1);
+        }
+
+        let len2 = data2.len();
+        let result: Vec<u8> = data1
+            .iter()
+            .enumerate()
+            .map(|(i, &b)| b ^ data2[i % len2])
+            .collect();
+
+        Ok(base64::engine::general_purpose::STANDARD.encode(&result))
+    })?;
+    g.set("llXorBase64StringsCorrect", f)?;
+
+    // llEscapeURL — percent-encode all bytes except unreserved (RFC 3986)
+    let f = lua.create_function(|_, url: String| {
+        let mut out = String::with_capacity(url.len() * 3);
+        for &b in url.as_bytes() {
+            match b {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                    out.push(b as char);
+                }
+                _ => {
+                    let hex = b"0123456789ABCDEF";
+                    out.push('%');
+                    out.push(hex[(b >> 4) as usize] as char);
+                    out.push(hex[(b & 0x0F) as usize] as char);
+                }
+            }
+        }
+        Ok(out)
+    })?;
+    g.set("llEscapeURL", f)?;
+
+    // llUnescapeURL — decode percent-encoded sequences
+    let f = lua.create_function(|_, url: String| {
+        let bytes = url.as_bytes();
+        let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == b'%' && i + 2 < bytes.len() {
+                let hi = bytes[i + 1];
+                let lo = bytes[i + 2];
+                if let (Some(h), Some(l)) = (hex_val(hi), hex_val(lo)) {
+                    out.push((h << 4) | l);
+                    i += 3;
+                    continue;
+                }
+            }
+            out.push(bytes[i]);
+            i += 1;
+        }
+        Ok(String::from_utf8(out).unwrap_or_default())
+    })?;
+    g.set("llUnescapeURL", f)?;
+
+    // llDumpList2String — join list elements with a separator
+    let f = lua.create_function(|_, (list, sep): (LuaTable, String)| {
+        let len = list.raw_len();
+        if len == 0 {
+            return Ok(String::new());
+        }
+        let mut parts = Vec::with_capacity(len);
+        for i in 1..=len {
+            let v: LuaValue = list.raw_get(i as i64)?;
+            parts.push(lua_value_to_string(&v));
+        }
+        Ok(parts.join(&sep))
+    })?;
+    g.set("llDumpList2String", f)?;
+
+    // llParseString2List — split by separators/spacers, drop empty tokens
+    let f = lua.create_function(|lua, (src, separators, spacers): (String, LuaTable, LuaTable)| {
+        let seps = collect_string_entries(&separators);
+        let spcs = collect_string_entries(&spacers);
+        let tokens = parse_string_to_list(&src, &seps, &spcs, false);
+        let result = lua.create_table()?;
+        for (i, tok) in tokens.into_iter().enumerate() {
+            result.raw_set(i as i64 + 1, tok)?;
+        }
+        Ok(result)
+    })?;
+    g.set("llParseString2List", f)?;
+
+    // llParseStringKeepNulls — same as above but keeps empty tokens
+    let f = lua.create_function(|lua, (src, separators, spacers): (String, LuaTable, LuaTable)| {
+        let seps = collect_string_entries(&separators);
+        let spcs = collect_string_entries(&spacers);
+        let tokens = parse_string_to_list(&src, &seps, &spcs, true);
+        let result = lua.create_table()?;
+        for (i, tok) in tokens.into_iter().enumerate() {
+            result.raw_set(i as i64 + 1, tok)?;
+        }
+        Ok(result)
+    })?;
+    g.set("llParseStringKeepNulls", f)?;
+
+    // llHash — SDBM-variant hash over Unicode codepoints (matches OpenSim)
+    let f = lua.create_function(|_, s: String| {
+        if s.is_empty() {
+            return Ok(0i64);
+        }
+        let mut hash: i32 = 0;
+        for cp in s.chars().map(|c| c as u32) {
+            hash = hash.wrapping_mul(65599).wrapping_add(cp as i32);
+        }
+        Ok(hash as i64)
+    })?;
+    g.set("llHash", f)?;
+
+    // llOrd — Unicode codepoint at character index
+    let f = lua.create_function(|_, (s, index): (String, i64)| {
+        if s.is_empty() {
+            return Ok(0i64);
+        }
+        let chars: Vec<char> = s.chars().collect();
+        let len = chars.len() as i64;
+        let idx = if index < 0 { len + index } else { index };
+        if idx < 0 || idx >= len {
+            return Ok(0i64);
+        }
+        Ok(chars[idx as usize] as u32 as i64)
+    })?;
+    g.set("llOrd", f)?;
+
+    // llChar — Unicode codepoint to single-character string
+    let f = lua.create_function(|_, unicode: i64| {
+        if unicode == 0 {
+            return Ok(String::new());
+        }
+        match char::from_u32(unicode as u32) {
+            Some(c) => Ok(c.to_string()),
+            None => Ok("\u{FFFD}".to_string()),
+        }
+    })?;
+    g.set("llChar", f)?;
+
+    // llReplaceSubString — regex-based replace (count controls max replacements)
+    let f = lua.create_function(|_, (src, pattern, replacement, count): (String, String, String, i64)| {
+        if src.is_empty() || pattern.is_empty() {
+            return Ok(src);
+        }
+        let rx = match regex::Regex::new(&pattern) {
+            Ok(r) => r,
+            Err(_) => return Ok(src),
+        };
+        let limit = if count < 0 {
+            count.unsigned_abs() as usize
+        } else if count == 0 {
+            0 // 0 means replace all
+        } else {
+            count as usize
+        };
+        if limit == 0 {
+            Ok(rx.replace_all(&src, replacement.as_str()).into_owned())
+        } else {
+            Ok(rx.replacen(&src, limit, replacement.as_str()).into_owned())
+        }
+    })?;
+    g.set("llReplaceSubString", f)?;
+
     Ok(())
+}
+
+/// Decode a single hex digit (ASCII) to its value 0-15.
+fn hex_val(b: u8) -> Option<u8> {
+    match b {
+        b'0'..=b'9' => Some(b - b'0'),
+        b'a'..=b'f' => Some(b - b'a' + 10),
+        b'A'..=b'F' => Some(b - b'A' + 10),
+        _ => None,
+    }
 }
 
 #[cfg(test)]

@@ -408,6 +408,114 @@ pub fn register_math(lua: &Lua) -> Result<(), crate::VmError> {
     })?;
     g.set("llListStatistics", f)?;
 
+    // llFabs — float absolute value
+    let f = lua.create_function(|_, val: f64| Ok(val.abs()))?;
+    g.set("llFabs", f)?;
+
+    // llModPow — modular exponentiation: (a^b) mod c
+    let f = lua.create_function(|_, (a, b, c): (i64, i64, i64)| {
+        if c == 0 {
+            return Ok(0i64);
+        }
+        // Proper modular exponentiation to avoid overflow
+        let modulus = c.unsigned_abs() as u128;
+        let mut base = ((a % c as i64) as i128).rem_euclid(modulus as i128) as u128;
+        let mut exp = b;
+        let mut result: u128 = 1;
+        if exp < 0 {
+            // Negative exponent: LSL returns 0 for integer modpow with negative exp
+            return Ok(0i64);
+        }
+        base %= modulus;
+        while exp > 0 {
+            if exp & 1 == 1 {
+                result = (result * base) % modulus;
+            }
+            exp >>= 1;
+            base = (base * base) % modulus;
+        }
+        Ok(result as i64)
+    })?;
+    g.set("llModPow", f)?;
+
+    // Helper closure for normalizing a quaternion in-place (shared by Rot2Fwd/Left/Up)
+    fn normalize_quat(x: &mut f64, y: &mut f64, z: &mut f64, w: &mut f64) {
+        let m = *x * *x + *y * *y + *z * *z + *w * *w;
+        if (1.0 - m).abs() > 0.000001 {
+            let inv = 1.0 / m.sqrt();
+            *x *= inv;
+            *y *= inv;
+            *z *= inv;
+            *w *= inv;
+        }
+    }
+
+    // llRot2Fwd — forward (x-axis) vector from rotation
+    let f = lua.create_function(|lua, r: LuaValue| {
+        let [mut x, mut y, mut z, mut w] = get_rot(&r)?;
+        normalize_quat(&mut x, &mut y, &mut z, &mut w);
+        make_vec3(lua, [
+            x * x - y * y - z * z + w * w,
+            2.0 * (x * y + z * w),
+            2.0 * (x * z - y * w),
+        ])
+    })?;
+    g.set("llRot2Fwd", f)?;
+
+    // llRot2Left — left (y-axis) vector from rotation
+    let f = lua.create_function(|lua, r: LuaValue| {
+        let [mut x, mut y, mut z, mut w] = get_rot(&r)?;
+        normalize_quat(&mut x, &mut y, &mut z, &mut w);
+        make_vec3(lua, [
+            2.0 * (x * y - z * w),
+            -x * x + y * y - z * z + w * w,
+            2.0 * (x * w + y * z),
+        ])
+    })?;
+    g.set("llRot2Left", f)?;
+
+    // llRot2Up — up (z-axis) vector from rotation
+    let f = lua.create_function(|lua, r: LuaValue| {
+        let [mut x, mut y, mut z, mut w] = get_rot(&r)?;
+        normalize_quat(&mut x, &mut y, &mut z, &mut w);
+        make_vec3(lua, [
+            2.0 * (x * z + y * w),
+            2.0 * (-x * w + y * z),
+            -x * x - y * y + z * z + w * w,
+        ])
+    })?;
+    g.set("llRot2Up", f)?;
+
+    // llAxisAngle2Rot — rotation from axis and angle
+    let f = lua.create_function(|lua, (axis_val, angle): (LuaValue, f64)| {
+        let [ax, ay, az] = get_vec3(&axis_val)?;
+        let mag = (ax * ax + ay * ay + az * az).sqrt();
+        let (nx, ny, nz) = if mag > 0.0 {
+            (ax / mag, ay / mag, az / mag)
+        } else {
+            (0.0, 0.0, 0.0)
+        };
+        let half = angle * 0.5;
+        let s = half.cos();
+        let t = half.sin();
+        make_rot(lua, [nx * t, ny * t, nz * t, s])
+    })?;
+    g.set("llAxisAngle2Rot", f)?;
+
+    // llLinear2sRGB — convert linear-space color to sRGB
+    let f = lua.create_function(|lua, v: LuaValue| {
+        let [r, g, b] = get_vec3(&v)?;
+        fn linear_to_srgb(c: f64) -> f64 {
+            if c <= 0.0031308 {
+                c * 12.92
+            } else {
+                1.055 * c.powf(1.0 / 2.4) - 0.055
+            }
+        }
+        make_vec3(lua, [linear_to_srgb(r), linear_to_srgb(g), linear_to_srgb(b)])
+    })?;
+    g.set("llLinear2sRGB", f)?;
+
     Ok(())
 }
 
