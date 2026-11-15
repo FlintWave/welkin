@@ -1188,19 +1188,28 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     cancel.cancel();
 
-    // Wait for background tasks to finish.
-    let _ = udp_handle.await;
-    let _ = process_handle.await;
-    let _ = caps_handle.await;
-    let _ = heartbeat_handle.await;
-    let _ = sim_stats_handle.await;
-    let _ = coarse_handle.await;
-    let _ = timeout_handle.await;
+    macro_rules! join_or_warn {
+        ($name:literal, $h:expr) => {
+            if tokio::time::timeout(Duration::from_secs(10), $h).await.is_err() {
+                warn!(concat!($name, " did not stop within 10s; continuing shutdown"));
+            }
+        };
+    }
 
-    if let Some(ref reg) = grid_reg
-        && let Err(e) = reg.shutdown().await
-    {
-        warn!(error = %e, "Failed to deregister from grid");
+    join_or_warn!("udp_handle", udp_handle);
+    join_or_warn!("process_handle", process_handle);
+    join_or_warn!("caps_handle", caps_handle);
+    join_or_warn!("heartbeat_handle", heartbeat_handle);
+    join_or_warn!("sim_stats_handle", sim_stats_handle);
+    join_or_warn!("coarse_handle", coarse_handle);
+    join_or_warn!("timeout_handle", timeout_handle);
+
+    if let Some(ref reg) = grid_reg {
+        match tokio::time::timeout(Duration::from_secs(10), reg.shutdown()).await {
+            Ok(Err(e)) => warn!(error = %e, "Failed to deregister from grid"),
+            Err(_) => warn!("grid deregistration did not stop within 10s; continuing shutdown"),
+            _ => {}
+        }
     }
 
     // Save script states to DB before shutdown
@@ -1217,9 +1226,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }).collect()
         };
-        match script_persist::save_script_states(pool.inner(), &states).await {
-            Ok(n) => info!(count = n, "saved script states to DB"),
-            Err(e) => warn!(error = %e, "failed to save script states"),
+        match tokio::time::timeout(Duration::from_secs(15), script_persist::save_script_states(pool.inner(), &states)).await {
+            Ok(Ok(n)) => info!(count = n, "saved script states to DB"),
+            Ok(Err(e)) => warn!(error = %e, "failed to save script states"),
+            Err(_) => warn!("script state save timed out"),
         }
     }
 
@@ -1230,21 +1240,27 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let dirty = scene.force_backup_all();
     if !dirty.is_empty() {
         info!(count = dirty.len(), "flushing dirty objects on shutdown");
-        for uuid in &dirty {
-            if let Some(group) = scene.get_object(uuid) {
-                let gid = group.uuid().to_string();
-                let region_uuid = scene.region_info.region_id.to_string();
-                for part in group.parts() {
-                    let prim_row = persist::part_to_prim_row(part, &region_uuid, &gid);
-                    let shape_row = persist::shape_to_row(part);
-                    if let Err(e) = sim_store.store_object(&region_uuid, &gid, &prim_row, &shape_row).await {
-                        tracing::warn!(uuid = %part.uuid, error = %e, "shutdown: failed to persist prim");
+        if tokio::time::timeout(Duration::from_secs(30), async {
+            for uuid in &dirty {
+                if let Some(group) = scene.get_object(uuid) {
+                    let gid = group.uuid().to_string();
+                    let region_uuid = scene.region_info.region_id.to_string();
+                    for part in group.parts() {
+                        let prim_row = persist::part_to_prim_row(part, &region_uuid, &gid);
+                        let shape_row = persist::shape_to_row(part);
+                        if let Err(e) = sim_store.store_object(&region_uuid, &gid, &prim_row, &shape_row).await {
+                            tracing::warn!(uuid = %part.uuid, error = %e, "shutdown: failed to persist prim");
+                        }
                     }
+                    scene.mark_backed_up(uuid);
                 }
-                scene.mark_backed_up(uuid);
             }
+        }).await.is_err() {
+            warn!("dirty prim flush timed out; some objects may not be persisted");
         }
     }
+    pool.inner().close().await;
+    info!("database pool closed");
     scene.shutdown();
     info!("Region simulator shut down");
 
