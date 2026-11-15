@@ -4,8 +4,6 @@
 
 use crate::circuit::{Circuit, CircuitTick};
 use crate::throttle::ClientThrottle;
-use welkin_msg::{IncomingPacket, Msg, parse_packet};
-use welkin_msg::msgs::PacketAck;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -13,6 +11,8 @@ use std::time::Instant;
 use tokio::net::UdpSocket;
 use tokio::sync::{Mutex, RwLock, mpsc};
 use uuid::Uuid;
+use welkin_msg::msgs::PacketAck;
+use welkin_msg::{IncomingPacket, Msg, parse_packet};
 
 /// Per-viewer session state held by the server.
 pub struct ClientSession {
@@ -220,11 +220,11 @@ impl LLUDPServer {
                 let is_new = {
                     let mut s = session.lock().await;
                     let is_new = s.on_receive(&pkt);
-                    if pkt.id == PacketAck::ID {
-                        if let Ok(ack_msg) = pkt.decode::<PacketAck>() {
-                            let ack_ids: Vec<u32> = ack_msg.packets.iter().map(|p| p.id).collect();
-                            s.circuit.on_receive(0, 0, &ack_ids);
-                        }
+                    if pkt.id == PacketAck::ID
+                        && let Ok(ack_msg) = pkt.decode::<PacketAck>()
+                    {
+                        let ack_ids: Vec<u32> = ack_msg.packets.iter().map(|p| p.id).collect();
+                        s.circuit.on_receive(0, 0, &ack_ids);
                     }
                     is_new
                 };
@@ -276,9 +276,9 @@ impl LLUDPServer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use welkin_msg::{Msg, MsgId, PacketFlags, build_packet};
     use std::net::SocketAddr;
     use uuid::Uuid;
+    use welkin_msg::{Msg, MsgId, PacketFlags, build_packet};
 
     fn localhost() -> SocketAddr {
         "127.0.0.1:9000".parse().unwrap()
@@ -389,8 +389,7 @@ mod tests {
         viewer.send_to(&buf, server_addr).await.unwrap();
 
         // Should NOT appear on the channel (no session).
-        let result =
-            tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv()).await;
+        let result = tokio::time::timeout(std::time::Duration::from_millis(200), rx.recv()).await;
         assert!(result.is_err(), "should have timed out — unknown client");
 
         cancel.cancel();
@@ -399,8 +398,7 @@ mod tests {
 
     #[test]
     fn session_dedup() {
-        let mut session =
-            ClientSession::new(localhost(), 1, Uuid::nil(), Uuid::nil());
+        let mut session = ClientSession::new(localhost(), 1, Uuid::nil(), Uuid::nil());
         let pkt = IncomingPacket {
             flags: PacketFlags::RELIABLE,
             sequence: 42,

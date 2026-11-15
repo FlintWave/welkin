@@ -7,8 +7,8 @@ use mlua::prelude::*;
 use parking_lot::RwLock;
 use uuid::Uuid;
 
-use crate::builtins::ScriptContext;
 use super::{OsslFunc, OsslThreatLevel};
+use crate::builtins::ScriptContext;
 
 pub(crate) fn math_functions() -> Vec<OsslFunc> {
     vec![
@@ -99,9 +99,8 @@ fn register_os_max(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()
 // ---------------------------------------------------------------------------
 
 fn register_os_is_uuid(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
-    let f = lua.create_function(|_, s: String| {
-        Ok(if Uuid::parse_str(&s).is_ok() { 1i32 } else { 0 })
-    })?;
+    let f =
+        lua.create_function(|_, s: String| Ok(if Uuid::parse_str(&s).is_ok() { 1i32 } else { 0 }))?;
     lua.globals().set("osIsUUID", f)
 }
 
@@ -195,10 +194,7 @@ fn register_os_approx_equals(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> Lu
 // osIsNotValidNumber — returns 1 if NaN or infinity
 // ---------------------------------------------------------------------------
 
-fn register_os_is_not_valid_number(
-    lua: &Lua,
-    _ctx: &Arc<RwLock<ScriptContext>>,
-) -> LuaResult<()> {
+fn register_os_is_not_valid_number(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(|_, d: f64| {
         Ok(if d.is_nan() || d.is_infinite() {
             1i32
@@ -309,10 +305,7 @@ fn register_os_old_list2list_strided(
 // osListSortInPlace
 // ---------------------------------------------------------------------------
 
-fn register_os_list_sort_in_place(
-    lua: &Lua,
-    _ctx: &Arc<RwLock<ScriptContext>>,
-) -> LuaResult<()> {
+fn register_os_list_sort_in_place(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(|_, (src, _stride, ascending): (Vec<String>, i32, i32)| {
         let mut sorted = src;
         sorted.sort();
@@ -416,14 +409,12 @@ mod tests {
             .unwrap();
         assert_eq!(r, 1);
 
-        let r: i32 = lua
-            .load(r#"return osIsUUID("not-a-uuid")"#)
-            .eval()
-            .unwrap();
+        let r: i32 = lua.load(r#"return osIsUUID("not-a-uuid")"#).eval().unwrap();
         assert_eq!(r, 0);
     }
 
     #[test]
+    #[allow(clippy::approx_constant)]
     fn test_round() {
         let lua = make_math_vm();
         let r: f64 = lua.load("return osRound(3.14159, 2)").eval().unwrap();
@@ -470,16 +461,10 @@ mod tests {
     #[test]
     fn test_is_not_valid_number() {
         let lua = make_math_vm();
-        let r: i32 = lua
-            .load("return osIsNotValidNumber(0/0)")
-            .eval()
-            .unwrap();
+        let r: i32 = lua.load("return osIsNotValidNumber(0/0)").eval().unwrap();
         assert_eq!(r, 1);
 
-        let r: i32 = lua
-            .load("return osIsNotValidNumber(42.0)")
-            .eval()
-            .unwrap();
+        let r: i32 = lua.load("return osIsNotValidNumber(42.0)").eval().unwrap();
         assert_eq!(r, 0);
     }
 

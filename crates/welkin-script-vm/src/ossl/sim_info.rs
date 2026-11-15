@@ -7,8 +7,8 @@ use mlua::prelude::*;
 use parking_lot::RwLock;
 use uuid::Uuid;
 
-use crate::builtins::ScriptContext;
 use super::{OsslFunc, OsslThreatLevel};
+use crate::builtins::ScriptContext;
 
 pub(crate) fn sim_info_functions() -> Vec<OsslFunc> {
     vec![
@@ -152,10 +152,10 @@ fn get_rss_kb() -> i64 {
         for line in status.lines() {
             if let Some(rest) = line.strip_prefix("VmRSS:") {
                 let trimmed = rest.trim();
-                if let Some(kb_str) = trimmed.strip_suffix("kB") {
-                    if let Ok(kb) = kb_str.trim().parse::<i64>() {
-                        return kb;
-                    }
+                if let Some(kb_str) = trimmed.strip_suffix("kB")
+                    && let Ok(kb) = kb_str.trim().parse::<i64>()
+                {
+                    return kb;
                 }
             }
         }
@@ -164,10 +164,7 @@ fn get_rss_kb() -> i64 {
     0
 }
 
-fn register_os_get_simulator_memory(
-    lua: &Lua,
-    _ctx: &Arc<RwLock<ScriptContext>>,
-) -> LuaResult<()> {
+fn register_os_get_simulator_memory(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(|_, ()| Ok(get_rss_kb() * 1024))?;
     lua.globals().set("osGetSimulatorMemory", f)
 }
@@ -216,10 +213,7 @@ fn temperature_to_srgb(kelvin: f64) -> (u8, u8, u8) {
     (r as u8, g as u8, b as u8)
 }
 
-fn register_os_temperature_to_srgb(
-    lua: &Lua,
-    _ctx: &Arc<RwLock<ScriptContext>>,
-) -> LuaResult<()> {
+fn register_os_temperature_to_srgb(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(|_, kelvin: f64| {
         let (r, g, b) = temperature_to_srgb(kelvin);
         Ok(format!("{r},{g},{b}"))
@@ -241,18 +235,12 @@ fn register_os_get_grid_name(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> Lu
     lua.globals().set("osGetGridName", f)
 }
 
-fn register_os_get_grid_login_uri(
-    lua: &Lua,
-    _ctx: &Arc<RwLock<ScriptContext>>,
-) -> LuaResult<()> {
+fn register_os_get_grid_login_uri(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(|_, ()| Ok(String::new()))?;
     lua.globals().set("osGetGridLoginURI", f)
 }
 
-fn register_os_get_grid_home_uri(
-    lua: &Lua,
-    _ctx: &Arc<RwLock<ScriptContext>>,
-) -> LuaResult<()> {
+fn register_os_get_grid_home_uri(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(|_, ()| Ok(String::new()))?;
     lua.globals().set("osGetGridHomeURI", f)
 }
@@ -324,10 +312,7 @@ mod tests {
     #[test]
     fn test_script_engine_name() {
         let lua = make_sim_vm();
-        let r: String = lua
-            .load("return osGetScriptEngineName()")
-            .eval()
-            .unwrap();
+        let r: String = lua.load("return osGetScriptEngineName()").eval().unwrap();
         assert_eq!(r, "welkin-luau");
     }
 
@@ -341,40 +326,28 @@ mod tests {
     #[test]
     fn test_physics_engine_type() {
         let lua = make_sim_vm();
-        let r: String = lua
-            .load("return osGetPhysicsEngineType()")
-            .eval()
-            .unwrap();
+        let r: String = lua.load("return osGetPhysicsEngineType()").eval().unwrap();
         assert_eq!(r, "Rapier");
     }
 
     #[test]
     fn test_physics_engine_name() {
         let lua = make_sim_vm();
-        let r: String = lua
-            .load("return osGetPhysicsEngineName()")
-            .eval()
-            .unwrap();
+        let r: String = lua.load("return osGetPhysicsEngineName()").eval().unwrap();
         assert_eq!(r, "welkin-physics-rapier");
     }
 
     #[test]
     fn test_region_size() {
         let lua = make_sim_vm();
-        let r: Vec<f64> = lua
-            .load("return osGetRegionSize()")
-            .eval()
-            .unwrap();
+        let r: Vec<f64> = lua.load("return osGetRegionSize()").eval().unwrap();
         assert_eq!(r, vec![256.0, 256.0, 4096.0]);
     }
 
     #[test]
     fn test_simulator_memory_returns_number() {
         let lua = make_sim_vm();
-        let r: i64 = lua
-            .load("return osGetSimulatorMemory()")
-            .eval()
-            .unwrap();
+        let r: i64 = lua.load("return osGetSimulatorMemory()").eval().unwrap();
         // On Linux with /proc, should be > 0. On other platforms, 0 is acceptable.
         assert!(r >= 0);
     }
@@ -382,20 +355,14 @@ mod tests {
     #[test]
     fn test_simulator_memory_kb() {
         let lua = make_sim_vm();
-        let r: i64 = lua
-            .load("return osGetSimulatorMemoryKB()")
-            .eval()
-            .unwrap();
+        let r: i64 = lua.load("return osGetSimulatorMemoryKB()").eval().unwrap();
         assert!(r >= 0);
     }
 
     #[test]
     fn test_temperature_to_srgb() {
         let lua = make_sim_vm();
-        let r: String = lua
-            .load("return osTemperature2sRGB(6500)")
-            .eval()
-            .unwrap();
+        let r: String = lua.load("return osTemperature2sRGB(6500)").eval().unwrap();
         // Should be close to white at 6500K
         let parts: Vec<u8> = r.split(',').map(|s| s.parse().unwrap()).collect();
         assert_eq!(parts.len(), 3);
@@ -408,10 +375,7 @@ mod tests {
     #[test]
     fn test_temperature_warm() {
         let lua = make_sim_vm();
-        let r: String = lua
-            .load("return osTemperature2sRGB(2000)")
-            .eval()
-            .unwrap();
+        let r: String = lua.load("return osTemperature2sRGB(2000)").eval().unwrap();
         let parts: Vec<u8> = r.split(',').map(|s| s.parse().unwrap()).collect();
         // At 2000K, should be warm (high R, lower G, very low B)
         assert_eq!(parts[0], 255); // R should be max
@@ -421,20 +385,14 @@ mod tests {
     #[test]
     fn test_grid_nick() {
         let lua = make_sim_vm();
-        let r: String = lua
-            .load("return osGetGridNick()")
-            .eval()
-            .unwrap();
+        let r: String = lua.load("return osGetGridNick()").eval().unwrap();
         assert_eq!(r, "welkin");
     }
 
     #[test]
     fn test_grid_name() {
         let lua = make_sim_vm();
-        let r: String = lua
-            .load("return osGetGridName()")
-            .eval()
-            .unwrap();
+        let r: String = lua.load("return osGetGridName()").eval().unwrap();
         assert_eq!(r, "OpenSim Rust Grid");
     }
 
@@ -451,10 +409,7 @@ mod tests {
     #[test]
     fn test_map_texture_returns_nil_uuid() {
         let lua = make_sim_vm();
-        let r: String = lua
-            .load("return osGetMapTexture()")
-            .eval()
-            .unwrap();
+        let r: String = lua.load("return osGetMapTexture()").eval().unwrap();
         assert_eq!(r, "00000000-0000-0000-0000-000000000000");
     }
 }

@@ -3,10 +3,10 @@
 //! Typed packet handler dispatch: routes [`IncomingPacket`]s to registered
 //! handler closures that receive a fully decoded message struct.
 
-use welkin_msg::{DecodeError, IncomingPacket, Msg, MsgId};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use uuid::Uuid;
+use welkin_msg::{DecodeError, IncomingPacket, Msg, MsgId};
 
 /// Context passed to every packet handler.
 pub struct PacketContext {
@@ -99,10 +99,10 @@ impl Default for PacketDispatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use welkin_msg::msgs::*;
-    use welkin_msg::{str_field, Writer};
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use welkin_msg::msgs::*;
+    use welkin_msg::{Writer, str_field};
 
     fn test_ctx() -> PacketContext {
         PacketContext {

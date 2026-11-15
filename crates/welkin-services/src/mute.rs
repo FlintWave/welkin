@@ -167,9 +167,21 @@ async fn handle_mutelist(State(state): State<MuteServiceState>, body: Bytes) -> 
                 agent_id: agent_id.to_string(),
                 mute_id: mute_id.to_string(),
                 mute_name: f.str("mutename").to_string(),
-                mute_type: if f.has("mutetype") { f.num("mutetype") } else { 0 },
-                mute_flags: if f.has("muteflags") { f.num("muteflags") } else { 0 },
-                stamp: if f.has("mutestamp") { f.num("mutestamp") } else { unix_now() },
+                mute_type: if f.has("mutetype") {
+                    f.num("mutetype")
+                } else {
+                    0
+                },
+                mute_flags: if f.has("muteflags") {
+                    f.num("muteflags")
+                } else {
+                    0
+                },
+                stamp: if f.has("mutestamp") {
+                    f.num("mutestamp")
+                } else {
+                    unix_now()
+                },
             };
             match store.add_mute(&mute).await {
                 Ok(()) => result(true),

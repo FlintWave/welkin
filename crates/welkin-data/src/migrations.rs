@@ -13,7 +13,21 @@ pub enum Backend {
 }
 
 /// Stores migrated by `run_all` (those used by the grid services).
-pub const GRID_STORES: &[&str] = &["AssetStore", "AuthStore", "Avatar", "EstateStore", "FriendsStore", "GridStore", "GridUserStore", "InventoryStore", "MuteListStore", "Presence", "UserAccount", "UserProfiles", "AgentPrefs"];
+pub const GRID_STORES: &[&str] = &[
+    "AssetStore",
+    "AuthStore",
+    "Avatar",
+    "EstateStore",
+    "FriendsStore",
+    "GridStore",
+    "GridUserStore",
+    "InventoryStore",
+    "MuteListStore",
+    "Presence",
+    "UserAccount",
+    "UserProfiles",
+    "AgentPrefs",
+];
 
 /// Parse a `.migrations` file into `(version, sql)` pairs.
 pub fn parse_migrations(content: &str) -> Vec<(i32, String)> {
@@ -297,7 +311,9 @@ mod tests {
 
     #[test]
     fn splits_statements() {
-        let s = split_statements("BEGIN;\nINSERT INTO a VALUES ('x;y'); -- hi; there\nCREATE TABLE b(i INT);\nCOMMIT;");
+        let s = split_statements(
+            "BEGIN;\nINSERT INTO a VALUES ('x;y'); -- hi; there\nCREATE TABLE b(i INT);\nCOMMIT;",
+        );
         assert_eq!(s.len(), 2);
         assert!(s[0].contains("'x;y'"));
     }

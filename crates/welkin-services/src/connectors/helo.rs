@@ -55,12 +55,13 @@ impl HeloServiceConnector {
             }
         })?;
 
-        let text = resp.text().await.map_err(|e| {
-            HypergridError::GatekeeperUnreachable {
+        let text = resp
+            .text()
+            .await
+            .map_err(|e| HypergridError::GatekeeperUnreachable {
                 url: url.clone(),
                 detail: format!("failed to read response body: {e}"),
-            }
-        })?;
+            })?;
 
         Ok(text)
     }

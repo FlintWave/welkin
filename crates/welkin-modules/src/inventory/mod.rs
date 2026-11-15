@@ -120,11 +120,7 @@ impl InventoryTransferModule {
     }
 
     /// Accept a pending inventory gift.
-    pub fn accept_gift(
-        &self,
-        agent_id: Uuid,
-        transaction_id: Uuid,
-    ) -> Result<(), ModuleError> {
+    pub fn accept_gift(&self, agent_id: Uuid, transaction_id: Uuid) -> Result<(), ModuleError> {
         tracing::debug!(
             %agent_id, %transaction_id,
             "accept_gift: stub — gift accepted"
@@ -133,11 +129,7 @@ impl InventoryTransferModule {
     }
 
     /// Decline a pending inventory gift.
-    pub fn decline_gift(
-        &self,
-        agent_id: Uuid,
-        transaction_id: Uuid,
-    ) -> Result<(), ModuleError> {
+    pub fn decline_gift(&self, agent_id: Uuid, transaction_id: Uuid) -> Result<(), ModuleError> {
         tracing::debug!(
             %agent_id, %transaction_id,
             "decline_gift: stub — gift declined"
@@ -216,12 +208,7 @@ impl InventoryAccessModule {
     }
 
     /// Rez a coalesced (multi-object) inventory item into the scene.
-    pub fn rez_coalesced(
-        &self,
-        agent_id: Uuid,
-        item_id: Uuid,
-        position: [f32; 3],
-    ) -> RezResult {
+    pub fn rez_coalesced(&self, agent_id: Uuid, item_id: Uuid, position: [f32; 3]) -> RezResult {
         tracing::debug!(
             %agent_id, %item_id,
             ?position,
@@ -324,14 +311,11 @@ impl AssetTransactionModule {
     }
 
     /// Append data to an in-progress upload.
-    pub fn append_data(
-        &mut self,
-        transaction_id: Uuid,
-        data: &[u8],
-    ) -> Result<(), ModuleError> {
-        let txn = self.transactions.get_mut(&transaction_id).ok_or_else(|| {
-            ModuleError::NotFound(format!("upload transaction {transaction_id}"))
-        })?;
+    pub fn append_data(&mut self, transaction_id: Uuid, data: &[u8]) -> Result<(), ModuleError> {
+        let txn = self
+            .transactions
+            .get_mut(&transaction_id)
+            .ok_or_else(|| ModuleError::NotFound(format!("upload transaction {transaction_id}")))?;
         tracing::debug!(
             %transaction_id,
             bytes = data.len(),
@@ -342,13 +326,11 @@ impl AssetTransactionModule {
     }
 
     /// Complete an upload.  Returns the new asset UUID.
-    pub fn complete_upload(
-        &mut self,
-        transaction_id: Uuid,
-    ) -> Result<Uuid, ModuleError> {
-        let _txn = self.transactions.remove(&transaction_id).ok_or_else(|| {
-            ModuleError::NotFound(format!("upload transaction {transaction_id}"))
-        })?;
+    pub fn complete_upload(&mut self, transaction_id: Uuid) -> Result<Uuid, ModuleError> {
+        let _txn = self
+            .transactions
+            .remove(&transaction_id)
+            .ok_or_else(|| ModuleError::NotFound(format!("upload transaction {transaction_id}")))?;
         let asset_id = Uuid::new_v4();
         tracing::debug!(
             %transaction_id, %asset_id,

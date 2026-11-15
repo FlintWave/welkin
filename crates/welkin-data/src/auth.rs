@@ -96,9 +96,10 @@ impl AuthStore {
         token: &str,
         validity_minutes: i32,
     ) -> Result<(), DataError> {
-        let validity = (chrono::Utc::now() + chrono::Duration::minutes(i64::from(validity_minutes)))
-            .format(DT_FMT)
-            .to_string();
+        let validity = (chrono::Utc::now()
+            + chrono::Duration::minutes(i64::from(validity_minutes)))
+        .format(DT_FMT)
+        .to_string();
         sqlx::query("INSERT INTO tokens (UUID, token, validity) VALUES ($1, $2, $3)")
             .bind(uuid.to_string())
             .bind(token.to_string())

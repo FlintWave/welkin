@@ -7,17 +7,17 @@
 
 use std::io::Write;
 
-use flate2::write::GzEncoder;
 use flate2::Compression;
+use flate2::write::GzEncoder;
 use tar::{Builder, Header};
 use uuid::Uuid;
 
+use crate::ArchiveError;
 use crate::assets_request::AssetData;
 use crate::constants;
 use crate::control_file::{self, ArchiveControlFile, ArchiveRegionInfo};
 use crate::land_data::{self, ArchiveLandData};
 use crate::region_settings::{self, RegionSettings};
-use crate::ArchiveError;
 
 // ---------------------------------------------------------------------------
 // Progress reporting
@@ -94,7 +94,9 @@ pub fn check_export_permission(
     let perm_class = checker.get_permission_class(user, object_uuid);
     let perm = match perm_class {
         PermissionClass::Owner => checker.base_mask(object_uuid),
-        PermissionClass::Group => checker.group_mask(object_uuid) | checker.everyone_mask(object_uuid),
+        PermissionClass::Group => {
+            checker.group_mask(object_uuid) | checker.everyone_mask(object_uuid)
+        }
         PermissionClass::Everyone => checker.everyone_mask(object_uuid),
     };
 
@@ -104,7 +106,8 @@ pub fn check_export_permission(
     // Special case: if Everyone can copy then this implies it can also be transferred,
     // but only if the user is not the owner (C# behaviour).
     if perm_class != PermissionClass::Owner {
-        can_transfer |= (checker.everyone_mask(object_uuid) & welkin_types::PermissionMask::COPY.bits()) != 0;
+        can_transfer |=
+            (checker.everyone_mask(object_uuid) & welkin_types::PermissionMask::COPY.bits()) != 0;
     }
 
     let mut permitted = true;
@@ -234,10 +237,18 @@ where
         regions: Vec::new(),
     };
     let control_xml = control_file::serialize(&control)?;
-    write_tar_entry(&mut tar, constants::CONTROL_FILE_PATH, control_xml.as_bytes())?;
+    write_tar_entry(
+        &mut tar,
+        constants::CONTROL_FILE_PATH,
+        control_xml.as_bytes(),
+    )?;
 
     if let Some(ref mut cb) = progress {
-        cb(&OarProgress { phase: OarWritePhase::ControlFile, current: 1, total: 1 });
+        cb(&OarProgress {
+            phase: OarWritePhase::ControlFile,
+            current: 1,
+            total: 1,
+        });
     }
 
     // 2. Settings
@@ -246,7 +257,11 @@ where
     write_tar_entry(&mut tar, &settings_path, settings_xml.as_bytes())?;
 
     if let Some(ref mut cb) = progress {
-        cb(&OarProgress { phase: OarWritePhase::Settings, current: 1, total: 1 });
+        cb(&OarProgress {
+            phase: OarWritePhase::Settings,
+            current: 1,
+            total: 1,
+        });
     }
 
     // 3. Land data
@@ -257,19 +272,24 @@ where
         write_tar_entry(&mut tar, &parcel_path, parcel_xml.as_bytes())?;
 
         if let Some(ref mut cb) = progress {
-            cb(&OarProgress { phase: OarWritePhase::LandData, current: i + 1, total: total_parcels });
+            cb(&OarProgress {
+                phase: OarWritePhase::LandData,
+                current: i + 1,
+                total: total_parcels,
+            });
         }
     }
 
     // 4. Terrain
-    let terrain_path = format!(
-        "{}{}.r32",
-        constants::TERRAINS_PATH, region.region_name
-    );
+    let terrain_path = format!("{}{}.r32", constants::TERRAINS_PATH, region.region_name);
     write_tar_entry(&mut tar, &terrain_path, &region.terrain.heightfield)?;
 
     if let Some(ref mut cb) = progress {
-        cb(&OarProgress { phase: OarWritePhase::Terrain, current: 1, total: 1 });
+        cb(&OarProgress {
+            phase: OarWritePhase::Terrain,
+            current: 1,
+            total: 1,
+        });
     }
 
     // 5. Objects
@@ -279,7 +299,11 @@ where
         write_tar_entry(&mut tar, &obj_path, obj.xml.as_bytes())?;
 
         if let Some(ref mut cb) = progress {
-            cb(&OarProgress { phase: OarWritePhase::Objects, current: i + 1, total: total_objects });
+            cb(&OarProgress {
+                phase: OarWritePhase::Objects,
+                current: i + 1,
+                total: total_objects,
+            });
         }
     }
 
@@ -287,19 +311,27 @@ where
     if options.include_assets {
         let total_assets = assets.len();
         for (i, asset) in assets.iter().enumerate() {
-            let ext = constants::asset_type_to_extension(asset.asset_type)
-                .unwrap_or("_unknown.bin");
+            let ext =
+                constants::asset_type_to_extension(asset.asset_type).unwrap_or("_unknown.bin");
             let asset_path = format!("{}{}{}", constants::ASSETS_PATH, asset.uuid, ext);
             write_tar_entry(&mut tar, &asset_path, &asset.data)?;
 
             if let Some(ref mut cb) = progress {
-                cb(&OarProgress { phase: OarWritePhase::Assets, current: i + 1, total: total_assets });
+                cb(&OarProgress {
+                    phase: OarWritePhase::Assets,
+                    current: i + 1,
+                    total: total_assets,
+                });
             }
         }
     }
 
     if let Some(ref mut cb) = progress {
-        cb(&OarProgress { phase: OarWritePhase::Complete, current: 0, total: 0 });
+        cb(&OarProgress {
+            phase: OarWritePhase::Complete,
+            current: 0,
+            total: 0,
+        });
     }
 
     // Finalize
@@ -423,10 +455,18 @@ where
             .collect(),
     };
     let control_xml = control_file::serialize(&control)?;
-    write_tar_entry(&mut tar, constants::CONTROL_FILE_PATH, control_xml.as_bytes())?;
+    write_tar_entry(
+        &mut tar,
+        constants::CONTROL_FILE_PATH,
+        control_xml.as_bytes(),
+    )?;
 
     if let Some(ref mut cb) = progress {
-        cb(&OarProgress { phase: OarWritePhase::ControlFile, current: 1, total: 1 });
+        cb(&OarProgress {
+            phase: OarWritePhase::ControlFile,
+            current: 1,
+            total: 1,
+        });
     }
 
     // 2. Per-region data
@@ -435,7 +475,12 @@ where
         let prefix = format!("{}{}/", constants::REGIONS_PATH, region_dir);
 
         // Settings
-        let settings_path = format!("{}{}{}.xml", prefix, constants::SETTINGS_PATH, region.region_name);
+        let settings_path = format!(
+            "{}{}{}.xml",
+            prefix,
+            constants::SETTINGS_PATH,
+            region.region_name
+        );
         let settings_xml = region_settings::serialize(&region.settings)?;
         write_tar_entry(&mut tar, &settings_path, settings_xml.as_bytes())?;
 
@@ -453,13 +498,16 @@ where
         // Terrain
         let terrain_path = format!(
             "{}{}{}.r32",
-            prefix, constants::TERRAINS_PATH, region.region_name
+            prefix,
+            constants::TERRAINS_PATH,
+            region.region_name
         );
         write_tar_entry(&mut tar, &terrain_path, &region.terrain.heightfield)?;
 
         // Objects
         for obj in &region.objects {
-            let obj_filename = constants::create_oar_object_filename(&obj.name, obj.uuid, obj.position);
+            let obj_filename =
+                constants::create_oar_object_filename(&obj.name, obj.uuid, obj.position);
             let obj_path = format!("{}{}{}", prefix, constants::OBJECTS_PATH, obj_filename);
             write_tar_entry(&mut tar, &obj_path, obj.xml.as_bytes())?;
         }
@@ -469,19 +517,27 @@ where
     if options.include_assets {
         let total_assets = assets.len();
         for (i, asset) in assets.iter().enumerate() {
-            let ext = constants::asset_type_to_extension(asset.asset_type)
-                .unwrap_or("_unknown.bin");
+            let ext =
+                constants::asset_type_to_extension(asset.asset_type).unwrap_or("_unknown.bin");
             let asset_path = format!("{}{}{}", constants::ASSETS_PATH, asset.uuid, ext);
             write_tar_entry(&mut tar, &asset_path, &asset.data)?;
 
             if let Some(ref mut cb) = progress {
-                cb(&OarProgress { phase: OarWritePhase::Assets, current: i + 1, total: total_assets });
+                cb(&OarProgress {
+                    phase: OarWritePhase::Assets,
+                    current: i + 1,
+                    total: total_assets,
+                });
             }
         }
     }
 
     if let Some(ref mut cb) = progress {
-        cb(&OarProgress { phase: OarWritePhase::Complete, current: 0, total: 0 });
+        cb(&OarProgress {
+            phase: OarWritePhase::Complete,
+            current: 0,
+            total: 0,
+        });
     }
 
     let gz = tar.into_inner().map_err(ArchiveError::Io)?;
@@ -601,8 +657,14 @@ mod tests {
         let options = OarWriteOptions::default();
 
         let mut buf = Vec::new();
-        write_archive(&mut buf, &region, &assets, &options, None::<fn(&OarProgress)>)
-            .expect("write_archive failed");
+        write_archive(
+            &mut buf,
+            &region,
+            &assets,
+            &options,
+            None::<fn(&OarProgress)>,
+        )
+        .expect("write_archive failed");
 
         // Should produce a non-empty gzip stream
         assert!(!buf.is_empty());
@@ -639,8 +701,14 @@ mod tests {
         let options = OarWriteOptions::default();
 
         let mut buf = Vec::new();
-        write_multi_region_archive(&mut buf, &mut group, &assets, &options, None::<fn(&OarProgress)>)
-            .expect("write_multi_region_archive failed");
+        write_multi_region_archive(
+            &mut buf,
+            &mut group,
+            &assets,
+            &options,
+            None::<fn(&OarProgress)>,
+        )
+        .expect("write_multi_region_archive failed");
 
         assert!(!buf.is_empty());
         assert_eq!(buf[0], 0x1f);
@@ -656,9 +724,15 @@ mod tests {
         let phases_clone = phases.clone();
 
         let mut buf = Vec::new();
-        write_archive(&mut buf, &region, &assets, &options, Some(move |p: &OarProgress| {
-            phases_clone.lock().unwrap().push(p.phase.clone());
-        }))
+        write_archive(
+            &mut buf,
+            &region,
+            &assets,
+            &options,
+            Some(move |p: &OarProgress| {
+                phases_clone.lock().unwrap().push(p.phase.clone());
+            }),
+        )
         .expect("write failed");
 
         let phases = phases.lock().unwrap();
@@ -739,10 +813,18 @@ mod tests {
             fn get_permission_class(&self, _user: Uuid, _object_uuid: Uuid) -> PermissionClass {
                 PermissionClass::Everyone
             }
-            fn base_mask(&self, _object_uuid: Uuid) -> u32 { 0 }
-            fn group_mask(&self, _object_uuid: Uuid) -> u32 { 0 }
-            fn everyone_mask(&self, _object_uuid: Uuid) -> u32 { 0 }
-            fn creator_id(&self, _object_uuid: Uuid) -> Uuid { self.user }
+            fn base_mask(&self, _object_uuid: Uuid) -> u32 {
+                0
+            }
+            fn group_mask(&self, _object_uuid: Uuid) -> u32 {
+                0
+            }
+            fn everyone_mask(&self, _object_uuid: Uuid) -> u32 {
+                0
+            }
+            fn creator_id(&self, _object_uuid: Uuid) -> Uuid {
+                self.user
+            }
         }
 
         let checker = CreatorChecker { user };
@@ -757,9 +839,17 @@ mod tests {
         fn get_permission_class(&self, _user: Uuid, _object_uuid: Uuid) -> PermissionClass {
             PermissionClass::Everyone
         }
-        fn base_mask(&self, _object_uuid: Uuid) -> u32 { 0 }
-        fn group_mask(&self, _object_uuid: Uuid) -> u32 { 0 }
-        fn everyone_mask(&self, _object_uuid: Uuid) -> u32 { 0 }
-        fn creator_id(&self, _object_uuid: Uuid) -> Uuid { Uuid::nil() }
+        fn base_mask(&self, _object_uuid: Uuid) -> u32 {
+            0
+        }
+        fn group_mask(&self, _object_uuid: Uuid) -> u32 {
+            0
+        }
+        fn everyone_mask(&self, _object_uuid: Uuid) -> u32 {
+            0
+        }
+        fn creator_id(&self, _object_uuid: Uuid) -> Uuid {
+            Uuid::nil()
+        }
     }
 }

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+use axum::Json;
 use axum::extract::State;
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 
 use crate::PortalState;
 use crate::sessions::RequireStaff;

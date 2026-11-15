@@ -101,7 +101,11 @@ pub struct LandAccessEntry {
 // Serialization helpers
 // ---------------------------------------------------------------------------
 
-fn write_element(writer: &mut Writer<Cursor<Vec<u8>>>, name: &str, value: &str) -> Result<(), ArchiveError> {
+fn write_element(
+    writer: &mut Writer<Cursor<Vec<u8>>>,
+    name: &str,
+    value: &str,
+) -> Result<(), ArchiveError> {
     writer
         .create_element(name)
         .write_text_content(BytesText::new(value))
@@ -149,7 +153,11 @@ pub fn serialize(data: &ArchiveLandData, wipe_owners: bool) -> Result<String, Ar
 
     // XML declaration
     writer
-        .write_event(Event::Decl(quick_xml::events::BytesDecl::new("1.0", Some("utf-8"), None)))
+        .write_event(Event::Decl(quick_xml::events::BytesDecl::new(
+            "1.0",
+            Some("utf-8"),
+            None,
+        )))
         .map_err(|e| ArchiveError::Xml(e.to_string()))?;
 
     // <LandData>
@@ -165,10 +173,18 @@ pub fn serialize(data: &ArchiveLandData, wipe_owners: bool) -> Result<String, Ar
     write_element(&mut writer, "ClaimPrice", &data.claim_price.to_string())?;
     write_element(&mut writer, "GlobalID", &data.global_id.to_string())?;
 
-    let group_id = if wipe_owners { Uuid::nil() } else { data.group_id };
+    let group_id = if wipe_owners {
+        Uuid::nil()
+    } else {
+        data.group_id
+    };
     write_element(&mut writer, "GroupID", &group_id.to_string())?;
 
-    let is_group_owned = if wipe_owners { false } else { data.is_group_owned };
+    let is_group_owned = if wipe_owners {
+        false
+    } else {
+        data.is_group_owned
+    };
     write_element(&mut writer, "IsGroupOwned", &is_group_owned.to_string())?;
 
     write_element(&mut writer, "Bitmap", &BASE64.encode(&data.bitmap))?;
@@ -178,12 +194,20 @@ pub fn serialize(data: &ArchiveLandData, wipe_owners: bool) -> Result<String, Ar
     write_element(&mut writer, "Name", &data.name)?;
     write_element(&mut writer, "Status", &data.status.to_string())?;
     write_element(&mut writer, "LocalID", &data.local_id.to_string())?;
-    write_element(&mut writer, "MediaAutoScale", &data.media_auto_scale.to_string())?;
+    write_element(
+        &mut writer,
+        "MediaAutoScale",
+        &data.media_auto_scale.to_string(),
+    )?;
     write_element(&mut writer, "MediaID", &data.media_id.to_string())?;
     write_element(&mut writer, "MediaURL", &data.media_url)?;
     write_element(&mut writer, "MusicURL", &data.music_url)?;
 
-    let owner_id = if wipe_owners { Uuid::nil() } else { data.owner_id };
+    let owner_id = if wipe_owners {
+        Uuid::nil()
+    } else {
+        data.owner_id
+    };
     write_element(&mut writer, "OwnerID", &owner_id.to_string())?;
 
     // <ParcelAccessList>
@@ -209,14 +233,34 @@ pub fn serialize(data: &ArchiveLandData, wipe_owners: bool) -> Result<String, Ar
     write_element(&mut writer, "PassPrice", &data.pass_price.to_string())?;
     write_element(&mut writer, "SalePrice", &data.sale_price.to_string())?;
     write_element(&mut writer, "SnapshotID", &data.snapshot_id.to_string())?;
-    write_element(&mut writer, "UserLocation", &vec3_to_string(data.user_location))?;
-    write_element(&mut writer, "UserLookAt", &vec3_to_string(data.user_look_at))?;
+    write_element(
+        &mut writer,
+        "UserLocation",
+        &vec3_to_string(data.user_location),
+    )?;
+    write_element(
+        &mut writer,
+        "UserLookAt",
+        &vec3_to_string(data.user_look_at),
+    )?;
     write_element(&mut writer, "Dwell", "0")?;
-    write_element(&mut writer, "OtherCleanTime", &data.other_clean_time.to_string())?;
+    write_element(
+        &mut writer,
+        "OtherCleanTime",
+        &data.other_clean_time.to_string(),
+    )?;
 
     write_element(&mut writer, "SeeAVs", if data.see_avs { "1" } else { "0" })?;
-    write_element(&mut writer, "AnyAVSnds", if data.any_av_sounds { "1" } else { "0" })?;
-    write_element(&mut writer, "GrpAVSnds", if data.group_av_sounds { "1" } else { "0" })?;
+    write_element(
+        &mut writer,
+        "AnyAVSnds",
+        if data.any_av_sounds { "1" } else { "0" },
+    )?;
+    write_element(
+        &mut writer,
+        "GrpAVSnds",
+        if data.group_av_sounds { "1" } else { "0" },
+    )?;
 
     // </LandData>
     writer
@@ -232,12 +276,14 @@ pub fn serialize(data: &ArchiveLandData, wipe_owners: bool) -> Result<String, Ar
 // ---------------------------------------------------------------------------
 
 /// Read element text and unescape XML entities.
-fn read_text_unescaped(reader: &mut Reader<&[u8]>, name: quick_xml::name::QName<'_>) -> Result<String, ArchiveError> {
+fn read_text_unescaped(
+    reader: &mut Reader<&[u8]>,
+    name: quick_xml::name::QName<'_>,
+) -> Result<String, ArchiveError> {
     let raw = reader
         .read_text(name)
         .map_err(|e| ArchiveError::Xml(e.to_string()))?;
-    let unescaped = unescape(&raw)
-        .map_err(|e| ArchiveError::Xml(e.to_string()))?;
+    let unescaped = unescape(&raw).map_err(|e| ArchiveError::Xml(e.to_string()))?;
     Ok(unescaped.into_owned())
 }
 
@@ -503,7 +549,7 @@ mod tests {
         assert_eq!(restored.claim_date, 1700000000);
         assert_eq!(restored.global_id, data.global_id);
         assert_eq!(restored.group_id, data.group_id);
-        assert_eq!(restored.is_group_owned, true);
+        assert!(restored.is_group_owned);
         assert_eq!(restored.bitmap, vec![0xFF, 0x00, 0xAB]);
         assert_eq!(restored.description, "Test parcel");
         assert_eq!(restored.flags, 100);
@@ -518,9 +564,15 @@ mod tests {
 
         // Access list
         assert_eq!(restored.access_list.len(), 2);
-        assert_eq!(restored.access_list[0].agent_id, data.access_list[0].agent_id);
+        assert_eq!(
+            restored.access_list[0].agent_id,
+            data.access_list[0].agent_id
+        );
         assert_eq!(restored.access_list[0].flags, 1);
-        assert_eq!(restored.access_list[1].agent_id, data.access_list[1].agent_id);
+        assert_eq!(
+            restored.access_list[1].agent_id,
+            data.access_list[1].agent_id
+        );
         assert_eq!(restored.access_list[1].flags, 2);
 
         assert!((restored.pass_hours - 1.5).abs() < f32::EPSILON);
@@ -530,9 +582,9 @@ mod tests {
         assert_eq!(restored.user_location.1, 128.0);
         assert_eq!(restored.user_location.2, 25.0);
         assert_eq!(restored.other_clean_time, 5);
-        assert_eq!(restored.see_avs, false);
-        assert_eq!(restored.any_av_sounds, false);
-        assert_eq!(restored.group_av_sounds, true);
+        assert!(!restored.see_avs);
+        assert!(!restored.any_av_sounds);
+        assert!(restored.group_av_sounds);
     }
 
     #[test]
@@ -543,7 +595,7 @@ mod tests {
 
         assert_eq!(restored.owner_id, Uuid::nil());
         assert_eq!(restored.group_id, Uuid::nil());
-        assert_eq!(restored.is_group_owned, false);
+        assert!(!restored.is_group_owned);
         // Other fields should be intact
         assert_eq!(restored.name, "My Land");
         assert_eq!(restored.global_id, data.global_id);

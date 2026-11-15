@@ -13,12 +13,10 @@ use std::time::Instant;
 use glam::{Quat, Vec3};
 use uuid::Uuid;
 
-use welkin_prim::meshing::{
-    create_physics_shape, shape_for_box, PhysicsShapeType, ShapeCache,
-};
+use welkin_prim::meshing::{PhysicsShapeType, ShapeCache, create_physics_shape, shape_for_box};
 use welkin_prim::{
-    PathParams, ProfileParams, SculptParams, VolumeParams, LL_PCODE_PATH_CIRCLE,
-    LL_PCODE_PROFILE_CIRCLE, LL_PCODE_PROFILE_SQUARE, LL_SCULPT_TYPE_SPHERE,
+    LL_PCODE_PATH_CIRCLE, LL_PCODE_PROFILE_CIRCLE, LL_PCODE_PROFILE_SQUARE, LL_SCULPT_TYPE_SPHERE,
+    PathParams, ProfileParams, SculptParams, VolumeParams,
 };
 
 use welkin_physics::PhysicsScene;
@@ -127,7 +125,10 @@ fn test_box_collider_aabb() {
         .expect("box should produce a shape");
 
     // Analytic box has zero vertex/triangle counts.
-    assert_eq!(result.vertex_count, 0, "analytic box should have zero vertices");
+    assert_eq!(
+        result.vertex_count, 0,
+        "analytic box should have zero vertices"
+    );
 
     let aabb = result.shape.compute_local_aabb();
     let hx = (aabb.maxs.x - aabb.mins.x) * 0.5;

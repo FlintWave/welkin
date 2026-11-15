@@ -4,14 +4,14 @@
 
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
-use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::time::{Duration, Instant};
 
 use uuid::Uuid;
 
-use crate::instance::{ScriptEvent, ScriptInstance, ScriptInstanceState};
 use crate::VmError;
+use crate::instance::{ScriptEvent, ScriptInstance, ScriptInstanceState};
 
 // ---------------------------------------------------------------------------
 // TimerEntry
@@ -189,11 +189,7 @@ impl ScriptScheduler {
         }
 
         // --- 2. Round-robin event dispatch --------------------------------
-        let ids: Vec<Uuid> = self
-            .scripts
-            .keys()
-            .copied()
-            .collect();
+        let ids: Vec<Uuid> = self.scripts.keys().copied().collect();
 
         let limit = self.max_instructions_per_slice;
 

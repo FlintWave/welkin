@@ -22,10 +22,7 @@ fn make_vec3(lua: &Lua, x: f64, y: f64, z: f64) -> LuaResult<LuaTable> {
 }
 
 /// Register all physics ll* functions as Lua globals.
-pub fn register_physics(
-    lua: &Lua,
-    ctx: &Arc<RwLock<ScriptContext>>,
-) -> Result<(), crate::VmError> {
+pub fn register_physics(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<(), crate::VmError> {
     // llApplyImpulse(force, local)
     {
         let ctx = Arc::clone(ctx);

@@ -271,8 +271,7 @@ impl EstateManagementModule {
 
     /// Returns `true` if the agent is an estate manager (or the estate owner).
     pub fn is_estate_manager(&self, agent_id: Uuid) -> bool {
-        agent_id == self.settings.estate_owner
-            || self.settings.estate_managers.contains(&agent_id)
+        agent_id == self.settings.estate_owner || self.settings.estate_managers.contains(&agent_id)
     }
 
     /// Returns `true` if the agent is on the estate ban list.

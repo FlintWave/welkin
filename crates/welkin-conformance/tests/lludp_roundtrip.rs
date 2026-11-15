@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use aurora_msg::packet::build_raw;
-use aurora_msg::{parse_packet, PacketFlags};
+use aurora_msg::{PacketFlags, parse_packet};
 
 fn hex_val(b: u8) -> Option<u8> {
     match b {
@@ -14,7 +14,7 @@ fn hex_val(b: u8) -> Option<u8> {
 
 fn hex_decode(s: &str) -> Option<Vec<u8>> {
     let bytes: Vec<u8> = s.bytes().filter(|b| !b.is_ascii_whitespace()).collect();
-    if bytes.len() % 2 != 0 {
+    if !bytes.len().is_multiple_of(2) {
         return None;
     }
     let mut out = Vec::with_capacity(bytes.len() / 2);

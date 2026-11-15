@@ -259,7 +259,11 @@ impl InventoryStore {
                 }
             }
         }
-        for id in descendants.iter().map(String::as_str).chain(std::iter::once(folder_id)) {
+        for id in descendants
+            .iter()
+            .map(String::as_str)
+            .chain(std::iter::once(folder_id))
+        {
             sqlx::query("DELETE FROM inventoryitems WHERE parentFolderID = $1")
                 .bind(id)
                 .execute(&mut *tx)
@@ -290,11 +294,12 @@ impl InventoryStore {
     }
 
     pub async fn move_folder(&self, folder_id: &str, parent_id: &str) -> Result<bool, DataError> {
-        let res = sqlx::query("UPDATE inventoryfolders SET parentFolderID = $1 WHERE folderID = $2")
-            .bind(parent_id)
-            .bind(folder_id)
-            .execute(&self.pool)
-            .await?;
+        let res =
+            sqlx::query("UPDATE inventoryfolders SET parentFolderID = $1 WHERE folderID = $2")
+                .bind(parent_id)
+                .bind(folder_id)
+                .execute(&self.pool)
+                .await?;
         Ok(res.rows_affected() > 0)
     }
 

@@ -8,9 +8,9 @@
 //! little-endian f32 heightfield), then reads it back through
 //! `SimulationDataStore` and checks every value that matters for scene fidelity.
 
-use welkin_data::simulation::*;
-use sqlx::any::AnyPoolOptions;
 use sqlx::AnyPool;
+use sqlx::any::AnyPoolOptions;
+use welkin_data::simulation::*;
 
 // ---------------------------------------------------------------------------
 // Schema (identical to the C# OpenSimulator SQLite schema)
@@ -245,7 +245,7 @@ fn make_shape(uuid: &str, scale: (f64, f64, f64)) -> PrimShapeRow {
         scale_x: scale.0,
         scale_y: scale.1,
         scale_z: scale.2,
-        pcode: 9,       // PCode.Prim
+        pcode: 9, // PCode.Prim
         path_begin: 0,
         path_end: 0,
         path_scale_x: 100,
@@ -253,7 +253,7 @@ fn make_shape(uuid: &str, scale: (f64, f64, f64)) -> PrimShapeRow {
         path_shear_x: 0,
         path_shear_y: 0,
         path_skew: 0,
-        path_curve: 16,  // PathCurve.Line (box)
+        path_curve: 16, // PathCurve.Line (box)
         path_radius_offset: 0,
         path_revolutions: 0,
         path_taper_x: 0,
@@ -321,9 +321,9 @@ async fn load_csharp_region_objects() {
     let root = make_prim(
         ROOT_UUID,
         GROUP_A,
-        1,                          // link 1 = root
-        (128.0, 128.0, 25.0),      // Position (same as GroupPosition for root)
-        (128.0, 128.0, 25.0),      // GroupPosition
+        1,                    // link 1 = root
+        (128.0, 128.0, 25.0), // Position (same as GroupPosition for root)
+        (128.0, 128.0, 25.0), // GroupPosition
         "House Foundation",
     );
     let root_shape = make_shape(ROOT_UUID, (10.0, 10.0, 0.5));
@@ -331,9 +331,9 @@ async fn load_csharp_region_objects() {
     let child = make_prim(
         CHILD_UUID,
         GROUP_A,
-        2,                          // link 2 = first child
-        (0.0, 0.0, 3.0),           // local offset from root
-        (128.0, 128.0, 25.0),      // GroupPosition = root's world pos
+        2,                    // link 2 = first child
+        (0.0, 0.0, 3.0),      // local offset from root
+        (128.0, 128.0, 25.0), // GroupPosition = root's world pos
         "House Roof",
     );
     let child_shape = make_shape(CHILD_UUID, (12.0, 12.0, 0.3));
@@ -350,18 +350,32 @@ async fn load_csharp_region_objects() {
     let solo_shape = make_shape(SOLO_UUID, (0.5, 0.5, 2.0));
 
     // Store all three prims.
-    store.store_object(REGION, GROUP_A, &root, &root_shape).await.unwrap();
-    store.store_object(REGION, GROUP_A, &child, &child_shape).await.unwrap();
-    store.store_object(REGION, GROUP_B, &solo, &solo_shape).await.unwrap();
+    store
+        .store_object(REGION, GROUP_A, &root, &root_shape)
+        .await
+        .unwrap();
+    store
+        .store_object(REGION, GROUP_A, &child, &child_shape)
+        .await
+        .unwrap();
+    store
+        .store_object(REGION, GROUP_B, &solo, &solo_shape)
+        .await
+        .unwrap();
 
     // -- Load back through SimulationDataStore --------------------------------
-    let loaded = store.load_objects(REGION).await.expect("load_objects failed");
+    let loaded = store
+        .load_objects(REGION)
+        .await
+        .expect("load_objects failed");
     assert_eq!(loaded.len(), 3, "expected 3 prims total across 2 groups");
 
     // `load_objects` sorts by (SceneGroupID, LinkNumber).  Build a map by UUID
     // for order-independent checks.
-    let by_uuid: std::collections::HashMap<&str, &(PrimRow, Option<PrimShapeRow>)> =
-        loaded.iter().map(|pair| (pair.0.uuid.as_str(), pair)).collect();
+    let by_uuid: std::collections::HashMap<&str, &(PrimRow, Option<PrimShapeRow>)> = loaded
+        .iter()
+        .map(|pair| (pair.0.uuid.as_str(), pair))
+        .collect();
 
     // -- Verify group A root prim ---
     let (rp, rs) = by_uuid[ROOT_UUID];
@@ -417,7 +431,10 @@ async fn load_csharp_region_objects() {
     assert_eq!(ss.scale_z, 2.0);
 
     // -- Verify both groups exist (by counting distinct SceneGroupIDs) ---
-    let mut group_ids: Vec<&str> = loaded.iter().map(|(p, _)| p.scene_group_id.as_str()).collect();
+    let mut group_ids: Vec<&str> = loaded
+        .iter()
+        .map(|(p, _)| p.scene_group_id.as_str())
+        .collect();
     group_ids.sort();
     group_ids.dedup();
     assert_eq!(group_ids.len(), 2, "expected 2 distinct groups");
@@ -451,7 +468,11 @@ async fn load_csharp_terrain_heightfield() {
     let (_pool, store) = setup_db().await;
 
     let heightfield = build_terrain_heightfield();
-    assert_eq!(heightfield.len(), 256 * 256 * 4, "heightfield must be 256x256 f32 LE");
+    assert_eq!(
+        heightfield.len(),
+        256 * 256 * 4,
+        "heightfield must be 256x256 f32 LE"
+    );
 
     store
         .store_terrain(REGION, 1, &heightfield)
@@ -475,9 +496,9 @@ async fn load_csharp_terrain_heightfield() {
     // Spot-check heights at known coordinates against the formula:
     //   h(x,y) = 21.0 + 0.04*x + 0.02*y
     let samples: &[(usize, usize, f32)] = &[
-        (0, 0, 21.0),                           // SW corner
-        (255, 0, 21.0 + 0.04 * 255.0),          // SE corner  = 31.2
-        (0, 255, 21.0 + 0.02 * 255.0),          // NW corner  = 26.1
+        (0, 0, 21.0),                                   // SW corner
+        (255, 0, 21.0 + 0.04 * 255.0),                  // SE corner  = 31.2
+        (0, 255, 21.0 + 0.02 * 255.0),                  // NW corner  = 26.1
         (255, 255, 21.0 + 0.04 * 255.0 + 0.02 * 255.0), // NE corner = 36.3
         (128, 128, 21.0 + 0.04 * 128.0 + 0.02 * 128.0), // center = 28.68
         (64, 192, 21.0 + 0.04 * 64.0 + 0.02 * 192.0),   // arbitrary = 27.4
@@ -531,18 +552,70 @@ async fn terrain_latest_revision_wins() {
 async fn get_object_ids_matches_inserted() {
     let (_pool, store) = setup_db().await;
 
-    let root = make_prim(ROOT_UUID, GROUP_A, 1, (128.0, 128.0, 25.0), (128.0, 128.0, 25.0), "Root");
-    let child = make_prim(CHILD_UUID, GROUP_A, 2, (0.0, 0.0, 3.0), (128.0, 128.0, 25.0), "Child");
-    let solo = make_prim(SOLO_UUID, GROUP_B, 1, (50.0, 200.0, 30.0), (50.0, 200.0, 30.0), "Solo");
+    let root = make_prim(
+        ROOT_UUID,
+        GROUP_A,
+        1,
+        (128.0, 128.0, 25.0),
+        (128.0, 128.0, 25.0),
+        "Root",
+    );
+    let child = make_prim(
+        CHILD_UUID,
+        GROUP_A,
+        2,
+        (0.0, 0.0, 3.0),
+        (128.0, 128.0, 25.0),
+        "Child",
+    );
+    let solo = make_prim(
+        SOLO_UUID,
+        GROUP_B,
+        1,
+        (50.0, 200.0, 30.0),
+        (50.0, 200.0, 30.0),
+        "Solo",
+    );
 
-    store.store_object(REGION, GROUP_A, &root, &make_shape(ROOT_UUID, (1.0, 1.0, 1.0))).await.unwrap();
-    store.store_object(REGION, GROUP_A, &child, &make_shape(CHILD_UUID, (1.0, 1.0, 1.0))).await.unwrap();
-    store.store_object(REGION, GROUP_B, &solo, &make_shape(SOLO_UUID, (1.0, 1.0, 1.0))).await.unwrap();
+    store
+        .store_object(
+            REGION,
+            GROUP_A,
+            &root,
+            &make_shape(ROOT_UUID, (1.0, 1.0, 1.0)),
+        )
+        .await
+        .unwrap();
+    store
+        .store_object(
+            REGION,
+            GROUP_A,
+            &child,
+            &make_shape(CHILD_UUID, (1.0, 1.0, 1.0)),
+        )
+        .await
+        .unwrap();
+    store
+        .store_object(
+            REGION,
+            GROUP_B,
+            &solo,
+            &make_shape(SOLO_UUID, (1.0, 1.0, 1.0)),
+        )
+        .await
+        .unwrap();
 
-    let mut ids = store.get_object_ids(REGION).await.expect("get_object_ids failed");
+    let mut ids = store
+        .get_object_ids(REGION)
+        .await
+        .expect("get_object_ids failed");
     ids.sort();
 
-    let mut expected = vec![ROOT_UUID.to_string(), CHILD_UUID.to_string(), SOLO_UUID.to_string()];
+    let mut expected = vec![
+        ROOT_UUID.to_string(),
+        CHILD_UUID.to_string(),
+        SOLO_UUID.to_string(),
+    ];
     expected.sort();
 
     assert_eq!(ids, expected);
@@ -554,18 +627,69 @@ async fn get_object_ids_matches_inserted() {
 async fn remove_child_preserves_remaining_objects() {
     let (_pool, store) = setup_db().await;
 
-    let root = make_prim(ROOT_UUID, GROUP_A, 1, (128.0, 128.0, 25.0), (128.0, 128.0, 25.0), "Root");
-    let child = make_prim(CHILD_UUID, GROUP_A, 2, (0.0, 0.0, 3.0), (128.0, 128.0, 25.0), "Child");
-    let solo = make_prim(SOLO_UUID, GROUP_B, 1, (50.0, 200.0, 30.0), (50.0, 200.0, 30.0), "Solo");
+    let root = make_prim(
+        ROOT_UUID,
+        GROUP_A,
+        1,
+        (128.0, 128.0, 25.0),
+        (128.0, 128.0, 25.0),
+        "Root",
+    );
+    let child = make_prim(
+        CHILD_UUID,
+        GROUP_A,
+        2,
+        (0.0, 0.0, 3.0),
+        (128.0, 128.0, 25.0),
+        "Child",
+    );
+    let solo = make_prim(
+        SOLO_UUID,
+        GROUP_B,
+        1,
+        (50.0, 200.0, 30.0),
+        (50.0, 200.0, 30.0),
+        "Solo",
+    );
 
-    store.store_object(REGION, GROUP_A, &root, &make_shape(ROOT_UUID, (1.0, 1.0, 1.0))).await.unwrap();
-    store.store_object(REGION, GROUP_A, &child, &make_shape(CHILD_UUID, (1.0, 1.0, 1.0))).await.unwrap();
-    store.store_object(REGION, GROUP_B, &solo, &make_shape(SOLO_UUID, (1.0, 1.0, 1.0))).await.unwrap();
+    store
+        .store_object(
+            REGION,
+            GROUP_A,
+            &root,
+            &make_shape(ROOT_UUID, (1.0, 1.0, 1.0)),
+        )
+        .await
+        .unwrap();
+    store
+        .store_object(
+            REGION,
+            GROUP_A,
+            &child,
+            &make_shape(CHILD_UUID, (1.0, 1.0, 1.0)),
+        )
+        .await
+        .unwrap();
+    store
+        .store_object(
+            REGION,
+            GROUP_B,
+            &solo,
+            &make_shape(SOLO_UUID, (1.0, 1.0, 1.0)),
+        )
+        .await
+        .unwrap();
 
     // Remove the child prim (simulates unlinking in C# OpenSim).
-    store.remove_object(CHILD_UUID).await.expect("remove_object failed");
+    store
+        .remove_object(CHILD_UUID)
+        .await
+        .expect("remove_object failed");
 
-    let loaded = store.load_objects(REGION).await.expect("load_objects failed");
+    let loaded = store
+        .load_objects(REGION)
+        .await
+        .expect("load_objects failed");
     assert_eq!(loaded.len(), 2, "root + solo should remain");
 
     let uuids: Vec<&str> = loaded.iter().map(|(p, _)| p.uuid.as_str()).collect();

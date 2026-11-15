@@ -329,7 +329,11 @@ impl MixedGridValidator {
         // Login test
         results.push((
             direction.clone(),
-            ValidationResult::pass(ValidationTest::Login, 0.0, "stub — awaiting LLUDP integration"),
+            ValidationResult::pass(
+                ValidationTest::Login,
+                0.0,
+                "stub — awaiting LLUDP integration",
+            ),
         ));
 
         // Inventory fetch
@@ -378,7 +382,11 @@ impl MixedGridValidator {
 
         results.push((
             direction.clone(),
-            ValidationResult::pass(ValidationTest::Login, 0.0, "stub — awaiting LLUDP integration"),
+            ValidationResult::pass(
+                ValidationTest::Login,
+                0.0,
+                "stub — awaiting LLUDP integration",
+            ),
         ));
 
         results.push((
@@ -620,9 +628,18 @@ mod tests {
     #[test]
     fn test_report_aggregation() {
         let results = vec![
-            ("dir_a".into(), ValidationResult::pass(ValidationTest::Login, 10.0, "")),
-            ("dir_a".into(), ValidationResult::fail(ValidationTest::MapRequest, 20.0, "err", "")),
-            ("dir_b".into(), ValidationResult::pass(ValidationTest::InventoryFetch, 5.0, "")),
+            (
+                "dir_a".into(),
+                ValidationResult::pass(ValidationTest::Login, 10.0, ""),
+            ),
+            (
+                "dir_a".into(),
+                ValidationResult::fail(ValidationTest::MapRequest, 20.0, "err", ""),
+            ),
+            (
+                "dir_b".into(),
+                ValidationResult::pass(ValidationTest::InventoryFetch, 5.0, ""),
+            ),
         ];
         let report = MixedGridReport::from_results(results);
         assert_eq!(report.total_tests, 3);
@@ -637,9 +654,10 @@ mod tests {
 
     #[test]
     fn test_generate_report_contains_header() {
-        let results = vec![
-            ("dir".into(), ValidationResult::pass(ValidationTest::Login, 10.0, "note")),
-        ];
+        let results = vec![(
+            "dir".into(),
+            ValidationResult::pass(ValidationTest::Login, 10.0, "note"),
+        )];
         let report = MixedGridReport::from_results(results);
         let md = generate_report(&report);
         assert!(md.contains("# Mixed-Grid Validation Report"));
@@ -650,9 +668,10 @@ mod tests {
 
     #[test]
     fn test_generate_report_failure_row() {
-        let results = vec![
-            ("d".into(), ValidationResult::fail(ValidationTest::MapRequest, 50.0, "err_msg", "n")),
-        ];
+        let results = vec![(
+            "d".into(),
+            ValidationResult::fail(ValidationTest::MapRequest, 50.0, "err_msg", "n"),
+        )];
         let report = MixedGridReport::from_results(results);
         let md = generate_report(&report);
         assert!(md.contains("FAIL"));

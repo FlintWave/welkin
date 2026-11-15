@@ -63,11 +63,11 @@ impl ChatSessionState {
         let invited = self
             .invited
             .get(&group_id)
-            .map_or(false, |s| s.contains(&agent_id));
+            .is_some_and(|s| s.contains(&agent_id));
         let dropped = self
             .dropped
             .get(&group_id)
-            .map_or(false, |s| s.contains(&agent_id));
+            .is_some_and(|s| s.contains(&agent_id));
         invited && !dropped
     }
 
@@ -75,7 +75,7 @@ impl ChatSessionState {
     pub fn has_agent_dropped(&self, group_id: Uuid, agent_id: Uuid) -> bool {
         self.dropped
             .get(&group_id)
-            .map_or(false, |s| s.contains(&agent_id))
+            .is_some_and(|s| s.contains(&agent_id))
     }
 
     /// Get all active agents in a group chat session.
@@ -87,9 +87,7 @@ impl ChatSessionState {
         let dropped = self.dropped.get(&group_id);
         invited
             .iter()
-            .filter(|a| {
-                dropped.map_or(true, |d| !d.contains(a))
-            })
+            .filter(|a| dropped.is_none_or(|d| !d.contains(a)))
             .copied()
             .collect()
     }
@@ -180,11 +178,7 @@ impl GroupsMessagingModule {
     /// Start a group chat session for an agent.
     ///
     /// Corresponds to `IMDialog::SessionGroupStart` / `Session911Start`.
-    pub fn handle_session_group_start(
-        &mut self,
-        agent_id: Uuid,
-        group_id: Uuid,
-    ) {
+    pub fn handle_session_group_start(&mut self, agent_id: Uuid, group_id: Uuid) {
         if !self.enabled {
             return;
         }
@@ -200,12 +194,7 @@ impl GroupsMessagingModule {
     ///
     /// Corresponds to `IMDialog::SessionSend`.  Returns the list of
     /// recipient agent IDs to fan the message out to.
-    pub fn handle_session_send(
-        &self,
-        agent_id: Uuid,
-        group_id: Uuid,
-        message: &str,
-    ) -> Vec<Uuid> {
+    pub fn handle_session_send(&self, agent_id: Uuid, group_id: Uuid, message: &str) -> Vec<Uuid> {
         if !self.enabled {
             return Vec::new();
         }
@@ -386,10 +375,8 @@ impl RegionModule for GroupsMessagingModule {
         }
 
         self.enabled = true;
-        self.message_online_only =
-            config.get_bool("Groups", "MessageOnlineUsersOnly", false);
-        self.online_cache_expiry_secs =
-            config.get_int("Groups", "OnlineCacheExpiry", 20) as u64;
+        self.message_online_only = config.get_bool("Groups", "MessageOnlineUsersOnly", false);
+        self.online_cache_expiry_secs = config.get_int("Groups", "OnlineCacheExpiry", 20) as u64;
 
         tracing::info!(
             online_only = self.message_online_only,
@@ -710,10 +697,7 @@ mod tests {
         assert_eq!(im.binary_bucket[1], 7);
         // Bucket should contain has_att(1) + type(1) + name + null(1)
         // + item_id(16) + owner_id(16).
-        assert_eq!(
-            im.binary_bucket.len(),
-            2 + att.name.len() + 1 + 16 + 16
-        );
+        assert_eq!(im.binary_bucket.len(), 2 + att.name.len() + 1 + 16 + 16);
     }
 
     // 15. Module name and type.

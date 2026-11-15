@@ -109,21 +109,11 @@ impl Default for GridRegion {
 /// Per-teleport context carried through the transfer pipeline.
 ///
 /// Mirrors the C# `EntityTransferContext` struct.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct EntityTransferContext {
     pub incoming_teleport_type: String,
     pub src_external_name: String,
     pub destination: Option<GridRegion>,
-}
-
-impl Default for EntityTransferContext {
-    fn default() -> Self {
-        Self {
-            incoming_teleport_type: String::new(),
-            src_external_name: String::new(),
-            destination: None,
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -168,10 +158,7 @@ impl AgentTransferState {
             ),
             Self::Transferring => matches!(
                 new_state,
-                Self::ReceivedAtDestination
-                    | Self::Cancelling
-                    | Self::CleaningUp
-                    | Self::Aborting
+                Self::ReceivedAtDestination | Self::Cancelling | Self::CleaningUp | Self::Aborting
             ),
             Self::Cancelling => matches!(new_state, Self::CleaningUp | Self::Aborting),
             Self::ReceivedAtDestination => {
@@ -422,16 +409,10 @@ impl RegionModule for EntityTransferModule {
     }
 
     fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
-        self.max_transfer_distance = config.get_float(
-            "EntityTransfer",
-            "max_transfer_distance",
-            4095.0,
-        ) as f32;
-        self.wait_for_agent_arrived_timeout_secs = config.get_int(
-            "EntityTransfer",
-            "wait_for_agent_arrived_timeout_secs",
-            15,
-        ) as u32;
+        self.max_transfer_distance =
+            config.get_float("EntityTransfer", "max_transfer_distance", 4095.0) as f32;
+        self.wait_for_agent_arrived_timeout_secs =
+            config.get_int("EntityTransfer", "wait_for_agent_arrived_timeout_secs", 15) as u32;
         tracing::info!(
             max_distance = self.max_transfer_distance,
             timeout = self.wait_for_agent_arrived_timeout_secs,

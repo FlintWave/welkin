@@ -164,8 +164,7 @@ impl ConciergeModule {
         }
 
         let count = agents.len();
-        let msg =
-            Self::substitute_message(&self.goodbye_message, avatar_name, region_name, count);
+        let msg = Self::substitute_message(&self.goodbye_message, avatar_name, region_name, count);
 
         // Broadcast the goodbye via the scene event bus.
         if let Some(ref scene) = self.scene {
@@ -187,10 +186,7 @@ impl ConciergeModule {
 
     /// Get the attendance count for an area.
     pub fn attendance_count(&self, area: &ConciergeArea) -> usize {
-        self.attendance
-            .get(area)
-            .map(|s| s.len())
-            .unwrap_or(0)
+        self.attendance.get(area).map(|s| s.len()).unwrap_or(0)
     }
 
     /// Get the set of agents in an area.
@@ -242,18 +238,11 @@ impl RegionModule for ConciergeModule {
 
     fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
         self.enabled = config.get_bool("Concierge", "enabled", false);
-        self.welcome_message = config.get_string(
-            "Concierge",
-            "welcome_message",
-            "Welcome to {1}, {0}!",
-        );
-        self.goodbye_message = config.get_string(
-            "Concierge",
-            "goodbye_message",
-            "{0} has left {1}.",
-        );
-        self.broker_url =
-            config.get_string("Concierge", "broker", "");
+        self.welcome_message =
+            config.get_string("Concierge", "welcome_message", "Welcome to {1}, {0}!");
+        self.goodbye_message =
+            config.get_string("Concierge", "goodbye_message", "{0} has left {1}.");
+        self.broker_url = config.get_string("Concierge", "broker", "");
         tracing::info!(
             enabled = self.enabled,
             broker = %self.broker_url,
@@ -463,9 +452,11 @@ mod tests {
 
         let area = ConciergeArea::Region(scene.region_id);
         let agent = Uuid::new_v4();
-        assert!(module
-            .on_avatar_enter(area, agent, "Ghost", "TestRegion")
-            .is_none());
+        assert!(
+            module
+                .on_avatar_enter(area, agent, "Ghost", "TestRegion")
+                .is_none()
+        );
     }
 
     // -- Test 8: parcel-level tracking ----------------------------------------

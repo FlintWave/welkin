@@ -13,7 +13,7 @@
 //! 6. Verify vehicle state globals are correct across the transfer.
 
 use welkin_script_vm::{
-    compile_source, restore_script_state, serialize_script_state, ScriptState, VmError,
+    ScriptState, VmError, compile_source, restore_script_state, serialize_script_state,
 };
 
 /// The vehicle script uses a checkpoint pattern to survive serialization.
@@ -51,14 +51,7 @@ return pos_x
 "#;
 
 /// Global names the vehicle script uses.
-const VEHICLE_GLOBALS: &[&str] = &[
-    "_checkpoint",
-    "pos_x",
-    "pos_y",
-    "vel_x",
-    "vel_y",
-    "heading",
-];
+const VEHICLE_GLOBALS: &[&str] = &["_checkpoint", "pos_x", "pos_y", "vel_x", "vel_y", "heading"];
 
 // ===================================================================
 // Main proof: vehicle crosses a region border
@@ -104,7 +97,10 @@ fn vehicle_crosses_region_border() -> Result<(), VmError> {
 
     // Verify the serialized state can round-trip through JSON
     let json_bytes = serde_json::to_vec(&saved).map_err(VmError::Serde)?;
-    assert!(!json_bytes.is_empty(), "serialized state should not be empty");
+    assert!(
+        !json_bytes.is_empty(),
+        "serialized state should not be empty"
+    );
 
     let restored_state: ScriptState =
         serde_json::from_slice(&json_bytes).map_err(VmError::Serde)?;
@@ -128,7 +124,10 @@ fn vehicle_crosses_region_border() -> Result<(), VmError> {
     );
 
     let vx2: f64 = lua2.globals().get("vel_x")?;
-    assert!((vx2 - 6.0).abs() < tolerance, "restored vel_x should be 6.0");
+    assert!(
+        (vx2 - 6.0).abs() < tolerance,
+        "restored vel_x should be 6.0"
+    );
 
     // Re-load bytecode and run from the top.
     // The script checks _checkpoint and skips phase 1, entering phase 2.
@@ -238,7 +237,10 @@ fn vehicle_multiple_ticks_then_transfer() -> Result<(), VmError> {
 
     // pos_x should be 128 + 5*3 = 143
     let px: f64 = lua1.globals().get("pos_x")?;
-    assert!((px - 143.0).abs() < tolerance, "after 3 ticks: expected 143.0, got {px}");
+    assert!(
+        (px - 143.0).abs() < tolerance,
+        "after 3 ticks: expected 143.0, got {px}"
+    );
 
     let tc: i64 = lua1.globals().get("tick_count")?;
     assert_eq!(tc, 3, "tick_count should be 3");
@@ -275,9 +277,9 @@ fn vehicle_multiple_ticks_then_transfer() -> Result<(), VmError> {
 
 #[test]
 fn vehicle_transfer_via_bundle() -> Result<(), VmError> {
-    use welkin_script_vm::{ScriptInstance, ScriptScheduler, RegionTransferBundle, ScriptEvent};
     use std::time::Duration;
     use uuid::Uuid;
+    use welkin_script_vm::{RegionTransferBundle, ScriptEvent, ScriptInstance, ScriptScheduler};
 
     // -- Source region --
     let source_script = r#"
@@ -313,7 +315,11 @@ fn vehicle_transfer_via_bundle() -> Result<(), VmError> {
     // -- Extract transfer bundle --
     let bundle = RegionTransferBundle::from_scheduler(&mut sched_a, &[sid], region_a)?;
     assert_eq!(bundle.script_states.len(), 1);
-    assert_eq!(sched_a.script_count(), 0, "source should have no scripts after transfer");
+    assert_eq!(
+        sched_a.script_count(),
+        0,
+        "source should have no scripts after transfer"
+    );
 
     // -- Serialize / deserialize the bundle (simulating network transfer) --
     let bytes = bundle.serialize_to_bytes()?;
@@ -370,11 +376,13 @@ fn vehicle_preserves_mixed_types() -> Result<(), VmError> {
 
     // Verify nested table (passengers list) survived
     let count: i64 = lua2
-        .load(r#"
+        .load(
+            r#"
             local c = 0
             for _ in ipairs(passengers) do c = c + 1 end
             return c
-        "#)
+        "#,
+        )
         .eval()?;
     assert_eq!(count, 2, "passengers list should have 2 entries");
 

@@ -125,14 +125,11 @@ impl BasicProfileModule {
 
     /// Handle `AvatarPropertiesRequest` — return properties for a user.
     pub fn request_avatar_properties(&self, avatar_id: Uuid) -> AvatarProperties {
-        self.profiles
-            .get(&avatar_id)
-            .cloned()
-            .unwrap_or_else(|| {
-                let mut p = AvatarProperties::default();
-                p.user_id = avatar_id;
-                p
-            })
+        self.profiles.get(&avatar_id).cloned().unwrap_or_else(|| {
+            let mut p = AvatarProperties::default();
+            p.user_id = avatar_id;
+            p
+        })
     }
 
     /// Handle `AvatarPropertiesUpdate` — update a user's profile properties.
@@ -172,8 +169,7 @@ impl BasicProfileModule {
 
     /// Store or update a note that `user_id` writes about `target_id`.
     pub fn update_note(&mut self, user_id: Uuid, target_id: Uuid, notes: &str) {
-        self.notes
-            .insert((user_id, target_id), notes.to_string());
+        self.notes.insert((user_id, target_id), notes.to_string());
     }
 
     // ---- Picks -------------------------------------------------------------
@@ -213,7 +209,10 @@ impl BasicProfileModule {
     /// Add or update a classified.
     pub fn update_classified(&mut self, user_id: Uuid, classified: ClassifiedSummary) {
         let list = self.classifieds.entry(user_id).or_default();
-        if let Some(existing) = list.iter_mut().find(|c| c.classified_id == classified.classified_id) {
+        if let Some(existing) = list
+            .iter_mut()
+            .find(|c| c.classified_id == classified.classified_id)
+        {
             existing.name = classified.name;
         } else {
             list.push(classified);
@@ -250,8 +249,8 @@ impl RegionModule for BasicProfileModule {
         // C# enables BasicProfileModule when there is NO [UserProfiles] config
         // section, meaning the full profile service is not configured.
         let profiles_url = config.get_string("UserProfiles", "ProfileServiceURL", "");
-        self.enabled = profiles_url.is_empty()
-            || config.get_bool("UserProfiles", "EnableBasicProfile", true);
+        self.enabled =
+            profiles_url.is_empty() || config.get_bool("UserProfiles", "EnableBasicProfile", true);
 
         tracing::info!(enabled = self.enabled, "BasicProfileModule initialised");
         Ok(())
@@ -433,18 +432,24 @@ mod tests {
 
         assert!(module.get_picks(user).is_empty());
 
-        module.update_pick(user, PickSummary {
-            pick_id,
-            name: "My Spot".to_string(),
-        });
+        module.update_pick(
+            user,
+            PickSummary {
+                pick_id,
+                name: "My Spot".to_string(),
+            },
+        );
         assert_eq!(module.get_picks(user).len(), 1);
         assert_eq!(module.get_picks(user)[0].name, "My Spot");
 
         // Update existing pick.
-        module.update_pick(user, PickSummary {
-            pick_id,
-            name: "My Updated Spot".to_string(),
-        });
+        module.update_pick(
+            user,
+            PickSummary {
+                pick_id,
+                name: "My Updated Spot".to_string(),
+            },
+        );
         assert_eq!(module.get_picks(user).len(), 1);
         assert_eq!(module.get_picks(user)[0].name, "My Updated Spot");
 
@@ -464,10 +469,13 @@ mod tests {
         let user = Uuid::new_v4();
         let cid = Uuid::new_v4();
 
-        module.update_classified(user, ClassifiedSummary {
-            classified_id: cid,
-            name: "For Sale".to_string(),
-        });
+        module.update_classified(
+            user,
+            ClassifiedSummary {
+                classified_id: cid,
+                name: "For Sale".to_string(),
+            },
+        );
         assert_eq!(module.get_classifieds(user).len(), 1);
 
         assert!(module.delete_classified(user, cid));

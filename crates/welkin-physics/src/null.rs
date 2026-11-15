@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use glam::{Quat, Vec3};
 
-use crate::{ActorType, ContactResult, PidHoverType, PhysicsActor, PhysicsScene, RayFilterFlags};
+use crate::{ActorType, ContactResult, PhysicsActor, PhysicsScene, PidHoverType, RayFilterFlags};
 
 pub struct NullActor {
     local_id: u32,

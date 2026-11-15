@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 use std::sync::{Arc, Mutex};
 
-use axum::routing::{delete, get, post};
 use axum::Router;
+use axum::routing::{delete, get, post};
 
 pub mod audit;
 pub mod auth;
@@ -10,10 +10,10 @@ pub mod content;
 pub mod error;
 pub mod map;
 pub mod pages;
+pub mod people;
 pub mod region_control;
 pub mod roles;
 pub mod sessions;
-pub mod people;
 pub mod wizard;
 
 use audit::AuditLog;

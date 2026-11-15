@@ -6,7 +6,7 @@ use glam::{Quat, Vec3};
 use uuid::Uuid;
 
 use welkin_scene::group::SceneObjectGroup;
-use welkin_scene::part::{PartColor, PrimFlags, PrimShape, SceneObjectPart};
+use welkin_scene::part::{PartColor, PrimFlags, SceneObjectPart};
 use welkin_scene::xml2::{deserialize_group, serialize_group};
 
 // ---------------------------------------------------------------------------
@@ -615,10 +615,7 @@ fn deserialize_csharp_linked_object() {
     assert_eq!(group.uuid(), root_uuid);
     assert_eq!(group.part_count(), 2);
     assert_eq!(group.root_part().name, "Linked Root");
-    assert!(vec3_close(
-        group.position(),
-        Vec3::new(50.0, 60.0, 70.0)
-    ));
+    assert!(vec3_close(group.position(), Vec3::new(50.0, 60.0, 70.0)));
 
     let child = group.get_part(&child_uuid).expect("child should exist");
     assert_eq!(child.name, "Linked Child");
@@ -673,7 +670,10 @@ fn identity_rotation_roundtrip() {
     let xml = serialize_group(&group).unwrap();
     let restored = deserialize_group(&xml).unwrap();
 
-    assert!(quat_close(restored.root_part().rotation_offset, Quat::IDENTITY));
+    assert!(quat_close(
+        restored.root_part().rotation_offset,
+        Quat::IDENTITY
+    ));
 }
 
 #[test]
@@ -798,8 +798,7 @@ fn sculpt_params_roundtrip() {
     let mut part = SceneObjectPart::new("SculptPrim", owner);
     part.shape.sculpt_entry = true;
     part.shape.sculpt_type = 5; // mesh
-    part.shape.sculpt_texture =
-        Uuid::parse_str("deadbeef-dead-beef-dead-beefdeadbeef").unwrap();
+    part.shape.sculpt_texture = Uuid::parse_str("deadbeef-dead-beef-dead-beefdeadbeef").unwrap();
     let group = SceneObjectGroup::new(part);
 
     let xml = serialize_group(&group).unwrap();
@@ -895,7 +894,8 @@ fn flags_all_common_combinations() {
         let xml = serialize_group(&group).unwrap();
         let restored = deserialize_group(&xml).unwrap();
         assert_eq!(
-            restored.root_part().flags, flags,
+            restored.root_part().flags,
+            flags,
             "flags mismatch for {:?}",
             flags
         );
@@ -924,7 +924,10 @@ fn permissions_roundtrip() {
     let rp = restored.root_part();
     assert_eq!(rp.base_mask, PermissionMask::ALL);
     assert_eq!(rp.owner_mask, PermissionMask::ALL);
-    assert_eq!(rp.group_mask, PermissionMask::from_bits_truncate(0x0008_0000));
+    assert_eq!(
+        rp.group_mask,
+        PermissionMask::from_bits_truncate(0x0008_0000)
+    );
     assert_eq!(rp.everyone_mask, PermissionMask::NONE);
     assert_eq!(
         rp.next_owner_mask,
@@ -1200,8 +1203,5 @@ fn particle_system_roundtrip() {
 
     let xml = serialize_group(&group).unwrap();
     let restored = deserialize_group(&xml).unwrap();
-    assert_eq!(
-        restored.root_part().particle_system,
-        vec![0xAA, 0xBB, 0xCC]
-    );
+    assert_eq!(restored.root_part().particle_system, vec![0xAA, 0xBB, 0xCC]);
 }

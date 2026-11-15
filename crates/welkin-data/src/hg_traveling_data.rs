@@ -78,10 +78,7 @@ impl HgTravelingDataStore {
         Ok(row)
     }
 
-    pub async fn get_by_user(
-        &self,
-        user_id: &str,
-    ) -> Result<Vec<HgTravelingDataRow>, DataError> {
+    pub async fn get_by_user(&self, user_id: &str) -> Result<Vec<HgTravelingDataRow>, DataError> {
         let rows = sqlx::query_as::<_, HgTravelingDataRow>(
             "SELECT SessionID, UserID, GridExternalName, ServiceToken, ClientIPAddress \
              FROM hg_traveling_data WHERE UserID = $1",
@@ -158,7 +155,10 @@ mod tests {
 
         assert_eq!(fetched.session_id, "sess-1");
         assert_eq!(fetched.user_id, "user-1");
-        assert_eq!(fetched.grid_external_name, "http://other-grid.example:9000/");
+        assert_eq!(
+            fetched.grid_external_name,
+            "http://other-grid.example:9000/"
+        );
         assert_eq!(
             fetched.service_token,
             "http://other-grid.example:9000/;some-token"
@@ -190,7 +190,10 @@ mod tests {
     #[tokio::test]
     async fn test_delete() {
         let store = setup().await;
-        store.store(&sample_row("sess-del", "user-1")).await.unwrap();
+        store
+            .store(&sample_row("sess-del", "user-1"))
+            .await
+            .unwrap();
         assert!(store.delete("sess-del").await.unwrap());
         assert!(store.get_by_session("sess-del").await.unwrap().is_none());
         // Deleting a non-existent row returns false.

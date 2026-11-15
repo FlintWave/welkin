@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use welkin_msg::build_raw;
-use welkin_msg::{Msg, PacketFlags, Writer};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
+use welkin_msg::build_raw;
+use welkin_msg::{Msg, PacketFlags, Writer};
 
 const MAX_RESENDS: u8 = 4;
 const DEDUPE_WINDOW: usize = 2048;
@@ -71,12 +71,7 @@ impl Circuit {
         seq
     }
 
-    pub fn send_raw(
-        &mut self,
-        payload: &[u8],
-        zerocoded: bool,
-        reliable: bool,
-    ) -> (Vec<u8>, u32) {
+    pub fn send_raw(&mut self, payload: &[u8], zerocoded: bool, reliable: bool) -> (Vec<u8>, u32) {
         let seq = self.next_sequence();
         let mut out = std::mem::take(&mut self.buf);
         let n = build_raw(
@@ -142,10 +137,10 @@ impl Circuit {
             return;
         }
 
-        if self.recent.len() >= DEDUPE_WINDOW {
-            if let Some(old) = self.recent.pop_front() {
-                self.recent_set.remove(&old);
-            }
+        if self.recent.len() >= DEDUPE_WINDOW
+            && let Some(old) = self.recent.pop_front()
+        {
+            self.recent_set.remove(&old);
         }
 
         self.recent.push_back(seq);
@@ -265,13 +260,13 @@ impl Circuit {
     }
 
     pub fn on_ping_reply(&mut self, id: u8) -> Option<Duration> {
-        if let Some((pid, at)) = self.ping_sent {
-            if pid == id {
-                let rtt = at.elapsed();
-                self.rtt = (self.rtt * 7 + rtt) / 8;
-                self.ping_sent = None;
-                return Some(rtt);
-            }
+        if let Some((pid, at)) = self.ping_sent
+            && pid == id
+        {
+            let rtt = at.elapsed();
+            self.rtt = (self.rtt * 7 + rtt) / 8;
+            self.ping_sent = None;
+            return Some(rtt);
         }
         None
     }
@@ -315,11 +310,7 @@ mod tests {
     fn test_duplicate_detection() {
         let mut c = Circuit::new("127.0.0.1:8000".parse().unwrap());
         c.accept(PacketFlags::RELIABLE, 5);
-        assert!(!c.on_receive(
-            PacketFlags::RESENT | PacketFlags::RELIABLE,
-            5,
-            &[]
-        ));
+        assert!(!c.on_receive(PacketFlags::RESENT | PacketFlags::RELIABLE, 5, &[]));
     }
 
     #[test]

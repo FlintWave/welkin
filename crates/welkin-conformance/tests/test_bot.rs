@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use aurora_llsd::{Llsd, llsd_map};
-use aurora_msg::{parse_packet, Msg};
+use aurora_msg::{Msg, parse_packet};
 use aurora_net::circuit::{Circuit, Resend};
 use aurora_net::stats::NetStats;
 use bytes::Bytes;
@@ -61,8 +61,8 @@ async fn test_bot_circuit_handshake() {
 #[tokio::test]
 #[ignore]
 async fn test_bot_login_handshake() {
-    let login_uri = std::env::var("OPENSIM_LOGIN_URI")
-        .unwrap_or_else(|_| "http://127.0.0.1:9100".to_string());
+    let login_uri =
+        std::env::var("OPENSIM_LOGIN_URI").unwrap_or_else(|_| "http://127.0.0.1:9100".to_string());
 
     let params = llsd_map! {
         "first" => "Foo",
@@ -77,15 +77,11 @@ async fn test_bot_login_handshake() {
         "options" => Llsd::Array(vec![])
     };
 
-    let xml_body = welkin_llsd::xmlrpc::build_call(
-        "login_to_simulator",
-        std::slice::from_ref(&params),
-    );
+    let xml_body =
+        welkin_llsd::xmlrpc::build_call("login_to_simulator", std::slice::from_ref(&params));
 
-    let client = hyper_util::client::legacy::Client::builder(
-        hyper_util::rt::TokioExecutor::new(),
-    )
-    .build_http();
+    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
+        .build_http();
     let req = hyper::Request::builder()
         .method(hyper::Method::POST)
         .uri(&login_uri)
@@ -95,8 +91,7 @@ async fn test_bot_login_handshake() {
     let resp = client.request(req).await.expect("login HTTP failed");
     let body_bytes = resp.into_body().collect().await.unwrap().to_bytes();
 
-    let login_result =
-        welkin_llsd::xmlrpc::parse_response(&body_bytes).expect("login failed");
+    let login_result = welkin_llsd::xmlrpc::parse_response(&body_bytes).expect("login failed");
 
     assert_eq!(login_result["login"].as_str(), "true", "login rejected");
 
@@ -128,8 +123,7 @@ async fn test_bot_login_handshake() {
         let mut got_complete = false;
 
         loop {
-            match tokio::time::timeout(Duration::from_secs(2), sock.recv_from(&mut recv_buf))
-                .await
+            match tokio::time::timeout(Duration::from_secs(2), sock.recv_from(&mut recv_buf)).await
             {
                 Ok(Ok((n, _from))) => {
                     if let Ok(pkt) = parse_packet(&recv_buf[..n]) {
@@ -138,9 +132,7 @@ async fn test_bot_login_handshake() {
                             circuit.accept(pkt.flags, pkt.sequence);
                         }
 
-                        if pkt.id
-                            == <aurora_msg::msgs::AgentMovementComplete as Msg>::ID
-                        {
+                        if pkt.id == <aurora_msg::msgs::AgentMovementComplete as Msg>::ID {
                             got_complete = true;
                             break;
                         }
@@ -149,19 +141,13 @@ async fn test_bot_login_handshake() {
                     if !sent_complete && circuit.unacked_count() == 0 {
                         sent_complete = true;
                         let complete_msg = aurora_msg::msgs::CompleteAgentMovement {
-                            agent_data:
-                                aurora_msg::msgs::complete_agent_movement::AgentData {
-                                    agent_id,
-                                    session_id,
-                                    circuit_code,
-                                },
+                            agent_data: aurora_msg::msgs::complete_agent_movement::AgentData {
+                                agent_id,
+                                session_id,
+                                circuit_code,
+                            },
                         };
-                        circuit.send_reliable_with(
-                            &sock,
-                            &stats,
-                            &complete_msg,
-                            Resend::DEFAULT,
-                        );
+                        circuit.send_reliable_with(&sock, &stats, &complete_msg, Resend::DEFAULT);
                     }
                 }
                 _ => break,

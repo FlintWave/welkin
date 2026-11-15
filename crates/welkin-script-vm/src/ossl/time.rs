@@ -7,8 +7,8 @@ use chrono::{DateTime, FixedOffset, TimeZone, Timelike, Utc};
 use mlua::prelude::*;
 use parking_lot::RwLock;
 
-use crate::builtins::ScriptContext;
 use super::{OsslFunc, OsslThreatLevel};
+use crate::builtins::ScriptContext;
 
 pub(crate) fn time_functions() -> Vec<OsslFunc> {
     vec![
@@ -68,11 +68,9 @@ fn register_os_unix_time_to_timestamp(
     lua: &Lua,
     _ctx: &Arc<RwLock<ScriptContext>>,
 ) -> LuaResult<()> {
-    let f = lua.create_function(|_, epoch: i64| {
-        match DateTime::from_timestamp(epoch, 0) {
-            Some(dt) => Ok(dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
-            None => Ok(String::new()),
-        }
+    let f = lua.create_function(|_, epoch: i64| match DateTime::from_timestamp(epoch, 0) {
+        Some(dt) => Ok(dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+        None => Ok(String::new()),
     })?;
     lua.globals().set("osUnixTimeToTimestamp", f)
 }
@@ -81,10 +79,7 @@ fn register_os_unix_time_to_timestamp(
 // osGetPSTWallclock — seconds since midnight PST
 // ---------------------------------------------------------------------------
 
-fn register_os_get_pst_wallclock(
-    lua: &Lua,
-    _ctx: &Arc<RwLock<ScriptContext>>,
-) -> LuaResult<()> {
+fn register_os_get_pst_wallclock(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(|_, ()| {
         let now_pst = Utc::now().with_timezone(&pst_offset());
         Ok(seconds_since_midnight(&now_pst))
@@ -96,10 +91,7 @@ fn register_os_get_pst_wallclock(
 // osGetApparentTime / osGetApparentTimeString
 // ---------------------------------------------------------------------------
 
-fn register_os_get_apparent_time(
-    lua: &Lua,
-    _ctx: &Arc<RwLock<ScriptContext>>,
-) -> LuaResult<()> {
+fn register_os_get_apparent_time(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(|_, ()| {
         let now = Utc::now();
         Ok(seconds_since_midnight(&now))
@@ -179,10 +171,7 @@ mod tests {
     #[test]
     fn test_unix_time_to_timestamp() {
         let lua = make_time_vm();
-        let r: String = lua
-            .load("return osUnixTimeToTimestamp(0)")
-            .eval()
-            .unwrap();
+        let r: String = lua.load("return osUnixTimeToTimestamp(0)").eval().unwrap();
         assert_eq!(r, "1970-01-01T00:00:00Z");
     }
 
@@ -200,31 +189,22 @@ mod tests {
     #[test]
     fn test_pst_wallclock_returns_number() {
         let lua = make_time_vm();
-        let r: f64 = lua
-            .load("return osGetPSTWallclock()")
-            .eval()
-            .unwrap();
+        let r: f64 = lua.load("return osGetPSTWallclock()").eval().unwrap();
         // Should be between 0 and 86400 (seconds in a day)
-        assert!(r >= 0.0 && r < 86400.0);
+        assert!((0.0..86400.0).contains(&r));
     }
 
     #[test]
     fn test_apparent_time_returns_number() {
         let lua = make_time_vm();
-        let r: f64 = lua
-            .load("return osGetApparentTime()")
-            .eval()
-            .unwrap();
-        assert!(r >= 0.0 && r < 86400.0);
+        let r: f64 = lua.load("return osGetApparentTime()").eval().unwrap();
+        assert!((0.0..86400.0).contains(&r));
     }
 
     #[test]
     fn test_apparent_time_string_format() {
         let lua = make_time_vm();
-        let r: String = lua
-            .load("return osGetApparentTimeString()")
-            .eval()
-            .unwrap();
+        let r: String = lua.load("return osGetApparentTimeString()").eval().unwrap();
         // Should match HH:MM:SS format
         assert_eq!(r.len(), 8);
         assert_eq!(r.chars().nth(2), Some(':'));

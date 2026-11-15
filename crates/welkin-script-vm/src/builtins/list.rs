@@ -23,7 +23,13 @@ fn value_to_string(v: &LuaValue) -> String {
             format!("{n:.6}")
         }
         LuaValue::String(s) => s.to_string_lossy().to_string(),
-        LuaValue::Boolean(b) => if *b { "1".to_string() } else { "0".to_string() },
+        LuaValue::Boolean(b) => {
+            if *b {
+                "1".to_string()
+            } else {
+                "0".to_string()
+            }
+        }
         LuaValue::Nil => String::new(),
         _ => String::new(),
     }
@@ -48,7 +54,7 @@ fn collect_numbers(list: &LuaTable) -> Vec<f64> {
 /// Collect all values from a Lua table into a Vec.
 fn collect_values(list: &LuaTable) -> Vec<LuaValue> {
     let len = list.raw_len();
-    let mut vals = Vec::with_capacity(len as usize);
+    let mut vals = Vec::with_capacity(len);
     for i in 1..=len {
         if let Ok(v) = list.raw_get::<LuaValue>(i) {
             vals.push(v);
@@ -62,9 +68,7 @@ pub fn register_list(lua: &Lua) -> Result<(), crate::VmError> {
     let globals = lua.globals();
 
     // llGetListLength
-    let f = lua.create_function(|_, list: LuaTable| {
-        Ok(list.raw_len() as i64)
-    })?;
+    let f = lua.create_function(|_, list: LuaTable| Ok(list.raw_len() as i64))?;
     globals.set("llGetListLength", f)?;
 
     // llList2Integer
@@ -76,9 +80,7 @@ pub fn register_list(lua: &Lua) -> Result<(), crate::VmError> {
                 match v {
                     LuaValue::Integer(n) => Ok(n),
                     LuaValue::Number(n) => Ok(n as i64),
-                    LuaValue::String(s) => {
-                        Ok(s.to_string_lossy().parse::<i64>().unwrap_or(0))
-                    }
+                    LuaValue::String(s) => Ok(s.to_string_lossy().parse::<i64>().unwrap_or(0)),
                     _ => Ok(0),
                 }
             }
@@ -96,9 +98,7 @@ pub fn register_list(lua: &Lua) -> Result<(), crate::VmError> {
                 match v {
                     LuaValue::Integer(n) => Ok(n as f64),
                     LuaValue::Number(n) => Ok(n),
-                    LuaValue::String(s) => {
-                        Ok(s.to_string_lossy().parse::<f64>().unwrap_or(0.0))
-                    }
+                    LuaValue::String(s) => Ok(s.to_string_lossy().parse::<f64>().unwrap_or(0.0)),
                     _ => Ok(0.0),
                 }
             }
@@ -223,22 +223,18 @@ pub fn register_list(lua: &Lua) -> Result<(), crate::VmError> {
                     (LuaValue::Number(x), LuaValue::Number(y)) => {
                         x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal)
                     }
-                    (LuaValue::Integer(x), LuaValue::Number(y)) => {
-                        (*x as f64).partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal)
-                    }
-                    (LuaValue::Number(x), LuaValue::Integer(y)) => {
-                        x.partial_cmp(&(*y as f64)).unwrap_or(std::cmp::Ordering::Equal)
-                    }
+                    (LuaValue::Integer(x), LuaValue::Number(y)) => (*x as f64)
+                        .partial_cmp(y)
+                        .unwrap_or(std::cmp::Ordering::Equal),
+                    (LuaValue::Number(x), LuaValue::Integer(y)) => x
+                        .partial_cmp(&(*y as f64))
+                        .unwrap_or(std::cmp::Ordering::Equal),
                     (LuaValue::String(x), LuaValue::String(y)) => {
                         Ord::cmp(x.as_bytes().as_ref(), y.as_bytes().as_ref())
                     }
                     // Numbers before strings
-                    (LuaValue::Integer(_) | LuaValue::Number(_), _) => {
-                        std::cmp::Ordering::Less
-                    }
-                    (_, LuaValue::Integer(_) | LuaValue::Number(_)) => {
-                        std::cmp::Ordering::Greater
-                    }
+                    (LuaValue::Integer(_) | LuaValue::Number(_), _) => std::cmp::Ordering::Less,
+                    (_, LuaValue::Integer(_) | LuaValue::Number(_)) => std::cmp::Ordering::Greater,
                     _ => std::cmp::Ordering::Equal,
                 };
                 if asc { ord } else { ord.reverse() }
@@ -272,21 +268,17 @@ pub fn register_list(lua: &Lua) -> Result<(), crate::VmError> {
                     (LuaValue::Number(x), LuaValue::Number(y)) => {
                         x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal)
                     }
-                    (LuaValue::Integer(x), LuaValue::Number(y)) => {
-                        (*x as f64).partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal)
-                    }
-                    (LuaValue::Number(x), LuaValue::Integer(y)) => {
-                        x.partial_cmp(&(*y as f64)).unwrap_or(std::cmp::Ordering::Equal)
-                    }
+                    (LuaValue::Integer(x), LuaValue::Number(y)) => (*x as f64)
+                        .partial_cmp(y)
+                        .unwrap_or(std::cmp::Ordering::Equal),
+                    (LuaValue::Number(x), LuaValue::Integer(y)) => x
+                        .partial_cmp(&(*y as f64))
+                        .unwrap_or(std::cmp::Ordering::Equal),
                     (LuaValue::String(x), LuaValue::String(y)) => {
                         Ord::cmp(x.as_bytes().as_ref(), y.as_bytes().as_ref())
                     }
-                    (LuaValue::Integer(_) | LuaValue::Number(_), _) => {
-                        std::cmp::Ordering::Less
-                    }
-                    (_, LuaValue::Integer(_) | LuaValue::Number(_)) => {
-                        std::cmp::Ordering::Greater
-                    }
+                    (LuaValue::Integer(_) | LuaValue::Number(_), _) => std::cmp::Ordering::Less,
+                    (_, LuaValue::Integer(_) | LuaValue::Number(_)) => std::cmp::Ordering::Greater,
                     _ => std::cmp::Ordering::Equal,
                 };
                 if asc { ord } else { ord.reverse() }
@@ -339,7 +331,11 @@ pub fn register_list(lua: &Lua) -> Result<(), crate::VmError> {
         if len == 0 {
             return lua.create_table();
         }
-        let s = if start < 0 { (len + start).max(0) } else { start.min(len - 1) } as usize;
+        let s = if start < 0 {
+            (len + start).max(0)
+        } else {
+            start.min(len - 1)
+        } as usize;
         let e = if end_idx < 0 {
             (len + end_idx).max(0)
         } else {
@@ -382,10 +378,12 @@ pub fn register_list(lua: &Lua) -> Result<(), crate::VmError> {
                     LuaValue::Number(_) => 2,
                     LuaValue::String(_) => 3,
                     LuaValue::Table(t) => {
-                        let has_w: bool = t.get::<LuaValue>("w")
+                        let has_w: bool = t
+                            .get::<LuaValue>("w")
                             .map(|v| !matches!(v, LuaValue::Nil))
                             .unwrap_or(false);
-                        let has_xyz = t.get::<LuaValue>("x")
+                        let has_xyz = t
+                            .get::<LuaValue>("x")
                             .map(|v| !matches!(v, LuaValue::Nil))
                             .unwrap_or(false)
                             && t.get::<LuaValue>("y")
@@ -424,7 +422,7 @@ pub fn register_list(lua: &Lua) -> Result<(), crate::VmError> {
     // llList2CSV — join elements with ", "
     let f = lua.create_function(|_, list: LuaTable| {
         let len = list.raw_len();
-        let mut parts = Vec::with_capacity(len as usize);
+        let mut parts = Vec::with_capacity(len);
         for i in 1..=len {
             let v: LuaValue = list.raw_get(i as i64)?;
             parts.push(value_to_string(&v));
@@ -434,40 +432,38 @@ pub fn register_list(lua: &Lua) -> Result<(), crate::VmError> {
     globals.set("llList2CSV", f)?;
 
     // llListInsertList — insert src into dest at pos (0-based)
-    let f = lua.create_function(
-        |lua, (dest, src, pos): (LuaTable, LuaTable, i64)| {
-            let d = collect_values(&dest);
-            let s = collect_values(&src);
-            let len = d.len() as i64;
-            // Clamp pos to [0, len]
-            let insert_at = if pos < 0 {
-                (len + pos).max(0) as usize
-            } else {
-                (pos as usize).min(d.len())
-            };
+    let f = lua.create_function(|lua, (dest, src, pos): (LuaTable, LuaTable, i64)| {
+        let d = collect_values(&dest);
+        let s = collect_values(&src);
+        let len = d.len() as i64;
+        // Clamp pos to [0, len]
+        let insert_at = if pos < 0 {
+            (len + pos).max(0) as usize
+        } else {
+            (pos as usize).min(d.len())
+        };
 
-            let result = lua.create_table()?;
-            let mut idx = 1i64;
-            for (i, v) in d.into_iter().enumerate() {
-                if i == insert_at {
-                    for sv in &s {
-                        result.raw_set(idx, sv.clone())?;
-                        idx += 1;
-                    }
-                }
-                result.raw_set(idx, v)?;
-                idx += 1;
-            }
-            // If insert_at == original len, append at end
-            if insert_at >= (len as usize) {
-                for sv in s {
-                    result.raw_set(idx, sv)?;
+        let result = lua.create_table()?;
+        let mut idx = 1i64;
+        for (i, v) in d.into_iter().enumerate() {
+            if i == insert_at {
+                for sv in &s {
+                    result.raw_set(idx, sv.clone())?;
                     idx += 1;
                 }
             }
-            Ok(result)
-        },
-    )?;
+            result.raw_set(idx, v)?;
+            idx += 1;
+        }
+        // If insert_at == original len, append at end
+        if insert_at >= (len as usize) {
+            for sv in s {
+                result.raw_set(idx, sv)?;
+                idx += 1;
+            }
+        }
+        Ok(result)
+    })?;
     globals.set("llListInsertList", f)?;
 
     // llListStatistics — compute statistics on numeric elements
@@ -501,7 +497,7 @@ pub fn register_list(lua: &Lua) -> Result<(), crate::VmError> {
                 let mut sorted = nums.clone();
                 sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
                 let mid = sorted.len() / 2;
-                if sorted.len() % 2 == 0 {
+                if sorted.len().is_multiple_of(2) {
                     (sorted[mid - 1] + sorted[mid]) / 2.0
                 } else {
                     sorted[mid]
@@ -567,7 +563,10 @@ mod tests {
     #[test]
     fn test_get_list_length() {
         let lua = setup();
-        let result: i64 = lua.load("return llGetListLength({10, 20, 30})").eval().unwrap();
+        let result: i64 = lua
+            .load("return llGetListLength({10, 20, 30})")
+            .eval()
+            .unwrap();
         assert_eq!(result, 3);
     }
 
@@ -581,28 +580,40 @@ mod tests {
     #[test]
     fn test_list2_integer() {
         let lua = setup();
-        let result: i64 = lua.load("return llList2Integer({10, 20, 30}, 1)").eval().unwrap();
+        let result: i64 = lua
+            .load("return llList2Integer({10, 20, 30}, 1)")
+            .eval()
+            .unwrap();
         assert_eq!(result, 20);
     }
 
     #[test]
     fn test_list2_integer_negative_index() {
         let lua = setup();
-        let result: i64 = lua.load("return llList2Integer({10, 20, 30}, -1)").eval().unwrap();
+        let result: i64 = lua
+            .load("return llList2Integer({10, 20, 30}, -1)")
+            .eval()
+            .unwrap();
         assert_eq!(result, 30);
     }
 
     #[test]
     fn test_list2_integer_out_of_bounds() {
         let lua = setup();
-        let result: i64 = lua.load("return llList2Integer({10, 20}, 5)").eval().unwrap();
+        let result: i64 = lua
+            .load("return llList2Integer({10, 20}, 5)")
+            .eval()
+            .unwrap();
         assert_eq!(result, 0);
     }
 
     #[test]
     fn test_list2_float() {
         let lua = setup();
-        let result: f64 = lua.load("return llList2Float({1.5, 2.5, 3.5}, 0)").eval().unwrap();
+        let result: f64 = lua
+            .load("return llList2Float({1.5, 2.5, 3.5}, 0)")
+            .eval()
+            .unwrap();
         assert!((result - 1.5).abs() < f64::EPSILON);
     }
 

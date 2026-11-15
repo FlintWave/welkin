@@ -163,8 +163,7 @@ impl KeyframeMotion {
             self.current_frame = None;
             self.current_velocity = Vec3::ZERO;
 
-            let can_loop =
-                self.mode == PlayMode::Loop || self.mode == PlayMode::PingPong;
+            let can_loop = self.mode == PlayMode::Loop || self.mode == PlayMode::PingPong;
 
             if can_loop {
                 return KeyframeResult {
@@ -190,7 +189,10 @@ impl KeyframeMotion {
 
         let completed =
             (frame.time_total_ms - frame.time_remaining_ms) as f32 / frame.time_total_ms as f32;
-        let new_rot = frame.start_rotation.slerp(frame.target_rotation, completed).normalize();
+        let new_rot = frame
+            .start_rotation
+            .slerp(frame.target_rotation, completed)
+            .normalize();
 
         KeyframeResult {
             position: new_pos,
@@ -203,9 +205,8 @@ impl KeyframeMotion {
     fn build_frame_list(&mut self) {
         self.frames.clear();
 
-        let can_repeat = self.mode == PlayMode::Loop
-            || self.mode == PlayMode::PingPong
-            || self.iterations == 0;
+        let can_repeat =
+            self.mode == PlayMode::Loop || self.mode == PlayMode::PingPong || self.iterations == 0;
 
         if !can_repeat {
             return;

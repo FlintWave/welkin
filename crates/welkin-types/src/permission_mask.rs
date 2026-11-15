@@ -102,7 +102,9 @@ mod tests {
         let folded = full.fold();
         assert_eq!(
             folded,
-            PermissionMask::FOLDED_COPY | PermissionMask::FOLDED_MODIFY | PermissionMask::FOLDED_TRANSFER
+            PermissionMask::FOLDED_COPY
+                | PermissionMask::FOLDED_MODIFY
+                | PermissionMask::FOLDED_TRANSFER
         );
         assert_eq!(folded.unfold(), full);
     }

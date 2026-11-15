@@ -23,14 +23,7 @@ impl Default for MoveToTarget {
 }
 
 impl MoveToTarget {
-    pub fn step(
-        &self,
-        position: Vec3,
-        velocity: Vec3,
-        gravity: Vec3,
-        mass: f32,
-        dt: f32,
-    ) -> Vec3 {
+    pub fn step(&self, position: Vec3, velocity: Vec3, gravity: Vec3, mass: f32, dt: f32) -> Vec3 {
         if !self.active || self.tau <= 0.0 || dt <= 0.0 {
             return Vec3::ZERO;
         }

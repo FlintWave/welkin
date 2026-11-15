@@ -21,7 +21,10 @@ pub struct EstateServiceState {
 pub fn router(state: EstateServiceState) -> Router {
     Router::new()
         .route("/estates", get(handle_estates_get))
-        .route("/estates/estate/", get(handle_estate_get).post(handle_estate_post))
+        .route(
+            "/estates/estate/",
+            get(handle_estate_get).post(handle_estate_post),
+        )
         .route("/estates/regions/", get(handle_regions_get))
         .with_state(state)
 }
@@ -94,7 +97,11 @@ fn ban_to_xml(name: &str, ban: &EstateBanRow) -> String {
     tag(&mut s, "BannedUserID", &ban.banned_uuid);
     tag(&mut s, "BannedHostAddress", &ban.banned_ip);
     tag(&mut s, "BannedHostIPMask", &ban.banned_ip_host_mask);
-    tag(&mut s, "BannedHostNameMask", ban.banned_name_mask.as_deref().unwrap_or(""));
+    tag(
+        &mut s,
+        "BannedHostNameMask",
+        ban.banned_name_mask.as_deref().unwrap_or(""),
+    );
     tag(&mut s, "BanningUserID", &ban.banning_uuid);
     tag(&mut s, "BanTime", &ban.ban_time.to_string());
     let _ = write!(s, "</{name}>");
@@ -105,9 +112,17 @@ async fn estate_to_xml(name: &str, e: &EstateSettingsRow, store: &EstateStore) -
     let mut s = format!("<{name} type=\"List\">");
     tag(&mut s, "EstateID", &e.estate_id.to_string());
     tag(&mut s, "EstateName", e.estate_name.as_deref().unwrap_or(""));
-    tag(&mut s, "AbuseEmailToEstateOwner", &e.abuse_email_to_estate_owner.to_string());
+    tag(
+        &mut s,
+        "AbuseEmailToEstateOwner",
+        &e.abuse_email_to_estate_owner.to_string(),
+    );
     tag(&mut s, "DenyAnonymous", &e.deny_anonymous.to_string());
-    tag(&mut s, "ResetHomeOnTeleport", &e.reset_home_on_teleport.to_string());
+    tag(
+        &mut s,
+        "ResetHomeOnTeleport",
+        &e.reset_home_on_teleport.to_string(),
+    );
     tag(&mut s, "FixedSun", &e.fixed_sun.to_string());
     tag(&mut s, "DenyTransacted", &e.deny_transacted.to_string());
     tag(&mut s, "BlockDwell", &e.block_dwell.to_string());
@@ -116,21 +131,37 @@ async fn estate_to_xml(name: &str, e: &EstateSettingsRow, store: &EstateStore) -
     tag(&mut s, "UseGlobalTime", &e.use_global_time.to_string());
     tag(&mut s, "PricePerMeter", &e.price_per_meter.to_string());
     tag(&mut s, "TaxFree", &e.tax_free.to_string());
-    tag(&mut s, "AllowDirectTeleport", &e.allow_direct_teleport.to_string());
+    tag(
+        &mut s,
+        "AllowDirectTeleport",
+        &e.allow_direct_teleport.to_string(),
+    );
     tag(&mut s, "RedirectGridX", &e.redirect_grid_x.to_string());
     tag(&mut s, "RedirectGridY", &e.redirect_grid_y.to_string());
     tag(&mut s, "ParentEstateID", &e.parent_estate_id.to_string());
     tag(&mut s, "SunPosition", &e.sun_position.to_string());
-    tag(&mut s, "EstateSkipScripts", &e.estate_skip_scripts.to_string());
+    tag(
+        &mut s,
+        "EstateSkipScripts",
+        &e.estate_skip_scripts.to_string(),
+    );
     tag(&mut s, "BillableFactor", &e.billable_factor.to_string());
     tag(&mut s, "PublicAccess", &e.public_access.to_string());
     tag(&mut s, "AbuseEmail", &e.abuse_email);
     tag(&mut s, "EstateOwner", &e.estate_owner);
     tag(&mut s, "DenyMinors", &e.deny_minors.to_string());
     tag(&mut s, "AllowLandmark", &e.allow_landmark.to_string());
-    tag(&mut s, "AllowParcelChanges", &e.allow_parcel_changes.to_string());
+    tag(
+        &mut s,
+        "AllowParcelChanges",
+        &e.allow_parcel_changes.to_string(),
+    );
     tag(&mut s, "AllowSetHome", &e.allow_set_home.to_string());
-    tag(&mut s, "AllowEnviromentOverride", &e.allow_environment_override.to_string());
+    tag(
+        &mut s,
+        "AllowEnviromentOverride",
+        &e.allow_environment_override.to_string(),
+    );
 
     if let Ok(users) = store.get_estate_users(e.estate_id).await {
         tag(&mut s, "EstateAccess", &users.join(","));

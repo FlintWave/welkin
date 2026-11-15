@@ -137,11 +137,9 @@ mod tests {
     #[test]
     fn value_type_round_trip() {
         assert_eq!(LslValue::Integer(42).lsl_type(), LslType::Integer);
+        #[allow(clippy::approx_constant)]
         assert_eq!(LslValue::Float(3.14).lsl_type(), LslType::Float);
-        assert_eq!(
-            LslValue::String("hello".into()).lsl_type(),
-            LslType::String
-        );
+        assert_eq!(LslValue::String("hello".into()).lsl_type(), LslType::String);
         assert_eq!(
             LslValue::Key("00000000-0000-0000-0000-000000000000".into()).lsl_type(),
             LslType::Key
@@ -170,7 +168,10 @@ mod tests {
 
     #[test]
     fn default_values() {
-        assert_eq!(LslValue::default_for(LslType::Integer), LslValue::Integer(0));
+        assert_eq!(
+            LslValue::default_for(LslType::Integer),
+            LslValue::Integer(0)
+        );
         assert_eq!(LslValue::default_for(LslType::Float), LslValue::Float(0.0));
         assert_eq!(
             LslValue::default_for(LslType::Rotation),

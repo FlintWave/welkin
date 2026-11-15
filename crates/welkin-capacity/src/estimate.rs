@@ -61,7 +61,9 @@ pub fn estimate_capacity(
     let memory_per_1k_prims = coefficients.get("memory_per_1k_prims_mb").unwrap_or(30.0);
     let memory_per_user = coefficients.get("memory_per_user_mb").unwrap_or(50.0);
     let max_regions = coefficients.get("max_regions_per_server").unwrap_or(16.0);
-    let client_throttle = coefficients.get("client_throttle_max_bps").unwrap_or(187500.0);
+    let client_throttle = coefficients
+        .get("client_throttle_max_bps")
+        .unwrap_or(187500.0);
 
     let effective_cores = report.cpu.cores as f64;
     let usable_cores = (effective_cores - 1.0).max(0.5);
@@ -104,11 +106,11 @@ pub fn estimate_capacity(
     let user_count_from_islands = island_count * profile.agents_per_region;
     let mut user_count = user_count_from_islands;
 
-    if let Some(bw_users) = bandwidth_users {
-        if bw_users < user_count {
-            user_count = bw_users;
-            limiting = "bandwidth";
-        }
+    if let Some(bw_users) = bandwidth_users
+        && bw_users < user_count
+    {
+        user_count = bw_users;
+        limiting = "bandwidth";
     }
 
     let point_islands = island_count.floor() as u32;

@@ -11,8 +11,8 @@ use mlua::prelude::*;
 use parking_lot::RwLock;
 use uuid::Uuid;
 
-use crate::builtins::ScriptContext;
 use super::{OsslFunc, OsslThreatLevel};
+use crate::builtins::ScriptContext;
 
 pub(crate) fn stub_functions() -> Vec<OsslFunc> {
     vec![
@@ -253,10 +253,7 @@ fn register_os_set_dynamic_texture_data(
 // Parcel media
 // ---------------------------------------------------------------------------
 
-fn register_os_set_parcel_media_url(
-    lua: &Lua,
-    ctx: &Arc<RwLock<ScriptContext>>,
-) -> LuaResult<()> {
+fn register_os_set_parcel_media_url(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, url: String| {
         let c = ctx.read();
@@ -363,18 +360,24 @@ fn register_os_get_speed(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResu
 
 fn register_os_npc_create(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
-    let f = lua.create_function(
-        move |_,
-              (first_name, last_name, _position, _clone_from): (String, String, String, String)| {
-            let c = ctx.read();
-            tracing::debug!(
-                script_id = %c.script_id,
-                name = %format!("{first_name} {last_name}"),
-                "osNpcCreate"
-            );
-            Ok(Uuid::new_v4().to_string())
-        },
-    )?;
+    let f =
+        lua.create_function(
+            move |_,
+                  (first_name, last_name, _position, _clone_from): (
+                String,
+                String,
+                String,
+                String,
+            )| {
+                let c = ctx.read();
+                tracing::debug!(
+                    script_id = %c.script_id,
+                    name = %format!("{first_name} {last_name}"),
+                    "osNpcCreate"
+                );
+                Ok(Uuid::new_v4().to_string())
+            },
+        )?;
     lua.globals().set("osNpcCreate", f)
 }
 
@@ -400,17 +403,19 @@ fn register_os_npc_move_to(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaRe
 
 fn register_os_npc_say(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
-    let f = lua.create_function(move |_, (npc_id, channel, message): (String, i32, String)| {
-        let c = ctx.read();
-        tracing::debug!(
-            script_id = %c.script_id,
-            npc = %npc_id,
-            channel,
-            message = %message,
-            "osNpcSay"
-        );
-        Ok(())
-    })?;
+    let f = lua.create_function(
+        move |_, (npc_id, channel, message): (String, i32, String)| {
+            let c = ctx.read();
+            tracing::debug!(
+                script_id = %c.script_id,
+                npc = %npc_id,
+                channel,
+                message = %message,
+                "osNpcSay"
+            );
+            Ok(())
+        },
+    )?;
     lua.globals().set("osNpcSay", f)
 }
 
@@ -433,10 +438,7 @@ fn register_os_get_simulator_version(
 // Sun / environment
 // ---------------------------------------------------------------------------
 
-fn register_os_get_current_sun_hour(
-    lua: &Lua,
-    _ctx: &Arc<RwLock<ScriptContext>>,
-) -> LuaResult<()> {
+fn register_os_get_current_sun_hour(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(|_, ()| {
         tracing::debug!("osGetCurrentSunHour");
         Ok(12.0f64)

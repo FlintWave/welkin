@@ -3,14 +3,14 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use axum::Router;
 use axum::body::Bytes;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::post;
-use axum::Router;
-use welkin_llsd::{from_xml, to_xml_string, Llsd, Map};
 use tokio::sync::RwLock;
 use uuid::Uuid;
+use welkin_llsd::{Llsd, Map, from_xml, to_xml_string};
 
 use crate::event_queue::EventQueue;
 
@@ -50,9 +50,7 @@ impl CapabilityServer {
 
         let handler = move |body: Bytes| {
             let agents = Arc::clone(&agents);
-            async move {
-                seed_cap_handler(agents, captured_agent_id, body).await
-            }
+            async move { seed_cap_handler(agents, captured_agent_id, body).await }
         };
 
         let route = Router::new().route(&seed_path, post(handler));
@@ -87,11 +85,7 @@ impl CapabilityServer {
 
     pub async fn get_cap_url(&self, agent_id: Uuid, name: &str) -> Option<String> {
         let agents = self.agents.read().await;
-        agents
-            .get(&agent_id)?
-            .cap_urls
-            .get(name)
-            .cloned()
+        agents.get(&agent_id)?.cap_urls.get(name).cloned()
     }
 
     pub fn into_router(self) -> Router {
@@ -119,11 +113,7 @@ async fn seed_cap_handler(
     let requested = match from_xml(&body) {
         Ok(llsd) => llsd,
         Err(_) => {
-            return (
-                StatusCode::BAD_REQUEST,
-                "invalid LLSD".to_string(),
-            )
-                .into_response();
+            return (StatusCode::BAD_REQUEST, "invalid LLSD".to_string()).into_response();
         }
     };
 
@@ -179,10 +169,17 @@ mod tests {
         let seed_path = server.register_agent(agent_id).await;
 
         let dummy_handler = || async { "ok" };
-        server.register_cap(agent_id, "FetchInventory2", dummy_handler.clone()).await;
-        server.register_cap(agent_id, "GetTexture", dummy_handler).await;
+        server
+            .register_cap(agent_id, "FetchInventory2", dummy_handler)
+            .await;
+        server
+            .register_cap(agent_id, "GetTexture", dummy_handler)
+            .await;
 
-        let fetch_url = server.get_cap_url(agent_id, "FetchInventory2").await.unwrap();
+        let fetch_url = server
+            .get_cap_url(agent_id, "FetchInventory2")
+            .await
+            .unwrap();
         let texture_url = server.get_cap_url(agent_id, "GetTexture").await.unwrap();
 
         let request_llsd = Llsd::Array(vec![
@@ -218,7 +215,9 @@ mod tests {
         server.register_agent(agent_id).await;
 
         let dummy_handler = || async { "ok" };
-        server.register_cap(agent_id, "TestCap", dummy_handler).await;
+        server
+            .register_cap(agent_id, "TestCap", dummy_handler)
+            .await;
 
         server.unregister_agent(agent_id).await;
         assert!(server.get_cap_url(agent_id, "TestCap").await.is_none());
@@ -237,7 +236,10 @@ mod tests {
             .unwrap();
 
         assert!(cap_path.starts_with('/'));
-        let stored = server.get_cap_url(agent_id, "FetchInventory2").await.unwrap();
+        let stored = server
+            .get_cap_url(agent_id, "FetchInventory2")
+            .await
+            .unwrap();
         assert_eq!(cap_path, stored);
     }
 

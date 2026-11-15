@@ -5,8 +5,8 @@
 //! Talks to a Robust xinventory endpoint over HTTP using URL-encoded form POSTs
 //! and `<ServerResponse>` XML replies.
 
-use welkin_data::inventory::{InventoryFolderRow, InventoryItemRow};
 use quick_xml::{Reader, events::Event};
+use welkin_data::inventory::{InventoryFolderRow, InventoryItemRow};
 
 use super::RemoteError;
 
@@ -203,12 +203,11 @@ where
                 }
             }
             Ok(Event::Text(t)) => {
-                if in_list {
-                    if let Some(ref field) = current_field {
-                        if let Ok(text) = t.unescape() {
-                            fields.push((field.clone(), text.to_string()));
-                        }
-                    }
+                if in_list
+                    && let Some(ref field) = current_field
+                    && let Ok(text) = t.unescape()
+                {
+                    fields.push((field.clone(), text.to_string()));
                 }
             }
             Ok(Event::Eof) => break,
@@ -267,9 +266,7 @@ fn parse_item_fields(fields: &[(String, String)]) -> Option<InventoryItemRow> {
         sale_type: field_num(fields, "SaleType"),
         creation_date: field_num(fields, "CreationDate"),
         group_id: field_str(fields, "GroupID").to_string(),
-        group_owned: i32::from(
-            field_str(fields, "GroupOwned").eq_ignore_ascii_case("true"),
-        ),
+        group_owned: i32::from(field_str(fields, "GroupOwned").eq_ignore_ascii_case("true")),
         flags: perm("Flags"),
         inventory_id: id.to_string(),
         avatar_id: field_str(fields, "Owner").to_string(),
@@ -302,10 +299,7 @@ mod tests {
         assert_eq!(f.folder_type, -1);
         assert_eq!(f.version, 12);
         assert_eq!(f.agent_id, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
-        assert_eq!(
-            f.parent_folder_id,
-            "00000000-0000-0000-0000-000000000000"
-        );
+        assert_eq!(f.parent_folder_id, "00000000-0000-0000-0000-000000000000");
     }
 
     #[test]

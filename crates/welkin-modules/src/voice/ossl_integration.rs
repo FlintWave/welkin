@@ -29,9 +29,7 @@ pub fn os_set_parcel_sip_address(
     sip_address: &str,
 ) -> OsslVoiceResult {
     if !validate_sip_address(sip_address) {
-        return OsslVoiceResult::InvalidArguments(format!(
-            "invalid SIP address: '{sip_address}'"
-        ));
+        return OsslVoiceResult::InvalidArguments(format!("invalid SIP address: '{sip_address}'"));
     }
 
     tracing::debug!(
@@ -97,10 +95,7 @@ mod tests {
 
         let result = os_set_parcel_sip_address(&mut module, parcel_id, addr);
         assert_eq!(result, OsslVoiceResult::Success);
-        assert_eq!(
-            module.get_sip_override(parcel_id),
-            Some(&addr.to_string())
-        );
+        assert_eq!(module.get_sip_override(parcel_id), Some(&addr.to_string()));
     }
 
     // -- Test 2: empty address returns InvalidArguments ----------------------
@@ -185,8 +180,7 @@ mod tests {
         let mut module = make_module();
         let parcel_id = Uuid::new_v4();
 
-        let result =
-            os_set_parcel_sip_address(&mut module, parcel_id, "sip:bad\x00addr");
+        let result = os_set_parcel_sip_address(&mut module, parcel_id, "sip:bad\x00addr");
         assert!(matches!(result, OsslVoiceResult::InvalidArguments(_)));
     }
 }

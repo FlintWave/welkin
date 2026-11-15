@@ -70,10 +70,7 @@ pub fn make_ospa(first: &str, last: &str) -> String {
 /// MD5 of the UTF-16LE–encoded name bytes, interpreted as a big-endian UUID
 /// (OpenMetaverse network-order convention).
 pub fn hash_name(name: &str) -> Uuid {
-    let utf16le_bytes: Vec<u8> = name
-        .encode_utf16()
-        .flat_map(|c| c.to_le_bytes())
-        .collect();
+    let utf16le_bytes: Vec<u8> = name.encode_utf16().flat_map(|c| c.to_le_bytes()).collect();
     let digest = md5::compute(&utf16le_bytes);
     Uuid::from_bytes(digest.0)
 }

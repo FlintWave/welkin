@@ -25,7 +25,8 @@ fn falloff(dist: f32, radius: f32) -> f32 {
 }
 
 fn deterministic_noise(x: u32, y: u32) -> f32 {
-    let mut h = x.wrapping_mul(374_761_393)
+    let mut h = x
+        .wrapping_mul(374_761_393)
         .wrapping_add(y.wrapping_mul(668_265_263));
     h = (h ^ (h >> 13)).wrapping_mul(1_274_126_177);
     h ^= h >> 16;
@@ -130,9 +131,7 @@ pub fn apply_brush(
                             let target = flatten_target.unwrap();
                             h + (target - h) * params.strength * f
                         }
-                        BrushType::Noise => {
-                            h + deterministic_noise(x, y) * params.strength * f
-                        }
+                        BrushType::Noise => h + deterministic_noise(x, y) * params.strength * f,
                         BrushType::Revert => {
                             if let Some(b) = baked {
                                 let bh = b.get(x, y);
@@ -178,7 +177,10 @@ mod tests {
         let before = terrain.get(128, 128);
         apply_brush(&mut terrain, BrushType::Raise, &params, None);
         let after = terrain.get(128, 128);
-        assert!(after > before, "center should be raised: {after} > {before}");
+        assert!(
+            after > before,
+            "center should be raised: {after} > {before}"
+        );
     }
 
     #[test]
@@ -194,7 +196,10 @@ mod tests {
         let before = terrain.get(128, 128);
         apply_brush(&mut terrain, BrushType::Lower, &params, None);
         let after = terrain.get(128, 128);
-        assert!(after < before, "center should be lowered: {after} < {before}");
+        assert!(
+            after < before,
+            "center should be lowered: {after} < {before}"
+        );
     }
 
     #[test]
@@ -264,7 +269,10 @@ mod tests {
             center_delta > edge_delta,
             "center should be affected more than edge: {center_delta} > {edge_delta}"
         );
-        assert!(edge_delta > 0.0, "edge within radius should still be raised");
+        assert!(
+            edge_delta > 0.0,
+            "edge within radius should still be raised"
+        );
 
         let outside = terrain.get(140, 128);
         assert!(

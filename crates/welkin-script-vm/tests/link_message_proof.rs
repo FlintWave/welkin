@@ -13,7 +13,7 @@
 //! 2. Show that two VMs can exchange data through an external coordinator.
 //! 3. Prove the pattern that the full integration will use.
 
-use welkin_script_vm::{compile_source, VmError};
+use welkin_script_vm::{VmError, compile_source};
 
 // ===================================================================
 // 1. Basic two-VM message exchange via external coordinator
@@ -227,8 +227,8 @@ fn bidirectional_link_messages() -> Result<(), VmError> {
 
 #[test]
 fn link_message_via_script_instance() -> Result<(), VmError> {
-    use welkin_script_vm::{ScriptEvent, ScriptInstance};
     use uuid::Uuid;
+    use welkin_script_vm::{ScriptEvent, ScriptInstance};
 
     let source_a = r#"
         _sent = false
@@ -264,8 +264,8 @@ fn link_message_via_script_instance() -> Result<(), VmError> {
     inst_b.post_event(ScriptEvent::Custom {
         name: "link_message".into(),
         args: vec![
-            serde_json::Value::from(1),             // sender_num
-            serde_json::Value::from(99),             // num
+            serde_json::Value::from(1),               // sender_num
+            serde_json::Value::from(99),              // num
             serde_json::Value::from("from script A"), // str
             serde_json::Value::from("key-abc"),       // id
         ],
@@ -284,8 +284,8 @@ fn link_message_via_script_instance() -> Result<(), VmError> {
 
 #[test]
 fn broadcast_link_message_to_linkset() -> Result<(), VmError> {
-    use welkin_script_vm::{ScriptEvent, ScriptScheduler, ScriptInstance};
     use uuid::Uuid;
+    use welkin_script_vm::{ScriptEvent, ScriptInstance, ScriptScheduler};
 
     let receiver_source = r#"
         _got_msg = false
@@ -347,10 +347,8 @@ fn broadcast_link_message_to_linkset() -> Result<(), VmError> {
 
 #[test]
 fn link_message_after_region_transfer() -> Result<(), VmError> {
-    use welkin_script_vm::{
-        ScriptEvent, ScriptInstance, ScriptScheduler, RegionTransferBundle,
-    };
     use uuid::Uuid;
+    use welkin_script_vm::{RegionTransferBundle, ScriptEvent, ScriptInstance, ScriptScheduler};
 
     let source = r#"
         _msg_count = 0

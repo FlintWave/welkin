@@ -7,8 +7,8 @@
 
 use uuid::Uuid;
 
+use super::{extract_tag_text, form_post, parse_server_result};
 use crate::hypergrid::*;
-use super::{form_post, parse_server_result, extract_tag_text};
 
 /// Outbound HTTP client for a foreign HGFriends service.
 pub struct HGFriendsServiceConnector {
@@ -39,11 +39,7 @@ impl HGFriendsServiceConnector {
 
     /// Validate that a pending friendship offer exists between two users
     /// on the foreign grid.
-    pub async fn validate_friendship_offered(
-        &self,
-        from_id: Uuid,
-        to_id: Uuid,
-    ) -> HgResult<bool> {
+    pub async fn validate_friendship_offered(&self, from_id: Uuid, to_id: Uuid) -> HgResult<bool> {
         let from_str = from_id.to_string();
         let to_str = to_id.to_string();
         let params: Vec<(&str, &str)> = vec![
@@ -53,16 +49,11 @@ impl HGFriendsServiceConnector {
         ];
         let body = form_post(&self.client, &self.endpoint(), &params).await?;
         let result = parse_server_result(&body).unwrap_or_default();
-        Ok(result.eq_ignore_ascii_case("success")
-            || result.eq_ignore_ascii_case("true"))
+        Ok(result.eq_ignore_ascii_case("success") || result.eq_ignore_ascii_case("true"))
     }
 
     /// Create a new cross-grid friendship record on the foreign grid.
-    pub async fn new_friendship(
-        &self,
-        friend: &HgFriendInfo,
-        secret: &str,
-    ) -> HgResult<bool> {
+    pub async fn new_friendship(&self, friend: &HgFriendInfo, secret: &str) -> HgResult<bool> {
         let principal = friend.principal_id.to_string();
         let friend_str = &friend.friend;
         let my_flags = friend.my_flags.to_string();
@@ -77,17 +68,12 @@ impl HGFriendsServiceConnector {
         ];
         let body = form_post(&self.client, &self.endpoint(), &params).await?;
         let result = parse_server_result(&body).unwrap_or_default();
-        Ok(result.eq_ignore_ascii_case("success")
-            || result.eq_ignore_ascii_case("true"))
+        Ok(result.eq_ignore_ascii_case("success") || result.eq_ignore_ascii_case("true"))
     }
 
     /// Delete a cross-grid friendship record, validated by the shared
     /// secret.
-    pub async fn delete_friendship(
-        &self,
-        friend: &HgFriendInfo,
-        secret: &str,
-    ) -> HgResult<bool> {
+    pub async fn delete_friendship(&self, friend: &HgFriendInfo, secret: &str) -> HgResult<bool> {
         let principal = friend.principal_id.to_string();
         let friend_str = &friend.friend;
         let params: Vec<(&str, &str)> = vec![
@@ -128,20 +114,18 @@ impl HGFriendsServiceConnector {
             params.push((&friend_keys[i], f.as_str()));
         }
 
-        let body =
-            form_post(&self.client, &self.endpoint(), &params).await?;
+        let body = form_post(&self.client, &self.endpoint(), &params).await?;
 
         // Parse online friends from the response.
         // The response contains numbered elements: <friend_0>uuid</friend_0>...
         let mut online_friends = Vec::new();
         for i in 0..friends.len() {
             let tag = format!("friend_{i}");
-            if let Some(val) = extract_tag_text(&body, &tag) {
-                if let Ok(id) = Uuid::parse_str(&val) {
-                    if !id.is_nil() {
-                        online_friends.push(id);
-                    }
-                }
+            if let Some(val) = extract_tag_text(&body, &tag)
+                && let Ok(id) = Uuid::parse_str(&val)
+                && !id.is_nil()
+            {
+                online_friends.push(id);
             }
         }
 
@@ -149,11 +133,7 @@ impl HGFriendsServiceConnector {
     }
 
     /// Get the permission flags for a cross-grid friendship.
-    pub async fn get_friend_perms(
-        &self,
-        user_id: Uuid,
-        friend_id: Uuid,
-    ) -> HgResult<i32> {
+    pub async fn get_friend_perms(&self, user_id: Uuid, friend_id: Uuid) -> HgResult<i32> {
         let uid = user_id.to_string();
         let fid = friend_id.to_string();
         let params: Vec<(&str, &str)> = vec![
@@ -164,19 +144,19 @@ impl HGFriendsServiceConnector {
         let body = form_post(&self.client, &self.endpoint(), &params).await?;
         let result = parse_server_result(&body).unwrap_or_default();
         // Success result carries the perms as the Value element
-        if let Some(val) = extract_tag_text(&body, "Value") {
-            if let Ok(perms) = val.parse::<i32>() {
-                return Ok(perms);
-            }
+        if let Some(val) = extract_tag_text(&body, "Value")
+            && let Ok(perms) = val.parse::<i32>()
+        {
+            return Ok(perms);
         }
         // If we got a failure or can't parse, return -1
         if result.eq_ignore_ascii_case("failure") {
             return Ok(-1);
         }
         // Try parsing result itself as an integer (some responses embed it there)
-        result.parse::<i32>().map_err(|_| {
-            HypergridError::FriendsError("failed to parse friend perms".into())
-        })
+        result
+            .parse::<i32>()
+            .map_err(|_| HypergridError::FriendsError("failed to parse friend perms".into()))
     }
 }
 

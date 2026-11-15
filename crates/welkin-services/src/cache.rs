@@ -6,8 +6,8 @@ use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime};
 
-use welkin_data::assets::AssetRow;
 use tokio::sync::Mutex;
+use welkin_data::assets::AssetRow;
 
 struct CacheEntry {
     asset: AssetRow,
@@ -73,31 +73,29 @@ impl AssetCache {
             let path = dir.join(format!("{}.bin", id));
             if path.exists() {
                 // Check file age via mtime.
-                if let Ok(meta) = path.metadata() {
-                    if let Ok(modified) = meta.modified() {
-                        if let Ok(age) = SystemTime::now().duration_since(modified) {
-                            if age < self.ttl {
-                                // Read and deserialize.
-                                if let Ok(bytes) = tokio::fs::read(&path).await {
-                                    if let Some(asset) = deserialize_asset(id, &bytes) {
-                                        let size = asset.data.len();
-                                        // Insert into memory cache.
-                                        inner.entries.insert(
-                                            id.to_string(),
-                                            CacheEntry {
-                                                asset: asset.clone(),
-                                                cached_at: Instant::now(),
-                                                size,
-                                            },
-                                        );
-                                        inner.order.push_back(id.to_string());
-                                        inner.current_size += size;
-                                        evict_if_needed(&mut inner, self.max_size);
-                                        return Some(asset);
-                                    }
-                                }
-                            }
-                        }
+                if let Ok(meta) = path.metadata()
+                    && let Ok(modified) = meta.modified()
+                    && let Ok(age) = SystemTime::now().duration_since(modified)
+                    && age < self.ttl
+                {
+                    // Read and deserialize.
+                    if let Ok(bytes) = tokio::fs::read(&path).await
+                        && let Some(asset) = deserialize_asset(id, &bytes)
+                    {
+                        let size = asset.data.len();
+                        // Insert into memory cache.
+                        inner.entries.insert(
+                            id.to_string(),
+                            CacheEntry {
+                                asset: asset.clone(),
+                                cached_at: Instant::now(),
+                                size,
+                            },
+                        );
+                        inner.order.push_back(id.to_string());
+                        inner.current_size += size;
+                        evict_if_needed(&mut inner, self.max_size);
+                        return Some(asset);
                     }
                 }
             }
@@ -136,7 +134,7 @@ impl AssetCache {
 
         // Write to disk in background.
         if let Some(ref dir) = self.cache_dir {
-            let path = dir.join(format!("{}.bin", &id));
+            let path = dir.join(format!("{}.bin", id));
             let bytes = serialize_asset(&asset);
             tokio::spawn(async move {
                 if let Err(e) = tokio::fs::write(&path, &bytes).await {
@@ -150,23 +148,21 @@ impl AssetCache {
         let inner = self.inner.lock().await;
 
         // Check memory.
-        if let Some(entry) = inner.entries.get(id) {
-            if entry.cached_at.elapsed() < self.ttl {
-                return true;
-            }
+        if let Some(entry) = inner.entries.get(id)
+            && entry.cached_at.elapsed() < self.ttl
+        {
+            return true;
         }
 
         // Check disk.
         if let Some(ref dir) = self.cache_dir {
             let path = dir.join(format!("{}.bin", id));
-            if path.exists() {
-                if let Ok(meta) = path.metadata() {
-                    if let Ok(modified) = meta.modified() {
-                        if let Ok(age) = SystemTime::now().duration_since(modified) {
-                            return age < self.ttl;
-                        }
-                    }
-                }
+            if path.exists()
+                && let Ok(meta) = path.metadata()
+                && let Ok(modified) = meta.modified()
+                && let Ok(age) = SystemTime::now().duration_since(modified)
+            {
+                return age < self.ttl;
             }
         }
 
@@ -184,10 +180,10 @@ impl AssetCache {
 
         if let Some(ref dir) = self.cache_dir {
             let path = dir.join(format!("{}.bin", id));
-            if let Err(e) = tokio::fs::remove_file(&path).await {
-                if e.kind() != std::io::ErrorKind::NotFound {
-                    tracing::warn!("failed to remove cache file {}: {}", path.display(), e);
-                }
+            if let Err(e) = tokio::fs::remove_file(&path).await
+                && e.kind() != std::io::ErrorKind::NotFound
+            {
+                tracing::warn!("failed to remove cache file {}: {}", path.display(), e);
             }
         }
     }
@@ -393,7 +389,10 @@ mod tests {
 
         // Create a new cache pointing at the same directory.
         let cache2 = AssetCache::new(1_000_000, Duration::from_secs(60), Some(dir));
-        let got = cache2.get("disk-1").await.expect("asset should load from disk");
+        let got = cache2
+            .get("disk-1")
+            .await
+            .expect("asset should load from disk");
         assert_eq!(got.id, "disk-1");
         assert_eq!(got.name, "test-disk-1");
         assert_eq!(got.data.len(), 128);

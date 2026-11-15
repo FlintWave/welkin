@@ -139,7 +139,11 @@ impl<'a> ScriptRunner<'a> {
         let mut actions_failed = 0usize;
         let mut failures = Vec::new();
 
-        info!("Running script '{}': {} actions", script.name, script.actions.len());
+        info!(
+            "Running script '{}': {} actions",
+            script.name,
+            script.actions.len()
+        );
 
         for (i, action) in script.actions.iter().enumerate() {
             actions_run += 1;
@@ -149,7 +153,11 @@ impl<'a> ScriptRunner<'a> {
                     action_index: i,
                     error: e,
                 });
-                warn!("Script '{}' action {i} failed: {}", script.name, failures.last().map(|f| f.error.as_str()).unwrap_or(""));
+                warn!(
+                    "Script '{}' action {i} failed: {}",
+                    script.name,
+                    failures.last().map(|f| f.error.as_str()).unwrap_or("")
+                );
             }
         }
 
@@ -190,10 +198,7 @@ impl<'a> ScriptRunner<'a> {
                 info!("Took object '{name}' into inventory");
                 Ok(())
             }
-            ScriptAction::GiveObject {
-                name,
-                target_agent,
-            } => {
+            ScriptAction::GiveObject { name, target_agent } => {
                 if !self.bot.connected {
                     return Err("not connected".to_string());
                 }
@@ -216,10 +221,7 @@ impl<'a> ScriptRunner<'a> {
                 if !self.bot.connected {
                     return Err("not connected".to_string());
                 }
-                info!(
-                    "Running script in '{name}' ({} bytes)",
-                    source.len()
-                );
+                info!("Running script in '{name}' ({} bytes)", source.len());
                 Ok(())
             }
             ScriptAction::VerifyOutput { pattern } => {
@@ -408,11 +410,9 @@ mod tests {
         let script = BotScript {
             name: "failing".to_string(),
             description: "will fail".to_string(),
-            actions: vec![
-                ScriptAction::AssertInventoryContains {
-                    name: "NonExistent".to_string(),
-                },
-            ],
+            actions: vec![ScriptAction::AssertInventoryContains {
+                name: "NonExistent".to_string(),
+            }],
             timeout_ms: 5000,
         };
         let mut runner = ScriptRunner::new(&mut bot);

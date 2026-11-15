@@ -237,25 +237,31 @@ fn group_disabled_operations_return_error() {
     let module = GroupsModule::new();
     // Not initialised means disabled.
 
-    assert!(module
-        .handle_create_group_request(
-            Uuid::new_v4(),
-            "Test",
-            "",
-            true,
-            Uuid::nil(),
-            0,
-            true,
-            true,
-            false,
-        )
-        .is_err());
-    assert!(module
-        .handle_join_group_request(Uuid::new_v4(), Uuid::new_v4())
-        .is_err());
-    assert!(module
-        .handle_leave_group_request(Uuid::new_v4(), Uuid::new_v4())
-        .is_err());
+    assert!(
+        module
+            .handle_create_group_request(
+                Uuid::new_v4(),
+                "Test",
+                "",
+                true,
+                Uuid::nil(),
+                0,
+                true,
+                true,
+                false,
+            )
+            .is_err()
+    );
+    assert!(
+        module
+            .handle_join_group_request(Uuid::new_v4(), Uuid::new_v4())
+            .is_err()
+    );
+    assert!(
+        module
+            .handle_leave_group_request(Uuid::new_v4(), Uuid::new_v4())
+            .is_err()
+    );
     assert!(!module.handle_invite_group_request(
         Uuid::new_v4(),
         Uuid::new_v4(),
@@ -529,7 +535,12 @@ fn offline_im_store_and_retrieve() {
     let recipient = Uuid::new_v4();
     let sender = Uuid::new_v4();
 
-    let im = sample_im(sender, recipient, IMDialog::MessageFromAgent, "Hello offline!");
+    let im = sample_im(
+        sender,
+        recipient,
+        IMDialog::MessageFromAgent,
+        "Hello offline!",
+    );
     let stored = module.handle_undelivered(&im).unwrap();
     assert!(stored);
     assert_eq!(module.pending_count(recipient), 1);
@@ -594,56 +605,68 @@ fn offline_im_dialog_type_filtering() {
     let recipient = Uuid::new_v4();
 
     // Storable types.
-    assert!(module
-        .handle_undelivered(&sample_im(
-            Uuid::new_v4(),
-            recipient,
-            IMDialog::MessageFromAgent,
-            "test"
-        ))
-        .unwrap());
-    assert!(module
-        .handle_undelivered(&sample_im(
-            Uuid::new_v4(),
-            recipient,
-            IMDialog::MessageFromObject,
-            "test"
-        ))
-        .unwrap());
-    assert!(module
-        .handle_undelivered(&sample_im(
-            Uuid::new_v4(),
-            recipient,
-            IMDialog::InventoryOffered,
-            "test"
-        ))
-        .unwrap());
+    assert!(
+        module
+            .handle_undelivered(&sample_im(
+                Uuid::new_v4(),
+                recipient,
+                IMDialog::MessageFromAgent,
+                "test"
+            ))
+            .unwrap()
+    );
+    assert!(
+        module
+            .handle_undelivered(&sample_im(
+                Uuid::new_v4(),
+                recipient,
+                IMDialog::MessageFromObject,
+                "test"
+            ))
+            .unwrap()
+    );
+    assert!(
+        module
+            .handle_undelivered(&sample_im(
+                Uuid::new_v4(),
+                recipient,
+                IMDialog::InventoryOffered,
+                "test"
+            ))
+            .unwrap()
+    );
 
     // Non-storable types should return Ok(false).
-    assert!(!module
-        .handle_undelivered(&sample_im(
-            Uuid::new_v4(),
-            recipient,
-            IMDialog::StartTyping,
-            "test"
-        ))
-        .unwrap());
-    assert!(!module
-        .handle_undelivered(&sample_im(
-            Uuid::new_v4(),
-            recipient,
-            IMDialog::StopTyping,
-            "test"
-        ))
-        .unwrap());
-    assert!(!module
-        .handle_undelivered(&sample_im(
-            Uuid::new_v4(),
-            recipient,
-            IMDialog::BusyAutoResponse,
-            "test"
-        ))
-        .unwrap());
+    assert!(
+        !module
+            .handle_undelivered(&sample_im(
+                Uuid::new_v4(),
+                recipient,
+                IMDialog::StartTyping,
+                "test"
+            ))
+            .unwrap()
+    );
+    assert!(
+        !module
+            .handle_undelivered(&sample_im(
+                Uuid::new_v4(),
+                recipient,
+                IMDialog::StopTyping,
+                "test"
+            ))
+            .unwrap()
+    );
+    assert!(
+        !module
+            .handle_undelivered(&sample_im(
+                Uuid::new_v4(),
+                recipient,
+                IMDialog::BusyAutoResponse,
+                "test"
+            ))
+            .unwrap()
+    );
 
     // Only the 3 storable messages should be pending.
     assert_eq!(module.pending_count(recipient), 3);
@@ -664,32 +687,38 @@ fn offline_im_group_forwarding_disabled() {
     let recipient = Uuid::new_v4();
 
     // Group dialogs should be silently rejected.
-    assert!(!module
-        .handle_undelivered(&sample_im(
-            Uuid::new_v4(),
-            recipient,
-            IMDialog::GroupNotice,
-            "notice"
-        ))
-        .unwrap());
-    assert!(!module
-        .handle_undelivered(&sample_im(
-            Uuid::new_v4(),
-            recipient,
-            IMDialog::GroupInvitation,
-            "invite"
-        ))
-        .unwrap());
+    assert!(
+        !module
+            .handle_undelivered(&sample_im(
+                Uuid::new_v4(),
+                recipient,
+                IMDialog::GroupNotice,
+                "notice"
+            ))
+            .unwrap()
+    );
+    assert!(
+        !module
+            .handle_undelivered(&sample_im(
+                Uuid::new_v4(),
+                recipient,
+                IMDialog::GroupInvitation,
+                "invite"
+            ))
+            .unwrap()
+    );
 
     // Regular IM should still work.
-    assert!(module
-        .handle_undelivered(&sample_im(
-            Uuid::new_v4(),
-            recipient,
-            IMDialog::MessageFromAgent,
-            "hello"
-        ))
-        .unwrap());
+    assert!(
+        module
+            .handle_undelivered(&sample_im(
+                Uuid::new_v4(),
+                recipient,
+                IMDialog::MessageFromAgent,
+                "hello"
+            ))
+            .unwrap()
+    );
 
     assert_eq!(module.pending_count(recipient), 1);
 }
@@ -716,7 +745,12 @@ fn offline_im_delete_bidirectional() {
     module.handle_undelivered(&im).unwrap();
 
     // Charlie -> Bob.
-    im = sample_im(charlie, bob, IMDialog::MessageFromAgent, "hi bob from charlie");
+    im = sample_im(
+        charlie,
+        bob,
+        IMDialog::MessageFromAgent,
+        "hi bob from charlie",
+    );
     module.handle_undelivered(&im).unwrap();
 
     assert_eq!(module.total_pending(), 3);
@@ -1206,7 +1240,10 @@ fn cross_module_offline_im_stores_group_notice() {
     let msgs = offline_module.retrieve_messages(offline_member);
     assert_eq!(msgs.len(), 1);
     assert_eq!(msgs[0].dialog, IMDialog::GroupNotice);
-    assert_eq!(msgs[0].message, "Important Notice|Please read this carefully");
+    assert_eq!(
+        msgs[0].message,
+        "Important Notice|Please read this carefully"
+    );
     assert_eq!(msgs[0].im_session_id, group_id);
 }
 
@@ -1306,9 +1343,7 @@ fn npc_rotation() {
     assert_eq!(npc.rotation(), [0.0, 0.0, 0.0, 1.0]);
 
     // Set rotation.
-    module
-        .rotate(npc_id, [0.0, 0.707, 0.0, 0.707])
-        .unwrap();
+    module.rotate(npc_id, [0.0, 0.707, 0.0, 0.707]).unwrap();
     let npc = module.get_npc(npc_id).unwrap();
     assert_eq!(npc.rotation(), [0.0, 0.707, 0.0, 0.707]);
 }

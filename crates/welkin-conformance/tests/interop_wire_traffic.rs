@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
+use tower::ServiceExt;
 use welkin_data::{
     accounts::UserAccountStore,
     assets::AssetStore,
@@ -42,7 +43,6 @@ use welkin_services::{
     mute::MuteServiceState,
     presence::PresenceServiceState,
 };
-use tower::ServiceExt;
 
 const PRINCIPAL: &str = "d6a10998-7b7f-4c8a-b8e5-3e3f4c5d6e7f";
 const REGION_UUID: &str = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
@@ -61,7 +61,9 @@ const SALT: &str = "test-salt-uuid";
 
 async fn setup_db() -> sqlx::AnyPool {
     static INIT: std::sync::Once = std::sync::Once::new();
-    INIT.call_once(|| { sqlx::any::install_default_drivers(); });
+    INIT.call_once(|| {
+        sqlx::any::install_default_drivers();
+    });
     let pool = sqlx::pool::PoolOptions::new()
         .max_connections(1)
         .connect("sqlite::memory:")
@@ -80,7 +82,9 @@ async fn setup_db() -> sqlx::AnyPool {
     }
 
     sqlx::query("CREATE TABLE IF NOT EXISTS migrations(name VARCHAR(100), version INT)")
-        .execute(&pool).await.unwrap();
+        .execute(&pool)
+        .await
+        .unwrap();
 
     for stmt in [
         "CREATE TABLE IF NOT EXISTS inventoryfolders(
@@ -109,12 +113,16 @@ async fn setup_db() -> sqlx::AnyPool {
         sqlx::query(stmt).execute(&pool).await.unwrap();
     }
     sqlx::query("INSERT INTO migrations(name, version) VALUES ('InventoryStore', 2)")
-        .execute(&pool).await.unwrap();
+        .execute(&pool)
+        .await
+        .unwrap();
 
     let runner = MigrationRunner::new(pool.clone(), Backend::SQLite);
     for store in ["FriendsStore", "Avatar", "MuteListStore"] {
         if let Some(content) = welkin_data::migrations::migration_content(store, Backend::SQLite) {
-            runner.run_migrations(store, content).await
+            runner
+                .run_migrations(store, content)
+                .await
                 .unwrap_or_else(|e| panic!("migration failed for {store}: {e}"));
         }
     }
@@ -127,21 +135,33 @@ async fn setup_db() -> sqlx::AnyPool {
             webLoginKey VARCHAR(255) NOT NULL DEFAULT '',
             accountType VARCHAR(32) NOT NULL DEFAULT 'UserAccount'
         )",
-    ).execute(&pool).await.unwrap();
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS tokens (
             UUID VARCHAR(36) NOT NULL,
             token VARCHAR(255) NOT NULL,
             validity VARCHAR(32) NOT NULL
         )",
-    ).execute(&pool).await.unwrap();
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
 
     {
-        let content = welkin_data::migrations::migration_content("UserAccount", Backend::SQLite).unwrap();
-        runner.run_migrations("UserAccount", content).await
+        let content =
+            welkin_data::migrations::migration_content("UserAccount", Backend::SQLite).unwrap();
+        runner
+            .run_migrations("UserAccount", content)
+            .await
             .unwrap_or_else(|e| panic!("migration failed for UserAccount: {e}"));
     }
-    sqlx::query("DROP TABLE IF EXISTS UserAccounts").execute(&pool).await.unwrap();
+    sqlx::query("DROP TABLE IF EXISTS UserAccounts")
+        .execute(&pool)
+        .await
+        .unwrap();
     sqlx::query(
         "CREATE TABLE UserAccounts (
             PrincipalID CHAR(36) PRIMARY KEY,
@@ -156,7 +176,10 @@ async fn setup_db() -> sqlx::AnyPool {
             UserTitle VARCHAR(64) NOT NULL DEFAULT '',
             active INTEGER NOT NULL DEFAULT 1
         )",
-    ).execute(&pool).await.unwrap();
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS assets(
@@ -168,7 +191,10 @@ async fn setup_db() -> sqlx::AnyPool {
             asset_flags INTEGER NOT NULL DEFAULT 0,
             CreatorID VARCHAR(128) DEFAULT ''
         )",
-    ).execute(&pool).await.unwrap();
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS regions(
@@ -185,7 +211,10 @@ async fn setup_db() -> sqlx::AnyPool {
             Token VARCHAR(255) DEFAULT '',
             parcelMapTexture VARCHAR(255) DEFAULT '00000000-0000-0000-0000-000000000000'
         )",
-    ).execute(&pool).await.unwrap();
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS GridUser(
@@ -200,7 +229,10 @@ async fn setup_db() -> sqlx::AnyPool {
             Login CHAR(16) DEFAULT '0',
             Logout CHAR(16) DEFAULT '0'
         )",
-    ).execute(&pool).await.unwrap();
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS Presence(
@@ -210,7 +242,10 @@ async fn setup_db() -> sqlx::AnyPool {
             SecureSessionID VARCHAR(36) DEFAULT '00000000-0000-0000-0000-000000000000',
             LastSeen VARCHAR(32)
         )",
-    ).execute(&pool).await.unwrap();
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
 
     pool
 }
@@ -283,45 +318,92 @@ async fn seed_data(pool: &sqlx::AnyPool) {
          ServiceURLs, Created, UserLevel, UserFlags, UserTitle, active)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
     )
-    .bind(PRINCIPAL).bind(ZERO_UUID).bind("Test").bind("User")
-    .bind("test.user@example.com").bind("").bind(1700000000i32)
-    .bind(0i32).bind(0i32).bind("").bind(1i32)
-    .execute(pool).await.unwrap();
+    .bind(PRINCIPAL)
+    .bind(ZERO_UUID)
+    .bind("Test")
+    .bind("User")
+    .bind("test.user@example.com")
+    .bind("")
+    .bind(1700000000i32)
+    .bind(0i32)
+    .bind(0i32)
+    .bind("")
+    .bind(1i32)
+    .execute(pool)
+    .await
+    .unwrap();
 
     sqlx::query(
         "INSERT INTO auth (UUID, passwordHash, passwordSalt, webLoginKey, accountType)
          VALUES ($1, $2, $3, $4, $5)",
     )
-    .bind(PRINCIPAL).bind(&password_hash).bind(SALT).bind("").bind("UserAccount")
-    .execute(pool).await.unwrap();
+    .bind(PRINCIPAL)
+    .bind(&password_hash)
+    .bind(SALT)
+    .bind("")
+    .bind("UserAccount")
+    .execute(pool)
+    .await
+    .unwrap();
 
     sqlx::query(
         "INSERT INTO GridUser (UserID, HomeRegionID, HomePosition, HomeLookAt,
          LastRegionID, LastPosition, LastLookAt, Online, Login, Logout)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
     )
-    .bind(PRINCIPAL).bind(REGION_UUID).bind("<128,128,25>").bind("<0,1,0>")
-    .bind(REGION_UUID).bind("<128,128,25>").bind("<0,1,0>")
-    .bind("false").bind("1700000000").bind("0")
-    .execute(pool).await.unwrap();
+    .bind(PRINCIPAL)
+    .bind(REGION_UUID)
+    .bind("<128,128,25>")
+    .bind("<0,1,0>")
+    .bind(REGION_UUID)
+    .bind("<128,128,25>")
+    .bind("<0,1,0>")
+    .bind("false")
+    .bind("1700000000")
+    .bind("0")
+    .execute(pool)
+    .await
+    .unwrap();
 
-    sqlx::query("INSERT INTO Friends (PrincipalID, Friend, Flags, Offered) VALUES ($1, $2, $3, $4)")
-        .bind(PRINCIPAL).bind(FRIEND_UUID).bind("1").bind("0")
-        .execute(pool).await.unwrap();
+    sqlx::query(
+        "INSERT INTO Friends (PrincipalID, Friend, Flags, Offered) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(PRINCIPAL)
+    .bind(FRIEND_UUID)
+    .bind("1")
+    .bind("0")
+    .execute(pool)
+    .await
+    .unwrap();
 
-    for (name, value) in [("AvatarType", "1"), ("Height", "1.771488"), ("Serial", "1"), ("Wearables", "0")] {
+    for (name, value) in [
+        ("AvatarType", "1"),
+        ("Height", "1.771488"),
+        ("Serial", "1"),
+        ("Wearables", "0"),
+    ] {
         sqlx::query("INSERT INTO Avatars (PrincipalID, Name, Value) VALUES ($1, $2, $3)")
-            .bind(PRINCIPAL).bind(name).bind(value)
-            .execute(pool).await.unwrap();
+            .bind(PRINCIPAL)
+            .bind(name)
+            .bind(value)
+            .execute(pool)
+            .await
+            .unwrap();
     }
 
     sqlx::query(
         "INSERT INTO MuteList (AgentID, MuteID, MuteName, MuteType, MuteFlags, Stamp)
          VALUES ($1, $2, $3, $4, $5, $6)",
     )
-    .bind(PRINCIPAL).bind(FRIEND_UUID).bind("Annoying Bob")
-    .bind(1i32).bind(0i32).bind(1700000000i32)
-    .execute(pool).await.unwrap();
+    .bind(PRINCIPAL)
+    .bind(FRIEND_UUID)
+    .bind("Annoying Bob")
+    .bind(1i32)
+    .bind(0i32)
+    .bind(1700000000i32)
+    .execute(pool)
+    .await
+    .unwrap();
 }
 
 fn build_router(pool: &sqlx::AnyPool) -> axum::Router {
@@ -337,7 +419,8 @@ fn build_router(pool: &sqlx::AnyPool) -> axum::Router {
 
     axum::Router::new()
         .merge(welkin_services::assets::router(AssetServiceState::new(
-            AssetStore::new(pool.clone()), DeleteAllowed::None,
+            AssetStore::new(pool.clone()),
+            DeleteAllowed::None,
         )))
         .merge(welkin_services::auth::router(AuthServiceState {
             store: auth_store.clone(),
@@ -446,97 +529,175 @@ async fn pcambot_login_rez_teleport_sequence() {
 
     let (status, body) = send_xml_rpc(&app, "/", &login_xml).await;
     assert_eq!(status, StatusCode::OK, "login should return 200");
-    assert!(body.contains("<name>login</name>"), "response should contain login field");
+    assert!(
+        body.contains("<name>login</name>"),
+        "response should contain login field"
+    );
 
     let login_val = extract_xml_rpc_string(&body, "login").unwrap();
     assert_eq!(login_val, "true", "login should succeed");
 
-    let session_id = extract_xml_rpc_string(&body, "session_id")
-        .expect("response should contain session_id");
+    let session_id =
+        extract_xml_rpc_string(&body, "session_id").expect("response should contain session_id");
     let secure_session_id = extract_xml_rpc_string(&body, "secure_session_id")
         .expect("response should contain secure_session_id");
-    let agent_id = extract_xml_rpc_string(&body, "agent_id")
-        .expect("response should contain agent_id");
-    let _circuit_code = extract_xml_rpc_i4(&body, "circuit_code")
-        .expect("response should contain circuit_code");
+    let agent_id =
+        extract_xml_rpc_string(&body, "agent_id").expect("response should contain agent_id");
+    let _circuit_code =
+        extract_xml_rpc_i4(&body, "circuit_code").expect("response should contain circuit_code");
     let seed_cap = extract_xml_rpc_string(&body, "seed_capability")
         .expect("response should contain seed_capability");
 
     assert_eq!(agent_id, PRINCIPAL, "agent_id should match principal");
     assert!(!session_id.is_empty(), "session_id should not be empty");
-    assert!(!secure_session_id.is_empty(), "secure_session_id should not be empty");
-    assert!(seed_cap.contains("/CAPS/"), "seed_capability should contain /CAPS/ path");
+    assert!(
+        !secure_session_id.is_empty(),
+        "secure_session_id should not be empty"
+    );
+    assert!(
+        seed_cap.contains("/CAPS/"),
+        "seed_capability should contain /CAPS/ path"
+    );
 
     // Verify login response contains inventory skeleton
-    assert!(body.contains("<name>inventory-skeleton</name>"),
-        "login response should include inventory-skeleton");
-    assert!(body.contains("<name>inventory-root</name>"),
-        "login response should include inventory-root");
-    assert!(body.contains(ROOT_FOLDER),
-        "inventory root folder ID should appear in response");
+    assert!(
+        body.contains("<name>inventory-skeleton</name>"),
+        "login response should include inventory-skeleton"
+    );
+    assert!(
+        body.contains("<name>inventory-root</name>"),
+        "login response should include inventory-root"
+    );
+    assert!(
+        body.contains(ROOT_FOLDER),
+        "inventory root folder ID should appear in response"
+    );
 
     // Verify login response contains buddy list with our friend
-    assert!(body.contains("<name>buddy-list</name>"),
-        "login response should include buddy-list");
+    assert!(
+        body.contains("<name>buddy-list</name>"),
+        "login response should include buddy-list"
+    );
 
     // Verify home field contains region coordinates
-    assert!(body.contains("<name>home</name>"), "response should contain home");
-    assert!(body.contains("region_handle"), "home should contain region_handle");
+    assert!(
+        body.contains("<name>home</name>"),
+        "response should contain home"
+    );
+    assert!(
+        body.contains("region_handle"),
+        "home should contain region_handle"
+    );
 
     // --- Step 2: Presence report (simulator reports agent location) ---
-    let (status, body) = send(&app, "POST", "/presence",
-        format!("METHOD=report&SessionID={session_id}&RegionID={REGION_UUID}")).await;
+    let (status, body) = send(
+        &app,
+        "POST",
+        "/presence",
+        format!("METHOD=report&SessionID={session_id}&RegionID={REGION_UUID}"),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
-    assert!(body.contains("<result>Success</result>"),
-        "presence report should succeed: {body}");
+    assert!(
+        body.contains("<result>Success</result>"),
+        "presence report should succeed: {body}"
+    );
 
     // --- Step 3: Verify presence was recorded ---
-    let (status, body) = send(&app, "POST", "/presence",
-        format!("METHOD=getagent&SessionID={session_id}")).await;
+    let (status, body) = send(
+        &app,
+        "POST",
+        "/presence",
+        format!("METHOD=getagent&SessionID={session_id}"),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
-    assert!(body.contains(REGION_UUID),
-        "getagent should return the region we reported to: {body}");
+    assert!(
+        body.contains(REGION_UUID),
+        "getagent should return the region we reported to: {body}"
+    );
 
     // --- Step 4: GridUser should be marked online (login handler called logged_in) ---
-    let (status, body) = send(&app, "POST", "/griduser",
-        format!("METHOD=getgriduserinfo&UserID={PRINCIPAL}")).await;
+    let (status, body) = send(
+        &app,
+        "POST",
+        "/griduser",
+        format!("METHOD=getgriduserinfo&UserID={PRINCIPAL}"),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
-    assert!(body.contains("<Online>True</Online>"),
-        "griduser should show online after login: {body}");
+    assert!(
+        body.contains("<Online>True</Online>"),
+        "griduser should show online after login: {body}"
+    );
 
     // --- Step 5: Post-login inventory reads (viewer fetches root folder) ---
-    let (status, body) = send(&app, "POST", "/xinventory",
-        format!("METHOD=GETROOTFOLDER&PRINCIPAL={PRINCIPAL}")).await;
+    let (status, body) = send(
+        &app,
+        "POST",
+        "/xinventory",
+        format!("METHOD=GETROOTFOLDER&PRINCIPAL={PRINCIPAL}"),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
-    assert!(body.contains(ROOT_FOLDER),
-        "root folder fetch should return our root: {body}");
-    assert!(body.contains("My Inventory"),
-        "root folder should be named 'My Inventory': {body}");
+    assert!(
+        body.contains(ROOT_FOLDER),
+        "root folder fetch should return our root: {body}"
+    );
+    assert!(
+        body.contains("My Inventory"),
+        "root folder should be named 'My Inventory': {body}"
+    );
 
     // --- Step 6: Viewer fetches folder content (textures subfolder items) ---
-    let (status, body) = send(&app, "POST", "/xinventory",
-        format!("METHOD=GETFOLDERCONTENT&PRINCIPAL={PRINCIPAL}&FOLDER={ROOT_FOLDER}")).await;
+    let (status, body) = send(
+        &app,
+        "POST",
+        "/xinventory",
+        format!("METHOD=GETFOLDERCONTENT&PRINCIPAL={PRINCIPAL}&FOLDER={ROOT_FOLDER}"),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
-    assert!(body.contains(CHILD_FOLDER),
-        "folder content should contain Textures subfolder: {body}");
-    assert!(body.contains(ITEM_UUID),
-        "folder content should contain our test item: {body}");
+    assert!(
+        body.contains(CHILD_FOLDER),
+        "folder content should contain Textures subfolder: {body}"
+    );
+    assert!(
+        body.contains(ITEM_UUID),
+        "folder content should contain our test item: {body}"
+    );
 
     // --- Step 7: Teleport prep - look up region by name ---
-    let (status, body) = send(&app, "POST", "/grid",
-        "METHOD=get_region_by_name&NAME=TestRegion".to_string()).await;
+    let (status, body) = send(
+        &app,
+        "POST",
+        "/grid",
+        "METHOD=get_region_by_name&NAME=TestRegion".to_string(),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
-    assert!(body.contains(REGION_UUID),
-        "region lookup should find TestRegion: {body}");
-    assert!(body.contains("127.0.0.1"),
-        "region should have correct server IP: {body}");
+    assert!(
+        body.contains(REGION_UUID),
+        "region lookup should find TestRegion: {body}"
+    );
+    assert!(
+        body.contains("127.0.0.1"),
+        "region should have correct server IP: {body}"
+    );
 
     // --- Step 8: Teleport prep - get default regions ---
-    let (status, body) = send(&app, "POST", "/grid",
-        format!("METHOD=get_default_regions&SCOPEID={ZERO_UUID}")).await;
+    let (status, body) = send(
+        &app,
+        "POST",
+        "/grid",
+        format!("METHOD=get_default_regions&SCOPEID={ZERO_UUID}"),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
-    assert!(body.contains(REGION_UUID),
-        "default regions should include our region: {body}");
+    assert!(
+        body.contains(REGION_UUID),
+        "default regions should include our region: {body}"
+    );
 }
 
 // ===========================================================================
@@ -582,16 +743,22 @@ async fn aurora_viewer_login_sequence() {
     assert_eq!(start_loc, "last", "start_location should be 'last'");
 
     // Verify classified_categories are present (viewers need these)
-    assert!(body.contains("<name>classified_categories</name>"),
-        "response should contain classified_categories for viewer UI");
+    assert!(
+        body.contains("<name>classified_categories</name>"),
+        "response should contain classified_categories for viewer UI"
+    );
 
     // Verify global-textures (viewer needs sun/cloud/moon textures)
-    assert!(body.contains("<name>global-textures</name>"),
-        "response should contain global-textures");
+    assert!(
+        body.contains("<name>global-textures</name>"),
+        "response should contain global-textures"
+    );
 
     // Verify login-flags
-    assert!(body.contains("<name>login-flags</name>"),
-        "response should contain login-flags");
+    assert!(
+        body.contains("<name>login-flags</name>"),
+        "response should contain login-flags"
+    );
 
     // Aurora-specific: verify the sim connection info is present
     let sim_ip = extract_xml_rpc_string(&body, "sim_ip").unwrap();
@@ -600,18 +767,32 @@ async fn aurora_viewer_login_sequence() {
     assert_eq!(sim_port, 9000);
 
     // Post-login: verify presence is set up correctly
-    let (status, body) = send(&app, "POST", "/presence",
-        format!("METHOD=getagent&SessionID={session_id}")).await;
+    let (status, body) = send(
+        &app,
+        "POST",
+        "/presence",
+        format!("METHOD=getagent&SessionID={session_id}"),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
-    assert!(body.contains(PRINCIPAL),
-        "presence should show our user after login: {body}");
+    assert!(
+        body.contains(PRINCIPAL),
+        "presence should show our user after login: {body}"
+    );
 
     // Verify griduser shows online
-    let (status, body) = send(&app, "POST", "/griduser",
-        format!("METHOD=getgriduserinfo&UserID={PRINCIPAL}")).await;
+    let (status, body) = send(
+        &app,
+        "POST",
+        "/griduser",
+        format!("METHOD=getgriduserinfo&UserID={PRINCIPAL}"),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
-    assert!(body.contains("<Online>True</Online>"),
-        "user should be online after Aurora login: {body}");
+    assert!(
+        body.contains("<Online>True</Online>"),
+        "user should be online after Aurora login: {body}"
+    );
 }
 
 // ===========================================================================
@@ -633,13 +814,23 @@ async fn login_wrong_password_fails() {
         </struct></value></param></params></methodCall>"#;
 
     let (status, body) = send_xml_rpc(&app, "/", login_xml).await;
-    assert_eq!(status, StatusCode::OK, "even failed login returns 200 per XML-RPC");
+    assert_eq!(
+        status,
+        StatusCode::OK,
+        "even failed login returns 200 per XML-RPC"
+    );
     let login_val = extract_xml_rpc_string(&body, "login").unwrap();
     assert_eq!(login_val, "false", "wrong password should fail");
 
     // Error message should not reveal whether the account exists
-    assert!(!body.contains("not found"), "error should not reveal account existence");
-    assert!(!body.contains(&PRINCIPAL), "error should not leak principal ID");
+    assert!(
+        !body.contains("not found"),
+        "error should not reveal account existence"
+    );
+    assert!(
+        !body.contains(PRINCIPAL),
+        "error should not leak principal ID"
+    );
 }
 
 // ===========================================================================
@@ -668,5 +859,8 @@ async fn login_uri_start_location() {
     assert_eq!(login_val, "true", "URI-based login should succeed");
 
     let start_loc = extract_xml_rpc_string(&body, "start_location").unwrap();
-    assert_eq!(start_loc, "url", "start_location should be 'url' for URI login");
+    assert_eq!(
+        start_loc, "url",
+        "start_location should be 'url' for URI login"
+    );
 }

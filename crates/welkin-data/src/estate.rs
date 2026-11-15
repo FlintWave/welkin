@@ -200,7 +200,12 @@ impl EstateStore {
         Ok(())
     }
 
-    async fn remove_uuid(&self, table: &str, estate_id: i32, uuid: &str) -> Result<bool, DataError> {
+    async fn remove_uuid(
+        &self,
+        table: &str,
+        estate_id: i32,
+        uuid: &str,
+    ) -> Result<bool, DataError> {
         let sql = format!("DELETE FROM {table} WHERE EstateID = $1 AND uuid = $2");
         let res = sqlx::query(&sql)
             .bind(estate_id)
@@ -242,7 +247,11 @@ impl EstateStore {
         self.add_uuid("estate_managers", estate_id, uuid).await
     }
 
-    pub async fn remove_estate_manager(&self, estate_id: i32, uuid: &str) -> Result<bool, DataError> {
+    pub async fn remove_estate_manager(
+        &self,
+        estate_id: i32,
+        uuid: &str,
+    ) -> Result<bool, DataError> {
         self.remove_uuid("estate_managers", estate_id, uuid).await
     }
 

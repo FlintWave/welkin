@@ -10,9 +10,9 @@
 use std::sync::Arc;
 
 use http_body_util::BodyExt;
+use tower::ServiceExt;
 use welkin_data::groups::GroupsStore;
 use welkin_services::groups::{GroupsServiceState, router as groups_router};
-use tower::ServiceExt;
 
 // ===========================================================================
 // SQLite schema for groups tables (compatible with GroupsStore queries)
@@ -139,10 +139,7 @@ fn form_body(params: &[(&str, &str)]) -> String {
         .join("&")
 }
 
-async fn post_groups(
-    app: &axum::Router,
-    body: &str,
-) -> (u16, String) {
+async fn post_groups(app: &axum::Router, body: &str) -> (u16, String) {
     let request = axum::http::Request::builder()
         .method("POST")
         .uri("/groups")
@@ -906,10 +903,7 @@ async fn groups_protocol_putgroup_bad_data() {
     let app = build_groups_app(store);
 
     // Missing OP.
-    let body = form_body(&[
-        ("METHOD", "PUTGROUP"),
-        ("RequestingAgentID", AGENT_UUID),
-    ]);
+    let body = form_body(&[("METHOD", "PUTGROUP"), ("RequestingAgentID", AGENT_UUID)]);
     let (status, response) = post_groups(&app, &body).await;
     assert_eq!(status, 200);
     assert_valid_xml_response(&response, "PUTGROUP bad data");

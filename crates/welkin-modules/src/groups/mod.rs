@@ -11,8 +11,8 @@ pub mod messaging;
 
 use std::collections::HashMap;
 
-use welkin_data::groups::GroupPowers;
 use uuid::Uuid;
+use welkin_data::groups::GroupPowers;
 
 use crate::module::{ModuleConfig, ModuleError, ModuleType, RegionModule};
 use crate::registry::SceneRef;
@@ -197,11 +197,7 @@ pub trait IGroupsServicesConnector: Send + Sync {
 
     fn get_group_roles(&self, requesting_agent: Uuid, group_id: Uuid) -> Vec<GroupRolesData>;
 
-    fn get_group_role_members(
-        &self,
-        requesting_agent: Uuid,
-        group_id: Uuid,
-    ) -> Vec<(Uuid, Uuid)>;
+    fn get_group_role_members(&self, requesting_agent: Uuid, group_id: Uuid) -> Vec<(Uuid, Uuid)>;
 
     fn add_agent_to_group(
         &self,
@@ -235,12 +231,7 @@ pub trait IGroupsServicesConnector: Send + Sync {
 
     fn remove_agent_to_group_invite(&self, requesting_agent: Uuid, invite_id: Uuid);
 
-    fn set_agent_active_group(
-        &self,
-        requesting_agent: Uuid,
-        agent_id: Uuid,
-        group_id: Uuid,
-    );
+    fn set_agent_active_group(&self, requesting_agent: Uuid, agent_id: Uuid, group_id: Uuid);
 
     fn get_agent_active_membership(
         &self,
@@ -272,12 +263,7 @@ pub trait IGroupsServicesConnector: Send + Sync {
         powers: GroupPowers,
     ) -> Result<(), String>;
 
-    fn remove_group_role(
-        &self,
-        requesting_agent: Uuid,
-        group_id: Uuid,
-        role_id: Uuid,
-    );
+    fn remove_group_role(&self, requesting_agent: Uuid, group_id: Uuid, role_id: Uuid);
 
     fn update_group_role(
         &self,
@@ -338,17 +324,9 @@ pub trait IGroupsServicesConnector: Send + Sync {
         attachment_owner_id: Uuid,
     ) -> bool;
 
-    fn get_group_notice(
-        &self,
-        requesting_agent: Uuid,
-        notice_id: Uuid,
-    ) -> Option<GroupNoticeData>;
+    fn get_group_notice(&self, requesting_agent: Uuid, notice_id: Uuid) -> Option<GroupNoticeData>;
 
-    fn get_group_notices(
-        &self,
-        requesting_agent: Uuid,
-        group_id: Uuid,
-    ) -> Vec<GroupNoticeData>;
+    fn get_group_notices(&self, requesting_agent: Uuid, group_id: Uuid) -> Vec<GroupNoticeData>;
 
     fn get_agent_group_roles(
         &self,
@@ -370,11 +348,7 @@ pub trait IGroupsModule: Send + Sync {
     fn activate_group(&self, agent_id: Uuid, group_id: Uuid);
 
     /// Get membership info for an agent in a specific group.
-    fn get_member_info(
-        &self,
-        agent_id: Uuid,
-        group_id: Uuid,
-    ) -> Option<GroupMembershipData>;
+    fn get_member_info(&self, agent_id: Uuid, group_id: Uuid) -> Option<GroupMembershipData>;
 
     /// Get all group memberships for an agent.
     fn get_groups_for_agent(&self, agent_id: Uuid) -> Vec<GroupMembershipData>;
@@ -490,19 +464,11 @@ impl IGroupsServicesConnector for StubGroupsConnector {
             .collect()
     }
 
-    fn get_group_members(
-        &self,
-        _requesting_agent: Uuid,
-        group_id: Uuid,
-    ) -> Vec<GroupMembersData> {
+    fn get_group_members(&self, _requesting_agent: Uuid, group_id: Uuid) -> Vec<GroupMembersData> {
         self.members.get(&group_id).cloned().unwrap_or_default()
     }
 
-    fn get_group_roles(
-        &self,
-        _requesting_agent: Uuid,
-        group_id: Uuid,
-    ) -> Vec<GroupRolesData> {
+    fn get_group_roles(&self, _requesting_agent: Uuid, group_id: Uuid) -> Vec<GroupRolesData> {
         self.roles.get(&group_id).cloned().unwrap_or_default()
     }
 
@@ -554,13 +520,7 @@ impl IGroupsServicesConnector for StubGroupsConnector {
 
     fn remove_agent_to_group_invite(&self, _requesting_agent: Uuid, _invite_id: Uuid) {}
 
-    fn set_agent_active_group(
-        &self,
-        _requesting_agent: Uuid,
-        _agent_id: Uuid,
-        _group_id: Uuid,
-    ) {
-    }
+    fn set_agent_active_group(&self, _requesting_agent: Uuid, _agent_id: Uuid, _group_id: Uuid) {}
 
     fn get_agent_active_membership(
         &self,
@@ -605,13 +565,7 @@ impl IGroupsServicesConnector for StubGroupsConnector {
         Ok(())
     }
 
-    fn remove_group_role(
-        &self,
-        _requesting_agent: Uuid,
-        _group_id: Uuid,
-        _role_id: Uuid,
-    ) {
-    }
+    fn remove_group_role(&self, _requesting_agent: Uuid, _group_id: Uuid, _role_id: Uuid) {}
 
     fn update_group_role(
         &self,
@@ -687,11 +641,7 @@ impl IGroupsServicesConnector for StubGroupsConnector {
         None
     }
 
-    fn get_group_notices(
-        &self,
-        _requesting_agent: Uuid,
-        group_id: Uuid,
-    ) -> Vec<GroupNoticeData> {
+    fn get_group_notices(&self, _requesting_agent: Uuid, group_id: Uuid) -> Vec<GroupNoticeData> {
         self.notices.get(&group_id).cloned().unwrap_or_default()
     }
 
@@ -837,11 +787,7 @@ impl GroupsModule {
     }
 
     /// Handle JoinGroupRequest from viewer.
-    pub fn handle_join_group_request(
-        &self,
-        agent_id: Uuid,
-        group_id: Uuid,
-    ) -> Result<(), String> {
+    pub fn handle_join_group_request(&self, agent_id: Uuid, group_id: Uuid) -> Result<(), String> {
         if !self.enabled {
             return Err("Groups not enabled".to_string());
         }
@@ -851,11 +797,7 @@ impl GroupsModule {
     }
 
     /// Handle LeaveGroupRequest from viewer.
-    pub fn handle_leave_group_request(
-        &self,
-        agent_id: Uuid,
-        group_id: Uuid,
-    ) -> Result<(), String> {
+    pub fn handle_leave_group_request(&self, agent_id: Uuid, group_id: Uuid) -> Result<(), String> {
         if !self.enabled {
             return Err("Groups not enabled".to_string());
         }
@@ -902,9 +844,8 @@ impl GroupsModule {
             group = %group_id,
             "InviteGroupRequest"
         );
-        self.connector.add_agent_to_group_invite(
-            agent_id, invite_id, group_id, role_id, target_id,
-        )
+        self.connector
+            .add_agent_to_group_invite(agent_id, invite_id, group_id, role_id, target_id)
     }
 
     /// Handle GroupRoleDataRequest from viewer.
@@ -943,7 +884,9 @@ impl GroupsModule {
             return Vec::new();
         }
         tracing::debug!(agent = %agent_id, group = %group_id, "GroupTitlesRequest");
-        let roles = self.connector.get_agent_group_roles(agent_id, agent_id, group_id);
+        let roles = self
+            .connector
+            .get_agent_group_roles(agent_id, agent_id, group_id);
         let active = self
             .connector
             .get_agent_group_membership(agent_id, agent_id, group_id);
@@ -974,11 +917,7 @@ impl GroupsModule {
     /// Handle GroupVoteHistoryRequest from viewer.
     ///
     /// Vote history is not implemented; returns empty.
-    pub fn handle_group_vote_history_request(
-        &self,
-        _agent_id: Uuid,
-        _group_id: Uuid,
-    ) -> Vec<()> {
+    pub fn handle_group_vote_history_request(&self, _agent_id: Uuid, _group_id: Uuid) -> Vec<()> {
         Vec::new()
     }
 
@@ -1028,11 +967,7 @@ impl IGroupsModule for GroupsModule {
             .set_agent_active_group(agent_id, agent_id, group_id);
     }
 
-    fn get_member_info(
-        &self,
-        agent_id: Uuid,
-        group_id: Uuid,
-    ) -> Option<GroupMembershipData> {
+    fn get_member_info(&self, agent_id: Uuid, group_id: Uuid) -> Option<GroupMembershipData> {
         if !self.enabled {
             return None;
         }
@@ -1069,18 +1004,13 @@ impl IGroupsModule for GroupsModule {
         self.connector.get_group_members(ZERO_UUID, group_id)
     }
 
-    fn agent_has_power(
-        &self,
-        agent_id: Uuid,
-        group_id: Uuid,
-        power: GroupPowers,
-    ) -> bool {
+    fn agent_has_power(&self, agent_id: Uuid, group_id: Uuid, power: GroupPowers) -> bool {
         if !self.enabled {
             return false;
         }
-        let roles =
-            self.connector
-                .get_agent_group_roles(agent_id, agent_id, group_id);
+        let roles = self
+            .connector
+            .get_agent_group_roles(agent_id, agent_id, group_id);
         roles.iter().any(|r| r.powers.contains(power))
     }
 }
@@ -1429,12 +1359,16 @@ mod tests {
     #[test]
     fn proposals_and_votes_return_empty() {
         let module = GroupsModule::new();
-        assert!(module
-            .handle_group_active_proposals_request(Uuid::new_v4(), Uuid::new_v4())
-            .is_empty());
-        assert!(module
-            .handle_group_vote_history_request(Uuid::new_v4(), Uuid::new_v4())
-            .is_empty());
+        assert!(
+            module
+                .handle_group_active_proposals_request(Uuid::new_v4(), Uuid::new_v4())
+                .is_empty()
+        );
+        assert!(
+            module
+                .handle_group_vote_history_request(Uuid::new_v4(), Uuid::new_v4())
+                .is_empty()
+        );
     }
 
     // 16. GroupAccountSummary default is zeroed.

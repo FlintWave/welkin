@@ -351,9 +351,9 @@ pub fn encode_compressed(update: &FullObjectUpdate) -> (Vec<u8>, u32) {
 mod tests {
     use super::*;
 
-    use glam::{Quat, Vec3, Vec4};
     use aurora_msg::msgs::improved_terse_object_update;
     use aurora_msg::unpack_quat;
+    use glam::{Quat, Vec3, Vec4};
 
     fn u16_to_f32(v: u16, lower: f32, upper: f32) -> f32 {
         let delta = upper - lower;
@@ -547,7 +547,8 @@ mod tests {
         };
 
         let (data, _compressed_flags) = encode_compressed(&update);
-        let parsed = aurora_net::objects::parse_compressed(&data, update.update_flags).expect("parse_compressed failed");
+        let parsed = aurora_net::objects::parse_compressed(&data, update.update_flags)
+            .expect("parse_compressed failed");
 
         assert_eq!(parsed.local_id, 99);
         assert_eq!(parsed.full_id, Uuid::from_u128(0xDEADBEEF));

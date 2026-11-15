@@ -152,7 +152,7 @@ async fn handle_mode(State(s): State<WizardServiceState>, Json(body): Json<ModeB
                     StatusCode::BAD_REQUEST,
                     Json(serde_json::json!({"error": "grid_uri required for join_grid mode"})),
                 )
-                    .into_response()
+                    .into_response();
             }
         },
         _ => {
@@ -160,7 +160,7 @@ async fn handle_mode(State(s): State<WizardServiceState>, Json(body): Json<ModeB
                 StatusCode::BAD_REQUEST,
                 Json(serde_json::json!({"error": "invalid mode"})),
             )
-                .into_response()
+                .into_response();
         }
     };
 

@@ -115,7 +115,11 @@ fn griduser_xml(name: &str, u: &GridUserRow) -> String {
     tag(&mut s, "LastRegionID", &u.last_region_id);
     tag(&mut s, "LastPosition", &u.last_position);
     tag(&mut s, "LastLookAt", &u.last_look_at);
-    let online = if u.online.eq_ignore_ascii_case("true") { "True" } else { "False" };
+    let online = if u.online.eq_ignore_ascii_case("true") {
+        "True"
+    } else {
+        "False"
+    };
     tag(&mut s, "Online", online);
     tag(&mut s, "Login", &u.login);
     tag(&mut s, "Logout", &u.logout);

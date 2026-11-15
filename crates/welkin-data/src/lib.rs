@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-pub mod pool;
-pub mod assets;
-pub mod inventory;
-pub mod grid;
 pub mod accounts;
-pub mod auth;
-pub mod presence;
-pub mod grid_user;
-pub mod friends;
-pub mod avatar;
-pub mod mute;
-pub mod profiles;
-pub mod offline_im;
-pub mod estate;
 pub mod agent_prefs;
-pub mod migrations;
-pub mod simulation;
+pub mod assets;
+pub mod auth;
+pub mod avatar;
+pub mod estate;
+pub mod friends;
+pub mod grid;
+pub mod grid_user;
 pub mod groups;
 pub mod hg_traveling_data;
+pub mod inventory;
+pub mod migrations;
+pub mod mute;
+pub mod offline_im;
+pub mod pool;
+pub mod presence;
+pub mod profiles;
+pub mod simulation;
 
 pub use pool::DataPool;
 

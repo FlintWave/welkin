@@ -468,10 +468,7 @@ mod tests {
         };
         register_ossl(&lua, &config, &ctx).unwrap();
 
-        let version: String = lua
-            .load("return osGetSimulatorVersion()")
-            .eval()
-            .unwrap();
+        let version: String = lua.load("return osGetSimulatorVersion()").eval().unwrap();
         assert_eq!(version, "welkin 0.1.0");
     }
 
@@ -488,20 +485,14 @@ mod tests {
 
         // osNpcCreate (High) should not be registered
         let result: LuaResult<mlua::Value> = lua.load("return osNpcCreate").eval();
-        match result {
-            Ok(mlua::Value::Function(_)) => {
-                panic!("osNpcCreate should not be registered at Low threat level")
-            }
-            _ => {}
+        if let Ok(mlua::Value::Function(_)) = result {
+            panic!("osNpcCreate should not be registered at Low threat level")
         }
 
         // osGetSimulatorVersion (High) also blocked
         let result: LuaResult<mlua::Value> = lua.load("return osGetSimulatorVersion").eval();
-        match result {
-            Ok(mlua::Value::Function(_)) => {
-                panic!("osGetSimulatorVersion should not be registered at Low threat level")
-            }
-            _ => {}
+        if let Ok(mlua::Value::Function(_)) = result {
+            panic!("osGetSimulatorVersion should not be registered at Low threat level")
         }
 
         // But osDrawText (None) should work
@@ -528,16 +519,12 @@ mod tests {
         };
         register_ossl(&lua, &config, &ctx).unwrap();
 
-        let version: String = lua
-            .load("return osGetSimulatorVersion()")
-            .eval()
-            .unwrap();
+        let version: String = lua.load("return osGetSimulatorVersion()").eval().unwrap();
         assert_eq!(version, "welkin 0.1.0");
 
         let result: LuaResult<mlua::Value> = lua.load("return osNpcCreate").eval();
-        match result {
-            Ok(mlua::Value::Function(_)) => panic!("osNpcCreate should still be blocked"),
-            _ => {}
+        if let Ok(mlua::Value::Function(_)) = result {
+            panic!("osNpcCreate should still be blocked")
         }
     }
 
@@ -615,10 +602,7 @@ mod tests {
             .unwrap();
         assert!((speed - 1.0).abs() < f64::EPSILON);
 
-        let hour: f64 = lua
-            .load("return osGetCurrentSunHour()")
-            .eval()
-            .unwrap();
+        let hour: f64 = lua.load("return osGetCurrentSunHour()").eval().unwrap();
         assert!((hour - 12.0).abs() < f64::EPSILON);
 
         // Functions above Moderate should NOT be available:
@@ -827,11 +811,7 @@ mod tests {
             Some(OsslRole::EstateOwner)
         ));
         // Anyone denied
-        assert!(!config.is_allowed(
-            "osNpcCreate",
-            OsslThreatLevel::High,
-            Some(OsslRole::Anyone)
-        ));
+        assert!(!config.is_allowed("osNpcCreate", OsslThreatLevel::High, Some(OsslRole::Anyone)));
         // No role denied
         assert!(!config.is_allowed("osNpcCreate", OsslThreatLevel::High, Option::None));
     }
@@ -923,16 +903,10 @@ Allow_osDrawText = true
         let r: i32 = lua.load(r#"return osIsNpc("some-key")"#).eval().unwrap();
         assert_eq!(r, 0);
 
-        let r: String = lua
-            .load(r#"return osNpcGetPos("npc-key")"#)
-            .eval()
-            .unwrap();
+        let r: String = lua.load(r#"return osNpcGetPos("npc-key")"#).eval().unwrap();
         assert_eq!(r, "<0, 0, 0>");
 
-        let r: String = lua
-            .load(r#"return osNpcGetRot("npc-key")"#)
-            .eval()
-            .unwrap();
+        let r: String = lua.load(r#"return osNpcGetRot("npc-key")"#).eval().unwrap();
         assert_eq!(r, "<0, 0, 0, 1>");
 
         let r: String = lua
@@ -996,9 +970,7 @@ Allow_osDrawText = true
         lua.load(r#"osCauseHealing("avatar", 10.0)"#)
             .exec()
             .unwrap();
-        lua.load(r#"osCauseDamage("avatar", 10.0)"#)
-            .exec()
-            .unwrap();
+        lua.load(r#"osCauseDamage("avatar", 10.0)"#).exec().unwrap();
         lua.load(r#"osKickAvatar("First", "Last", "reason")"#)
             .exec()
             .unwrap();
@@ -1009,16 +981,25 @@ Allow_osDrawText = true
     fn terrain_stubs_no_panic() {
         let (lua, _ctx) = vm_all_enabled();
 
-        let h: f64 = lua.load("return osTerrainGetHeight(128, 128)").eval().unwrap();
+        let h: f64 = lua
+            .load("return osTerrainGetHeight(128, 128)")
+            .eval()
+            .unwrap();
         assert!((h - 25.0).abs() < f64::EPSILON);
 
-        let h2: f64 = lua.load("return osGetTerrainHeight(64, 64)").eval().unwrap();
+        let h2: f64 = lua
+            .load("return osGetTerrainHeight(64, 64)")
+            .eval()
+            .unwrap();
         assert!((h2 - 25.0).abs() < f64::EPSILON);
 
         let water: f64 = lua.load("return osGetRegionWaterHeight()").eval().unwrap();
         assert!((water - 20.0).abs() < f64::EPSILON);
 
-        let sun: f64 = lua.load(r#"return osSunGetParam("day_length")"#).eval().unwrap();
+        let sun: f64 = lua
+            .load(r#"return osSunGetParam("day_length")"#)
+            .eval()
+            .unwrap();
         assert!((sun - 6.0).abs() < f64::EPSILON);
 
         let wind: f64 = lua
@@ -1132,10 +1113,7 @@ Allow_osDrawText = true
         let color: String = lua.load("return osGetLinkColor(0, 0)").eval().unwrap();
         assert_eq!(color, "<0, 0, 0>");
 
-        let name: String = lua
-            .load(r#"return osKey2Name("some-key")"#)
-            .eval()
-            .unwrap();
+        let name: String = lua.load(r#"return osKey2Name("some-key")"#).eval().unwrap();
         assert_eq!(name, "");
 
         // Void stubs
@@ -1151,10 +1129,7 @@ Allow_osDrawText = true
         let catalog = function_catalog();
         let mut seen = HashSet::new();
         for (name, _level) in &catalog {
-            assert!(
-                seen.insert(*name),
-                "duplicate OSSL function name: {name}"
-            );
+            assert!(seen.insert(*name), "duplicate OSSL function name: {name}");
         }
     }
 }

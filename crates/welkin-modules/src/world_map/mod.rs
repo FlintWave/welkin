@@ -23,12 +23,14 @@ use crate::registry::SceneRef;
 /// `SimAccess` values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
+#[derive(Default)]
 pub enum SimAccess {
     /// Unknown or unset.
     Unknown = 0,
     /// Trial account region (historical).
     Trial = 7,
     /// PG — general audience.
+    #[default]
     PG = 13,
     /// Mature — moderate content.
     Mature = 21,
@@ -54,12 +56,6 @@ impl SimAccess {
             255 => Self::NonExistent,
             _ => Self::Unknown,
         }
-    }
-}
-
-impl Default for SimAccess {
-    fn default() -> Self {
-        Self::PG
     }
 }
 
@@ -371,8 +367,7 @@ impl RegionModule for WorldMapModule {
     fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
         let module_name = config.get_string("Map", "WorldMapModule", "WorldMap");
         self.enabled = module_name == "WorldMap";
-        self.blacklist_timeout =
-            config.get_int("Map", "BlacklistTimeout", 300) as u32;
+        self.blacklist_timeout = config.get_int("Map", "BlacklistTimeout", 300) as u32;
         tracing::info!(enabled = self.enabled, "WorldMapModule initialised");
         Ok(())
     }

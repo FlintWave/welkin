@@ -10,11 +10,11 @@
 //!    is active and the agent is a god, return `true`.
 //! 3. Apply the specific permission logic.
 
-use welkin_types::PermissionMask;
 use uuid::Uuid;
+use welkin_types::PermissionMask;
 
-use crate::land::{LandData, ParcelFlags};
 use super::{DefaultPermissionsModule, UserSet};
+use crate::land::{LandData, ParcelFlags};
 
 /// Simple description of object ownership / group used by permission checks
 /// that do not have access to the full scene graph.
@@ -98,13 +98,12 @@ impl DefaultPermissionsModule {
         }
 
         // Group create-objects.
-        if !parcel.group_id.is_nil() {
-            if flags.contains(ParcelFlags::CREATE_GROUP_OBJECTS)
-                && agent_id == parcel.group_id
-            {
-                // Simplified: in full implementation would check group membership.
-                return true;
-            }
+        if !parcel.group_id.is_nil()
+            && flags.contains(ParcelFlags::CREATE_GROUP_OBJECTS)
+            && agent_id == parcel.group_id
+        {
+            // Simplified: in full implementation would check group membership.
+            return true;
         }
 
         false
@@ -278,12 +277,7 @@ impl DefaultPermissionsModule {
     ///
     /// Port of `CanTakeObject`. Combines owner check + transfer requirement
     /// for non-owners.
-    pub fn can_take_object(
-        &self,
-        agent_id: Uuid,
-        object_owner: Uuid,
-        object_group: Uuid,
-    ) -> bool {
+    pub fn can_take_object(&self, agent_id: Uuid, object_owner: Uuid, object_group: Uuid) -> bool {
         if let Some(v) = self.bypass_check() {
             return v;
         }
@@ -342,10 +336,10 @@ impl DefaultPermissionsModule {
         }
 
         // Parcel owner can return objects on their parcel.
-        if let Some(parcel) = parcel {
-            if agent_id == parcel.owner_id {
-                return true;
-            }
+        if let Some(parcel) = parcel
+            && agent_id == parcel.owner_id
+        {
+            return true;
         }
 
         false
@@ -389,9 +383,7 @@ impl DefaultPermissionsModule {
         }
 
         // AllowGroupScripts + matching group.
-        if flags.contains(ParcelFlags::ALLOW_GROUP_SCRIPTS)
-            && !parcel.group_id.is_nil()
-        {
+        if flags.contains(ParcelFlags::ALLOW_GROUP_SCRIPTS) && !parcel.group_id.is_nil() {
             // Simplified: in the full implementation this checks
             // `part.GroupID == parcel.GroupID`. Here we compare the
             // agent to the parcel group as a proxy.

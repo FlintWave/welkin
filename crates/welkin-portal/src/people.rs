@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+use axum::Router;
 use axum::extract::{Json, Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
-use axum::Router;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -172,10 +172,7 @@ where
     S: Clone + Send + Sync + 'static + AsRef<crate::sessions::SessionStore> + AsRef<SignUpStore>,
 {
     Router::new()
-        .route(
-            "/portal/api/people/signups",
-            get(handle_list_signups::<S>),
-        )
+        .route("/portal/api/people/signups", get(handle_list_signups::<S>))
         .route(
             "/portal/api/people/signups/{id}/approve",
             post(handle_approve::<S>),
@@ -262,7 +259,11 @@ where
     }
     let store: &SignUpStore = state.as_ref();
     let pending = store.list_pending();
-    (StatusCode::OK, Json(serde_json::json!({ "signups": pending }))).into_response()
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({ "signups": pending })),
+    )
+        .into_response()
 }
 
 async fn handle_approve<S>(
@@ -388,7 +389,11 @@ where
     };
     store.store_reset_token(token);
 
-    (StatusCode::OK, Json(serde_json::json!({ "message": "if an account exists, a reset email has been sent" }))).into_response()
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({ "message": "if an account exists, a reset email has been sent" })),
+    )
+        .into_response()
 }
 
 async fn handle_password_reset_confirm<S>(
@@ -405,12 +410,10 @@ where
             tracing::info!("password reset confirmed; password update not yet wired");
             (StatusCode::OK, Json(serde_json::json!({ "success": true }))).into_response()
         }
-        None => {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(serde_json::json!({ "error": "invalid or expired token" })),
-            )
-                .into_response()
-        }
+        None => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "invalid or expired token" })),
+        )
+            .into_response(),
     }
 }

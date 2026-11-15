@@ -10,11 +10,11 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
+use uuid::Uuid;
 use welkin_data::groups::{
     GroupPowers, GroupRow, GroupsStore, InvitationRow, MembershipRow, NoticeRow, PrincipalRow,
     RoleMembershipRow, RoleRow,
 };
-use uuid::Uuid;
 
 const ZERO_UUID: &str = "00000000-0000-0000-0000-000000000000";
 
@@ -34,9 +34,7 @@ pub fn router(state: GroupsServiceState) -> Router {
 // ---- XML response helpers (matching C# ServerUtils.BuildXmlResponse) ----
 
 fn xml_result(body: &str) -> Response {
-    let xml = format!(
-        "<?xml version=\"1.0\"?><ServerResponse>{body}</ServerResponse>"
-    );
+    let xml = format!("<?xml version=\"1.0\"?><ServerResponse>{body}</ServerResponse>");
     (
         StatusCode::OK,
         [(header::CONTENT_TYPE, "text/xml; charset=utf-8")],
@@ -46,9 +44,7 @@ fn xml_result(body: &str) -> Response {
 }
 
 fn null_result(reason: &str) -> Response {
-    xml_result(&format!(
-        "<RESULT>NULL</RESULT><REASON>{reason}</REASON>"
-    ))
+    xml_result(&format!("<RESULT>NULL</RESULT><REASON>{reason}</REASON>"))
 }
 
 fn bool_result(success: bool) -> Response {
@@ -156,10 +152,7 @@ fn role_to_xml(r: &RoleRow, members: i64) -> String {
 }
 
 fn role_member_to_xml(rm: &RoleMembershipRow) -> String {
-    dict_to_xml(&[
-        ("RoleID", &rm.role_id),
-        ("MemberID", &rm.principal_id),
-    ])
+    dict_to_xml(&[("RoleID", &rm.role_id), ("MemberID", &rm.principal_id)])
 }
 
 fn invite_to_xml(inv: &InvitationRow) -> String {
@@ -263,7 +256,12 @@ fn parse_form(body: &str) -> HashMap<String, String> {
 
 // ---- Permission checks ----
 
-async fn has_power(store: &GroupsStore, agent_id: &str, group_id: &str, power: GroupPowers) -> bool {
+async fn has_power(
+    store: &GroupsStore,
+    agent_id: &str,
+    group_id: &str,
+    power: GroupPowers,
+) -> bool {
     let rmemberships = match store.retrieve_member_roles(group_id, agent_id).await {
         Ok(r) => r,
         Err(_) => return false,
@@ -322,7 +320,12 @@ async fn add_or_update_role(
     store.store_role(&row).await.unwrap_or(false)
 }
 
-async fn add_agent_to_group_role(store: &GroupsStore, agent_id: &str, group_id: &str, role_id: &str) {
+async fn add_agent_to_group_role(
+    store: &GroupsStore,
+    agent_id: &str,
+    group_id: &str,
+    role_id: &str,
+) {
     if store
         .retrieve_role_member(group_id, role_id, agent_id)
         .await
@@ -396,9 +399,16 @@ async fn get_membership_data(
     group_id: &str,
 ) -> Option<(MembershipRow, GroupRow, String, u64)> {
     let group = store.retrieve_group_by_id(group_id).await.ok()??;
-    let membership = store.retrieve_member(&group.group_id, agent_id).await.ok()??;
+    let membership = store
+        .retrieve_member(&group.group_id, agent_id)
+        .await
+        .ok()??;
     let active_role_id = &membership.selected_role_id;
-    let role = store.retrieve_role(&group.group_id, active_role_id).await.ok().flatten();
+    let role = store
+        .retrieve_role(&group.group_id, active_role_id)
+        .await
+        .ok()
+        .flatten();
     let (title, powers) = match role {
         Some(r) => (r.title.clone(), r.powers.parse::<u64>().unwrap_or(0)),
         None => (String::new(), 0),
@@ -483,10 +493,30 @@ async fn handle_put_group(store: &GroupsStore, form: &HashMap<String, String>) -
             insignia_id: form_str(form, "InsigniaID").to_string(),
             founder_id: form_str(form, "FounderID").to_string(),
             membership_fee: form_str(form, "MembershipFee").parse().unwrap_or(0),
-            open_enrollment: if parse_bool(form_str(form, "OpenEnrollment")) { "1" } else { "0" }.to_string(),
-            show_in_list: if parse_bool(form_str(form, "ShownInList")) { "1" } else { "0" }.to_string(),
-            allow_publish: if parse_bool(form_str(form, "AllowPublish")) { "1" } else { "0" }.to_string(),
-            mature_publish: if parse_bool(form_str(form, "MaturePublish")) { "1" } else { "0" }.to_string(),
+            open_enrollment: if parse_bool(form_str(form, "OpenEnrollment")) {
+                "1"
+            } else {
+                "0"
+            }
+            .to_string(),
+            show_in_list: if parse_bool(form_str(form, "ShownInList")) {
+                "1"
+            } else {
+                "0"
+            }
+            .to_string(),
+            allow_publish: if parse_bool(form_str(form, "AllowPublish")) {
+                "1"
+            } else {
+                "0"
+            }
+            .to_string(),
+            mature_publish: if parse_bool(form_str(form, "MaturePublish")) {
+                "1"
+            } else {
+                "0"
+            }
+            .to_string(),
             owner_role_id: owner_role_id.clone(),
             location: String::new(),
         };
@@ -500,15 +530,39 @@ async fn handle_put_group(store: &GroupsStore, form: &HashMap<String, String>) -
         let officer_powers = GroupPowers::OFFICERS.bits();
         let owner_powers = GroupPowers::OWNERS.bits();
 
-        add_or_update_role(store, &group_id, ZERO_UUID, "Everyone",
+        add_or_update_role(
+            store,
+            &group_id,
+            ZERO_UUID,
+            "Everyone",
             "Everyone in the group is in the everyone role.",
-            &format!("Member of {name}"), everyone_powers, true).await;
-        add_or_update_role(store, &group_id, &officers_role_id, "Officers",
+            &format!("Member of {name}"),
+            everyone_powers,
+            true,
+        )
+        .await;
+        add_or_update_role(
+            store,
+            &group_id,
+            &officers_role_id,
+            "Officers",
             "The officers of the group, with more powers than regular members.",
-            &format!("Officer of {name}"), officer_powers, true).await;
-        add_or_update_role(store, &group_id, &owner_role_id, "Owners",
+            &format!("Officer of {name}"),
+            officer_powers,
+            true,
+        )
+        .await;
+        add_or_update_role(
+            store,
+            &group_id,
+            &owner_role_id,
+            "Owners",
             "Owners of the group",
-            &format!("Owner of {name}"), owner_powers, true).await;
+            &format!("Owner of {name}"),
+            owner_powers,
+            true,
+        )
+        .await;
 
         // Add founder
         let founder_id = form_str(form, "FounderID");
@@ -530,7 +584,14 @@ async fn handle_put_group(store: &GroupsStore, form: &HashMap<String, String>) -
         if group_id_str.is_empty() {
             return null_result("Bad network data");
         }
-        if !has_power(store, requesting_agent, group_id_str, GroupPowers::CHANGE_ACTIONS).await {
+        if !has_power(
+            store,
+            requesting_agent,
+            group_id_str,
+            GroupPowers::CHANGE_ACTIONS,
+        )
+        .await
+        {
             return null_result("Insufficient permissions");
         }
         let existing = match store.retrieve_group_by_id(group_id_str).await {
@@ -543,11 +604,33 @@ async fn handle_put_group(store: &GroupsStore, form: &HashMap<String, String>) -
             charter: form_str(form, "Charter").to_string(),
             insignia_id: form_str(form, "InsigniaID").to_string(),
             founder_id: existing.founder_id,
-            membership_fee: form_str(form, "MembershipFee").parse().unwrap_or(existing.membership_fee),
-            open_enrollment: if parse_bool(form_str(form, "OpenEnrollment")) { "1" } else { "0" }.to_string(),
-            show_in_list: if parse_bool(form_str(form, "ShownInList")) { "1" } else { "0" }.to_string(),
-            allow_publish: if parse_bool(form_str(form, "AllowPublish")) { "1" } else { "0" }.to_string(),
-            mature_publish: if parse_bool(form_str(form, "MaturePublish")) { "1" } else { "0" }.to_string(),
+            membership_fee: form_str(form, "MembershipFee")
+                .parse()
+                .unwrap_or(existing.membership_fee),
+            open_enrollment: if parse_bool(form_str(form, "OpenEnrollment")) {
+                "1"
+            } else {
+                "0"
+            }
+            .to_string(),
+            show_in_list: if parse_bool(form_str(form, "ShownInList")) {
+                "1"
+            } else {
+                "0"
+            }
+            .to_string(),
+            allow_publish: if parse_bool(form_str(form, "AllowPublish")) {
+                "1"
+            } else {
+                "0"
+            }
+            .to_string(),
+            mature_publish: if parse_bool(form_str(form, "MaturePublish")) {
+                "1"
+            } else {
+                "0"
+            }
+            .to_string(),
             owner_role_id: existing.owner_role_id,
             location: existing.location,
         };
@@ -604,7 +687,11 @@ async fn handle_add_agent_to_group(
     let group_id = form_str(form, "GroupID");
     let role_id = form_str(form, "RoleID");
 
-    if requesting_agent.is_empty() || agent_id.is_empty() || group_id.is_empty() || role_id.is_empty() {
+    if requesting_agent.is_empty()
+        || agent_id.is_empty()
+        || group_id.is_empty()
+        || role_id.is_empty()
+    {
         return null_result("Bad network data");
     }
 
@@ -643,23 +730,20 @@ async fn handle_remove_agent_from_group(
     let _ = store.delete_member_all_roles(group_id, agent_id).await;
 
     // Inactivate group if it was active
-    if let Ok(Some(principal)) = store.retrieve_principal(agent_id).await {
-        if principal.active_group_id == group_id {
-            let p = PrincipalRow {
-                principal_id: agent_id.to_string(),
-                active_group_id: ZERO_UUID.to_string(),
-            };
-            let _ = store.store_principal(&p).await;
-        }
+    if let Ok(Some(principal)) = store.retrieve_principal(agent_id).await
+        && principal.active_group_id == group_id
+    {
+        let p = PrincipalRow {
+            principal_id: agent_id.to_string(),
+            active_group_id: ZERO_UUID.to_string(),
+        };
+        let _ = store.store_principal(&p).await;
     }
 
     bool_result(true)
 }
 
-async fn handle_get_membership(
-    store: &GroupsStore,
-    form: &HashMap<String, String>,
-) -> Response {
+async fn handle_get_membership(store: &GroupsStore, form: &HashMap<String, String>) -> Response {
     let requesting_agent = form_str(form, "RequestingAgentID");
     let agent_id = form_str(form, "AgentID");
 
@@ -711,10 +795,7 @@ async fn handle_get_membership(
     }
 }
 
-async fn handle_get_group_members(
-    store: &GroupsStore,
-    form: &HashMap<String, String>,
-) -> Response {
+async fn handle_get_group_members(store: &GroupsStore, form: &HashMap<String, String>) -> Response {
     let requesting_agent = form_str(form, "RequestingAgentID");
     let group_id = form_str(form, "GroupID");
 
@@ -784,12 +865,39 @@ async fn handle_put_role(store: &GroupsStore, form: &HashMap<String, String>) ->
         if !has_power(store, requesting_agent, group_id, GroupPowers::CREATE_ROLE).await {
             return bool_result(false);
         }
-        add_or_update_role(store, group_id, role_id, name, description, title, powers, true).await
+        add_or_update_role(
+            store,
+            group_id,
+            role_id,
+            name,
+            description,
+            title,
+            powers,
+            true,
+        )
+        .await
     } else if op == "UPDATE" {
-        if !has_power(store, requesting_agent, group_id, GroupPowers::CHANGE_ACTIONS).await {
+        if !has_power(
+            store,
+            requesting_agent,
+            group_id,
+            GroupPowers::CHANGE_ACTIONS,
+        )
+        .await
+        {
             return bool_result(false);
         }
-        add_or_update_role(store, group_id, role_id, name, description, title, powers, false).await
+        add_or_update_role(
+            store,
+            group_id,
+            role_id,
+            name,
+            description,
+            title,
+            powers,
+            false,
+        )
+        .await
     } else {
         false
     };
@@ -816,20 +924,17 @@ async fn handle_remove_role(store: &GroupsStore, form: &HashMap<String, String>)
     }
 
     // Cannot delete Owner role
-    if let Ok(Some(g)) = store.retrieve_group_by_id(group_id).await {
-        if role_id == g.owner_role_id {
-            return bool_result(false);
-        }
+    if let Ok(Some(g)) = store.retrieve_group_by_id(group_id).await
+        && role_id == g.owner_role_id
+    {
+        return bool_result(false);
     }
 
     let _ = store.delete_role(group_id, role_id).await;
     bool_result(true)
 }
 
-async fn handle_get_group_roles(
-    store: &GroupsStore,
-    form: &HashMap<String, String>,
-) -> Response {
+async fn handle_get_group_roles(store: &GroupsStore, form: &HashMap<String, String>) -> Response {
     let requesting_agent = form_str(form, "RequestingAgentID");
     let group_id = form_str(form, "GroupID");
 
@@ -844,17 +949,17 @@ async fn handle_get_group_roles(
 
     let mut items = Vec::new();
     for r in &roles {
-        let count = store.role_member_count(group_id, &r.role_id).await.unwrap_or(0);
+        let count = store
+            .role_member_count(group_id, &r.role_id)
+            .await
+            .unwrap_or(0);
         items.push(role_to_xml(r, count));
     }
 
     xml_result(&list_to_xml("r", &items))
 }
 
-async fn handle_get_role_members(
-    store: &GroupsStore,
-    form: &HashMap<String, String>,
-) -> Response {
+async fn handle_get_role_members(store: &GroupsStore, form: &HashMap<String, String>) -> Response {
     let requesting_agent = form_str(form, "RequestingAgentID");
     let group_id = form_str(form, "GroupID");
 
@@ -867,7 +972,7 @@ async fn handle_get_role_members(
         _ => return null_result("No members"),
     };
 
-    let items: Vec<String> = rmembers.iter().map(|rm| role_member_to_xml(rm)).collect();
+    let items: Vec<String> = rmembers.iter().map(role_member_to_xml).collect();
     xml_result(&list_to_xml("rm", &items))
 }
 
@@ -878,15 +983,30 @@ async fn handle_agent_role(store: &GroupsStore, form: &HashMap<String, String>) 
     let agent_id = form_str(form, "AgentID");
     let op = form_str(form, "OP");
 
-    if requesting_agent.is_empty() || group_id.is_empty() || role_id.is_empty()
-        || agent_id.is_empty() || op.is_empty()
+    if requesting_agent.is_empty()
+        || group_id.is_empty()
+        || role_id.is_empty()
+        || agent_id.is_empty()
+        || op.is_empty()
     {
         return null_result("Bad network data");
     }
 
     let success = if op == "ADD" {
-        let limited = has_power(store, requesting_agent, group_id, GroupPowers::ASSIGN_MEMBER_LIMITED).await;
-        let unlimited = has_power(store, requesting_agent, group_id, GroupPowers::ASSIGN_MEMBER).await
+        let limited = has_power(
+            store,
+            requesting_agent,
+            group_id,
+            GroupPowers::ASSIGN_MEMBER_LIMITED,
+        )
+        .await;
+        let unlimited = has_power(
+            store,
+            requesting_agent,
+            group_id,
+            GroupPowers::ASSIGN_MEMBER,
+        )
+        .await
             || is_owner(store, requesting_agent, group_id).await;
 
         if !limited && !unlimited {
@@ -913,8 +1033,20 @@ async fn handle_agent_role(store: &GroupsStore, form: &HashMap<String, String>) 
             return bool_result(false);
         }
 
-        let limited = has_power(store, requesting_agent, group_id, GroupPowers::ASSIGN_MEMBER_LIMITED).await;
-        let unlimited = has_power(store, requesting_agent, group_id, GroupPowers::ASSIGN_MEMBER).await
+        let limited = has_power(
+            store,
+            requesting_agent,
+            group_id,
+            GroupPowers::ASSIGN_MEMBER_LIMITED,
+        )
+        .await;
+        let unlimited = has_power(
+            store,
+            requesting_agent,
+            group_id,
+            GroupPowers::ASSIGN_MEMBER,
+        )
+        .await
             || is_owner(store, requesting_agent, group_id).await;
 
         if !limited && !unlimited {
@@ -924,7 +1056,10 @@ async fn handle_agent_role(store: &GroupsStore, form: &HashMap<String, String>) 
         let _ = store.delete_role_member(group_id, role_id, agent_id).await;
 
         // Find another role
-        let roles = store.retrieve_member_roles(group_id, agent_id).await.unwrap_or_default();
+        let roles = store
+            .retrieve_member_roles(group_id, agent_id)
+            .await
+            .unwrap_or_default();
         let new_role = roles
             .iter()
             .find(|r| r.role_id != ZERO_UUID)
@@ -943,10 +1078,7 @@ async fn handle_agent_role(store: &GroupsStore, form: &HashMap<String, String>) 
     bool_result(success)
 }
 
-async fn handle_get_agent_roles(
-    store: &GroupsStore,
-    form: &HashMap<String, String>,
-) -> Response {
+async fn handle_get_agent_roles(store: &GroupsStore, form: &HashMap<String, String>) -> Response {
     let requesting_agent = form_str(form, "RequestingAgentID");
     let group_id = form_str(form, "GroupID");
     let agent_id = form_str(form, "AgentID");
@@ -963,7 +1095,10 @@ async fn handle_get_agent_roles(
     let mut items = Vec::new();
     for rm in &role_memberships {
         if let Ok(Some(role)) = store.retrieve_role(group_id, &rm.role_id).await {
-            let count = store.role_member_count(group_id, &rm.role_id).await.unwrap_or(0);
+            let count = store
+                .role_member_count(group_id, &rm.role_id)
+                .await
+                .unwrap_or(0);
             items.push(role_to_xml(&role, count));
         }
     }
@@ -1011,10 +1146,7 @@ async fn handle_set_active(store: &GroupsStore, form: &HashMap<String, String>) 
     }
 }
 
-async fn handle_update_membership(
-    store: &GroupsStore,
-    form: &HashMap<String, String>,
-) -> Response {
+async fn handle_update_membership(store: &GroupsStore, form: &HashMap<String, String>) -> Response {
     let requesting_agent = form_str(form, "RequestingAgentID");
     let agent_id = form_str(form, "AgentID");
     let group_id = form_str(form, "GroupID");
@@ -1081,10 +1213,7 @@ async fn handle_invite(store: &GroupsStore, form: &HashMap<String, String>) -> R
         }
 
         // Delete existing invite for this group+agent
-        if let Ok(Some(existing)) = store
-            .retrieve_invitation_by_group(group_id, agent_id)
-            .await
-        {
+        if let Ok(Some(existing)) = store.retrieve_invitation_by_group(group_id, agent_id).await {
             let _ = store.delete_invite(&existing.invite_id).await;
         }
 
@@ -1190,7 +1319,7 @@ async fn handle_get_notices(store: &GroupsStore, form: &HashMap<String, String>)
             _ => return null_result("No notices"),
         };
 
-        let items: Vec<String> = notices.iter().map(|n| notice_to_xml(n)).collect();
+        let items: Vec<String> = notices.iter().map(notice_to_xml).collect();
         xml_result(&list_to_xml("n", &items))
     } else {
         null_result("Bad OP in request")

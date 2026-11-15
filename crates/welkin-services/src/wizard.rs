@@ -207,9 +207,10 @@ pub async fn check_ports(
     let mut results = Vec::new();
 
     // --- TCP bind test ---
-    let tcp_result = match tokio::net::TcpListener::bind(
-        SocketAddr::from(([0, 0, 0, 0], internal_port)),
-    )
+    let tcp_result = match tokio::net::TcpListener::bind(SocketAddr::from((
+        [0, 0, 0, 0],
+        internal_port,
+    )))
     .await
     {
         Ok(listener) => {
@@ -583,21 +584,38 @@ mod tests {
         let accounts = StubAccounts { exists: true };
         let owner = Uuid::new_v4();
 
-        let report =
-            run_all_checks("Test Region", 256000, 256000, &owner, 0, "example.com", &grid, &accounts)
-                .await;
+        let report = run_all_checks(
+            "Test Region",
+            256000,
+            256000,
+            &owner,
+            0,
+            "example.com",
+            &grid,
+            &accounts,
+        )
+        .await;
 
         assert_eq!(report.outcomes.len(), 4, "should have 4 check outcomes");
         assert!(
-            report.outcomes.iter().any(|o| o.check_name == "region_name"),
+            report
+                .outcomes
+                .iter()
+                .any(|o| o.check_name == "region_name"),
             "should have region_name check"
         );
         assert!(
-            report.outcomes.iter().any(|o| o.check_name == "coordinates"),
+            report
+                .outcomes
+                .iter()
+                .any(|o| o.check_name == "coordinates"),
             "should have coordinates check"
         );
         assert!(
-            report.outcomes.iter().any(|o| o.check_name == "estate_owner"),
+            report
+                .outcomes
+                .iter()
+                .any(|o| o.check_name == "estate_owner"),
             "should have estate_owner check"
         );
         assert!(
@@ -615,9 +633,17 @@ mod tests {
         let accounts = StubAccounts { exists: false };
         let owner = Uuid::new_v4();
 
-        let report =
-            run_all_checks("Bad Region", 256000, 256000, &owner, 0, "example.com", &grid, &accounts)
-                .await;
+        let report = run_all_checks(
+            "Bad Region",
+            256000,
+            256000,
+            &owner,
+            0,
+            "example.com",
+            &grid,
+            &accounts,
+        )
+        .await;
 
         // Even though multiple checks fail, all four are reported.
         assert_eq!(report.outcomes.len(), 4);

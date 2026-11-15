@@ -461,7 +461,8 @@ impl FlotsamAssetCache {
             .unwrap_or_default()
             .as_secs();
         let ttl = self.config.memory_cache_ttl_secs;
-        self.memory_cache.retain(|_, v| now.saturating_sub(v.inserted_at) < ttl);
+        self.memory_cache
+            .retain(|_, v| now.saturating_sub(v.inserted_at) < ttl);
         self.insertion_order
             .retain(|id| self.memory_cache.contains_key(id));
     }
@@ -513,8 +514,7 @@ impl RegionModule for FlotsamAssetCache {
             config.get_int("AssetCache", "MemoryCacheMaxItems", 30_000) as u64;
         self.config.memory_cache_ttl_secs =
             config.get_int("AssetCache", "MemoryCacheTTL", 120) as u64;
-        self.config.file_cache_enabled =
-            config.get_bool("AssetCache", "FileCacheEnabled", true);
+        self.config.file_cache_enabled = config.get_bool("AssetCache", "FileCacheEnabled", true);
         self.config.file_cache_dir =
             config.get_string("AssetCache", "CacheDirectory", "assetcache");
         self.config.file_cache_ttl_secs =
@@ -579,8 +579,11 @@ impl TextureSenderModule {
         self.pending_queue.push(priority);
         // Sort descending by priority so the highest-priority item is last
         // (cheapest to pop).
-        self.pending_queue
-            .sort_by(|a, b| a.priority.partial_cmp(&b.priority).unwrap_or(std::cmp::Ordering::Equal));
+        self.pending_queue.sort_by(|a, b| {
+            a.priority
+                .partial_cmp(&b.priority)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
     }
 
     /// Remove and return the highest-priority texture request.
@@ -780,12 +783,7 @@ impl LandServiceConnector {
     }
 
     /// Query the land service for parcel data at a given coordinate.
-    pub fn get_land_data(
-        &self,
-        _region_id: Uuid,
-        _x: f32,
-        _y: f32,
-    ) -> Option<LandConnectorData> {
+    pub fn get_land_data(&self, _region_id: Uuid, _x: f32, _y: f32) -> Option<LandConnectorData> {
         // Stub — a real implementation would make an HTTP call.
         None
     }
@@ -807,10 +805,8 @@ impl RegionModule for LandServiceConnector {
     }
 
     fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
-        self.config.service_url =
-            config.get_string("LandService", "ServiceURL", "");
-        self.config.timeout_ms =
-            config.get_int("LandService", "Timeout", 25_000) as u64;
+        self.config.service_url = config.get_string("LandService", "ServiceURL", "");
+        self.config.timeout_ms = config.get_int("LandService", "Timeout", 25_000) as u64;
         tracing::info!(url = %self.config.service_url, "LandServiceConnector initialised");
         Ok(())
     }
@@ -873,10 +869,8 @@ impl RegionModule for NeighbourServiceConnector {
     }
 
     fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
-        self.config.service_url =
-            config.get_string("NeighbourService", "ServiceURL", "");
-        self.config.timeout_ms =
-            config.get_int("NeighbourService", "Timeout", 25_000) as u64;
+        self.config.service_url = config.get_string("NeighbourService", "ServiceURL", "");
+        self.config.timeout_ms = config.get_int("NeighbourService", "Timeout", 25_000) as u64;
         tracing::info!(url = %self.config.service_url, "NeighbourServiceConnector initialised");
         Ok(())
     }
@@ -939,10 +933,8 @@ impl RegionModule for MuteListServiceConnector {
     }
 
     fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
-        self.config.service_url =
-            config.get_string("MuteListService", "ServiceURL", "");
-        self.config.timeout_ms =
-            config.get_int("MuteListService", "Timeout", 25_000) as u64;
+        self.config.service_url = config.get_string("MuteListService", "ServiceURL", "");
+        self.config.timeout_ms = config.get_int("MuteListService", "Timeout", 25_000) as u64;
         tracing::info!(url = %self.config.service_url, "MuteListServiceConnector initialised");
         Ok(())
     }
@@ -1020,10 +1012,8 @@ impl RegionModule for AgentPreferencesConnector {
     }
 
     fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
-        self.config.service_url =
-            config.get_string("AgentPreferences", "ServiceURL", "");
-        self.config.timeout_ms =
-            config.get_int("AgentPreferences", "Timeout", 25_000) as u64;
+        self.config.service_url = config.get_string("AgentPreferences", "ServiceURL", "");
+        self.config.timeout_ms = config.get_int("AgentPreferences", "Timeout", 25_000) as u64;
         tracing::info!(url = %self.config.service_url, "AgentPreferencesConnector initialised");
         Ok(())
     }
@@ -1088,10 +1078,8 @@ impl RegionModule for MapImageServiceConnector {
     }
 
     fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
-        self.config.service_url =
-            config.get_string("MapImageService", "ServiceURL", "");
-        self.config.timeout_ms =
-            config.get_int("MapImageService", "Timeout", 25_000) as u64;
+        self.config.service_url = config.get_string("MapImageService", "ServiceURL", "");
+        self.config.timeout_ms = config.get_int("MapImageService", "Timeout", 25_000) as u64;
         tracing::info!(url = %self.config.service_url, "MapImageServiceConnector initialised");
         Ok(())
     }

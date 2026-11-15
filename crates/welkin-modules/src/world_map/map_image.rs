@@ -110,8 +110,7 @@ impl TerrainRenderer for ShadedTerrainRenderer {
         height: u32,
         water_height: f32,
     ) -> tiny_skia::Pixmap {
-        let mut pixmap =
-            tiny_skia::Pixmap::new(width, height).expect("non-zero tile dimensions");
+        let mut pixmap = tiny_skia::Pixmap::new(width, height).expect("non-zero tile dimensions");
 
         for y in 0..height {
             for x in 0..width {
@@ -134,8 +133,7 @@ impl TerrainRenderer for ShadedTerrainRenderer {
                     // north-east (x+1, y+1).  A positive diff means NE is
                     // lower (we're on a lit slope); negative means we're in
                     // shadow.
-                    let h_ne =
-                        Self::sample(heightmap, x as i32 + 1, y as i32 + 1, width, height);
+                    let h_ne = Self::sample(heightmap, x as i32 + 1, y as i32 + 1, width, height);
                     let diff = h - h_ne;
 
                     let shade_amount = (diff.abs() * 4.5).min(40.0) as i32;
@@ -153,16 +151,15 @@ impl TerrainRenderer for ShadedTerrainRenderer {
                         b = (b - shade_amount).max(0);
                     }
 
-                    let pixel = tiny_skia::PremultipliedColorU8::from_rgba(
-                        r as u8, g as u8, b as u8, 255,
-                    )
-                    .unwrap();
+                    let pixel =
+                        tiny_skia::PremultipliedColorU8::from_rgba(r as u8, g as u8, b as u8, 255)
+                            .unwrap();
                     pixmap.pixels_mut()[(yr * width + x) as usize] = pixel;
                 } else {
                     // Under water.
                     let (wr, wg, wb) = self.water_color;
-                    let pixel = tiny_skia::PremultipliedColorU8::from_rgba(wr, wg, wb, 255)
-                        .unwrap();
+                    let pixel =
+                        tiny_skia::PremultipliedColorU8::from_rgba(wr, wg, wb, 255).unwrap();
                     pixmap.pixels_mut()[(yr * width + x) as usize] = pixel;
                 }
             }
@@ -210,12 +207,7 @@ impl MapImageModule {
             water_color: self.config.water_color,
         };
 
-        let mut pixmap = renderer.render_terrain(
-            heightmap,
-            size,
-            size,
-            self.config.water_height,
-        );
+        let mut pixmap = renderer.render_terrain(heightmap, size, size, self.config.water_height);
 
         if self.config.draw_prims {
             // Stub: in a full implementation, object positions would be passed

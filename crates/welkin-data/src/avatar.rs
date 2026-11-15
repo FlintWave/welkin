@@ -127,11 +127,7 @@ impl AvatarStore {
         Ok(())
     }
 
-    pub async fn remove_items(
-        &self,
-        principal_id: &str,
-        names: &[&str],
-    ) -> Result<(), DataError> {
+    pub async fn remove_items(&self, principal_id: &str, names: &[&str]) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
         for name in names {
             sqlx::query("DELETE FROM Avatars WHERE PrincipalID = $1 AND Name = $2")

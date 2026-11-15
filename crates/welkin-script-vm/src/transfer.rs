@@ -82,10 +82,7 @@ impl RegionTransferBundle {
             let mut inst = ScriptInstance::restore_from(*script_id, *prim_id, state, 0)?;
 
             // Restore pending events.
-            if let Some((_, events)) = self
-                .pending_events
-                .iter()
-                .find(|(sid, _)| sid == script_id)
+            if let Some((_, events)) = self.pending_events.iter().find(|(sid, _)| sid == script_id)
             {
                 inst.restore_events(events.clone());
             }
@@ -157,8 +154,7 @@ mod tests {
         assert_eq!(sched_a.script_count(), 2);
 
         // --- Extract bundle for sid1 only ---------------------------------
-        let bundle =
-            RegionTransferBundle::from_scheduler(&mut sched_a, &[sid1], region_a)?;
+        let bundle = RegionTransferBundle::from_scheduler(&mut sched_a, &[sid1], region_a)?;
 
         // sid1 removed from source scheduler.
         assert_eq!(sched_a.script_count(), 1);
@@ -229,11 +225,7 @@ mod tests {
         let inst = ScriptInstance::new(sid, Uuid::new_v4(), SCRIPT_SRC, 0)?;
         sched.add_script(inst);
 
-        let bundle = RegionTransferBundle::from_scheduler(
-            &mut sched,
-            &[sid],
-            Uuid::new_v4(),
-        )?;
+        let bundle = RegionTransferBundle::from_scheduler(&mut sched, &[sid], Uuid::new_v4())?;
 
         let bytes = bundle.serialize_to_bytes()?;
         assert!(!bytes.is_empty());

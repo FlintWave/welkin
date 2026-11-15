@@ -97,10 +97,7 @@ pub fn router(state: ContentServiceState) -> Router {
     Router::new()
         .route("/portal/api/content/catalogue", get(handle_catalogue))
         .route("/portal/api/content/import", post(handle_import_start))
-        .route(
-            "/portal/api/content/import/{id}",
-            get(handle_import_status),
-        )
+        .route("/portal/api/content/import/{id}", get(handle_import_status))
         .route(
             "/portal/api/content/terrain/presets",
             get(handle_terrain_presets),

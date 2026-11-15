@@ -16,11 +16,7 @@ const AVATAR_POSITION_SMALL_TOLERANCE: f32 = 0.05;
 
 fn clamp_vector(v: Vec3, max: f32) -> Vec3 {
     let a = v.x.abs().max(v.y.abs()).max(v.z.abs());
-    if a > max {
-        v * (max / a)
-    } else {
-        v
-    }
+    if a > max { v * (max / a) } else { v }
 }
 
 fn approx_equals_vec3(a: Vec3, b: Vec3, tolerance: f32) -> bool {
@@ -74,7 +70,11 @@ impl PrimUpdateState {
             return true;
         }
 
-        if !approx_equals_vec3(acceleration, self.last_acceleration, PRIM_VELOCITY_TOLERANCE) {
+        if !approx_equals_vec3(
+            acceleration,
+            self.last_acceleration,
+            PRIM_VELOCITY_TOLERANCE,
+        ) {
             return true;
         }
 
@@ -173,8 +173,7 @@ impl AvatarUpdateState {
             return true;
         }
 
-        if (collision_plane.x - self.last_collision_plane.x).abs()
-            > AVATAR_POSITION_SMALL_TOLERANCE
+        if (collision_plane.x - self.last_collision_plane.x).abs() > AVATAR_POSITION_SMALL_TOLERANCE
             || (collision_plane.y - self.last_collision_plane.y).abs()
                 > AVATAR_POSITION_SMALL_TOLERANCE
             || (collision_plane.w - self.last_collision_plane.w).abs()
@@ -381,26 +380,14 @@ mod tests {
     fn avatar_state_change_sends() {
         let mut state = AvatarUpdateState::default();
         state.record_sent(0, Vec3::ZERO, Quat::IDENTITY, Vec3::ZERO, Vec4::ZERO);
-        assert!(state.should_send_terse(
-            1,
-            Vec3::ZERO,
-            Quat::IDENTITY,
-            Vec3::ZERO,
-            Vec4::ZERO,
-        ));
+        assert!(state.should_send_terse(1, Vec3::ZERO, Quat::IDENTITY, Vec3::ZERO, Vec4::ZERO,));
     }
 
     #[test]
     fn avatar_no_change_suppresses() {
         let mut state = AvatarUpdateState::default();
         state.record_sent(0, Vec3::ZERO, Quat::IDENTITY, Vec3::ZERO, Vec4::ZERO);
-        assert!(!state.should_send_terse(
-            0,
-            Vec3::ZERO,
-            Quat::IDENTITY,
-            Vec3::ZERO,
-            Vec4::ZERO,
-        ));
+        assert!(!state.should_send_terse(0, Vec3::ZERO, Quat::IDENTITY, Vec3::ZERO, Vec4::ZERO,));
     }
 
     #[test]

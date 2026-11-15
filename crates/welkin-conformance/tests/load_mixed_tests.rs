@@ -121,8 +121,8 @@ fn test_comparison_report_mixed_metrics() {
             fps_avg: 50.0,
             fps_min: 40.0,
             script_eps: 800.0,
-            memory_mb: 600.0,       // lower is better; C# uses 600
-            network_bandwidth_mbps: 12.0, // lower is better; C# uses 12
+            memory_mb: 600.0,                  // lower is better; C# uses 600
+            network_bandwidth_mbps: 12.0,      // lower is better; C# uses 12
             region_crossing_latency_ms: 150.0, // lower is better; C# 150
             asset_fetch_latency_ms: 80.0,
             login_latency_ms: 300.0,
@@ -136,14 +136,14 @@ fn test_comparison_report_mixed_metrics() {
         hardware_description: "hw".into(),
         config: cfg,
         metrics: LoadMetrics {
-            fps_avg: 60.0,       // better
-            fps_min: 48.0,       // better
-            script_eps: 1000.0,  // better
-            memory_mb: 700.0,    // WORSE (higher)
-            network_bandwidth_mbps: 10.0, // better
+            fps_avg: 60.0,                     // better
+            fps_min: 48.0,                     // better
+            script_eps: 1000.0,                // better
+            memory_mb: 700.0,                  // WORSE (higher)
+            network_bandwidth_mbps: 10.0,      // better
             region_crossing_latency_ms: 100.0, // better
-            asset_fetch_latency_ms: 50.0, // better
-            login_latency_ms: 200.0, // better
+            asset_fetch_latency_ms: 50.0,      // better
+            login_latency_ms: 200.0,           // better
         },
     };
 
@@ -211,12 +211,7 @@ fn test_validation_result_aggregation() {
         ),
         (
             "dir_a".into(),
-            ValidationResult::fail(
-                ValidationTest::InventoryFetch,
-                50.0,
-                "timeout",
-                "slow",
-            ),
+            ValidationResult::fail(ValidationTest::InventoryFetch, 50.0, "timeout", "slow"),
         ),
         (
             "dir_b".into(),

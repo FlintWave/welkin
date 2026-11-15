@@ -194,12 +194,7 @@ async fn handle_map_get(
             } else {
                 "image/jpeg"
             };
-            (
-                StatusCode::OK,
-                [(header::CONTENT_TYPE, content_type)],
-                data,
-            )
-                .into_response()
+            (StatusCode::OK, [(header::CONTENT_TYPE, content_type)], data).into_response()
         }
         Err(_) => StatusCode::NOT_FOUND.into_response(),
     }

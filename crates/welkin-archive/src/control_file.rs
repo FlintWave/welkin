@@ -62,7 +62,11 @@ pub struct ArchiveRegionInfo {
 // Serialization helpers
 // ---------------------------------------------------------------------------
 
-fn write_element(writer: &mut Writer<Cursor<Vec<u8>>>, name: &str, value: &str) -> Result<(), ArchiveError> {
+fn write_element(
+    writer: &mut Writer<Cursor<Vec<u8>>>,
+    name: &str,
+    value: &str,
+) -> Result<(), ArchiveError> {
     writer
         .create_element(name)
         .write_text_content(BytesText::new(value))
@@ -79,7 +83,9 @@ pub fn serialize(control: &ArchiveControlFile) -> Result<String, ArchiveError> {
 
     // XML declaration
     writer
-        .write_event(Event::Decl(quick_xml::events::BytesDecl::new("1.0", None, None)))
+        .write_event(Event::Decl(quick_xml::events::BytesDecl::new(
+            "1.0", None, None,
+        )))
         .map_err(|e| ArchiveError::Xml(e.to_string()))?;
 
     // <archive major_version="0" minor_version="8">
@@ -186,16 +192,12 @@ pub fn deserialize(xml: &str) -> Result<ArchiveControlFile, ArchiveError> {
                             match key {
                                 "major_version" => {
                                     control.major_version = val.parse().map_err(|_| {
-                                        ArchiveError::Invalid(format!(
-                                            "bad major_version: {val}"
-                                        ))
+                                        ArchiveError::Invalid(format!("bad major_version: {val}"))
                                     })?;
                                 }
                                 "minor_version" => {
                                     control.minor_version = val.parse().map_err(|_| {
-                                        ArchiveError::Invalid(format!(
-                                            "bad minor_version: {val}"
-                                        ))
+                                        ArchiveError::Invalid(format!("bad minor_version: {val}"))
                                     })?;
                                 }
                                 _ => {}
@@ -217,8 +219,7 @@ pub fn deserialize(xml: &str) -> Result<ArchiveControlFile, ArchiveError> {
                         let raw = reader
                             .read_text(e.name())
                             .map_err(|e| ArchiveError::Xml(e.to_string()))?;
-                        let text = unescape(&raw)
-                            .map_err(|e| ArchiveError::Xml(e.to_string()))?;
+                        let text = unescape(&raw).map_err(|e| ArchiveError::Xml(e.to_string()))?;
                         match name {
                             "datetime" => {
                                 if let Ok(v) = text.parse::<i64>() {
@@ -318,7 +319,7 @@ mod tests {
         assert_eq!(restored.timestamp, 1700000000);
         assert_eq!(restored.region_size_x, 256);
         assert_eq!(restored.region_size_y, 256);
-        assert_eq!(restored.is_multi_region, false);
+        assert!(!restored.is_multi_region);
         assert!(restored.regions.is_empty());
     }
 
@@ -352,7 +353,7 @@ mod tests {
 
         assert_eq!(restored.major_version, 1);
         assert_eq!(restored.minor_version, 0);
-        assert_eq!(restored.is_multi_region, true);
+        assert!(restored.is_multi_region);
         assert_eq!(restored.regions.len(), 2);
         assert_eq!(restored.regions[0].dir, "region1");
         assert_eq!(restored.regions[0].size_x, 256);
@@ -389,7 +390,7 @@ mod tests {
         assert_eq!(control.minor_version, 8);
         assert_eq!(control.region_size_x, 256);
         assert_eq!(control.region_size_y, 256);
-        assert_eq!(control.is_multi_region, false);
+        assert!(!control.is_multi_region);
     }
 
     #[test]

@@ -112,7 +112,11 @@ async fn handle_agentprefs(State(state): State<AgentPrefsServiceState>, body: By
                     tag(&mut s, "AccessPrefs", &p.access_prefs);
                     tag(&mut s, "HoverHeight", &p.hover_height.to_string());
                     tag(&mut s, "Language", &p.language);
-                    tag(&mut s, "LanguageIsPublic", &p.language_is_public.to_string());
+                    tag(
+                        &mut s,
+                        "LanguageIsPublic",
+                        &p.language_is_public.to_string(),
+                    );
                     tag(&mut s, "PermEveryone", &p.perm_everyone.to_string());
                     tag(&mut s, "PermGroup", &p.perm_group.to_string());
                     tag(&mut s, "PermNextOwner", &p.perm_next_owner.to_string());

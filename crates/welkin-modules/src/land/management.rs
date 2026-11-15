@@ -13,7 +13,7 @@ use crate::module::{ModuleConfig, ModuleError, ModuleType, RegionModule};
 use crate::registry::SceneRef;
 
 use super::data::{AccessList, LandAccessEntry, LandData, LandDataUpdate};
-use super::grid::{ParcelGrid, LAND_UNIT};
+use super::grid::{LAND_UNIT, ParcelGrid};
 use super::parcel::LandParcel;
 
 /// Manages all land parcels within a single region.
@@ -110,7 +110,13 @@ impl LandManagementModule {
         for parcel in self.parcels.values_mut() {
             for gx in sx..ex {
                 for gy in sy..ey {
-                    if parcel.land_bitmap.get(gx).and_then(|c| c.get(gy)).copied().unwrap_or(false) {
+                    if parcel
+                        .land_bitmap
+                        .get(gx)
+                        .and_then(|c| c.get(gy))
+                        .copied()
+                        .unwrap_or(false)
+                    {
                         parcel.land_bitmap[gx][gy] = false;
                     }
                 }
@@ -227,7 +233,11 @@ impl LandManagementModule {
         self.parcels
             .get(&local_id)
             .map(|p| {
-                let has_access_list = p.data.access_list.iter().any(|e| e.flags == AccessList::Access);
+                let has_access_list = p
+                    .data
+                    .access_list
+                    .iter()
+                    .any(|e| e.flags == AccessList::Access);
                 if !has_access_list {
                     return false; // no access restriction
                 }
@@ -263,7 +273,8 @@ impl LandManagementModule {
         for gx in 0..dim {
             for gy in 0..dim {
                 if parcel.contains_point(gx, gy) {
-                    self.grid.set_parcel_id(gx as u32, gy as u32, parcel.data.local_id);
+                    self.grid
+                        .set_parcel_id(gx as u32, gy as u32, parcel.data.local_id);
                 }
             }
         }
@@ -273,7 +284,9 @@ impl LandManagementModule {
         let dim = self.grid.grid_size() as usize;
         for gx in 0..dim {
             for gy in 0..dim {
-                if parcel.contains_point(gx, gy) && self.grid.get_parcel_id(gx as u32, gy as u32) == local_id {
+                if parcel.contains_point(gx, gy)
+                    && self.grid.get_parcel_id(gx as u32, gy as u32) == local_id
+                {
                     self.grid.set_parcel_id(gx as u32, gy as u32, 0);
                 }
             }

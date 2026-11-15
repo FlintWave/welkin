@@ -53,11 +53,10 @@ impl OfflineImStore {
 
     /// Return the count of offline messages queued for `principal_id`.
     pub async fn get_count(&self, principal_id: &str) -> Result<i64, DataError> {
-        let row: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM im_offline WHERE PrincipalID = $1")
-                .bind(principal_id.to_string())
-                .fetch_one(&self.pool)
-                .await?;
+        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM im_offline WHERE PrincipalID = $1")
+            .bind(principal_id.to_string())
+            .fetch_one(&self.pool)
+            .await?;
         Ok(row.0)
     }
 
@@ -88,10 +87,7 @@ impl OfflineImStore {
     }
 
     /// Retrieve all offline messages for `principal_id`.
-    pub async fn get_messages(
-        &self,
-        principal_id: &str,
-    ) -> Result<Vec<OfflineImRow>, DataError> {
+    pub async fn get_messages(&self, principal_id: &str) -> Result<Vec<OfflineImRow>, DataError> {
         let rows = sqlx::query_as::<_, OfflineImRow>(
             "SELECT id, PrincipalID, FromID, Message, TMStamp \
              FROM im_offline WHERE PrincipalID = $1 ORDER BY TMStamp ASC",

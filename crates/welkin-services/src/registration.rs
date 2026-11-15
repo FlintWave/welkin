@@ -4,9 +4,9 @@
 
 use std::sync::Arc;
 
-use welkin_data::grid::RegionRow;
 use serde_json::json;
 use tracing::{info, warn};
+use welkin_data::grid::RegionRow;
 
 use crate::remote::RemoteError;
 use crate::remote::grid::RemoteGridConnector;
@@ -62,13 +62,8 @@ impl GridRegistration {
 
     /// Deregister the region from the grid.
     pub async fn shutdown(&self) -> Result<(), RemoteError> {
-        self.connector
-            .deregister_region(&self.region.uuid)
-            .await?;
-        info!(
-            "Region {} deregistered from grid",
-            self.region.region_name
-        );
+        self.connector.deregister_region(&self.region.uuid).await?;
+        info!("Region {} deregistered from grid", self.region.region_name);
         Ok(())
     }
 

@@ -46,10 +46,7 @@ pub async fn scan_cpu() -> Result<CpuInfo, CapacityError> {
 
     let threads = cpus.len();
     let cores = sys.physical_core_count().unwrap_or(threads);
-    let frequency_mhz = cpus
-        .first()
-        .map(|c| c.frequency() as f64)
-        .unwrap_or(0.0);
+    let frequency_mhz = cpus.first().map(|c| c.frequency() as f64).unwrap_or(0.0);
 
     tracing::debug!(model = %model, cores, threads, frequency_mhz, "cpu scan complete");
 
@@ -138,7 +135,12 @@ pub async fn scan_container() -> Result<ContainerInfo, CapacityError> {
 
     let cpu_quota = read_cgroup_cpu_quota().await;
 
-    tracing::debug!(is_container, ?memory_limit, ?cpu_quota, "container scan complete");
+    tracing::debug!(
+        is_container,
+        ?memory_limit,
+        ?cpu_quota,
+        "container scan complete"
+    );
 
     Ok(ContainerInfo {
         is_container,
@@ -149,7 +151,7 @@ pub async fn scan_container() -> Result<ContainerInfo, CapacityError> {
 
 async fn read_cgroup_cpu_quota() -> Option<f64> {
     if let Ok(content) = tokio::fs::read_to_string("/sys/fs/cgroup/cpu.max").await {
-        let parts: Vec<&str> = content.trim().split_whitespace().collect();
+        let parts: Vec<&str> = content.split_whitespace().collect();
         if parts.len() == 2 && parts[0] != "max" {
             let quota: f64 = parts[0].parse().ok()?;
             let period: f64 = parts[1].parse().ok()?;

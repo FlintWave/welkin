@@ -141,10 +141,7 @@ fn make_uas_config() -> UserAgentConfig {
 
 fn make_circuit(gatekeeper_url: &str, ip: &str) -> AgentCircuitInfo {
     let mut service_urls = HashMap::new();
-    service_urls.insert(
-        "HomeURI".into(),
-        "http://foreigngrid.example:9000/".into(),
-    );
+    service_urls.insert("HomeURI".into(), "http://foreigngrid.example:9000/".into());
     AgentCircuitInfo {
         agent_id: Uuid::new_v4(),
         session_id: Uuid::new_v4(),
@@ -289,10 +286,8 @@ fn teleport_round_trip_outbound_login_and_verify() {
 #[test]
 fn teleport_round_trip_gatekeeper_login_agent() {
     let gk_url = "http://mygrid.example:9000/";
-    let gk = GatekeeperServiceImpl::new(
-        make_gatekeeper_config(gk_url),
-        Some(make_default_region()),
-    );
+    let gk =
+        GatekeeperServiceImpl::new(make_gatekeeper_config(gk_url), Some(make_default_region()));
 
     let circuit = make_circuit(gk_url, "192.168.1.100");
     let dest = make_default_region();
@@ -310,10 +305,8 @@ fn teleport_round_trip_gatekeeper_login_agent() {
 #[test]
 fn teleport_round_trip_gatekeeper_rejects_wrong_grid_token() {
     let gk_url = "http://mygrid.example:9000/";
-    let gk = GatekeeperServiceImpl::new(
-        make_gatekeeper_config(gk_url),
-        Some(make_default_region()),
-    );
+    let gk =
+        GatekeeperServiceImpl::new(make_gatekeeper_config(gk_url), Some(make_default_region()));
 
     // Circuit with a token pointing to evil.example
     let mut circuit = make_circuit("http://evil.example:9000/", "192.168.1.100");
@@ -331,10 +324,8 @@ fn teleport_round_trip_gatekeeper_rejects_wrong_grid_token() {
 #[test]
 fn teleport_round_trip_gatekeeper_rejects_empty_ip() {
     let gk_url = "http://mygrid.example:9000/";
-    let gk = GatekeeperServiceImpl::new(
-        make_gatekeeper_config(gk_url),
-        Some(make_default_region()),
-    );
+    let gk =
+        GatekeeperServiceImpl::new(make_gatekeeper_config(gk_url), Some(make_default_region()));
 
     let circuit = make_circuit(gk_url, "");
     let dest = make_default_region();
@@ -406,9 +397,11 @@ fn teleport_round_trip_teleport_home_foreign_stub() {
 fn teleport_round_trip_appearance_unrestricted() {
     let module = HGEntityTransferModule::new();
     // Without restriction (the default), everything passes.
-    assert!(module
-        .validate_appearance(&[Uuid::new_v4()], &[Uuid::new_v4()])
-        .is_ok());
+    assert!(
+        module
+            .validate_appearance(&[Uuid::new_v4()], &[Uuid::new_v4()])
+            .is_ok()
+    );
 }
 
 /// HG teleport level check -- configure via initialise().
@@ -482,15 +475,18 @@ fn teleport_round_trip_is_agent_coming_home() {
         client_ip_address: "10.0.0.1".into(),
     });
 
-    assert!(uas
-        .is_agent_coming_home(session, "http://mygrid.example:9000/")
-        .unwrap());
-    assert!(uas
-        .is_agent_coming_home(session, "HTTP://MYGRID.EXAMPLE:9000/")
-        .unwrap());
-    assert!(!uas
-        .is_agent_coming_home(session, "http://other.example:9000/")
-        .unwrap());
+    assert!(
+        uas.is_agent_coming_home(session, "http://mygrid.example:9000/")
+            .unwrap()
+    );
+    assert!(
+        uas.is_agent_coming_home(session, "HTTP://MYGRID.EXAMPLE:9000/")
+            .unwrap()
+    );
+    assert!(
+        !uas.is_agent_coming_home(session, "http://other.example:9000/")
+            .unwrap()
+    );
 }
 
 // ===========================================================================
@@ -937,13 +933,34 @@ fn hyperlink_coordinate_collision() {
 fn hyperlink_multiple_links() {
     let linker = make_linker();
     linker
-        .link_region(Uuid::nil(), "http://a.example:9000/", "Alpha", 1000, 1000, Uuid::nil())
+        .link_region(
+            Uuid::nil(),
+            "http://a.example:9000/",
+            "Alpha",
+            1000,
+            1000,
+            Uuid::nil(),
+        )
         .unwrap();
     linker
-        .link_region(Uuid::nil(), "http://b.example:9000/", "Beta", 2000, 2000, Uuid::nil())
+        .link_region(
+            Uuid::nil(),
+            "http://b.example:9000/",
+            "Beta",
+            2000,
+            2000,
+            Uuid::nil(),
+        )
         .unwrap();
     linker
-        .link_region(Uuid::nil(), "http://c.example:9000/", "Gamma", 3000, 3000, Uuid::nil())
+        .link_region(
+            Uuid::nil(),
+            "http://c.example:9000/",
+            "Gamma",
+            3000,
+            3000,
+            Uuid::nil(),
+        )
         .unwrap();
 
     let all = linker.get_linked_regions();
@@ -985,10 +1002,7 @@ fn friends_store_and_retrieve_hg_friendship() {
     let mut module = HGFriendsModule::new();
     let user = Uuid::new_v4();
     let friend_uuid = Uuid::new_v4();
-    let friend_uui = format!(
-        "{};http://foreign.grid:8002;Alice Wonderland",
-        friend_uuid
-    );
+    let friend_uui = format!("{};http://foreign.grid:8002;Alice Wonderland", friend_uuid);
 
     let secret = module.store_hg_friendship(user, &friend_uui);
     assert_eq!(secret.len(), 8, "secret should be 8 characters");
@@ -1201,7 +1215,9 @@ fn friends_friendship_message_content() {
 
     let foreign_id = format!("{};http://grid.com;Name Here", Uuid::new_v4());
     assert!(
-        module.friendship_message(&foreign_id).contains("another HG grid"),
+        module
+            .friendship_message(&foreign_id)
+            .contains("another HG grid"),
         "foreign friend message should mention HG"
     );
 
@@ -1416,8 +1432,7 @@ fn asset_service_creator_rewrite() {
 /// UUI parsing and round-trip.
 #[test]
 fn uui_parse_roundtrip() {
-    let original =
-        "550e8400-e29b-41d4-a716-446655440000;http://grid.example.com:8002;Jane Smith";
+    let original = "550e8400-e29b-41d4-a716-446655440000;http://grid.example.com:8002;Jane Smith";
     let parsed = UniversalUserIdentifier::parse(original).unwrap();
     assert_eq!(parsed.first_name, "Jane");
     assert_eq!(parsed.last_name, "Smith");

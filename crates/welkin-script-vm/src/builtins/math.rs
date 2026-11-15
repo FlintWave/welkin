@@ -225,36 +225,16 @@ pub fn register_math(lua: &Lua) -> Result<(), crate::VmError> {
         let trace = fx + ly + uz;
         let (x, y, z, w) = if trace > 0.0 {
             let s = (trace + 1.0).sqrt() * 2.0;
-            (
-                (uy - lz) / s,
-                (fz - ux) / s,
-                (lx - fy) / s,
-                0.25 * s,
-            )
+            ((uy - lz) / s, (fz - ux) / s, (lx - fy) / s, 0.25 * s)
         } else if fx > ly && fx > uz {
             let s = (1.0 + fx - ly - uz).sqrt() * 2.0;
-            (
-                0.25 * s,
-                (fy + lx) / s,
-                (fz + ux) / s,
-                (uy - lz) / s,
-            )
+            (0.25 * s, (fy + lx) / s, (fz + ux) / s, (uy - lz) / s)
         } else if ly > uz {
             let s = (1.0 + ly - fx - uz).sqrt() * 2.0;
-            (
-                (fy + lx) / s,
-                0.25 * s,
-                (lz + uy) / s,
-                (fz - ux) / s,
-            )
+            ((fy + lx) / s, 0.25 * s, (lz + uy) / s, (fz - ux) / s)
         } else {
             let s = (1.0 + uz - fx - ly).sqrt() * 2.0;
-            (
-                (fz + ux) / s,
-                (lz + uy) / s,
-                0.25 * s,
-                (lx - fy) / s,
-            )
+            ((fz + ux) / s, (lz + uy) / s, 0.25 * s, (lx - fy) / s)
         };
         make_rot(lua, [x, y, z, w])
     })?;
@@ -312,7 +292,7 @@ mod tests {
     fn test_frand() {
         let lua = setup();
         let r: f64 = lua.load("return llFrand(10.0)").eval().unwrap();
-        assert!(r >= 0.0 && r < 10.0, "llFrand result {r} out of range");
+        assert!((0.0..10.0).contains(&r), "llFrand result {r} out of range");
     }
 
     #[test]
@@ -362,20 +342,14 @@ mod tests {
     #[test]
     fn test_log() {
         let lua = setup();
-        let r: f64 = lua
-            .load("return llLog(2.718281828459045)")
-            .eval()
-            .unwrap();
+        let r: f64 = lua.load("return llLog(2.718281828459045)").eval().unwrap();
         assert!((r - 1.0).abs() < 1e-10);
     }
 
     #[test]
     fn test_vec_mag() {
         let lua = setup();
-        let r: f64 = lua
-            .load("return llVecMag({x=3, y=4, z=0})")
-            .eval()
-            .unwrap();
+        let r: f64 = lua.load("return llVecMag({x=3, y=4, z=0})").eval().unwrap();
         assert!((r - 5.0).abs() < 1e-12);
     }
 
@@ -430,6 +404,9 @@ mod tests {
             .load("return llAngleBetween({x=0,y=0,z=0,w=1}, {x=0,y=0,z=0,w=1})")
             .eval()
             .unwrap();
-        assert!(r.abs() < 1e-12, "angle between identical rotations should be 0, got {r}");
+        assert!(
+            r.abs() < 1e-12,
+            "angle between identical rotations should be 0, got {r}"
+        );
     }
 }

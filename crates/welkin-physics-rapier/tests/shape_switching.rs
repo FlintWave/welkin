@@ -30,7 +30,9 @@ fn test_update_shape_replaces_collider() {
     assert!(ok, "update_prim_shape should succeed");
 
     // Actor still exists and retains its properties.
-    let actor = scene.get_actor(1).expect("actor must still exist after shape update");
+    let actor = scene
+        .get_actor(1)
+        .expect("actor must still exist after shape update");
     assert_eq!(actor.name(), "box");
     assert!(!actor.is_physical());
 }
@@ -44,7 +46,9 @@ fn test_update_shape_to_phantom() {
     assert!(ok, "update to phantom should succeed");
 
     // Actor still exists.
-    let actor = scene.get_actor(1).expect("actor must survive phantom transition");
+    let actor = scene
+        .get_actor(1)
+        .expect("actor must survive phantom transition");
     assert_eq!(actor.name(), "box");
 }
 
@@ -65,15 +69,16 @@ fn test_update_shape_restores_from_phantom() {
     assert!(scene.update_prim_shape(1, None));
 
     // Restore with a cylinder shape.
-    let cylinder: Box<dyn std::any::Any + Send> =
-        Box::new(SharedShape::cylinder(1.0, 0.5));
+    let cylinder: Box<dyn std::any::Any + Send> = Box::new(SharedShape::cylinder(1.0, 0.5));
     assert!(
         scene.update_prim_shape(1, Some(cylinder)),
         "restoring from phantom must succeed"
     );
 
     // Actor is still there and a simulation step doesn't panic.
-    let actor = scene.get_actor(1).expect("actor must survive phantom round-trip");
+    let actor = scene
+        .get_actor(1)
+        .expect("actor must survive phantom round-trip");
     assert_eq!(actor.name(), "box");
     scene.simulate(1.0 / 54.5454);
 }

@@ -18,9 +18,9 @@ use uuid::Uuid;
 
 use welkin_types::{AssetType, PermissionMask};
 
-use crate::constants::INVENTORY_NODE_NAME_COMPONENT_SEPARATOR;
-use crate::osp_resolver::{make_ospa_from_uuid, UserService};
 use crate::ArchiveError;
+use crate::constants::INVENTORY_NODE_NAME_COMPONENT_SEPARATOR;
+use crate::osp_resolver::{UserService, make_ospa_from_uuid};
 
 // ---------------------------------------------------------------------------
 // InventoryItem
@@ -232,8 +232,7 @@ pub fn serialize_inventory_item(
 
     // CreatorUUID — may contain OSPA if user service is available
     let creator_str = if let Some(svc) = user_service {
-        make_ospa_from_uuid(item.creator_uuid, svc)
-            .unwrap_or_else(|| item.creator_uuid.to_string())
+        make_ospa_from_uuid(item.creator_uuid, svc).unwrap_or_else(|| item.creator_uuid.to_string())
     } else {
         item.creator_uuid.to_string()
     };
@@ -277,18 +276,18 @@ pub fn serialize_inventory_item(
     // CreatorData — conditional inclusion
     if options.include_creator_data && !item.creator_data.is_empty() {
         write_element(&mut writer, "CreatorData", &item.creator_data)?;
-    } else if let Some(ref home_url) = options.home_url {
-        if let Some(svc) = user_service {
-            if let Some((first, last)) = svc.get_user_by_id(item.creator_uuid) {
-                let cd = crate::external_representation::calc_creator_data_with_uuid(
-                    home_url,
-                    item.creator_uuid,
-                    &format!("{first} {last}"),
-                );
-                write_element(&mut writer, "CreatorData", &cd)?;
-            }
-            write_element(&mut writer, "CreatorID", &item.creator_id)?;
+    } else if let Some(ref home_url) = options.home_url
+        && let Some(svc) = user_service
+    {
+        if let Some((first, last)) = svc.get_user_by_id(item.creator_uuid) {
+            let cd = crate::external_representation::calc_creator_data_with_uuid(
+                home_url,
+                item.creator_uuid,
+                &format!("{first} {last}"),
+            );
+            write_element(&mut writer, "CreatorData", &cd)?;
         }
+        write_element(&mut writer, "CreatorID", &item.creator_id)?;
     }
 
     // </InventoryItem>
@@ -338,8 +337,8 @@ pub fn deserialize_inventory_item(xml: &str) -> Result<InventoryItem, ArchiveErr
                 match tag {
                     "Name" => item.name = text.to_string(),
                     "ID" => {
-                        item.id = Uuid::parse_str(text)
-                            .map_err(|e| ArchiveError::Xml(e.to_string()))?;
+                        item.id =
+                            Uuid::parse_str(text).map_err(|e| ArchiveError::Xml(e.to_string()))?;
                     }
                     "InvType" => {
                         item.inv_type = text
@@ -367,8 +366,8 @@ pub fn deserialize_inventory_item(xml: &str) -> Result<InventoryItem, ArchiveErr
                         item.creation_date = text.parse().unwrap_or(0);
                     }
                     "Owner" => {
-                        item.owner = Uuid::parse_str(text)
-                            .map_err(|e| ArchiveError::Xml(e.to_string()))?;
+                        item.owner =
+                            Uuid::parse_str(text).map_err(|e| ArchiveError::Xml(e.to_string()))?;
                     }
                     "Description" => {
                         item.description = text.to_string();
@@ -376,13 +375,11 @@ pub fn deserialize_inventory_item(xml: &str) -> Result<InventoryItem, ArchiveErr
                     "AssetType" => {
                         item.asset_type = text
                             .parse()
-                            .map_err(|_| {
-                                ArchiveError::Invalid(format!("bad AssetType: {text}"))
-                            })?;
+                            .map_err(|_| ArchiveError::Invalid(format!("bad AssetType: {text}")))?;
                     }
                     "AssetID" => {
-                        item.asset_id = Uuid::parse_str(text)
-                            .map_err(|e| ArchiveError::Xml(e.to_string()))?;
+                        item.asset_id =
+                            Uuid::parse_str(text).map_err(|e| ArchiveError::Xml(e.to_string()))?;
                     }
                     "SaleType" => {
                         item.sale_type = text.parse().unwrap_or(0);
@@ -409,8 +406,7 @@ pub fn deserialize_inventory_item(xml: &str) -> Result<InventoryItem, ArchiveErr
                         item.group_id = Uuid::parse_str(text).unwrap_or(Uuid::nil());
                     }
                     "GroupOwned" => {
-                        item.group_owned =
-                            text.eq_ignore_ascii_case("true") || text == "1";
+                        item.group_owned = text.eq_ignore_ascii_case("true") || text == "1";
                     }
                     _ => {
                         // Unknown elements are silently ignored
@@ -445,11 +441,7 @@ pub fn create_iar_control_file(
     save_assets: bool,
     home_url: Option<&str>,
 ) -> Result<String, ArchiveError> {
-    let (major, minor) = if home_url.is_some() {
-        (1, 2)
-    } else {
-        (0, 3)
-    };
+    let (major, minor) = if home_url.is_some() { (1, 2) } else { (0, 3) };
 
     let mut writer = Writer::new_with_indent(Cursor::new(Vec::new()), b' ', 2);
 
@@ -678,20 +670,14 @@ mod tests {
     fn create_archive_folder_name_format() {
         let uuid = Uuid::parse_str("12345678-1234-1234-1234-123456789abc").unwrap();
         let name = create_archive_folder_name("My Folder", uuid);
-        assert_eq!(
-            name,
-            "My Folder__12345678-1234-1234-1234-123456789abc/"
-        );
+        assert_eq!(name, "My Folder__12345678-1234-1234-1234-123456789abc/");
     }
 
     #[test]
     fn create_archive_item_name_format() {
         let uuid = Uuid::parse_str("12345678-1234-1234-1234-123456789abc").unwrap();
         let name = create_archive_item_name("My Item", uuid);
-        assert_eq!(
-            name,
-            "My Item__12345678-1234-1234-1234-123456789abc.xml"
-        );
+        assert_eq!(name, "My Item__12345678-1234-1234-1234-123456789abc.xml");
     }
 
     #[test]

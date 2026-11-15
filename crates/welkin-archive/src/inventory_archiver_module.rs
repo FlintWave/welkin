@@ -9,8 +9,8 @@
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use crate::iar_write::IarWriteOptions;
 use crate::ArchiveError;
+use crate::iar_write::IarWriteOptions;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -85,16 +85,10 @@ pub trait IInventoryArchiverModule: Send + Sync {
 // ---------------------------------------------------------------------------
 
 /// Options controlling how an IAR is loaded.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct IarLoadOptions {
     /// If true, merge with existing inventory folders by name.
     pub merge: bool,
-}
-
-impl Default for IarLoadOptions {
-    fn default() -> Self {
-        Self { merge: false }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -463,9 +457,7 @@ impl InventoryArchiverModule {
         lookup
             .get_user_by_name(first_name, last_name)
             .ok_or_else(|| {
-                ArchiveError::Invalid(format!(
-                    "user not found: {first_name} {last_name}"
-                ))
+                ArchiveError::Invalid(format!("user not found: {first_name} {last_name}"))
             })
     }
 }
@@ -489,10 +481,8 @@ mod tests {
     #[test]
     fn parse_save_iar_minimal() {
         let (opts, first, last, inv_path, pass, filename) =
-            InventoryArchiverModule::parse_save_iar_command(&[
-                "John", "Doe", "/Objects", "secret",
-            ])
-            .unwrap();
+            InventoryArchiverModule::parse_save_iar_command(&["John", "Doe", "/Objects", "secret"])
+                .unwrap();
 
         assert!(opts.save_assets);
         assert!(opts.filter_content.is_none());
@@ -543,10 +533,7 @@ mod tests {
         ])
         .unwrap();
 
-        assert_eq!(
-            opts.home_url,
-            Some("http://example.com:8002".to_string())
-        );
+        assert_eq!(opts.home_url, Some("http://example.com:8002".to_string()));
         assert!(opts.include_creator_data);
     }
 
@@ -564,8 +551,7 @@ mod tests {
 
     #[test]
     fn parse_save_iar_missing_positional() {
-        let result =
-            InventoryArchiverModule::parse_save_iar_command(&["John", "Doe"]);
+        let result = InventoryArchiverModule::parse_save_iar_command(&["John", "Doe"]);
         assert!(result.is_err());
     }
 
@@ -589,10 +575,8 @@ mod tests {
     #[test]
     fn parse_load_iar_minimal() {
         let (opts, first, last, inv_path, pass, filename) =
-            InventoryArchiverModule::parse_load_iar_command(&[
-                "John", "Doe", "/Objects", "secret",
-            ])
-            .unwrap();
+            InventoryArchiverModule::parse_load_iar_command(&["John", "Doe", "/Objects", "secret"])
+                .unwrap();
 
         assert!(!opts.merge);
         assert_eq!(first, "John");
@@ -625,17 +609,15 @@ mod tests {
 
     #[test]
     fn parse_load_iar_short_merge() {
-        let (opts, ..) = InventoryArchiverModule::parse_load_iar_command(&[
-            "-m", "John", "Doe", "/", "pass",
-        ])
-        .unwrap();
+        let (opts, ..) =
+            InventoryArchiverModule::parse_load_iar_command(&["-m", "John", "Doe", "/", "pass"])
+                .unwrap();
         assert!(opts.merge);
     }
 
     #[test]
     fn parse_load_iar_missing_positional() {
-        let result =
-            InventoryArchiverModule::parse_load_iar_command(&["John", "Doe"]);
+        let result = InventoryArchiverModule::parse_load_iar_command(&["John", "Doe"]);
         assert!(result.is_err());
     }
 
@@ -645,10 +627,7 @@ mod tests {
     fn validate_inventory_path_valid() {
         assert!(InventoryArchiverModule::validate_inventory_path("/").is_ok());
         assert!(InventoryArchiverModule::validate_inventory_path("/Objects").is_ok());
-        assert!(
-            InventoryArchiverModule::validate_inventory_path("/Objects/My Items/")
-                .is_ok()
-        );
+        assert!(InventoryArchiverModule::validate_inventory_path("/Objects/My Items/").is_ok());
     }
 
     #[test]
@@ -658,18 +637,12 @@ mod tests {
 
     #[test]
     fn validate_inventory_path_no_leading_slash() {
-        assert!(
-            InventoryArchiverModule::validate_inventory_path("Objects/Stuff")
-                .is_err()
-        );
+        assert!(InventoryArchiverModule::validate_inventory_path("Objects/Stuff").is_err());
     }
 
     #[test]
     fn validate_inventory_path_null_byte() {
-        assert!(
-            InventoryArchiverModule::validate_inventory_path("/Objects\0/Bad")
-                .is_err()
-        );
+        assert!(InventoryArchiverModule::validate_inventory_path("/Objects\0/Bad").is_err());
     }
 
     // -- user verification --
@@ -680,10 +653,7 @@ mod tests {
         fn get_user_by_name(&self, first: &str, last: &str) -> Option<UserInfo> {
             if first == "John" && last == "Doe" {
                 Some(UserInfo {
-                    principal_id: Uuid::parse_str(
-                        "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-                    )
-                    .unwrap(),
+                    principal_id: Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap(),
                     first_name: "John".to_string(),
                     last_name: "Doe".to_string(),
                 })
@@ -696,8 +666,7 @@ mod tests {
     #[test]
     fn verify_user_found() {
         let lookup = MockLookup;
-        let user =
-            InventoryArchiverModule::verify_user("John", "Doe", &lookup).unwrap();
+        let user = InventoryArchiverModule::verify_user("John", "Doe", &lookup).unwrap();
         assert_eq!(user.first_name, "John");
         assert_eq!(user.last_name, "Doe");
         assert_eq!(
@@ -709,8 +678,7 @@ mod tests {
     #[test]
     fn verify_user_not_found() {
         let lookup = MockLookup;
-        let result =
-            InventoryArchiverModule::verify_user("Nobody", "Here", &lookup);
+        let result = InventoryArchiverModule::verify_user("Nobody", "Here", &lookup);
         assert!(result.is_err());
     }
 
@@ -743,16 +711,7 @@ mod tests {
     fn emit_save_completed_success() {
         let module = InventoryArchiverModule::new();
         let id = Uuid::new_v4();
-        let event = module.emit_save_completed(
-            id,
-            true,
-            "John",
-            "Doe",
-            "/Objects",
-            42,
-            3,
-            None,
-        );
+        let event = module.emit_save_completed(id, true, "John", "Doe", "/Objects", 42, 3, None);
 
         match event {
             InventoryArchiveEvent::SaveCompleted {
@@ -775,16 +734,8 @@ mod tests {
     fn emit_save_completed_failure() {
         let module = InventoryArchiverModule::new();
         let id = Uuid::new_v4();
-        let event = module.emit_save_completed(
-            id,
-            false,
-            "John",
-            "Doe",
-            "/",
-            0,
-            0,
-            Some("disk full"),
-        );
+        let event =
+            module.emit_save_completed(id, false, "John", "Doe", "/", 0, 0, Some("disk full"));
 
         match event {
             InventoryArchiveEvent::SaveCompleted {
@@ -801,15 +752,7 @@ mod tests {
     fn emit_load_completed_success() {
         let module = InventoryArchiverModule::new();
         let id = Uuid::new_v4();
-        let event = module.emit_load_completed(
-            id,
-            true,
-            "Jane",
-            "Smith",
-            "/Clothing",
-            100,
-            None,
-        );
+        let event = module.emit_load_completed(id, true, "Jane", "Smith", "/Clothing", 100, None);
 
         match event {
             InventoryArchiveEvent::LoadCompleted {
@@ -828,15 +771,8 @@ mod tests {
     fn emit_load_completed_failure() {
         let module = InventoryArchiverModule::new();
         let id = Uuid::new_v4();
-        let event = module.emit_load_completed(
-            id,
-            false,
-            "Jane",
-            "Smith",
-            "/",
-            0,
-            Some("corrupt archive"),
-        );
+        let event =
+            module.emit_load_completed(id, false, "Jane", "Smith", "/", 0, Some("corrupt archive"));
 
         match event {
             InventoryArchiveEvent::LoadCompleted {

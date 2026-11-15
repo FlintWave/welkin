@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+#![allow(clippy::approx_constant)]
 //! Task 4.1: Port of script API tests from the C# OpenSimulator tree.
 //!
 //! The C# tests in `OpenSim/Region/ScriptEngine/Shared/Tests/` verify the LSL
@@ -11,7 +12,7 @@
 //! 4. LSL constants have expected values when injected
 //! 5. Type-system conversions (integer <-> float <-> string) work
 
-use welkin_script_vm::{new_vm, compile_source, VmError};
+use welkin_script_vm::{VmError, compile_source, new_vm};
 
 // ===================================================================
 // Helper: create a non-sandboxed VM for tests that set globals
@@ -87,7 +88,10 @@ fn math_trig_functions() -> Result<(), VmError> {
 
     // sin(pi/2) = 1
     let v: f64 = lua.load("return math.sin(math.pi / 2)").eval()?;
-    assert!((v - 1.0).abs() < tolerance, "sin(pi/2) should be 1, got {v}");
+    assert!(
+        (v - 1.0).abs() < tolerance,
+        "sin(pi/2) should be 1, got {v}"
+    );
 
     // cos(0) = 1
     let v: f64 = lua.load("return math.cos(0)").eval()?;
@@ -103,7 +107,10 @@ fn math_trig_functions() -> Result<(), VmError> {
 
     // tan(pi/4) = 1
     let v: f64 = lua.load("return math.tan(math.pi / 4)").eval()?;
-    assert!((v - 1.0).abs() < tolerance, "tan(pi/4) should be 1, got {v}");
+    assert!(
+        (v - 1.0).abs() < tolerance,
+        "tan(pi/4) should be 1, got {v}"
+    );
 
     // atan2(1, 1) = pi/4
     let v: f64 = lua.load("return math.atan2(1, 1)").eval()?;
@@ -189,7 +196,9 @@ fn math_random_in_range() -> Result<(), VmError> {
     let lua = new_vm()?;
 
     // math.random() returns [0, 1), scaled by magnitude
-    let result: f64 = lua.load(r#"
+    let result: f64 = lua
+        .load(
+            r#"
         local sum = 0
         for i = 1, 100 do
             local r = math.random() * 10.0
@@ -199,10 +208,15 @@ fn math_random_in_range() -> Result<(), VmError> {
             sum = sum + r
         end
         return sum
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
 
     // Sum of 100 random values in [0, 10) should be positive and < 1000
-    assert!(result > 0.0 && result < 1000.0, "random sum out of range: {result}");
+    assert!(
+        result > 0.0 && result < 1000.0,
+        "random sum out of range: {result}"
+    );
     Ok(())
 }
 
@@ -219,7 +233,11 @@ fn string_length() -> Result<(), VmError> {
     // llStringLength equivalent
     assert_eq!(lua.load(r#"return string.len("hello")"#).eval::<i64>()?, 5);
     assert_eq!(lua.load(r#"return string.len("")"#).eval::<i64>()?, 0);
-    assert_eq!(lua.load(r#"return string.len("hello world")"#).eval::<i64>()?, 11);
+    assert_eq!(
+        lua.load(r#"return string.len("hello world")"#)
+            .eval::<i64>()?,
+        11
+    );
     Ok(())
 }
 
@@ -229,7 +247,9 @@ fn string_substring() -> Result<(), VmError> {
     let lua = new_vm()?;
 
     // Lua string.sub is 1-based
-    let v: String = lua.load(r#"return string.sub("Hello World", 1, 5)"#).eval()?;
+    let v: String = lua
+        .load(r#"return string.sub("Hello World", 1, 5)"#)
+        .eval()?;
     assert_eq!(v, "Hello");
 
     let v: String = lua.load(r#"return string.sub("Hello World", 7)"#).eval()?;
@@ -252,7 +272,9 @@ fn string_case_conversion() -> Result<(), VmError> {
     let v: String = lua.load(r#"return string.lower("HELLO")"#).eval()?;
     assert_eq!(v, "hello");
 
-    let v: String = lua.load(r#"return string.upper("Hello World 123")"#).eval()?;
+    let v: String = lua
+        .load(r#"return string.upper("Hello World 123")"#)
+        .eval()?;
     assert_eq!(v, "HELLO WORLD 123");
     Ok(())
 }
@@ -263,17 +285,25 @@ fn string_find() -> Result<(), VmError> {
     let lua = new_vm()?;
 
     // string.find returns start,end or nil
-    let v: i64 = lua.load(r#"
+    let v: i64 = lua
+        .load(
+            r#"
         local s, e = string.find("hello world", "world", 1, true)
         return s or -1
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert_eq!(v, 7); // 1-based
 
     // Not found
-    let v: i64 = lua.load(r#"
+    let v: i64 = lua
+        .load(
+            r#"
         local s, e = string.find("hello world", "xyz", 1, true)
         return s or -1
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert_eq!(v, -1);
     Ok(())
 }
@@ -284,17 +314,25 @@ fn string_trim() -> Result<(), VmError> {
     let lua = new_vm()?;
 
     // Luau has built-in string patterns for trimming
-    let v: String = lua.load(r#"
+    let v: String = lua
+        .load(
+            r#"
         local s = "  hello  "
         return s:match("^%s*(.-)%s*$")
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert_eq!(v, "hello");
 
     // Head trim only
-    let v: String = lua.load(r#"
+    let v: String = lua
+        .load(
+            r#"
         local s = "  hello  "
         return s:match("^%s*(.*)")
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert_eq!(v, "hello  ");
     Ok(())
 }
@@ -304,12 +342,16 @@ fn string_trim() -> Result<(), VmError> {
 fn string_insert() -> Result<(), VmError> {
     let lua = new_vm()?;
 
-    let v: String = lua.load(r#"
+    let v: String = lua
+        .load(
+            r#"
         local function insert(dst, pos, src)
             return string.sub(dst, 1, pos) .. src .. string.sub(dst, pos + 1)
         end
         return insert("Hello World", 5, " Beautiful")
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert_eq!(v, "Hello Beautiful World");
     Ok(())
 }
@@ -341,7 +383,11 @@ fn list_creation_and_length() -> Result<(), VmError> {
     // llGetListLength equivalent
     assert_eq!(lua.load("return #{}").eval::<i64>()?, 0);
     assert_eq!(lua.load("return #{1, 2, 3}").eval::<i64>()?, 3);
-    assert_eq!(lua.load(r#"return #{1, "hello", 3.14, true}"#).eval::<i64>()?, 4);
+    assert_eq!(
+        lua.load(r#"return #{1, "hello", 3.14, true}"#)
+            .eval::<i64>()?,
+        4
+    );
     Ok(())
 }
 
@@ -350,36 +396,52 @@ fn list_creation_and_length() -> Result<(), VmError> {
 fn list_concatenation() -> Result<(), VmError> {
     let lua = new_vm()?;
 
-    let len: i64 = lua.load(r#"
+    let len: i64 = lua
+        .load(
+            r#"
         local t = {1, 97, "test"}
         -- Concatenate a string
         table.insert(t, "addition")
         return #t
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert_eq!(len, 4);
 
     // Verify the appended element
-    let v: String = lua.load(r#"
+    let v: String = lua
+        .load(
+            r#"
         local t = {1, 97, "test"}
         table.insert(t, "addition")
         return t[4]
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert_eq!(v, "addition");
 
     // Concatenate integer
-    let v: i64 = lua.load(r#"
+    let v: i64 = lua
+        .load(
+            r#"
         local t = {1, 97, "test"}
         table.insert(t, 20)
         return t[4]
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert_eq!(v, 20);
 
     // Concatenate float
-    let v: f64 = lua.load(r#"
+    let v: f64 = lua
+        .load(
+            r#"
         local t = {1, 97, "test"}
         table.insert(t, 2.0)
         return t[4]
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert!((v - 2.0).abs() < 0.000001);
     Ok(())
 }
@@ -391,24 +453,36 @@ fn list_element_access() -> Result<(), VmError> {
     let lua = new_vm()?;
 
     // Integer element
-    let v: i64 = lua.load(r#"
+    let v: i64 = lua
+        .load(
+            r#"
         local t = {123, 456.789, "hello"}
         return t[1]
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert_eq!(v, 123);
 
     // Float element
-    let v: f64 = lua.load(r#"
+    let v: f64 = lua
+        .load(
+            r#"
         local t = {123, 456.789, "hello"}
         return t[2]
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert!((v - 456.789).abs() < 0.001);
 
     // String element
-    let v: String = lua.load(r#"
+    let v: String = lua
+        .load(
+            r#"
         local t = {123, 456.789, "hello"}
         return t[3]
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert_eq!(v, "hello");
     Ok(())
 }
@@ -420,7 +494,9 @@ fn list_sort_and_find() -> Result<(), VmError> {
     let lua = new_vm()?;
 
     // Sort ascending
-    let v: String = lua.load(r#"
+    let v: String = lua
+        .load(
+            r#"
         local t = {3, 1, 4, 1, 5, 9}
         table.sort(t)
         local result = ""
@@ -428,11 +504,15 @@ fn list_sort_and_find() -> Result<(), VmError> {
             result = result .. tostring(v) .. ","
         end
         return result
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert_eq!(v, "1,1,3,4,5,9,");
 
     // Sort descending
-    let v: String = lua.load(r#"
+    let v: String = lua
+        .load(
+            r#"
         local t = {3, 1, 4, 1, 5, 9}
         table.sort(t, function(a, b) return a > b end)
         local result = ""
@@ -440,27 +520,37 @@ fn list_sort_and_find() -> Result<(), VmError> {
             result = result .. tostring(v) .. ","
         end
         return result
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert_eq!(v, "9,5,4,3,1,1,");
 
     // Find element (llListFindList equivalent)
-    let v: i64 = lua.load(r#"
+    let v: i64 = lua
+        .load(
+            r#"
         local t = {10, 20, 30, 40}
         for i, v in ipairs(t) do
             if v == 30 then return i end
         end
         return -1
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert_eq!(v, 3); // 1-based index
 
     // Find missing
-    let v: i64 = lua.load(r#"
+    let v: i64 = lua
+        .load(
+            r#"
         local t = {10, 20, 30, 40}
         for i, v in ipairs(t) do
             if v == 99 then return i end
         end
         return -1
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert_eq!(v, -1);
     Ok(())
 }
@@ -471,18 +561,26 @@ fn list_delete_and_join() -> Result<(), VmError> {
     let lua = new_vm()?;
 
     // Delete element (remove index 2)
-    let v: String = lua.load(r#"
+    let v: String = lua
+        .load(
+            r#"
         local t = {"a", "b", "c", "d"}
         table.remove(t, 2)
         return table.concat(t, ",")
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert_eq!(v, "a,c,d");
 
     // Join / dump list to string (llDumpList2String equivalent)
-    let v: String = lua.load(r#"
+    let v: String = lua
+        .load(
+            r#"
         local t = {"hello", "beautiful", "world"}
         return table.concat(t, " ")
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert_eq!(v, "hello beautiful world");
     Ok(())
 }
@@ -493,21 +591,29 @@ fn list_csv_conversion() -> Result<(), VmError> {
     let lua = new_vm()?;
 
     // CSV to list
-    let v: i64 = lua.load(r#"
+    let v: i64 = lua
+        .load(
+            r#"
         local csv = "one,two,three,four"
         local t = {}
         for item in string.gmatch(csv, "[^,]+") do
             table.insert(t, item)
         end
         return #t
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert_eq!(v, 4);
 
     // List to CSV
-    let v: String = lua.load(r#"
+    let v: String = lua
+        .load(
+            r#"
         local t = {"one", "two", "three"}
         return table.concat(t, ", ")
-    "#).eval()?;
+    "#,
+        )
+        .eval()?;
     assert_eq!(v, "one, two, three");
     Ok(())
 }
@@ -524,30 +630,48 @@ fn constants_math() -> Result<(), VmError> {
     let tolerance = 0.001;
 
     // Register the LSL math constants as globals
-    lua.globals().set("PI", 3.14159274_f64)?;
-    lua.globals().set("TWO_PI", 6.28318548_f64)?;
-    lua.globals().set("PI_BY_TWO", 1.57079637_f64)?;
-    lua.globals().set("DEG_TO_RAD", 0.01745329238_f64)?;
-    lua.globals().set("RAD_TO_DEG", 57.29578_f64)?;
-    lua.globals().set("SQRT2", 1.414213538_f64)?;
+    #[allow(clippy::approx_constant)]
+    {
+        lua.globals().set("PI", 3.14159274_f64)?;
+        lua.globals().set("TWO_PI", 6.28318548_f64)?;
+        lua.globals().set("PI_BY_TWO", 1.57079637_f64)?;
+        lua.globals().set("DEG_TO_RAD", 0.01745329238_f64)?;
+        lua.globals().set("RAD_TO_DEG", 57.29578_f64)?;
+        lua.globals().set("SQRT2", 1.414213538_f64)?;
+    }
 
     let v: f64 = lua.load("return PI").eval()?;
     assert!((v - std::f64::consts::PI).abs() < tolerance, "PI mismatch");
 
     let v: f64 = lua.load("return TWO_PI").eval()?;
-    assert!((v - 2.0 * std::f64::consts::PI).abs() < tolerance, "TWO_PI mismatch");
+    assert!(
+        (v - 2.0 * std::f64::consts::PI).abs() < tolerance,
+        "TWO_PI mismatch"
+    );
 
     let v: f64 = lua.load("return PI_BY_TWO").eval()?;
-    assert!((v - std::f64::consts::FRAC_PI_2).abs() < tolerance, "PI_BY_TWO mismatch");
+    assert!(
+        (v - std::f64::consts::FRAC_PI_2).abs() < tolerance,
+        "PI_BY_TWO mismatch"
+    );
 
     let v: f64 = lua.load("return DEG_TO_RAD").eval()?;
-    assert!((v - std::f64::consts::PI / 180.0).abs() < tolerance, "DEG_TO_RAD mismatch");
+    assert!(
+        (v - std::f64::consts::PI / 180.0).abs() < tolerance,
+        "DEG_TO_RAD mismatch"
+    );
 
     let v: f64 = lua.load("return RAD_TO_DEG").eval()?;
-    assert!((v - 180.0 / std::f64::consts::PI).abs() < tolerance, "RAD_TO_DEG mismatch");
+    assert!(
+        (v - 180.0 / std::f64::consts::PI).abs() < tolerance,
+        "RAD_TO_DEG mismatch"
+    );
 
     let v: f64 = lua.load("return SQRT2").eval()?;
-    assert!((v - std::f64::consts::SQRT_2).abs() < tolerance, "SQRT2 mismatch");
+    assert!(
+        (v - std::f64::consts::SQRT_2).abs() < tolerance,
+        "SQRT2 mismatch"
+    );
 
     Ok(())
 }
@@ -559,7 +683,8 @@ fn constants_boolean_and_special() -> Result<(), VmError> {
 
     lua.globals().set("TRUE", 1)?;
     lua.globals().set("FALSE", 0)?;
-    lua.globals().set("NULL_KEY", "00000000-0000-0000-0000-000000000000")?;
+    lua.globals()
+        .set("NULL_KEY", "00000000-0000-0000-0000-000000000000")?;
     lua.globals().set("ALL_SIDES", -1)?;
     lua.globals().set("EOF", "\n\n\n")?;
 
@@ -634,7 +759,9 @@ fn constants_changed_flags() -> Result<(), VmError> {
     lua.globals().set("CHANGED_TELEPORT", 512)?;
 
     // Test bitwise OR: CHANGED_INVENTORY | CHANGED_REGION = 257
-    let v: i64 = lua.load("return bit32.bor(CHANGED_INVENTORY, CHANGED_REGION)").eval()?;
+    let v: i64 = lua
+        .load("return bit32.bor(CHANGED_INVENTORY, CHANGED_REGION)")
+        .eval()?;
     assert_eq!(v, 257);
 
     // Test bitwise AND: (257 & CHANGED_REGION) == CHANGED_REGION
@@ -680,7 +807,10 @@ fn type_float_to_int_truncation() -> Result<(), VmError> {
             "local v = {f}; if v >= 0 then return math.floor(v) else return math.ceil(v) end"
         );
         let result: i64 = lua.load(&code).eval()?;
-        assert_eq!(result, *expected, "truncate({f}) should be {expected}, got {result}");
+        assert_eq!(
+            result, *expected,
+            "truncate({f}) should be {expected}, got {result}"
+        );
     }
     Ok(())
 }
@@ -778,16 +908,18 @@ fn type_int_float_roundtrip() -> Result<(), VmError> {
     for &i in cases {
         let code = format!("return {i} + 0.0");
         let v: f64 = lua.load(&code).eval()?;
-        assert!(
-            (v - i as f64).abs() < tolerance,
-            "int->float: {i} -> {v}"
-        );
+        assert!((v - i as f64).abs() < tolerance, "int->float: {i} -> {v}");
     }
 
     // Float to integer truncation: m_doubleIntSet from C#
     let float_to_int: &[(f64, i64)] = &[
-        (2.0, 2), (-2.0, -2), (0.0, 0), (1.0, 1), (-1.0, -1),
-        (999999999.0, 999999999), (-99999999.0, -99999999),
+        (2.0, 2),
+        (-2.0, -2),
+        (0.0, 0),
+        (1.0, 1),
+        (-1.0, -1),
+        (999999999.0, 999999999),
+        (-99999999.0, -99999999),
     ];
     for (f, expected) in float_to_int {
         let code = format!(

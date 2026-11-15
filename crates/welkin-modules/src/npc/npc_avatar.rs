@@ -197,7 +197,12 @@ impl NPCAvatar {
 
     /// Fire the chat-from-client event on the scene, as though a real viewer
     /// had sent a chat message.
-    pub fn handle_chat_from_client(&self, message: &str, chat_type: ChatType, channel: i32) -> bool {
+    pub fn handle_chat_from_client(
+        &self,
+        message: &str,
+        chat_type: ChatType,
+        channel: i32,
+    ) -> bool {
         self.send_chat_message(message, chat_type, channel)
     }
 

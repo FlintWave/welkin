@@ -151,10 +151,7 @@ const DEFAULT_TOUCH_ST_UV: [f64; 2] = [-1.0, -1.0];
 ///
 /// Each function captures a shared reference to the [`EventContext`] and
 /// reads from the detected list by index.
-pub fn register_detected_functions(
-    lua: &Lua,
-    ctx: Arc<RwLock<EventContext>>,
-) -> LuaResult<()> {
+pub fn register_detected_functions(lua: &Lua, ctx: Arc<RwLock<EventContext>>) -> LuaResult<()> {
     let globals = lua.globals();
 
     // llDetectedKey(index) -> String
@@ -269,10 +266,7 @@ pub fn register_detected_functions(
         let ctx = Arc::clone(&ctx);
         let f = lua.create_function(move |_, index: i32| {
             let guard = ctx.read();
-            Ok(guard
-                .detected
-                .get(index as usize)
-                .map_or(0, |d| d.link_num))
+            Ok(guard.detected.get(index as usize).map_or(0, |d| d.link_num))
         })?;
         globals.set("llDetectedLinkNumber", f)?;
     }
@@ -420,9 +414,7 @@ mod tests {
     use super::*;
 
     /// Helper: create a non-sandboxed Lua VM with detected functions registered.
-    fn setup_vm(
-        detected: Vec<DetectedInfo>,
-    ) -> (Lua, Arc<RwLock<EventContext>>) {
+    fn setup_vm(detected: Vec<DetectedInfo>) -> (Lua, Arc<RwLock<EventContext>>) {
         let lua = Lua::new();
         let ctx = Arc::new(RwLock::new(EventContext { detected }));
         register_detected_functions(&lua, Arc::clone(&ctx))
@@ -645,8 +637,7 @@ mod tests {
     fn dispatch_event_calls_handler() {
         let lua = Lua::new();
         let ctx = Arc::new(RwLock::new(EventContext::default()));
-        register_detected_functions(&lua, Arc::clone(&ctx))
-            .expect("register failed");
+        register_detected_functions(&lua, Arc::clone(&ctx)).expect("register failed");
 
         // Define a handler that records its argument.
         lua.load(
@@ -663,8 +654,7 @@ mod tests {
         .expect("handler definition failed");
 
         let info = make_test_info();
-        dispatch_event(&lua, &ctx, "touch_start", vec![info])
-            .expect("dispatch_event failed");
+        dispatch_event(&lua, &ctx, "touch_start", vec![info]).expect("dispatch_event failed");
 
         let called: bool = lua.globals().get("_called").unwrap();
         assert!(called, "touch_start handler was not called");
@@ -674,7 +664,10 @@ mod tests {
 
         // Context should be cleared after dispatch.
         let guard = ctx.read();
-        assert!(guard.detected.is_empty(), "context not cleared after dispatch");
+        assert!(
+            guard.detected.is_empty(),
+            "context not cleared after dispatch"
+        );
     }
 
     // ---------------------------------------------------------------
@@ -684,8 +677,7 @@ mod tests {
     fn multiple_detected_items() {
         let lua = Lua::new();
         let ctx = Arc::new(RwLock::new(EventContext::default()));
-        register_detected_functions(&lua, Arc::clone(&ctx))
-            .expect("register failed");
+        register_detected_functions(&lua, Arc::clone(&ctx)).expect("register failed");
 
         // Handler that reads both detected items.
         lua.load(
@@ -731,8 +723,7 @@ mod tests {
     fn dispatch_missing_handler_is_noop() {
         let lua = Lua::new();
         let ctx = Arc::new(RwLock::new(EventContext::default()));
-        register_detected_functions(&lua, Arc::clone(&ctx))
-            .expect("register failed");
+        register_detected_functions(&lua, Arc::clone(&ctx)).expect("register failed");
 
         // No handler defined -- should succeed silently.
         let result = dispatch_event(&lua, &ctx, "nonexistent_event", vec![]);
@@ -801,8 +792,7 @@ mod tests {
     fn context_cleared_on_error() {
         let lua = Lua::new();
         let ctx = Arc::new(RwLock::new(EventContext::default()));
-        register_detected_functions(&lua, Arc::clone(&ctx))
-            .expect("register failed");
+        register_detected_functions(&lua, Arc::clone(&ctx)).expect("register failed");
 
         lua.load(
             r#"

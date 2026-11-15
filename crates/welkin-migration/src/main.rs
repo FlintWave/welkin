@@ -73,12 +73,10 @@ fn main() {
                 connection,
                 generate_alters,
             } => {
-                let report =
-                    welkin_migration::db_validator::validate_schema(&connection).await?;
+                let report = welkin_migration::db_validator::validate_schema(&connection).await?;
                 println!("{report}");
                 if generate_alters {
-                    let alters =
-                        welkin_migration::db_validator::generate_alter_statements(&report);
+                    let alters = welkin_migration::db_validator::generate_alter_statements(&report);
                     if alters.is_empty() {
                         println!("\nNo ALTER statements needed.");
                     } else {
@@ -102,15 +100,13 @@ fn main() {
                     dry_run,
                     rollback,
                 };
-                let report =
-                    welkin_migration::password_upgrade::upgrade_passwords(&config).await?;
+                let report = welkin_migration::password_upgrade::upgrade_passwords(&config).await?;
                 println!("{report}");
                 Ok(())
             }
             Commands::ConvertConfig { input, output } => {
                 let ini_content = std::fs::read_to_string(&input)?;
-                let report =
-                    welkin_migration::config_converter::convert_config(&ini_content)?;
+                let report = welkin_migration::config_converter::convert_config(&ini_content)?;
                 let toml_output = report.to_toml();
                 match output {
                     Some(path) => {

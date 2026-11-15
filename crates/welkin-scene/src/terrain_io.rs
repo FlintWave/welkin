@@ -6,7 +6,8 @@ use crate::terrain::TerrainChannel;
 
 const LLRAW_PIXEL_SIZE: usize = 13;
 const LLRAW_REGION_SIZE: u32 = 256;
-const LLRAW_TOTAL_BYTES: usize = (LLRAW_REGION_SIZE * LLRAW_REGION_SIZE) as usize * LLRAW_PIXEL_SIZE;
+const LLRAW_TOTAL_BYTES: usize =
+    (LLRAW_REGION_SIZE * LLRAW_REGION_SIZE) as usize * LLRAW_PIXEL_SIZE;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TerrainFormat {
@@ -48,7 +49,7 @@ pub fn load_raw32(
 
     let mut terrain = TerrainChannel::new(size_x, size_y);
     let heights = terrain.heights_mut();
-    for (i, chunk) in buf.chunks_exact(4).enumerate() {
+    for (i, chunk) in buf.as_chunks::<4>().0.iter().enumerate() {
         heights[i] = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
     }
     Ok(terrain)
@@ -86,7 +87,7 @@ pub fn load_llraw(reader: &mut impl Read) -> Result<TerrainChannel, TerrainIoErr
 
     let mut terrain = TerrainChannel::new(LLRAW_REGION_SIZE, LLRAW_REGION_SIZE);
     let heights = terrain.heights_mut();
-    for (i, chunk) in buf.chunks_exact(LLRAW_PIXEL_SIZE).enumerate() {
+    for (i, chunk) in buf.as_chunks::<LLRAW_PIXEL_SIZE>().0.iter().enumerate() {
         heights[i] = (chunk[3] as f32 * 256.0 + chunk[0] as f32) / 128.0;
     }
     Ok(terrain)

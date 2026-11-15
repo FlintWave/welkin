@@ -113,7 +113,11 @@ impl Default for RegionSettings {
 // Serialization helpers
 // ---------------------------------------------------------------------------
 
-fn write_element(writer: &mut Writer<Cursor<Vec<u8>>>, name: &str, value: &str) -> Result<(), ArchiveError> {
+fn write_element(
+    writer: &mut Writer<Cursor<Vec<u8>>>,
+    name: &str,
+    value: &str,
+) -> Result<(), ArchiveError> {
     writer
         .create_element(name)
         .write_text_content(BytesText::new(value))
@@ -134,7 +138,9 @@ pub fn serialize(settings: &RegionSettings) -> Result<String, ArchiveError> {
 
     // XML declaration
     writer
-        .write_event(Event::Decl(quick_xml::events::BytesDecl::new("1.0", None, None)))
+        .write_event(Event::Decl(quick_xml::events::BytesDecl::new(
+            "1.0", None, None,
+        )))
         .map_err(|e| ArchiveError::Xml(e.to_string()))?;
 
     // <RegionSettings>
@@ -147,18 +153,58 @@ pub fn serialize(settings: &RegionSettings) -> Result<String, ArchiveError> {
         .write_event(Event::Start(BytesStart::new("General")))
         .map_err(|e| ArchiveError::Xml(e.to_string()))?;
     write_element(&mut writer, "AllowDamage", bool_str(settings.allow_damage))?;
-    write_element(&mut writer, "AllowLandResell", bool_str(settings.allow_land_resell))?;
-    write_element(&mut writer, "AllowLandJoinDivide", bool_str(settings.allow_land_join_divide))?;
+    write_element(
+        &mut writer,
+        "AllowLandResell",
+        bool_str(settings.allow_land_resell),
+    )?;
+    write_element(
+        &mut writer,
+        "AllowLandJoinDivide",
+        bool_str(settings.allow_land_join_divide),
+    )?;
     write_element(&mut writer, "BlockFly", bool_str(settings.block_fly))?;
-    write_element(&mut writer, "BlockLandShowInSearch", bool_str(settings.block_show_in_search))?;
-    write_element(&mut writer, "BlockTerraform", bool_str(settings.block_terraform))?;
-    write_element(&mut writer, "DisableCollisions", bool_str(settings.disable_collisions))?;
-    write_element(&mut writer, "DisablePhysics", bool_str(settings.disable_physics))?;
-    write_element(&mut writer, "DisableScripts", bool_str(settings.disable_scripts))?;
-    write_element(&mut writer, "MaturityRating", &settings.maturity.to_string())?;
-    write_element(&mut writer, "RestrictPushing", bool_str(settings.restrict_pushing))?;
+    write_element(
+        &mut writer,
+        "BlockLandShowInSearch",
+        bool_str(settings.block_show_in_search),
+    )?;
+    write_element(
+        &mut writer,
+        "BlockTerraform",
+        bool_str(settings.block_terraform),
+    )?;
+    write_element(
+        &mut writer,
+        "DisableCollisions",
+        bool_str(settings.disable_collisions),
+    )?;
+    write_element(
+        &mut writer,
+        "DisablePhysics",
+        bool_str(settings.disable_physics),
+    )?;
+    write_element(
+        &mut writer,
+        "DisableScripts",
+        bool_str(settings.disable_scripts),
+    )?;
+    write_element(
+        &mut writer,
+        "MaturityRating",
+        &settings.maturity.to_string(),
+    )?;
+    write_element(
+        &mut writer,
+        "RestrictPushing",
+        bool_str(settings.restrict_pushing),
+    )?;
     write_element(&mut writer, "AgentLimit", &settings.agent_limit.to_string())?;
-    write_element(&mut writer, "ObjectBonus", &settings.object_bonus.to_string())?;
+    write_element(
+        &mut writer,
+        "ObjectBonus",
+        &settings.object_bonus.to_string(),
+    )?;
     writer
         .write_event(Event::End(BytesEnd::new("General")))
         .map_err(|e| ArchiveError::Xml(e.to_string()))?;
@@ -167,22 +213,70 @@ pub fn serialize(settings: &RegionSettings) -> Result<String, ArchiveError> {
     writer
         .write_event(Event::Start(BytesStart::new("GroundTextures")))
         .map_err(|e| ArchiveError::Xml(e.to_string()))?;
-    write_element(&mut writer, "Texture1", &settings.terrain_texture1.to_string())?;
-    write_element(&mut writer, "Texture2", &settings.terrain_texture2.to_string())?;
-    write_element(&mut writer, "Texture3", &settings.terrain_texture3.to_string())?;
-    write_element(&mut writer, "Texture4", &settings.terrain_texture4.to_string())?;
+    write_element(
+        &mut writer,
+        "Texture1",
+        &settings.terrain_texture1.to_string(),
+    )?;
+    write_element(
+        &mut writer,
+        "Texture2",
+        &settings.terrain_texture2.to_string(),
+    )?;
+    write_element(
+        &mut writer,
+        "Texture3",
+        &settings.terrain_texture3.to_string(),
+    )?;
+    write_element(
+        &mut writer,
+        "Texture4",
+        &settings.terrain_texture4.to_string(),
+    )?;
     write_element(&mut writer, "PBR1", &settings.terrain_pbr1.to_string())?;
     write_element(&mut writer, "PBR2", &settings.terrain_pbr2.to_string())?;
     write_element(&mut writer, "PBR3", &settings.terrain_pbr3.to_string())?;
     write_element(&mut writer, "PBR4", &settings.terrain_pbr4.to_string())?;
-    write_element(&mut writer, "ElevationLowSW", &settings.elevation1_sw.to_string())?;
-    write_element(&mut writer, "ElevationLowNW", &settings.elevation1_nw.to_string())?;
-    write_element(&mut writer, "ElevationLowSE", &settings.elevation1_se.to_string())?;
-    write_element(&mut writer, "ElevationLowNE", &settings.elevation1_ne.to_string())?;
-    write_element(&mut writer, "ElevationHighSW", &settings.elevation2_sw.to_string())?;
-    write_element(&mut writer, "ElevationHighNW", &settings.elevation2_nw.to_string())?;
-    write_element(&mut writer, "ElevationHighSE", &settings.elevation2_se.to_string())?;
-    write_element(&mut writer, "ElevationHighNE", &settings.elevation2_ne.to_string())?;
+    write_element(
+        &mut writer,
+        "ElevationLowSW",
+        &settings.elevation1_sw.to_string(),
+    )?;
+    write_element(
+        &mut writer,
+        "ElevationLowNW",
+        &settings.elevation1_nw.to_string(),
+    )?;
+    write_element(
+        &mut writer,
+        "ElevationLowSE",
+        &settings.elevation1_se.to_string(),
+    )?;
+    write_element(
+        &mut writer,
+        "ElevationLowNE",
+        &settings.elevation1_ne.to_string(),
+    )?;
+    write_element(
+        &mut writer,
+        "ElevationHighSW",
+        &settings.elevation2_sw.to_string(),
+    )?;
+    write_element(
+        &mut writer,
+        "ElevationHighNW",
+        &settings.elevation2_nw.to_string(),
+    )?;
+    write_element(
+        &mut writer,
+        "ElevationHighSE",
+        &settings.elevation2_se.to_string(),
+    )?;
+    write_element(
+        &mut writer,
+        "ElevationHighNE",
+        &settings.elevation2_ne.to_string(),
+    )?;
     writer
         .write_event(Event::End(BytesEnd::new("GroundTextures")))
         .map_err(|e| ArchiveError::Xml(e.to_string()))?;
@@ -191,12 +285,32 @@ pub fn serialize(settings: &RegionSettings) -> Result<String, ArchiveError> {
     writer
         .write_event(Event::Start(BytesStart::new("Terrain")))
         .map_err(|e| ArchiveError::Xml(e.to_string()))?;
-    write_element(&mut writer, "WaterHeight", &settings.water_height.to_string())?;
-    write_element(&mut writer, "TerrainRaiseLimit", &settings.terrain_raise_limit.to_string())?;
-    write_element(&mut writer, "TerrainLowerLimit", &settings.terrain_lower_limit.to_string())?;
-    write_element(&mut writer, "UseEstateSun", bool_str(settings.use_estate_sun))?;
+    write_element(
+        &mut writer,
+        "WaterHeight",
+        &settings.water_height.to_string(),
+    )?;
+    write_element(
+        &mut writer,
+        "TerrainRaiseLimit",
+        &settings.terrain_raise_limit.to_string(),
+    )?;
+    write_element(
+        &mut writer,
+        "TerrainLowerLimit",
+        &settings.terrain_lower_limit.to_string(),
+    )?;
+    write_element(
+        &mut writer,
+        "UseEstateSun",
+        bool_str(settings.use_estate_sun),
+    )?;
     write_element(&mut writer, "FixedSun", bool_str(settings.fixed_sun))?;
-    write_element(&mut writer, "SunPosition", &settings.sun_position.to_string())?;
+    write_element(
+        &mut writer,
+        "SunPosition",
+        &settings.sun_position.to_string(),
+    )?;
     writer
         .write_event(Event::End(BytesEnd::new("Terrain")))
         .map_err(|e| ArchiveError::Xml(e.to_string()))?;
@@ -214,7 +328,11 @@ pub fn serialize(settings: &RegionSettings) -> Result<String, ArchiveError> {
         writer
             .write_event(Event::Start(BytesStart::new("Telehub")))
             .map_err(|e| ArchiveError::Xml(e.to_string()))?;
-        write_element(&mut writer, "TelehubObject", &settings.telehub_object.to_string())?;
+        write_element(
+            &mut writer,
+            "TelehubObject",
+            &settings.telehub_object.to_string(),
+        )?;
         for sp in &settings.spawn_points {
             write_element(&mut writer, "SpawnPoint", sp)?;
         }
@@ -227,8 +345,16 @@ pub fn serialize(settings: &RegionSettings) -> Result<String, ArchiveError> {
     writer
         .write_event(Event::Start(BytesStart::new("Estate")))
         .map_err(|e| ArchiveError::Xml(e.to_string()))?;
-    write_element(&mut writer, "AllowDirectTeleport", bool_str(settings.allow_direct_teleport))?;
-    write_element(&mut writer, "AllowEnvironmentOverride", bool_str(settings.allow_environment_override))?;
+    write_element(
+        &mut writer,
+        "AllowDirectTeleport",
+        bool_str(settings.allow_direct_teleport),
+    )?;
+    write_element(
+        &mut writer,
+        "AllowEnvironmentOverride",
+        bool_str(settings.allow_environment_override),
+    )?;
     writer
         .write_event(Event::End(BytesEnd::new("Estate")))
         .map_err(|e| ArchiveError::Xml(e.to_string()))?;
@@ -292,8 +418,7 @@ pub fn deserialize(xml: &str) -> Result<RegionSettings, ArchiveError> {
                         let raw = reader
                             .read_text(e.name())
                             .map_err(|e| ArchiveError::Xml(e.to_string()))?;
-                        let text = unescape(&raw)
-                            .map_err(|e| ArchiveError::Xml(e.to_string()))?;
+                        let text = unescape(&raw).map_err(|e| ArchiveError::Xml(e.to_string()))?;
                         apply_field(&mut settings, section, name, &text)?;
                     }
                 }
@@ -432,14 +557,14 @@ fn apply_field(
                     .map_err(|_| ArchiveError::Invalid(format!("bad WaterHeight: {value}")))?;
             }
             "TerrainRaiseLimit" => {
-                settings.terrain_raise_limit = value
-                    .parse()
-                    .map_err(|_| ArchiveError::Invalid(format!("bad TerrainRaiseLimit: {value}")))?;
+                settings.terrain_raise_limit = value.parse().map_err(|_| {
+                    ArchiveError::Invalid(format!("bad TerrainRaiseLimit: {value}"))
+                })?;
             }
             "TerrainLowerLimit" => {
-                settings.terrain_lower_limit = value
-                    .parse()
-                    .map_err(|_| ArchiveError::Invalid(format!("bad TerrainLowerLimit: {value}")))?;
+                settings.terrain_lower_limit = value.parse().map_err(|_| {
+                    ArchiveError::Invalid(format!("bad TerrainLowerLimit: {value}"))
+                })?;
             }
             "UseEstateSun" => settings.use_estate_sun = parse_bool(value),
             "FixedSun" => settings.fixed_sun = parse_bool(value),
@@ -486,8 +611,7 @@ mod tests {
         settings.terrain_lower_limit = -50.0;
         settings.fixed_sun = true;
         settings.sun_position = 6.0;
-        settings.telehub_object =
-            Uuid::parse_str("11111111-2222-3333-4444-555555555555").unwrap();
+        settings.telehub_object = Uuid::parse_str("11111111-2222-3333-4444-555555555555").unwrap();
         settings.spawn_points = vec!["1,2,3".to_string(), "4,5,6".to_string()];
         settings.allow_direct_teleport = false;
         settings.allow_environment_override = true;
@@ -496,17 +620,17 @@ mod tests {
         let restored = deserialize(&xml).expect("deserialize failed");
 
         // General
-        assert_eq!(restored.allow_damage, true);
-        assert_eq!(restored.allow_land_resell, true);
-        assert_eq!(restored.allow_land_join_divide, true);
-        assert_eq!(restored.block_fly, true);
-        assert_eq!(restored.block_show_in_search, false);
-        assert_eq!(restored.block_terraform, false);
-        assert_eq!(restored.disable_collisions, false);
-        assert_eq!(restored.disable_physics, false);
-        assert_eq!(restored.disable_scripts, false);
+        assert!(restored.allow_damage);
+        assert!(restored.allow_land_resell);
+        assert!(restored.allow_land_join_divide);
+        assert!(restored.block_fly);
+        assert!(!restored.block_show_in_search);
+        assert!(!restored.block_terraform);
+        assert!(!restored.disable_collisions);
+        assert!(!restored.disable_physics);
+        assert!(!restored.disable_scripts);
         assert_eq!(restored.maturity, 2);
-        assert_eq!(restored.restrict_pushing, false);
+        assert!(!restored.restrict_pushing);
         assert_eq!(restored.agent_limit, 100);
         assert!((restored.object_bonus - 1.5).abs() < f64::EPSILON);
 
@@ -519,7 +643,7 @@ mod tests {
         assert!((restored.water_height - 25.0).abs() < f64::EPSILON);
         assert!((restored.terrain_raise_limit - 50.0).abs() < f64::EPSILON);
         assert!((restored.terrain_lower_limit - -50.0).abs() < f64::EPSILON);
-        assert_eq!(restored.fixed_sun, true);
+        assert!(restored.fixed_sun);
         assert!((restored.sun_position - 6.0).abs() < f64::EPSILON);
 
         // Telehub
@@ -527,8 +651,8 @@ mod tests {
         assert_eq!(restored.spawn_points, vec!["1,2,3", "4,5,6"]);
 
         // Estate
-        assert_eq!(restored.allow_direct_teleport, false);
-        assert_eq!(restored.allow_environment_override, true);
+        assert!(!restored.allow_direct_teleport);
+        assert!(restored.allow_environment_override);
     }
 
     #[test]
@@ -541,7 +665,7 @@ mod tests {
         assert!((restored.water_height - 20.0).abs() < f64::EPSILON);
         assert!((restored.terrain_raise_limit - 100.0).abs() < f64::EPSILON);
         assert!((restored.terrain_lower_limit - (-100.0)).abs() < f64::EPSILON);
-        assert_eq!(restored.use_estate_sun, true);
+        assert!(restored.use_estate_sun);
         assert_eq!(restored.telehub_object, Uuid::nil());
         assert!(restored.spawn_points.is_empty());
     }

@@ -39,10 +39,7 @@ pub fn calibrate_from_benchmark(
     }
 }
 
-pub fn island_user_tradeoff(
-    _report: &HostReport,
-    _model: &CalibratedModel,
-) -> Vec<TradeoffPoint> {
+pub fn island_user_tradeoff(_report: &HostReport, _model: &CalibratedModel) -> Vec<TradeoffPoint> {
     // TODO: compute trade-off curve from calibrated model
     Vec::new()
 }

@@ -250,10 +250,7 @@ impl ConformanceRunner {
 
     /// Run the conformance suite in offline mode — the caller provides
     /// pre-collected response bodies keyed by test-case name.
-    pub fn run_offline(
-        &self,
-        responses: &BTreeMap<String, (u16, String)>,
-    ) -> ConformanceReport {
+    pub fn run_offline(&self, responses: &BTreeMap<String, (u16, String)>) -> ConformanceReport {
         let mut report = ConformanceReport {
             total: self.test_cases.len(),
             passed: 0,
@@ -299,10 +296,7 @@ impl ConformanceRunner {
 /// Run the full conformance suite from the CLI.  In this offline-capable
 /// implementation, if `recordings_path` is provided it loads pre-recorded
 /// exchanges; otherwise it reports the suite as skipped.
-pub fn run_conformance_suite(
-    target: &str,
-    recordings_path: Option<&Path>,
-) -> ConformanceReport {
+pub fn run_conformance_suite(target: &str, recordings_path: Option<&Path>) -> ConformanceReport {
     let runner = ConformanceRunner::new(target);
 
     if let Some(path) = recordings_path {
@@ -478,7 +472,10 @@ mod tests {
         let runner = ConformanceRunner::with_cases("http://localhost:8002", cases);
 
         let mut responses = BTreeMap::new();
-        responses.insert("asset_get".to_string(), (500, "Internal Server Error".to_string()));
+        responses.insert(
+            "asset_get".to_string(),
+            (500, "Internal Server Error".to_string()),
+        );
 
         let report = runner.run_offline(&responses);
         assert_eq!(report.failed, 1);

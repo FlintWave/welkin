@@ -8,9 +8,9 @@
 
 use std::fmt;
 
+use argon2::Argon2;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use rand_core::OsRng;
-use argon2::Argon2;
 use tracing::{debug, info, warn};
 
 // ---------------------------------------------------------------------------
@@ -138,8 +138,8 @@ pub fn hash_password_argon2id(md5_digest: &str) -> Result<String, PasswordError>
 
 /// Verify an MD5 hex digest against a stored Argon2id hash (PHC format).
 pub fn verify_password(input_md5: &str, stored_hash: &str) -> Result<bool, PasswordError> {
-    let parsed = PasswordHash::new(stored_hash)
-        .map_err(|e| PasswordError::InvalidHash(e.to_string()))?;
+    let parsed =
+        PasswordHash::new(stored_hash).map_err(|e| PasswordError::InvalidHash(e.to_string()))?;
     Ok(Argon2::default()
         .verify_password(input_md5.as_bytes(), &parsed)
         .is_ok())
@@ -298,7 +298,10 @@ mod tests {
     fn test_hash_password_argon2id() {
         let md5_digest = compute_md5_hash("password", "salt");
         let hashed = hash_password_argon2id(&md5_digest).expect("hashing should succeed");
-        assert!(hashed.starts_with("$argon2id$"), "should be argon2id: {hashed}");
+        assert!(
+            hashed.starts_with("$argon2id$"),
+            "should be argon2id: {hashed}"
+        );
     }
 
     // 3. Argon2id verification
@@ -306,7 +309,10 @@ mod tests {
     fn test_verify_password() {
         let md5_digest = compute_md5_hash("mypassword", "mysalt");
         let hashed = hash_password_argon2id(&md5_digest).expect("hash");
-        assert!(verify_password(&md5_digest, &hashed).expect("verify"), "correct digest should verify");
+        assert!(
+            verify_password(&md5_digest, &hashed).expect("verify"),
+            "correct digest should verify"
+        );
     }
 
     // 4. Round-trip: password → MD5 → Argon2id → verify
@@ -443,7 +449,9 @@ mod tests {
             },
         ];
 
-        let report = upgrade_password_records(&records, &cfg).await.expect("report");
+        let report = upgrade_password_records(&records, &cfg)
+            .await
+            .expect("report");
         assert_eq!(report.total_processed, 2);
         assert_eq!(report.total_upgraded, 1);
         assert_eq!(report.total_skipped, 1);

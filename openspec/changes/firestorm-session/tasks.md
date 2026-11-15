@@ -47,10 +47,12 @@
 - "Could not put on outfit" / "Could not load settings" — Firestorm-internal, empty inventory
 
 ### Action items
-- [ ] Audit and remove stub-only handlers that mask real implementations
-- [ ] Fix ChatFromViewer routing (also fix relay to include sender for single-user test)
-- [ ] Fix MapBlockRequest to return region land data
-- [ ] Re-test chat and map after fixes
+- [x] Audit and remove stub-only handlers that mask real implementations — commit 9d82a90
+- [x] Fix ChatFromViewer routing (also fix relay to include sender for single-user test) — commit 9d82a90
+- [x] Fix MapBlockRequest to return region land data — commit 9d82a90
+- [x] Remove all 21 log-only stub handlers — commit 6f04835 (-297 lines)
+- [x] Implement AgentSetAppearance handler (orange cloud fix) — commit f4ec89f
+- [ ] Re-test chat, map, and avatar appearance in Firestorm (awaiting user)
 
 ## Stability
 - [ ] 10-minute soak test with no crashes or disconnects

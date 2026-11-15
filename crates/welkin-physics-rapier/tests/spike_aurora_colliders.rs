@@ -59,7 +59,7 @@ fn combined_geometry(params: &VolumeParams, detail: f32) -> (Vec<Vector>, Vec<[u
         // Each face has its own vertex buffer, so indices are offset into the combined one.
         let offset = vertices.len() as u32;
         vertices.extend(face.positions.iter().map(|p| Vector::new(p[0], p[1], p[2])));
-        indices.extend(face.indices.chunks_exact(3).map(|t| {
+        indices.extend(face.indices.as_chunks::<3>().0.iter().map(|t| {
             [
                 offset + t[0] as u32,
                 offset + t[1] as u32,

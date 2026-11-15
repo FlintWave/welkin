@@ -1,70 +1,274 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Inventory, attachment, sound, and link/prim/object stub functions (Task 11.1).
 
-use std::sync::Arc;
+use super::{OsslFunc, OsslThreatLevel};
+use crate::builtins::ScriptContext;
 use mlua::prelude::*;
 use parking_lot::RwLock;
+use std::sync::Arc;
 use uuid::Uuid;
-use crate::builtins::ScriptContext;
-use super::{OsslFunc, OsslThreatLevel};
 
 pub(super) fn ossl_inventory_funcs() -> Vec<OsslFunc> {
     vec![
         // Inventory (VeryHigh unless noted)
-        OsslFunc { name: "osGiveInventory", level: OsslThreatLevel::VeryHigh, register: register_os_give_inventory },
-        OsslFunc { name: "osGiveInventoryList", level: OsslThreatLevel::VeryHigh, register: register_os_give_inventory_list },
-        OsslFunc { name: "osForceDropAttachment", level: OsslThreatLevel::VeryHigh, register: register_os_force_drop_attachment },
-        OsslFunc { name: "osForceDropAttachmentAt", level: OsslThreatLevel::VeryHigh, register: register_os_force_drop_attachment_at },
-        OsslFunc { name: "osGetInventoryDesc", level: OsslThreatLevel::Low, register: register_os_get_inventory_desc },
-        OsslFunc { name: "osGetInventoryItemKey", level: OsslThreatLevel::Low, register: register_os_get_inventory_item_key },
-        OsslFunc { name: "osGetInventoryLastOwner", level: OsslThreatLevel::Low, register: register_os_get_inventory_last_owner },
-        OsslFunc { name: "osGetInventoryName", level: OsslThreatLevel::Low, register: register_os_get_inventory_name },
-        OsslFunc { name: "osGetInventoryNumber", level: OsslThreatLevel::Low, register: register_os_get_inventory_number },
-        OsslFunc { name: "osGetInventoryPermMask", level: OsslThreatLevel::Low, register: register_os_get_inventory_perm_mask },
-        OsslFunc { name: "osSetInventoryDesc", level: OsslThreatLevel::Low, register: register_os_set_inventory_desc },
-        OsslFunc { name: "osRemoveInventory", level: OsslThreatLevel::VeryHigh, register: register_os_remove_inventory },
-        OsslFunc { name: "osGetLastChangedEventKey", level: OsslThreatLevel::None, register: register_os_get_last_changed_event_key },
-        OsslFunc { name: "osTakeObject", level: OsslThreatLevel::VeryHigh, register: register_os_take_object },
-        OsslFunc { name: "osOwnerDropAttachment", level: OsslThreatLevel::None, register: register_os_owner_drop_attachment },
-        OsslFunc { name: "osOwnerDropAttachmentAt", level: OsslThreatLevel::None, register: register_os_owner_drop_attachment_at },
-        OsslFunc { name: "osDropAttachment", level: OsslThreatLevel::VeryHigh, register: register_os_drop_attachment },
+        OsslFunc {
+            name: "osGiveInventory",
+            level: OsslThreatLevel::VeryHigh,
+            register: register_os_give_inventory,
+        },
+        OsslFunc {
+            name: "osGiveInventoryList",
+            level: OsslThreatLevel::VeryHigh,
+            register: register_os_give_inventory_list,
+        },
+        OsslFunc {
+            name: "osForceDropAttachment",
+            level: OsslThreatLevel::VeryHigh,
+            register: register_os_force_drop_attachment,
+        },
+        OsslFunc {
+            name: "osForceDropAttachmentAt",
+            level: OsslThreatLevel::VeryHigh,
+            register: register_os_force_drop_attachment_at,
+        },
+        OsslFunc {
+            name: "osGetInventoryDesc",
+            level: OsslThreatLevel::Low,
+            register: register_os_get_inventory_desc,
+        },
+        OsslFunc {
+            name: "osGetInventoryItemKey",
+            level: OsslThreatLevel::Low,
+            register: register_os_get_inventory_item_key,
+        },
+        OsslFunc {
+            name: "osGetInventoryLastOwner",
+            level: OsslThreatLevel::Low,
+            register: register_os_get_inventory_last_owner,
+        },
+        OsslFunc {
+            name: "osGetInventoryName",
+            level: OsslThreatLevel::Low,
+            register: register_os_get_inventory_name,
+        },
+        OsslFunc {
+            name: "osGetInventoryNumber",
+            level: OsslThreatLevel::Low,
+            register: register_os_get_inventory_number,
+        },
+        OsslFunc {
+            name: "osGetInventoryPermMask",
+            level: OsslThreatLevel::Low,
+            register: register_os_get_inventory_perm_mask,
+        },
+        OsslFunc {
+            name: "osSetInventoryDesc",
+            level: OsslThreatLevel::Low,
+            register: register_os_set_inventory_desc,
+        },
+        OsslFunc {
+            name: "osRemoveInventory",
+            level: OsslThreatLevel::VeryHigh,
+            register: register_os_remove_inventory,
+        },
+        OsslFunc {
+            name: "osGetLastChangedEventKey",
+            level: OsslThreatLevel::None,
+            register: register_os_get_last_changed_event_key,
+        },
+        OsslFunc {
+            name: "osTakeObject",
+            level: OsslThreatLevel::VeryHigh,
+            register: register_os_take_object,
+        },
+        OsslFunc {
+            name: "osOwnerDropAttachment",
+            level: OsslThreatLevel::None,
+            register: register_os_owner_drop_attachment,
+        },
+        OsslFunc {
+            name: "osOwnerDropAttachmentAt",
+            level: OsslThreatLevel::None,
+            register: register_os_owner_drop_attachment_at,
+        },
+        OsslFunc {
+            name: "osDropAttachment",
+            level: OsslThreatLevel::VeryHigh,
+            register: register_os_drop_attachment,
+        },
         // Attachment
-        OsslFunc { name: "osForceAttachToAvatar", level: OsslThreatLevel::VeryHigh, register: register_os_force_attach_to_avatar },
-        OsslFunc { name: "osForceAttachToAvatarAt", level: OsslThreatLevel::VeryHigh, register: register_os_force_attach_to_avatar_at },
-        OsslFunc { name: "osForceAttachToOtherAvatarFromInventory", level: OsslThreatLevel::Severe, register: register_os_force_attach_to_other_avatar },
-        OsslFunc { name: "osForceDetachFromAvatar", level: OsslThreatLevel::VeryHigh, register: register_os_force_detach_from_avatar },
-        OsslFunc { name: "osGetNumberOfAttachments", level: OsslThreatLevel::Moderate, register: register_os_get_number_of_attachments },
-        OsslFunc { name: "osMessageAttachments", level: OsslThreatLevel::Moderate, register: register_os_message_attachments },
+        OsslFunc {
+            name: "osForceAttachToAvatar",
+            level: OsslThreatLevel::VeryHigh,
+            register: register_os_force_attach_to_avatar,
+        },
+        OsslFunc {
+            name: "osForceAttachToAvatarAt",
+            level: OsslThreatLevel::VeryHigh,
+            register: register_os_force_attach_to_avatar_at,
+        },
+        OsslFunc {
+            name: "osForceAttachToOtherAvatarFromInventory",
+            level: OsslThreatLevel::Severe,
+            register: register_os_force_attach_to_other_avatar,
+        },
+        OsslFunc {
+            name: "osForceDetachFromAvatar",
+            level: OsslThreatLevel::VeryHigh,
+            register: register_os_force_detach_from_avatar,
+        },
+        OsslFunc {
+            name: "osGetNumberOfAttachments",
+            level: OsslThreatLevel::Moderate,
+            register: register_os_get_number_of_attachments,
+        },
+        OsslFunc {
+            name: "osMessageAttachments",
+            level: OsslThreatLevel::Moderate,
+            register: register_os_message_attachments,
+        },
         // Sound
-        OsslFunc { name: "osPlaySound", level: OsslThreatLevel::None, register: register_os_play_sound },
-        OsslFunc { name: "osLoopSound", level: OsslThreatLevel::None, register: register_os_loop_sound },
-        OsslFunc { name: "osLoopSoundMaster", level: OsslThreatLevel::None, register: register_os_loop_sound_master },
-        OsslFunc { name: "osLoopSoundSlave", level: OsslThreatLevel::None, register: register_os_loop_sound_slave },
-        OsslFunc { name: "osStopSound", level: OsslThreatLevel::None, register: register_os_stop_sound },
-        OsslFunc { name: "osPreloadSound", level: OsslThreatLevel::None, register: register_os_preload_sound },
-        OsslFunc { name: "osAdjustSoundVolume", level: OsslThreatLevel::None, register: register_os_adjust_sound_volume },
-        OsslFunc { name: "osTriggerSound", level: OsslThreatLevel::None, register: register_os_trigger_sound },
-        OsslFunc { name: "osTriggerSoundLimited", level: OsslThreatLevel::None, register: register_os_trigger_sound_limited },
-        OsslFunc { name: "osSoundSetRadius", level: OsslThreatLevel::None, register: register_os_sound_set_radius },
-        OsslFunc { name: "osMakeFire", level: OsslThreatLevel::VeryLow, register: register_os_make_fire },
-        OsslFunc { name: "osMakeSmoke", level: OsslThreatLevel::VeryLow, register: register_os_make_smoke },
-        OsslFunc { name: "osMakeExplosion", level: OsslThreatLevel::VeryLow, register: register_os_make_explosion },
+        OsslFunc {
+            name: "osPlaySound",
+            level: OsslThreatLevel::None,
+            register: register_os_play_sound,
+        },
+        OsslFunc {
+            name: "osLoopSound",
+            level: OsslThreatLevel::None,
+            register: register_os_loop_sound,
+        },
+        OsslFunc {
+            name: "osLoopSoundMaster",
+            level: OsslThreatLevel::None,
+            register: register_os_loop_sound_master,
+        },
+        OsslFunc {
+            name: "osLoopSoundSlave",
+            level: OsslThreatLevel::None,
+            register: register_os_loop_sound_slave,
+        },
+        OsslFunc {
+            name: "osStopSound",
+            level: OsslThreatLevel::None,
+            register: register_os_stop_sound,
+        },
+        OsslFunc {
+            name: "osPreloadSound",
+            level: OsslThreatLevel::None,
+            register: register_os_preload_sound,
+        },
+        OsslFunc {
+            name: "osAdjustSoundVolume",
+            level: OsslThreatLevel::None,
+            register: register_os_adjust_sound_volume,
+        },
+        OsslFunc {
+            name: "osTriggerSound",
+            level: OsslThreatLevel::None,
+            register: register_os_trigger_sound,
+        },
+        OsslFunc {
+            name: "osTriggerSoundLimited",
+            level: OsslThreatLevel::None,
+            register: register_os_trigger_sound_limited,
+        },
+        OsslFunc {
+            name: "osSoundSetRadius",
+            level: OsslThreatLevel::None,
+            register: register_os_sound_set_radius,
+        },
+        OsslFunc {
+            name: "osMakeFire",
+            level: OsslThreatLevel::VeryLow,
+            register: register_os_make_fire,
+        },
+        OsslFunc {
+            name: "osMakeSmoke",
+            level: OsslThreatLevel::VeryLow,
+            register: register_os_make_smoke,
+        },
+        OsslFunc {
+            name: "osMakeExplosion",
+            level: OsslThreatLevel::VeryLow,
+            register: register_os_make_explosion,
+        },
         // Link/prim/object
-        OsslFunc { name: "osForceCreateLink", level: OsslThreatLevel::VeryLow, register: register_os_force_create_link },
-        OsslFunc { name: "osForceBreakLink", level: OsslThreatLevel::VeryLow, register: register_os_force_break_link },
-        OsslFunc { name: "osForceBreakAllLinks", level: OsslThreatLevel::VeryLow, register: register_os_force_break_all_links },
-        OsslFunc { name: "osDie", level: OsslThreatLevel::Low, register: register_os_die },
-        OsslFunc { name: "osMessageObject", level: OsslThreatLevel::Low, register: register_os_message_object },
-        OsslFunc { name: "osGetRezzingObject", level: OsslThreatLevel::None, register: register_os_get_rezzing_object },
-        OsslFunc { name: "osSetContentType", level: OsslThreatLevel::High, register: register_os_set_content_type },
-        OsslFunc { name: "osVolumeDetect", level: OsslThreatLevel::Low, register: register_os_volume_detect },
-        OsslFunc { name: "osGetPrimCount", level: OsslThreatLevel::None, register: register_os_get_prim_count },
-        OsslFunc { name: "osGetSittingAvatarsCount", level: OsslThreatLevel::None, register: register_os_get_sitting_avatars_count },
-        OsslFunc { name: "osGetSittingAvatars", level: OsslThreatLevel::None, register: register_os_get_sitting_avatars },
-        OsslFunc { name: "osSetProjectionParams", level: OsslThreatLevel::High, register: register_os_set_projection_params },
-        OsslFunc { name: "osGetLinkPrimitiveParams", level: OsslThreatLevel::High, register: register_os_get_link_primitive_params },
-        OsslFunc { name: "osSetPrimitiveParams", level: OsslThreatLevel::High, register: register_os_set_primitive_params },
-        OsslFunc { name: "osGetLinkNumber", level: OsslThreatLevel::None, register: register_os_get_link_number },
+        OsslFunc {
+            name: "osForceCreateLink",
+            level: OsslThreatLevel::VeryLow,
+            register: register_os_force_create_link,
+        },
+        OsslFunc {
+            name: "osForceBreakLink",
+            level: OsslThreatLevel::VeryLow,
+            register: register_os_force_break_link,
+        },
+        OsslFunc {
+            name: "osForceBreakAllLinks",
+            level: OsslThreatLevel::VeryLow,
+            register: register_os_force_break_all_links,
+        },
+        OsslFunc {
+            name: "osDie",
+            level: OsslThreatLevel::Low,
+            register: register_os_die,
+        },
+        OsslFunc {
+            name: "osMessageObject",
+            level: OsslThreatLevel::Low,
+            register: register_os_message_object,
+        },
+        OsslFunc {
+            name: "osGetRezzingObject",
+            level: OsslThreatLevel::None,
+            register: register_os_get_rezzing_object,
+        },
+        OsslFunc {
+            name: "osSetContentType",
+            level: OsslThreatLevel::High,
+            register: register_os_set_content_type,
+        },
+        OsslFunc {
+            name: "osVolumeDetect",
+            level: OsslThreatLevel::Low,
+            register: register_os_volume_detect,
+        },
+        OsslFunc {
+            name: "osGetPrimCount",
+            level: OsslThreatLevel::None,
+            register: register_os_get_prim_count,
+        },
+        OsslFunc {
+            name: "osGetSittingAvatarsCount",
+            level: OsslThreatLevel::None,
+            register: register_os_get_sitting_avatars_count,
+        },
+        OsslFunc {
+            name: "osGetSittingAvatars",
+            level: OsslThreatLevel::None,
+            register: register_os_get_sitting_avatars,
+        },
+        OsslFunc {
+            name: "osSetProjectionParams",
+            level: OsslThreatLevel::High,
+            register: register_os_set_projection_params,
+        },
+        OsslFunc {
+            name: "osGetLinkPrimitiveParams",
+            level: OsslThreatLevel::High,
+            register: register_os_get_link_primitive_params,
+        },
+        OsslFunc {
+            name: "osSetPrimitiveParams",
+            level: OsslThreatLevel::High,
+            register: register_os_set_primitive_params,
+        },
+        OsslFunc {
+            name: "osGetLinkNumber",
+            level: OsslThreatLevel::None,
+            register: register_os_get_link_number,
+        },
     ]
 }
 
@@ -84,11 +288,13 @@ fn register_os_give_inventory(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Lu
 
 fn register_os_give_inventory_list(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
-    let f = lua.create_function(move |_, (_dest, _category, _items): (String, String, mlua::MultiValue)| {
-        let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, "osGiveInventoryList called (stub)");
-        Ok(())
-    })?;
+    let f = lua.create_function(
+        move |_, (_dest, _category, _items): (String, String, mlua::MultiValue)| {
+            let c = ctx.read();
+            tracing::debug!(script_id = %c.script_id, "osGiveInventoryList called (stub)");
+            Ok(())
+        },
+    )?;
     lua.globals().set("osGiveInventoryList", f)
 }
 
@@ -102,7 +308,10 @@ fn register_os_force_drop_attachment(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>
     lua.globals().set("osForceDropAttachment", f)
 }
 
-fn register_os_force_drop_attachment_at(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+fn register_os_force_drop_attachment_at(
+    lua: &Lua,
+    ctx: &Arc<RwLock<ScriptContext>>,
+) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, (_pos, _rot): (String, String)| {
         let c = ctx.read();
@@ -122,7 +331,10 @@ fn register_os_get_inventory_desc(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -
     lua.globals().set("osGetInventoryDesc", f)
 }
 
-fn register_os_get_inventory_item_key(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+fn register_os_get_inventory_item_key(
+    lua: &Lua,
+    ctx: &Arc<RwLock<ScriptContext>>,
+) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, _name: String| {
         let c = ctx.read();
@@ -132,7 +344,10 @@ fn register_os_get_inventory_item_key(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>
     lua.globals().set("osGetInventoryItemKey", f)
 }
 
-fn register_os_get_inventory_last_owner(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+fn register_os_get_inventory_last_owner(
+    lua: &Lua,
+    ctx: &Arc<RwLock<ScriptContext>>,
+) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, _name: String| {
         let c = ctx.read();
@@ -162,7 +377,10 @@ fn register_os_get_inventory_number(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>)
     lua.globals().set("osGetInventoryNumber", f)
 }
 
-fn register_os_get_inventory_perm_mask(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+fn register_os_get_inventory_perm_mask(
+    lua: &Lua,
+    ctx: &Arc<RwLock<ScriptContext>>,
+) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, (_name, _category): (String, i32)| {
         let c = ctx.read();
@@ -192,7 +410,10 @@ fn register_os_remove_inventory(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> 
     lua.globals().set("osRemoveInventory", f)
 }
 
-fn register_os_get_last_changed_event_key(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+fn register_os_get_last_changed_event_key(
+    lua: &Lua,
+    ctx: &Arc<RwLock<ScriptContext>>,
+) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, ()| {
         let c = ctx.read();
@@ -222,7 +443,10 @@ fn register_os_owner_drop_attachment(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>
     lua.globals().set("osOwnerDropAttachment", f)
 }
 
-fn register_os_owner_drop_attachment_at(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+fn register_os_owner_drop_attachment_at(
+    lua: &Lua,
+    ctx: &Arc<RwLock<ScriptContext>>,
+) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, (_pos, _rot): (String, String)| {
         let c = ctx.read();
@@ -246,7 +470,10 @@ fn register_os_drop_attachment(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> L
 // Attachment
 // ---------------------------------------------------------------------------
 
-fn register_os_force_attach_to_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+fn register_os_force_attach_to_avatar(
+    lua: &Lua,
+    ctx: &Arc<RwLock<ScriptContext>>,
+) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, _attach_point: i32| {
         let c = ctx.read();
@@ -256,27 +483,39 @@ fn register_os_force_attach_to_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>
     lua.globals().set("osForceAttachToAvatar", f)
 }
 
-fn register_os_force_attach_to_avatar_at(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+fn register_os_force_attach_to_avatar_at(
+    lua: &Lua,
+    ctx: &Arc<RwLock<ScriptContext>>,
+) -> LuaResult<()> {
     let ctx = ctx.clone();
-    let f = lua.create_function(move |_, (_avatar, _attach_point, _pos, _rot): (String, i32, String, String)| {
-        let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, "osForceAttachToAvatarAt called (stub)");
-        Ok(())
-    })?;
+    let f = lua.create_function(
+        move |_, (_avatar, _attach_point, _pos, _rot): (String, i32, String, String)| {
+            let c = ctx.read();
+            tracing::debug!(script_id = %c.script_id, "osForceAttachToAvatarAt called (stub)");
+            Ok(())
+        },
+    )?;
     lua.globals().set("osForceAttachToAvatarAt", f)
 }
 
-fn register_os_force_attach_to_other_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+fn register_os_force_attach_to_other_avatar(
+    lua: &Lua,
+    ctx: &Arc<RwLock<ScriptContext>>,
+) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, (_avatar, _name, _attach_point): (String, String, i32)| {
         let c = ctx.read();
         tracing::debug!(script_id = %c.script_id, "osForceAttachToOtherAvatarFromInventory called (stub)");
         Ok(())
     })?;
-    lua.globals().set("osForceAttachToOtherAvatarFromInventory", f)
+    lua.globals()
+        .set("osForceAttachToOtherAvatarFromInventory", f)
 }
 
-fn register_os_force_detach_from_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+fn register_os_force_detach_from_avatar(
+    lua: &Lua,
+    ctx: &Arc<RwLock<ScriptContext>>,
+) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, ()| {
         let c = ctx.read();
@@ -286,7 +525,10 @@ fn register_os_force_detach_from_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContex
     lua.globals().set("osForceDetachFromAvatar", f)
 }
 
-fn register_os_get_number_of_attachments(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+fn register_os_get_number_of_attachments(
+    lua: &Lua,
+    ctx: &Arc<RwLock<ScriptContext>>,
+) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |lua, (_avatar, _points): (String, mlua::MultiValue)| {
         let c = ctx.read();
@@ -298,11 +540,13 @@ fn register_os_get_number_of_attachments(lua: &Lua, ctx: &Arc<RwLock<ScriptConte
 
 fn register_os_message_attachments(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
-    let f = lua.create_function(move |_, (_avatar, _msg, _points, _flags): (String, String, String, i32)| {
-        let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, "osMessageAttachments called (stub)");
-        Ok(())
-    })?;
+    let f = lua.create_function(
+        move |_, (_avatar, _msg, _points, _flags): (String, String, String, i32)| {
+            let c = ctx.read();
+            tracing::debug!(script_id = %c.script_id, "osMessageAttachments called (stub)");
+            Ok(())
+        },
+    )?;
     lua.globals().set("osMessageAttachments", f)
 }
 
@@ -392,11 +636,13 @@ fn register_os_trigger_sound(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Lua
 
 fn register_os_trigger_sound_limited(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
-    let f = lua.create_function(move |_, (_sound, _volume, _tne, _bsw): (String, f64, String, String)| {
-        let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, "osTriggerSoundLimited called (stub)");
-        Ok(())
-    })?;
+    let f = lua.create_function(
+        move |_, (_sound, _volume, _tne, _bsw): (String, f64, String, String)| {
+            let c = ctx.read();
+            tracing::debug!(script_id = %c.script_id, "osTriggerSoundLimited called (stub)");
+            Ok(())
+        },
+    )?;
     lua.globals().set("osTriggerSoundLimited", f)
 }
 
@@ -534,7 +780,10 @@ fn register_os_get_prim_count(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Lu
     lua.globals().set("osGetPrimCount", f)
 }
 
-fn register_os_get_sitting_avatars_count(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+fn register_os_get_sitting_avatars_count(
+    lua: &Lua,
+    ctx: &Arc<RwLock<ScriptContext>>,
+) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, _prim: String| {
         let c = ctx.read();
@@ -564,7 +813,10 @@ fn register_os_set_projection_params(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>
     lua.globals().set("osSetProjectionParams", f)
 }
 
-fn register_os_get_link_primitive_params(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+fn register_os_get_link_primitive_params(
+    lua: &Lua,
+    ctx: &Arc<RwLock<ScriptContext>>,
+) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |lua, (_link, _params): (i32, mlua::MultiValue)| {
         let c = ctx.read();

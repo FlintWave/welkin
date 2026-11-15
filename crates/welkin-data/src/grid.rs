@@ -86,7 +86,8 @@ impl GridStore {
         x: i32,
         y: i32,
     ) -> Result<Option<RegionRow>, DataError> {
-        let sql = format!("SELECT {COLS} FROM regions WHERE ScopeID = $1 AND locX = $2 AND locY = $3");
+        let sql =
+            format!("SELECT {COLS} FROM regions WHERE ScopeID = $1 AND locX = $2 AND locY = $3");
         Ok(sqlx::query_as::<_, RegionRow>(&sql)
             .bind(scope_id)
             .bind(x)
@@ -191,9 +192,8 @@ impl GridStore {
     }
 
     async fn query_flagged(&self, scope_id: &str, mask: i32) -> Result<Vec<RegionRow>, DataError> {
-        let sql = format!(
-            "SELECT {COLS} FROM regions WHERE ScopeID = $1 AND (flags & {mask}) <> 0"
-        );
+        let sql =
+            format!("SELECT {COLS} FROM regions WHERE ScopeID = $1 AND (flags & {mask}) <> 0");
         Ok(sqlx::query_as::<_, RegionRow>(&sql)
             .bind(scope_id)
             .fetch_all(&self.pool)
@@ -282,7 +282,10 @@ impl GridStore {
         scope_id: &str,
         region_id: &str,
     ) -> Result<Option<i32>, DataError> {
-        Ok(self.get_region_by_uuid(scope_id, region_id).await?.map(|r| r.flags))
+        Ok(self
+            .get_region_by_uuid(scope_id, region_id)
+            .await?
+            .map(|r| r.flags))
     }
 
     pub async fn deregister(&self, region_id: &str) -> Result<bool, DataError> {

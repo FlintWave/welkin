@@ -172,11 +172,7 @@ impl GridProfileConfig {
             &urls.mute_list_server_uri,
         );
         // [EstateService]
-        cfg.set(
-            "EstateService",
-            "EstateServerURI",
-            &urls.estate_server_uri,
-        );
+        cfg.set("EstateService", "EstateServerURI", &urls.estate_server_uri);
         // [AgentPreferencesService]
         cfg.set(
             "AgentPreferencesService",
@@ -207,7 +203,10 @@ impl GridProfileConfig {
 ///   `http://localhost:8003` matching the C# Robust private port).
 /// - Anything else — treated as a custom profile; loads from
 ///   `{profiles_dir}/{name}.toml`.
-pub fn load_profile(name: &str, profiles_dir: Option<&Path>) -> Result<GridProfileConfig, ConfigError> {
+pub fn load_profile(
+    name: &str,
+    profiles_dir: Option<&Path>,
+) -> Result<GridProfileConfig, ConfigError> {
     match GridProfile::from_name(name) {
         GridProfile::Standalone => Ok(GridProfileConfig {
             name: "standalone".to_string(),
@@ -228,7 +227,11 @@ pub fn load_profile(name: &str, profiles_dir: Option<&Path>) -> Result<GridProfi
         GridProfile::Custom(ref profile_name) => {
             let dir = profiles_dir.unwrap_or_else(|| Path::new("profiles"));
             let path = dir.join(format!("{profile_name}.toml"));
-            load_custom_profile(&path, profile_name, GridProfile::Custom(profile_name.clone()))
+            load_custom_profile(
+                &path,
+                profile_name,
+                GridProfile::Custom(profile_name.clone()),
+            )
         }
     }
 }
@@ -336,17 +339,17 @@ fn load_custom_profile(
 
     let mut overrides = BTreeMap::new();
     for section in cfg.sections() {
-        if !consumed.contains(&section) {
-            if let Some(keys) = cfg.keys(section) {
-                let mut sec_map = BTreeMap::new();
-                for key in keys {
-                    if let Some(val) = cfg.get_value(section, key) {
-                        sec_map.insert(key.to_string(), val.clone());
-                    }
+        if !consumed.contains(&section)
+            && let Some(keys) = cfg.keys(section)
+        {
+            let mut sec_map = BTreeMap::new();
+            for key in keys {
+                if let Some(val) = cfg.get_value(section, key) {
+                    sec_map.insert(key.to_string(), val.clone());
                 }
-                if !sec_map.is_empty() {
-                    overrides.insert(section.to_string(), sec_map);
-                }
+            }
+            if !sec_map.is_empty() {
+                overrides.insert(section.to_string(), sec_map);
             }
         }
     }
@@ -496,9 +499,18 @@ mod tests {
 
     #[test]
     fn parse_standalone_name() {
-        assert_eq!(GridProfile::from_name("standalone"), GridProfile::Standalone);
-        assert_eq!(GridProfile::from_name("Standalone"), GridProfile::Standalone);
-        assert_eq!(GridProfile::from_name("STANDALONE"), GridProfile::Standalone);
+        assert_eq!(
+            GridProfile::from_name("standalone"),
+            GridProfile::Standalone
+        );
+        assert_eq!(
+            GridProfile::from_name("Standalone"),
+            GridProfile::Standalone
+        );
+        assert_eq!(
+            GridProfile::from_name("STANDALONE"),
+            GridProfile::Standalone
+        );
     }
 
     #[test]
@@ -702,23 +714,14 @@ WelcomeMessage = "Hello!"
         let p = import_grid_ini(&ini_path, None).unwrap();
         assert_eq!(p.name, "OSgrid");
         assert!(!p.services_local);
-        assert_eq!(
-            p.service_urls.grid_server_uri,
-            "http://hg.osgrid.org:8003"
-        );
-        assert_eq!(
-            p.service_urls.asset_server_uri,
-            "http://hg.osgrid.org:8003"
-        );
+        assert_eq!(p.service_urls.grid_server_uri, "http://hg.osgrid.org:8003");
+        assert_eq!(p.service_urls.asset_server_uri, "http://hg.osgrid.org:8003");
         assert_eq!(
             p.service_urls.inventory_server_uri,
             "http://hg.osgrid.org:8003"
         );
         // Unspecified URLs fall back to default
-        assert_eq!(
-            p.service_urls.friends_server_uri,
-            "http://localhost:8003"
-        );
+        assert_eq!(p.service_urls.friends_server_uri, "http://localhost:8003");
     }
 
     #[test]
@@ -788,7 +791,10 @@ WelcomeMessage = "Hello!"
     fn config_from_sections_round_trip() {
         let mut sections = BTreeMap::new();
         let mut kv = BTreeMap::new();
-        kv.insert("hello".to_string(), toml::Value::String("world".to_string()));
+        kv.insert(
+            "hello".to_string(),
+            toml::Value::String("world".to_string()),
+        );
         sections.insert("General".to_string(), kv);
 
         let cfg = Config::from_sections(sections);

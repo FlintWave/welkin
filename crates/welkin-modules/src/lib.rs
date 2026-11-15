@@ -13,6 +13,7 @@ pub mod concierge;
 pub mod environment;
 pub mod estate;
 pub mod events;
+pub mod framework;
 pub mod groups;
 pub mod hg;
 pub mod inventory;
@@ -29,51 +30,25 @@ pub mod registry;
 pub mod transfer;
 pub mod voice;
 pub mod world_map;
-pub mod framework;
 
 // Re-exports for convenience.
 pub use attachments::{AttachmentInfo, AttachmentPoint, AttachmentsModule};
-pub use estate::{EstateManagementModule, EstateSettings, EstateSettingsUpdate, TelehubManager};
-pub use events::*;
-pub use inventory::{
-    AssetTransactionModule, AssetType, DerezAction, InventoryAccessModule,
-    InventoryTransferModule, RezResult, UploadTransaction, XferModule,
+pub use avatar::{
+    AvatarAppearance, AvatarFactoryModule, BakeType, BakedTexturesModule,
+    CombatModule as AvatarCombatModule, DialogModule, FriendInfo, FriendPerms, FriendsModule,
+    GesturesModule, GodLevel, GodsModule, LureModule, WearableItem, WearableType,
 };
-pub use land::{
-    DwellModule, LandData, LandManagementModule, LandParcel, ParcelGrid, PrimCountModule,
-    PrimCounts,
+pub use chat::{
+    ChatMessage, ChatModule, ChatSourceType, ChatType, DEBUG_CHANNEL, MAX_MESSAGE_LENGTH,
 };
-pub use chat::{ChatMessage, ChatModule, ChatSourceType, ChatType, DEBUG_CHANNEL, MAX_MESSAGE_LENGTH};
 pub use environment::{
     AccessModule, ConfigurableWind, EnvironmentSettings, LightShareModule, MediaEntry, MediaModule,
     RegionAccessFlags, RegionReadyModule, RestartModule, SceneSerialiser, SimpleRandomWind,
     SoundFlags, SoundModule, SoundTrigger, VegetationModule, WindModel, WindModule,
     WindlightPreset,
 };
-pub use lifecycle::{CapsModule, DynAttrsModule, ServiceThrottleModule};
-pub use messaging::{
-    GridInstantMessage, IMDialog, MessageTransferModule, MuteEntry, MuteListModule, MuteType,
-    OfflineMessageModule, PresenceModule,
-};
-pub use module::{ModuleConfig, ModuleError, ModuleType, RegionModule};
-pub use permissions::{
-    checks::ObjectPerms, DefaultPermissionsModule, PermissionsConfig, UserSet,
-};
-pub use registry::{ModuleRegistry, SceneRef};
-pub use avatar::{
-    AvatarAppearance, AvatarFactoryModule, BakeType, BakedTexturesModule,
-    CombatModule as AvatarCombatModule, DialogModule, FriendInfo, FriendPerms,
-    FriendsModule, GesturesModule, GodLevel, GodsModule, LureModule,
-    WearableItem, WearableType,
-};
-pub use transfer::{
-    AgentTransferState, EntityTransferContext, EntityTransferModule,
-    EntityTransferStateMachine, GridRegion, TeleportFlags,
-};
-pub use world_map::{
-    map_image::{MapImageModule, MapTileConfig, ShadedTerrainRenderer, TerrainRenderer},
-    MapBlock, MapItem, MapItemType, MapSearchModule, SimAccess, WorldMapModule,
-};
+pub use estate::{EstateManagementModule, EstateSettings, EstateSettingsUpdate, TelehubManager};
+pub use events::*;
 pub use framework::{
     AgentPreferencesConnector, AgentPrefs, AssetCacheConfig, CacheStats, CachedAsset,
     FlotsamAssetCache, IPBanModule, J2KPriority, LandConnectorData, LandServiceConnector,
@@ -82,15 +57,39 @@ pub use framework::{
     TextureSenderModule, UserData, UserManagementModule,
 };
 pub use groups::{
-    GroupAccountSummary, GroupInviteInfo, GroupMembersData, GroupMembershipData,
-    GroupNoticeData, GroupRecord, GroupRolesData, GroupTitleData, GroupsModule,
-    GroupsPacketType, IGroupsModule, IGroupsServicesConnector,
+    GroupAccountSummary, GroupInviteInfo, GroupMembersData, GroupMembershipData, GroupNoticeData,
+    GroupRecord, GroupRolesData, GroupTitleData, GroupsModule, GroupsPacketType, IGroupsModule,
+    IGroupsServicesConnector,
     hg_connector::{ForeignImporter, HGGroupsServiceConnector, RemoteConnectorCacheWrapper},
     messaging::{ChatSessionState, GroupsMessagingModule, NoticeAttachment},
 };
+pub use inventory::{
+    AssetTransactionModule, AssetType, DerezAction, InventoryAccessModule, InventoryTransferModule,
+    RezResult, UploadTransaction, XferModule,
+};
+pub use land::{
+    DwellModule, LandData, LandManagementModule, LandParcel, ParcelGrid, PrimCountModule,
+    PrimCounts,
+};
+pub use lifecycle::{CapsModule, DynAttrsModule, ServiceThrottleModule};
+pub use messaging::{
+    GridInstantMessage, IMDialog, MessageTransferModule, MuteEntry, MuteListModule, MuteType,
+    OfflineMessageModule, PresenceModule,
+};
+pub use module::{ModuleConfig, ModuleError, ModuleType, RegionModule};
 pub use offline_im::OfflineIMModule;
+pub use permissions::{DefaultPermissionsModule, PermissionsConfig, UserSet, checks::ObjectPerms};
 pub use profiles::{
     AvatarProperties, BasicProfileModule, ClassifiedSummary, PickSummary, UserNote,
+};
+pub use registry::{ModuleRegistry, SceneRef};
+pub use transfer::{
+    AgentTransferState, EntityTransferContext, EntityTransferModule, EntityTransferStateMachine,
+    GridRegion, TeleportFlags,
+};
+pub use world_map::{
+    MapBlock, MapItem, MapItemType, MapSearchModule, SimAccess, WorldMapModule,
+    map_image::{MapImageModule, MapTileConfig, ShadedTerrainRenderer, TerrainRenderer},
 };
 
 #[cfg(test)]
@@ -348,22 +347,13 @@ mod tests {
         config.set_bool("ServiceThrottle", "Enabled", false);
         config.set_float("Physics", "Gravity", -9.81);
 
-        assert_eq!(
-            config.get_string("General", "Name", "default"),
-            "MyRegion"
-        );
+        assert_eq!(config.get_string("General", "Name", "default"), "MyRegion");
         assert_eq!(config.get_int("General", "Port", 0), 9000);
-        assert_eq!(
-            config.get_bool("ServiceThrottle", "Enabled", true),
-            false
-        );
+        assert_eq!(config.get_bool("ServiceThrottle", "Enabled", true), false);
         assert!((config.get_float("Physics", "Gravity", 0.0) - (-9.81)).abs() < f64::EPSILON);
 
         // Defaults:
-        assert_eq!(
-            config.get_string("Missing", "Key", "fallback"),
-            "fallback"
-        );
+        assert_eq!(config.get_string("Missing", "Key", "fallback"), "fallback");
         assert_eq!(config.get_int("Missing", "Key", 42), 42);
         assert!(config.get_bool("Missing", "Key", true));
         assert!((config.get_float("Missing", "Key", 1.5) - 1.5).abs() < f64::EPSILON);
@@ -474,8 +464,8 @@ mod tests {
     // ===================================================================
 
     use crate::land::{
-        AccessList, DwellModule, LandAccessEntry, LandData, LandDataUpdate,
-        LandManagementModule, LandParcel, ParcelFlags, ParcelGrid, PrimCountModule,
+        AccessList, DwellModule, LandAccessEntry, LandData, LandDataUpdate, LandManagementModule,
+        LandParcel, ParcelFlags, ParcelGrid, PrimCountModule,
     };
 
     // -- 15. ParcelGrid cell get/set ----------------------------------------
@@ -529,9 +519,9 @@ mod tests {
         let a = LandParcel::get_square_bitmap(256, 0, 0, 128, 128);
         let b = LandParcel::get_square_bitmap(256, 128, 128, 256, 256);
         let merged = LandParcel::merge_bitmaps(&a, &b);
-        assert!(merged[0][0]);      // from a
-        assert!(merged[32][32]);    // from b
-        assert!(!merged[32][0]);    // neither
+        assert!(merged[0][0]); // from a
+        assert!(merged[32][32]); // from b
+        assert!(!merged[32][0]); // neither
     }
 
     // -- 20. LandParcel contains_point --------------------------------------
@@ -826,7 +816,9 @@ mod tests {
     // Estate-module tests (section 4)
     // ===================================================================
 
-    use crate::estate::{EstateManagementModule, EstateSettings, EstateSettingsUpdate, TelehubManager};
+    use crate::estate::{
+        EstateManagementModule, EstateSettings, EstateSettingsUpdate, TelehubManager,
+    };
 
     // -- 36. EstateSettings default construction ---------------------------
 
@@ -1024,7 +1016,9 @@ mod tests {
             _ => panic!("expected RezResult::Success"),
         }
 
-        let derez_item = module.derez_object(agent, Uuid::new_v4(), DerezAction::Take).unwrap();
+        let derez_item = module
+            .derez_object(agent, Uuid::new_v4(), DerezAction::Take)
+            .unwrap();
         assert!(!derez_item.is_nil());
     }
 
@@ -1178,7 +1172,9 @@ mod tests {
         assert!(module.detach(agent, Uuid::new_v4()).is_err());
 
         // With attachments but wrong item.
-        module.wear(agent, Uuid::new_v4(), AttachmentPoint::Back).unwrap();
+        module
+            .wear(agent, Uuid::new_v4(), AttachmentPoint::Back)
+            .unwrap();
         assert!(module.detach(agent, Uuid::new_v4()).is_err());
     }
 
@@ -1188,8 +1184,12 @@ mod tests {
     fn attachments_detach_all() {
         let mut module = AttachmentsModule::new();
         let agent = Uuid::new_v4();
-        module.wear(agent, Uuid::new_v4(), AttachmentPoint::LeftHand).unwrap();
-        module.wear(agent, Uuid::new_v4(), AttachmentPoint::RightHand).unwrap();
+        module
+            .wear(agent, Uuid::new_v4(), AttachmentPoint::LeftHand)
+            .unwrap();
+        module
+            .wear(agent, Uuid::new_v4(), AttachmentPoint::RightHand)
+            .unwrap();
         assert_eq!(module.get_attachments(agent).len(), 2);
 
         module.detach_all(agent);
@@ -1236,7 +1236,9 @@ mod tests {
     fn attachments_prepare_for_transfer() {
         let mut module = AttachmentsModule::new();
         let agent = Uuid::new_v4();
-        module.wear(agent, Uuid::new_v4(), AttachmentPoint::Stomach).unwrap();
+        module
+            .wear(agent, Uuid::new_v4(), AttachmentPoint::Stomach)
+            .unwrap();
 
         // prepare_for_transfer clones without removing.
         let transferred = module.prepare_for_transfer(agent);
@@ -1252,8 +1254,12 @@ mod tests {
     #[test]
     fn attachments_validate_point() {
         assert!(AttachmentsModule::validate_point(AttachmentPoint::Default));
-        assert!(AttachmentsModule::validate_point(AttachmentPoint::AvatarCenter));
-        assert!(AttachmentsModule::validate_point(AttachmentPoint::HudBottomRight));
+        assert!(AttachmentsModule::validate_point(
+            AttachmentPoint::AvatarCenter
+        ));
+        assert!(AttachmentsModule::validate_point(
+            AttachmentPoint::HudBottomRight
+        ));
     }
 
     // -- 60. AttachmentsModule RegionModule lifecycle ----------------------
@@ -1269,7 +1275,9 @@ mod tests {
         assert_eq!(module.module_type(), ModuleType::NonShared);
 
         // Wear something, then remove_region clears it.
-        module.wear(Uuid::new_v4(), Uuid::new_v4(), AttachmentPoint::Nose).unwrap();
+        module
+            .wear(Uuid::new_v4(), Uuid::new_v4(), AttachmentPoint::Nose)
+            .unwrap();
         module.remove_region(&scene).unwrap();
         // After remove, no attachments remain.
         module.close().unwrap();
@@ -1279,9 +1287,7 @@ mod tests {
     // Permissions-module tests (section 3 — high-risk)
     // ===================================================================
 
-    use crate::permissions::{
-        DefaultPermissionsModule, UserSet,
-    };
+    use crate::permissions::{DefaultPermissionsModule, UserSet};
     use welkin_types::PermissionMask;
 
     // -- helpers ----------------------------------------------------------
@@ -1488,12 +1494,7 @@ mod tests {
         let m = perms_module_no_bypass();
         let parcel_owner = Uuid::from_u128(0xDDDD);
         let parcel = perm_parcel_with_owner(parcel_owner);
-        assert!(m.can_return_object(
-            parcel_owner,
-            perm_owner_id(),
-            Uuid::nil(),
-            Some(&parcel),
-        ));
+        assert!(m.can_return_object(parcel_owner, perm_owner_id(), Uuid::nil(), Some(&parcel),));
     }
 
     // -- 76. Script permissions respect parcel AllowOtherScripts flag --------
@@ -1768,12 +1769,11 @@ mod tests {
     // World-map module tests (section 8)
     // ===================================================================
 
-    use crate::world_map::{
-        MapBlock, MapItem, MapItemType, MapSearchModule as MapSearch,
-        SimAccess, WorldMapModule,
-    };
     use crate::world_map::map_image::{
         MapImageModule, MapTileConfig, ShadedTerrainRenderer, TerrainRenderer,
+    };
+    use crate::world_map::{
+        MapBlock, MapItem, MapItemType, MapSearchModule as MapSearch, SimAccess, WorldMapModule,
     };
 
     // -- 101. SimAccess from_u8 roundtrip ------------------------------------
@@ -1876,7 +1876,11 @@ mod tests {
 
         module.remove_items_by_type(MapItemType::Telehub);
         assert_eq!(module.map_item_count(), 1);
-        assert!(module.handle_map_item_request(MapItemType::Telehub).is_empty());
+        assert!(
+            module
+                .handle_map_item_request(MapItemType::Telehub)
+                .is_empty()
+        );
     }
 
     // -- 107. WorldMapModule RegionModule lifecycle ---------------------------
@@ -1956,7 +1960,10 @@ mod tests {
         // Check a pixel in the middle: RGBA at index (32, 32) after Y-flip.
         let yr = 63 - 32;
         let idx = ((yr * 64 + 32) * 4) as usize;
-        assert!(data[idx + 1] > 0, "green channel should be non-zero for land");
+        assert!(
+            data[idx + 1] > 0,
+            "green channel should be non-zero for land"
+        );
         assert_eq!(data[idx + 3], 255, "alpha should be 255");
     }
 
@@ -2049,8 +2056,8 @@ mod tests {
     // ===================================================================
 
     use crate::chat::{
-        ChatMessage, ChatModule as ChatMod, ChatSourceType, ChatType,
-        DEBUG_CHANNEL, MAX_MESSAGE_LENGTH,
+        ChatMessage, ChatModule as ChatMod, ChatSourceType, ChatType, DEBUG_CHANNEL,
+        MAX_MESSAGE_LENGTH,
     };
 
     fn make_chat_msg(chat_type: ChatType, channel: i32) -> ChatMessage {
@@ -2233,9 +2240,9 @@ mod tests {
     // ===================================================================
 
     use crate::messaging::{
-        GridInstantMessage, IMDialog, MessageTransferModule as MsgXfer,
-        MuteEntry, MuteListModule as MuteMod, MuteType,
-        OfflineMessageModule as OfflineMod, PresenceModule as PresenceMod,
+        GridInstantMessage, IMDialog, MessageTransferModule as MsgXfer, MuteEntry,
+        MuteListModule as MuteMod, MuteType, OfflineMessageModule as OfflineMod,
+        PresenceModule as PresenceMod,
     };
 
     fn make_im(from: Uuid, to: Uuid) -> GridInstantMessage {
@@ -2364,20 +2371,26 @@ mod tests {
         let owner = Uuid::new_v4();
         assert!(m.get_mutes(owner).is_empty());
 
-        m.update_mute(owner, MuteEntry {
-            agent_id: owner,
-            mute_id: Uuid::new_v4(),
-            name: "A".to_string(),
-            mute_type: MuteType::ByAgent,
-            flags: 0,
-        });
-        m.update_mute(owner, MuteEntry {
-            agent_id: owner,
-            mute_id: Uuid::new_v4(),
-            name: "B".to_string(),
-            mute_type: MuteType::ByObject,
-            flags: 0,
-        });
+        m.update_mute(
+            owner,
+            MuteEntry {
+                agent_id: owner,
+                mute_id: Uuid::new_v4(),
+                name: "A".to_string(),
+                mute_type: MuteType::ByAgent,
+                flags: 0,
+            },
+        );
+        m.update_mute(
+            owner,
+            MuteEntry {
+                agent_id: owner,
+                mute_id: Uuid::new_v4(),
+                name: "B".to_string(),
+                mute_type: MuteType::ByObject,
+                flags: 0,
+            },
+        );
         assert_eq!(m.get_mutes(owner).len(), 2);
     }
 
@@ -2388,20 +2401,26 @@ mod tests {
         let mut m = MuteMod::new();
         let owner = Uuid::new_v4();
         let target = Uuid::new_v4();
-        m.update_mute(owner, MuteEntry {
-            agent_id: owner,
-            mute_id: target,
-            name: "Original".to_string(),
-            mute_type: MuteType::ByAgent,
-            flags: 0,
-        });
-        m.update_mute(owner, MuteEntry {
-            agent_id: owner,
-            mute_id: target,
-            name: "Updated".to_string(),
-            mute_type: MuteType::ByAgent,
-            flags: 1,
-        });
+        m.update_mute(
+            owner,
+            MuteEntry {
+                agent_id: owner,
+                mute_id: target,
+                name: "Original".to_string(),
+                mute_type: MuteType::ByAgent,
+                flags: 0,
+            },
+        );
+        m.update_mute(
+            owner,
+            MuteEntry {
+                agent_id: owner,
+                mute_id: target,
+                name: "Updated".to_string(),
+                mute_type: MuteType::ByAgent,
+                flags: 1,
+            },
+        );
         let mutes = m.get_mutes(owner);
         assert_eq!(mutes.len(), 1);
         assert_eq!(mutes[0].name, "Updated");
@@ -2499,9 +2518,9 @@ mod tests {
 
     use crate::environment::{
         AccessModule, ConfigurableWind, LightShareModule, MediaEntry, MediaModule,
-        RegionAccessFlags, RegionReadyModule, RestartModule, SceneSerialiser,
-        SimpleRandomWind, SoundFlags, SoundModule, SoundTrigger, VegetationModule,
-        WindModel, WindModule, WindlightPreset,
+        RegionAccessFlags, RegionReadyModule, RestartModule, SceneSerialiser, SimpleRandomWind,
+        SoundFlags, SoundModule, SoundTrigger, VegetationModule, WindModel, WindModule,
+        WindlightPreset,
     };
 
     // -- 143. WindlightPreset defaults ------------------------------------
@@ -2566,7 +2585,10 @@ mod tests {
                 }
             }
         }
-        assert!(has_nonzero, "SimpleRandomWind should produce non-zero values");
+        assert!(
+            has_nonzero,
+            "SimpleRandomWind should produce non-zero values"
+        );
         assert_eq!(wind.name(), "SimpleRandomWind");
     }
 
@@ -2766,8 +2788,16 @@ mod tests {
         assert!(default_flags.contains(RegionAccessFlags::ALLOW_TELEPORT));
 
         module.set_access_flags(RegionAccessFlags::ALLOW_TELEPORT);
-        assert!(!module.access_flags().contains(RegionAccessFlags::ALLOW_LANDMARK));
-        assert!(module.access_flags().contains(RegionAccessFlags::ALLOW_TELEPORT));
+        assert!(
+            !module
+                .access_flags()
+                .contains(RegionAccessFlags::ALLOW_LANDMARK)
+        );
+        assert!(
+            module
+                .access_flags()
+                .contains(RegionAccessFlags::ALLOW_TELEPORT)
+        );
 
         assert!(module.check_access(Uuid::new_v4()));
     }
@@ -2839,10 +2869,9 @@ mod tests {
     // ===================================================================
 
     use crate::avatar::{
-        AvatarAppearance, AvatarFactoryModule, BakeType, BakedTexturesModule,
-        CombatModule, DialogModule as DialogMod, FriendPerms,
-        FriendsModule, GesturesModule, GodLevel, GodsModule, LureModule,
-        WearableItem, WearableType,
+        AvatarAppearance, AvatarFactoryModule, BakeType, BakedTexturesModule, CombatModule,
+        DialogModule as DialogMod, FriendPerms, FriendsModule, GesturesModule, GodLevel,
+        GodsModule, LureModule, WearableItem, WearableType,
     };
 
     // -- 164. AvatarFactoryModule lifecycle -----------------------------------
@@ -3394,10 +3423,9 @@ mod tests {
     // ===================================================================
 
     use crate::framework::{
-        AgentPreferencesConnector, AssetCacheConfig, CachedAsset,
-        FlotsamAssetCache, IPBanModule, J2KPriority, LandServiceConnector,
-        LibraryModule, MapImageServiceConnector, MonitorModule, MuteListServiceConnector,
-        NeighbourServiceConnector, RegionStats, SearchModule,
+        AgentPreferencesConnector, AssetCacheConfig, CachedAsset, FlotsamAssetCache, IPBanModule,
+        J2KPriority, LandServiceConnector, LibraryModule, MapImageServiceConnector, MonitorModule,
+        MuteListServiceConnector, NeighbourServiceConnector, RegionStats, SearchModule,
         ServiceConnectorConfig, TextureSenderModule, UserManagementModule,
     };
 
@@ -3419,7 +3447,12 @@ mod tests {
     fn user_mgmt_add_with_url() {
         let mut m = UserManagementModule::new();
         let id = Uuid::new_v4();
-        m.add_user_with_url(id, "HG".to_string(), "User".to_string(), "http://grid.example.com".to_string());
+        m.add_user_with_url(
+            id,
+            "HG".to_string(),
+            "User".to_string(),
+            "http://grid.example.com".to_string(),
+        );
         let (f, l) = m.get_user_name(id).unwrap();
         assert_eq!(f, "HG");
         assert_eq!(l, "User");
@@ -4467,19 +4500,31 @@ mod tests {
         );
 
         // Transition through all valid states.
-        assert!(transfer.state_machine_mut().update_in_transit(agent, AgentTransferState::Transferring));
+        assert!(
+            transfer
+                .state_machine_mut()
+                .update_in_transit(agent, AgentTransferState::Transferring)
+        );
         assert_eq!(
             transfer.state_machine().get_agent_transfer_state(agent),
             Some(AgentTransferState::Transferring)
         );
 
-        assert!(transfer.state_machine_mut().update_in_transit(agent, AgentTransferState::ReceivedAtDestination));
+        assert!(
+            transfer
+                .state_machine_mut()
+                .update_in_transit(agent, AgentTransferState::ReceivedAtDestination)
+        );
         assert_eq!(
             transfer.state_machine().get_agent_transfer_state(agent),
             Some(AgentTransferState::ReceivedAtDestination)
         );
 
-        assert!(transfer.state_machine_mut().update_in_transit(agent, AgentTransferState::CleaningUp));
+        assert!(
+            transfer
+                .state_machine_mut()
+                .update_in_transit(agent, AgentTransferState::CleaningUp)
+        );
         assert_eq!(
             transfer.state_machine().get_agent_transfer_state(agent),
             Some(AgentTransferState::CleaningUp)
@@ -4488,7 +4533,10 @@ mod tests {
         // After CleaningUp, reset removes the agent from transit.
         assert!(transfer.state_machine_mut().reset_from_transit(agent));
         assert!(!transfer.state_machine().is_in_transit(agent));
-        assert_eq!(transfer.state_machine().get_agent_transfer_state(agent), None);
+        assert_eq!(
+            transfer.state_machine().get_agent_transfer_state(agent),
+            None
+        );
     }
 
     // -- 263. Integration: double-teleport prevention and recovery ----------
@@ -4761,7 +4809,10 @@ mod tests {
         registry.register(CapsModule::new());
         registry.register(DynAttrsModule::new());
         registry.register(ServiceThrottleModule::new());
-        registry.register(TrackingModule::new("IntegrationTracker", ModuleType::NonShared));
+        registry.register(TrackingModule::new(
+            "IntegrationTracker",
+            ModuleType::NonShared,
+        ));
 
         assert_eq!(registry.module_count(), 4);
 
@@ -5212,13 +5263,7 @@ mod tests {
 
         // do_teleport drives through: Preparing -> Transferring ->
         // ReceivedAtDestination -> CleaningUp, then resets.
-        let result = module.do_teleport(
-            agent,
-            &dest,
-            [128.0, 128.0, 25.0],
-            [0.0, 1.0, 0.0],
-            flags,
-        );
+        let result = module.do_teleport(agent, &dest, [128.0, 128.0, 25.0], [0.0, 1.0, 0.0], flags);
         assert!(result.is_ok());
         // Agent is no longer in transit after completion.
         assert!(!module.state_machine().is_in_transit(agent));
@@ -5290,7 +5335,9 @@ mod tests {
         // Test detach_all.
         let item2 = Uuid::new_v4();
         let item3 = Uuid::new_v4();
-        module.wear(agent, item2, AttachmentPoint::RightHand).unwrap();
+        module
+            .wear(agent, item2, AttachmentPoint::RightHand)
+            .unwrap();
         module.wear(agent, item3, AttachmentPoint::Head).unwrap();
         assert_eq!(module.get_attachments(agent).len(), 2);
         module.detach_all(agent);
@@ -5405,5 +5452,4 @@ mod tests {
         module.remove_region(&scene).unwrap();
         module.close().unwrap();
     }
-
 }

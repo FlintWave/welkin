@@ -7,14 +7,14 @@
 //! Gatekeeper, UserAgent, and Friends services.
 
 pub mod gatekeeper;
-pub mod user_agent;
-pub mod hg_friends;
 pub mod helo;
+pub mod hg_friends;
+pub mod user_agent;
 
 use std::collections::HashMap;
 
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 
 use crate::hypergrid::HypergridError;
 
@@ -45,9 +45,7 @@ pub(crate) fn build_xmlrpc_request(method: &str, params: &[(&str, &str)]) -> Str
 /// Parse an XML-RPC `<methodResponse>` that contains a single `<struct>`
 /// value (the OpenSim hashtable pattern).  Returns the key-value pairs,
 /// or an error if the response is a fault.
-pub(crate) fn parse_xmlrpc_response(
-    body: &str,
-) -> Result<HashMap<String, String>, HypergridError> {
+pub(crate) fn parse_xmlrpc_response(body: &str) -> Result<HashMap<String, String>, HypergridError> {
     // Detect faults first.
     if let Some(fault) = try_parse_fault(body) {
         return Err(HypergridError::Internal(fault));
@@ -86,9 +84,7 @@ pub(crate) fn parse_xmlrpc_response(
                     "value" if state == State::InMember => {
                         state = State::InValue;
                     }
-                    "string" | "int" | "i4" | "boolean" | "double"
-                        if state == State::InValue =>
-                    {
+                    "string" | "int" | "i4" | "boolean" | "double" if state == State::InValue => {
                         state = State::InValueString;
                     }
                     _ => {}
@@ -121,10 +117,7 @@ pub(crate) fn parse_xmlrpc_response(
                     }
                     "member" if state == State::InMember => {
                         if !current_name.is_empty() {
-                            map.insert(
-                                current_name.clone(),
-                                current_value.clone(),
-                            );
+                            map.insert(current_name.clone(), current_value.clone());
                         }
                         state = State::Scanning;
                     }
@@ -237,8 +230,7 @@ pub(crate) fn extract_tag_text(xml: &str, tag: &str) -> Option<String> {
     loop {
         match reader.read_event() {
             Ok(Event::Start(e)) => {
-                let name =
-                    String::from_utf8_lossy(e.local_name().as_ref()).to_string();
+                let name = String::from_utf8_lossy(e.local_name().as_ref()).to_string();
                 if name == tag {
                     capture = true;
                     buf.clear();
@@ -251,15 +243,9 @@ pub(crate) fn extract_tag_text(xml: &str, tag: &str) -> Option<String> {
             }
             Ok(Event::End(e)) => {
                 if capture {
-                    let name =
-                        String::from_utf8_lossy(e.local_name().as_ref())
-                            .to_string();
+                    let name = String::from_utf8_lossy(e.local_name().as_ref()).to_string();
                     if name == tag {
-                        return if buf.is_empty() {
-                            None
-                        } else {
-                            Some(buf)
-                        };
+                        return if buf.is_empty() { None } else { Some(buf) };
                     }
                 }
             }
@@ -294,10 +280,7 @@ mod tests {
 
     #[test]
     fn test_build_xmlrpc_request() {
-        let xml = build_xmlrpc_request(
-            "link_region",
-            &[("region_name", "Test Region")],
-        );
+        let xml = build_xmlrpc_request("link_region", &[("region_name", "Test Region")]);
         assert!(xml.starts_with("<?xml version=\"1.0\"?>"));
         assert!(xml.contains("<methodName>link_region</methodName>"));
         assert!(xml.contains("<name>region_name</name>"));
@@ -363,16 +346,14 @@ mod tests {
 
     #[test]
     fn test_xml_escape() {
-        let xml = build_xmlrpc_request(
-            "test",
-            &[("key", "a<b>&c\"d'e")],
-        );
+        let xml = build_xmlrpc_request("test", &[("key", "a<b>&c\"d'e")]);
         assert!(xml.contains("a&lt;b&gt;&amp;c&quot;d&apos;e"));
     }
 
     #[test]
     fn test_extract_tag_text() {
-        let xml = r#"<?xml version="1.0"?><ServerResponse><RESULT>Success</RESULT></ServerResponse>"#;
+        let xml =
+            r#"<?xml version="1.0"?><ServerResponse><RESULT>Success</RESULT></ServerResponse>"#;
         assert_eq!(extract_tag_text(xml, "RESULT"), Some("Success".into()));
         assert_eq!(extract_tag_text(xml, "MISSING"), None);
     }

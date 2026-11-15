@@ -8,9 +8,6 @@
 //! the Hypergrid service handlers (gatekeeper, user-agent, helo, friends)
 //! with the HTTP server.  Subsequent regions share the same handlers.
 
-use uuid::Uuid;
-
-use super::*;
 use crate::module::{ModuleConfig, ModuleError, ModuleType, RegionModule};
 use crate::registry::SceneRef;
 
@@ -77,10 +74,19 @@ impl HypergridServiceInConnectorModule {
         }
 
         let handlers = [
-            ("/gatekeeper", "Gatekeeper service (link_region, get_region, create_agent)"),
-            ("/user-agent", "User-agent service (verify_agent, locate_user, etc.)"),
+            (
+                "/gatekeeper",
+                "Gatekeeper service (link_region, get_region, create_agent)",
+            ),
+            (
+                "/user-agent",
+                "User-agent service (verify_agent, locate_user, etc.)",
+            ),
             ("/helo", "Helo service (reachability probe)"),
-            ("/hg-friends", "HG friends service (new_friendship, status_notification, etc.)"),
+            (
+                "/hg-friends",
+                "HG friends service (new_friendship, status_notification, etc.)",
+            ),
         ];
 
         for (path, desc) in &handlers {
@@ -132,13 +138,11 @@ impl RegionModule for HypergridServiceInConnectorModule {
             return Ok(());
         }
 
-        self.local_service_dll = config.get_string(
-            "FriendsService",
-            "LocalServiceModule",
-            "",
-        );
+        self.local_service_dll = config.get_string("FriendsService", "LocalServiceModule", "");
         if self.local_service_dll.is_empty() {
-            tracing::warn!("HypergridServiceInConnectorModule: Friends LocalServiceModule config missing");
+            tracing::warn!(
+                "HypergridServiceInConnectorModule: Friends LocalServiceModule config missing"
+            );
         }
 
         tracing::info!(
@@ -251,7 +255,11 @@ mod tests {
         let mut module = HypergridServiceInConnectorModule::new();
         let mut config = TestConfig::new();
         config.set_bool("Modules", "HypergridServiceInConnector", true);
-        config.set_string("FriendsService", "LocalServiceModule", "OpenSim.Services.FriendsService.dll");
+        config.set_string(
+            "FriendsService",
+            "LocalServiceModule",
+            "OpenSim.Services.FriendsService.dll",
+        );
         module.initialise(&config).unwrap();
         assert!(module.enabled);
     }

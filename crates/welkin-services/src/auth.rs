@@ -115,7 +115,11 @@ async fn handle_auth(State(state): State<AuthServiceState>, body: Bytes) -> Resp
             let password = f.str("PASSWORD");
             let lifetime: i32 = {
                 let v: i32 = f.num("LIFETIME");
-                if v <= 0 || v > MAX_LIFETIME { MAX_LIFETIME } else { v }
+                if v <= 0 || v > MAX_LIFETIME {
+                    MAX_LIFETIME
+                } else {
+                    v
+                }
             };
 
             let auth = match store.get(principal).await {

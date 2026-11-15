@@ -9,8 +9,8 @@ use std::sync::Arc;
 use mlua::prelude::*;
 use parking_lot::RwLock;
 
-use crate::builtins::ScriptContext;
 use super::{OsslFunc, OsslThreatLevel};
+use crate::builtins::ScriptContext;
 
 pub(crate) fn draw_functions() -> Vec<OsslFunc> {
     vec![
@@ -163,9 +163,7 @@ fn register_os_draw_ellipse(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> Lua
 fn register_os_draw_image(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(
         |_, (draw_list, width, height, image_url): (String, i32, i32, String)| {
-            Ok(format!(
-                "{draw_list}Image {width},{height},{image_url}; "
-            ))
+            Ok(format!("{draw_list}Image {width},{height},{image_url}; "))
         },
     )?;
     lua.globals().set("osDrawImage", f)
@@ -182,10 +180,7 @@ fn register_os_move_pen(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResu
     lua.globals().set("osMovePen", f)
 }
 
-fn register_os_draw_filled_ellipse(
-    lua: &Lua,
-    _ctx: &Arc<RwLock<ScriptContext>>,
-) -> LuaResult<()> {
+fn register_os_draw_filled_ellipse(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(|_, (draw_list, width, height): (String, i32, i32)| {
         Ok(format!("{draw_list}FillEllipse {width},{height}; "))
     })?;
@@ -222,10 +217,7 @@ fn register_os_draw_polygon(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> Lua
     lua.globals().set("osDrawPolygon", f)
 }
 
-fn register_os_draw_filled_polygon(
-    lua: &Lua,
-    _ctx: &Arc<RwLock<ScriptContext>>,
-) -> LuaResult<()> {
+fn register_os_draw_filled_polygon(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(
         |_, (draw_list, x_points, y_points): (String, Vec<i32>, Vec<i32>)| {
             let pts = polygon_points(&x_points, &y_points);
@@ -235,13 +227,8 @@ fn register_os_draw_filled_polygon(
     lua.globals().set("osDrawFilledPolygon", f)
 }
 
-fn register_os_draw_reset_transform(
-    lua: &Lua,
-    _ctx: &Arc<RwLock<ScriptContext>>,
-) -> LuaResult<()> {
-    let f = lua.create_function(|_, draw_list: String| {
-        Ok(format!("{draw_list}ResetTransf; "))
-    })?;
+fn register_os_draw_reset_transform(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+    let f = lua.create_function(|_, draw_list: String| Ok(format!("{draw_list}ResetTransf; ")))?;
     lua.globals().set("osDrawResetTransform", f)
 }
 
@@ -255,10 +242,7 @@ fn register_os_draw_rotation_transform(
     lua.globals().set("osDrawRotationTransform", f)
 }
 
-fn register_os_draw_scale_transform(
-    lua: &Lua,
-    _ctx: &Arc<RwLock<ScriptContext>>,
-) -> LuaResult<()> {
+fn register_os_draw_scale_transform(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(|_, (draw_list, sx, sy): (String, f64, f64)| {
         Ok(format!("{draw_list}ScaleTransf {sx},{sy}; "))
     })?;
@@ -312,23 +296,20 @@ fn register_os_set_pen_colour(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> L
 }
 
 fn register_os_set_pen_cap(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
-    let f = lua.create_function(
-        |_, (draw_list, direction, cap): (String, String, String)| {
-            Ok(format!("{draw_list}PenCap {direction},{cap}; "))
-        },
-    )?;
+    let f = lua.create_function(|_, (draw_list, direction, cap): (String, String, String)| {
+        Ok(format!("{draw_list}PenCap {direction},{cap}; "))
+    })?;
     lua.globals().set("osSetPenCap", f)
 }
 
-fn register_os_get_draw_string_size(
-    lua: &Lua,
-    _ctx: &Arc<RwLock<ScriptContext>>,
-) -> LuaResult<()> {
+fn register_os_get_draw_string_size(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     // Stub: needs font metrics engine. Returns "0,0".
-    let f = lua.create_function(|_, (_font_name, _text, _font_size): (String, String, i32)| {
-        tracing::debug!("osGetDrawStringSize (stub)");
-        Ok("0,0".to_string())
-    })?;
+    let f = lua.create_function(
+        |_, (_font_name, _text, _font_size): (String, String, i32)| {
+            tracing::debug!("osGetDrawStringSize (stub)");
+            Ok("0,0".to_string())
+        },
+    )?;
     lua.globals().set("osGetDrawStringSize", f)
 }
 
@@ -366,10 +347,7 @@ mod tests {
     #[test]
     fn test_move_pen() {
         let lua = make_draw_vm();
-        let r: String = lua
-            .load(r#"return osMovePen("", 10, 20)"#)
-            .eval()
-            .unwrap();
+        let r: String = lua.load(r#"return osMovePen("", 10, 20)"#).eval().unwrap();
         assert_eq!(r, "MoveTo 10,20; ");
     }
 
@@ -451,16 +429,10 @@ mod tests {
             .unwrap();
         assert_eq!(r, "FontName Arial; ");
 
-        let r: String = lua
-            .load(r#"return osSetFontSize("", 24)"#)
-            .eval()
-            .unwrap();
+        let r: String = lua.load(r#"return osSetFontSize("", 24)"#).eval().unwrap();
         assert_eq!(r, "FontSize 24; ");
 
-        let r: String = lua
-            .load(r#"return osSetPenSize("", 3)"#)
-            .eval()
-            .unwrap();
+        let r: String = lua.load(r#"return osSetPenSize("", 3)"#).eval().unwrap();
         assert_eq!(r, "PenSize 3; ");
 
         let r: String = lua

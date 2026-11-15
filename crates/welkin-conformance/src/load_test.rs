@@ -6,7 +6,6 @@
 //! comparison reporting for cutover section 4 (load testing).
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::path::Path;
 
 // ---------------------------------------------------------------------------
@@ -491,8 +490,11 @@ impl LoadTestRunner {
             .first()
             .ok_or_else(|| LoadTestError::ConfigValidation("no regions configured".into()))?;
 
-        let avatar_gen =
-            AvatarLoadGenerator::new(self.config.concurrent_avatars, &self.config.target_uri, region);
+        let avatar_gen = AvatarLoadGenerator::new(
+            self.config.concurrent_avatars,
+            &self.config.target_uri,
+            region,
+        );
         let physics_gen =
             PhysicsLoadGenerator::new(self.config.physics_objects, &self.config.target_uri, region);
         let script_gen =
@@ -692,9 +694,7 @@ mod tests {
         let json = serde_json::to_string(&baseline).expect("serialize");
         let restored: BaselineMeasurement = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(restored.target, baseline.target);
-        assert!(
-            (restored.metrics.fps_avg - baseline.metrics.fps_avg).abs() < f64::EPSILON
-        );
+        assert!((restored.metrics.fps_avg - baseline.metrics.fps_avg).abs() < f64::EPSILON);
     }
 
     #[test]
@@ -708,9 +708,7 @@ mod tests {
         let loaded = load_baseline(&path).expect("load");
 
         assert_eq!(loaded.target, Target::CSharp);
-        assert!(
-            (loaded.metrics.fps_avg - 45.0).abs() < f64::EPSILON
-        );
+        assert!((loaded.metrics.fps_avg - 45.0).abs() < f64::EPSILON);
 
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_dir(&dir);

@@ -2,11 +2,11 @@
 
 //! WebRTC voice module: voice channel management via wolfvoice sidecar.
 
-pub mod wolfvoice_client;
 pub mod capabilities;
-pub mod ossl_integration;
 pub mod docker;
+pub mod ossl_integration;
 pub mod portal_integration;
+pub mod wolfvoice_client;
 
 use std::collections::HashMap;
 use std::time::Instant;
@@ -173,10 +173,7 @@ impl WebRtcVoiceModule {
     pub fn destroy_all_channels(&mut self) {
         let count = self.active_channels.len();
         self.active_channels.clear();
-        tracing::debug!(
-            count,
-            "WebRtcVoiceModule: destroyed all voice channels"
-        );
+        tracing::debug!(count, "WebRtcVoiceModule: destroyed all voice channels");
     }
 
     /// Look up the active channel for a parcel.
@@ -187,13 +184,11 @@ impl WebRtcVoiceModule {
     /// Enable or disable voice for a parcel. When disabled, the existing
     /// channel (if any) is destroyed.
     pub fn set_parcel_voice_enabled(&mut self, parcel_local_id: i32, enabled: bool) {
-        if !enabled {
-            if self.active_channels.remove(&parcel_local_id).is_some() {
-                tracing::debug!(
-                    parcel_local_id,
-                    "WebRtcVoiceModule: voice disabled for parcel, channel removed"
-                );
-            }
+        if !enabled && self.active_channels.remove(&parcel_local_id).is_some() {
+            tracing::debug!(
+                parcel_local_id,
+                "WebRtcVoiceModule: voice disabled for parcel, channel removed"
+            );
         }
     }
 
@@ -204,7 +199,10 @@ impl WebRtcVoiceModule {
 
     /// Total viewers across all active channels.
     pub fn total_viewer_count(&self) -> usize {
-        self.active_channels.values().map(|ch| ch.viewer_count).sum()
+        self.active_channels
+            .values()
+            .map(|ch| ch.viewer_count)
+            .sum()
     }
 
     /// Increment the viewer count on a parcel's voice channel.
@@ -274,27 +272,15 @@ impl RegionModule for WebRtcVoiceModule {
         self.config.enabled = config.get_bool("Voice", "enabled", false);
 
         // [WebRtcVoice] section -- module-specific settings.
-        self.config.wolfvoice_endpoint = config.get_string(
-            "WebRtcVoice",
-            "wolfvoice_endpoint",
-            "http://localhost:8090",
-        );
-        self.config.turn_server =
-            config.get_string("WebRtcVoice", "turn_server", "");
-        self.config.turn_username =
-            config.get_string("WebRtcVoice", "turn_username", "");
-        self.config.turn_credential =
-            config.get_string("WebRtcVoice", "turn_credential", "");
-        self.config.voice_account_api = config.get_string(
-            "WebRtcVoice",
-            "voice_account_api",
-            "/api/provision",
-        );
-        self.config.voice_channel_api = config.get_string(
-            "WebRtcVoice",
-            "voice_channel_api",
-            "/api/channel",
-        );
+        self.config.wolfvoice_endpoint =
+            config.get_string("WebRtcVoice", "wolfvoice_endpoint", "http://localhost:8090");
+        self.config.turn_server = config.get_string("WebRtcVoice", "turn_server", "");
+        self.config.turn_username = config.get_string("WebRtcVoice", "turn_username", "");
+        self.config.turn_credential = config.get_string("WebRtcVoice", "turn_credential", "");
+        self.config.voice_account_api =
+            config.get_string("WebRtcVoice", "voice_account_api", "/api/provision");
+        self.config.voice_channel_api =
+            config.get_string("WebRtcVoice", "voice_channel_api", "/api/channel");
 
         tracing::info!(
             enabled = self.config.enabled,
@@ -496,10 +482,7 @@ mod tests {
         let sip = "sip:parcel@voice.example.com";
 
         module.set_land_sip_address(parcel_id, sip);
-        assert_eq!(
-            module.get_sip_override(parcel_id),
-            Some(&sip.to_string())
-        );
+        assert_eq!(module.get_sip_override(parcel_id), Some(&sip.to_string()));
 
         // Unknown parcel returns None.
         assert_eq!(module.get_sip_override(Uuid::new_v4()), None);
@@ -641,9 +624,7 @@ mod tests {
         let mut module = setup_module();
         let parcel_id = Uuid::new_v4();
         module.set_land_sip_address(parcel_id, "sip:test@example.com");
-        module
-            .create_channel(1, "ch", ChannelType::Parcel)
-            .unwrap();
+        module.create_channel(1, "ch", ChannelType::Parcel).unwrap();
 
         module.close().unwrap();
 

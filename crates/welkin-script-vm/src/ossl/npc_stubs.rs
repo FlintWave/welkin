@@ -1,35 +1,115 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! NPC stub functions (Task 8.1) — extends the base 4 NPC stubs to the full 24.
 
-use std::sync::Arc;
+use super::{OsslFunc, OsslThreatLevel};
+use crate::builtins::ScriptContext;
 use mlua::prelude::*;
 use parking_lot::RwLock;
+use std::sync::Arc;
 use uuid::Uuid;
-use crate::builtins::ScriptContext;
-use super::{OsslFunc, OsslThreatLevel};
 
 pub(super) fn ossl_npc_funcs() -> Vec<OsslFunc> {
     vec![
-        OsslFunc { name: "osIsNpc", level: OsslThreatLevel::High, register: register_os_is_npc },
-        OsslFunc { name: "osNpcSaveAppearance", level: OsslThreatLevel::High, register: register_os_npc_save_appearance },
-        OsslFunc { name: "osNpcLoadAppearance", level: OsslThreatLevel::High, register: register_os_npc_load_appearance },
-        OsslFunc { name: "osNpcGetOwner", level: OsslThreatLevel::High, register: register_os_npc_get_owner },
-        OsslFunc { name: "osNpcGetPos", level: OsslThreatLevel::High, register: register_os_npc_get_pos },
-        OsslFunc { name: "osNpcMoveToTarget", level: OsslThreatLevel::High, register: register_os_npc_move_to_target },
-        OsslFunc { name: "osNpcGetRot", level: OsslThreatLevel::High, register: register_os_npc_get_rot },
-        OsslFunc { name: "osNpcSetRot", level: OsslThreatLevel::High, register: register_os_npc_set_rot },
-        OsslFunc { name: "osNpcStopMoveToTarget", level: OsslThreatLevel::High, register: register_os_npc_stop_move_to_target },
-        OsslFunc { name: "osNpcSetProfileAbout", level: OsslThreatLevel::High, register: register_os_npc_set_profile_about },
-        OsslFunc { name: "osNpcSetProfileImage", level: OsslThreatLevel::High, register: register_os_npc_set_profile_image },
-        OsslFunc { name: "osNpcSayTo", level: OsslThreatLevel::High, register: register_os_npc_say_to },
-        OsslFunc { name: "osNpcShout", level: OsslThreatLevel::High, register: register_os_npc_shout },
-        OsslFunc { name: "osNpcSit", level: OsslThreatLevel::High, register: register_os_npc_sit },
-        OsslFunc { name: "osNpcStand", level: OsslThreatLevel::High, register: register_os_npc_stand },
-        OsslFunc { name: "osNpcPlayAnimation", level: OsslThreatLevel::High, register: register_os_npc_play_animation },
-        OsslFunc { name: "osNpcStopAnimation", level: OsslThreatLevel::High, register: register_os_npc_stop_animation },
-        OsslFunc { name: "osNpcTouch", level: OsslThreatLevel::High, register: register_os_npc_touch },
-        OsslFunc { name: "osNpcWhisper", level: OsslThreatLevel::High, register: register_os_npc_whisper },
-        OsslFunc { name: "osNpcLookAt", level: OsslThreatLevel::High, register: register_os_npc_look_at },
+        OsslFunc {
+            name: "osIsNpc",
+            level: OsslThreatLevel::High,
+            register: register_os_is_npc,
+        },
+        OsslFunc {
+            name: "osNpcSaveAppearance",
+            level: OsslThreatLevel::High,
+            register: register_os_npc_save_appearance,
+        },
+        OsslFunc {
+            name: "osNpcLoadAppearance",
+            level: OsslThreatLevel::High,
+            register: register_os_npc_load_appearance,
+        },
+        OsslFunc {
+            name: "osNpcGetOwner",
+            level: OsslThreatLevel::High,
+            register: register_os_npc_get_owner,
+        },
+        OsslFunc {
+            name: "osNpcGetPos",
+            level: OsslThreatLevel::High,
+            register: register_os_npc_get_pos,
+        },
+        OsslFunc {
+            name: "osNpcMoveToTarget",
+            level: OsslThreatLevel::High,
+            register: register_os_npc_move_to_target,
+        },
+        OsslFunc {
+            name: "osNpcGetRot",
+            level: OsslThreatLevel::High,
+            register: register_os_npc_get_rot,
+        },
+        OsslFunc {
+            name: "osNpcSetRot",
+            level: OsslThreatLevel::High,
+            register: register_os_npc_set_rot,
+        },
+        OsslFunc {
+            name: "osNpcStopMoveToTarget",
+            level: OsslThreatLevel::High,
+            register: register_os_npc_stop_move_to_target,
+        },
+        OsslFunc {
+            name: "osNpcSetProfileAbout",
+            level: OsslThreatLevel::High,
+            register: register_os_npc_set_profile_about,
+        },
+        OsslFunc {
+            name: "osNpcSetProfileImage",
+            level: OsslThreatLevel::High,
+            register: register_os_npc_set_profile_image,
+        },
+        OsslFunc {
+            name: "osNpcSayTo",
+            level: OsslThreatLevel::High,
+            register: register_os_npc_say_to,
+        },
+        OsslFunc {
+            name: "osNpcShout",
+            level: OsslThreatLevel::High,
+            register: register_os_npc_shout,
+        },
+        OsslFunc {
+            name: "osNpcSit",
+            level: OsslThreatLevel::High,
+            register: register_os_npc_sit,
+        },
+        OsslFunc {
+            name: "osNpcStand",
+            level: OsslThreatLevel::High,
+            register: register_os_npc_stand,
+        },
+        OsslFunc {
+            name: "osNpcPlayAnimation",
+            level: OsslThreatLevel::High,
+            register: register_os_npc_play_animation,
+        },
+        OsslFunc {
+            name: "osNpcStopAnimation",
+            level: OsslThreatLevel::High,
+            register: register_os_npc_stop_animation,
+        },
+        OsslFunc {
+            name: "osNpcTouch",
+            level: OsslThreatLevel::High,
+            register: register_os_npc_touch,
+        },
+        OsslFunc {
+            name: "osNpcWhisper",
+            level: OsslThreatLevel::High,
+            register: register_os_npc_whisper,
+        },
+        OsslFunc {
+            name: "osNpcLookAt",
+            level: OsslThreatLevel::High,
+            register: register_os_npc_look_at,
+        },
     ]
 }
 
@@ -122,7 +202,10 @@ fn register_os_npc_set_rot(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaRe
 }
 
 // -- osNpcStopMoveToTarget(npc) -> void --
-fn register_os_npc_stop_move_to_target(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+fn register_os_npc_stop_move_to_target(
+    lua: &Lua,
+    ctx: &Arc<RwLock<ScriptContext>>,
+) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, _npc: String| {
         let c = ctx.read();
@@ -157,11 +240,13 @@ fn register_os_npc_set_profile_image(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>
 // -- osNpcSayTo(npc, target, channel, msg) -> void --
 fn register_os_npc_say_to(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
-    let f = lua.create_function(move |_, (_npc, _target, _channel, _msg): (String, String, i32, String)| {
-        let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, "osNpcSayTo called (stub)");
-        Ok(())
-    })?;
+    let f = lua.create_function(
+        move |_, (_npc, _target, _channel, _msg): (String, String, i32, String)| {
+            let c = ctx.read();
+            tracing::debug!(script_id = %c.script_id, "osNpcSayTo called (stub)");
+            Ok(())
+        },
+    )?;
     lua.globals().set("osNpcSayTo", f)
 }
 

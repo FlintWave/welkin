@@ -10,12 +10,11 @@ use axum::{
     routing::{get, post},
 };
 use base64::Engine as _;
-use welkin_data::assets::{AssetMetadataRow, AssetRow, AssetStore};
 use quick_xml::{Reader, escape::escape, events::Event};
+use welkin_data::assets::{AssetMetadataRow, AssetRow, AssetStore};
 
 const XML_DECL: &str = "<?xml version=\"1.0\" encoding=\"utf-8\"?>";
-const XML_NS: &str =
-    "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\"";
+const XML_NS: &str = "xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\"";
 
 const FLAG_MAPTILE: i32 = 1;
 const FLAG_REWRITABLE: i32 = 2;
@@ -59,7 +58,10 @@ impl AssetServiceState {
 pub fn router(state: AssetServiceState) -> Router {
     Router::new()
         .route("/assets", post(post_asset))
-        .route("/assets/{id}", get(get_asset).post(update_asset).delete(delete_asset))
+        .route(
+            "/assets/{id}",
+            get(get_asset).post(update_asset).delete(delete_asset),
+        )
         .route("/assets/{id}/data", get(get_asset_data))
         .route("/assets/{id}/metadata", get(get_asset_metadata))
         .route("/get_assets_exist", post(assets_exist))
@@ -135,11 +137,20 @@ fn write_asset_xml(
     out.push_str(&format!("  <FullID><Guid>{id}</Guid></FullID>\n"));
     out.push_str(&format!("  <ID>{id}</ID>\n"));
     out.push_str(&format!("  <Name>{}</Name>\n", escape(name)));
-    out.push_str(&format!("  <Description>{}</Description>\n", escape(description)));
+    out.push_str(&format!(
+        "  <Description>{}</Description>\n",
+        escape(description)
+    ));
     out.push_str(&format!("  <Type>{asset_type}</Type>\n"));
     out.push_str(&format!("  <Local>{}</Local>\n", bool_xml(local)));
-    out.push_str(&format!("  <Temporary>{}</Temporary>\n", bool_xml(temporary)));
-    out.push_str(&format!("  <CreatorID>{}</CreatorID>\n", escape(creator_id)));
+    out.push_str(&format!(
+        "  <Temporary>{}</Temporary>\n",
+        bool_xml(temporary)
+    ));
+    out.push_str(&format!(
+        "  <CreatorID>{}</CreatorID>\n",
+        escape(creator_id)
+    ));
     out.push_str(&format!("  <Flags>{}</Flags>\n", flags_to_xml(flags)));
     out.push_str("</AssetBase>");
     out
@@ -326,7 +337,10 @@ async fn get_asset(State(state): State<AssetServiceState>, Path(id): Path<String
     }
 }
 
-async fn get_asset_data(State(state): State<AssetServiceState>, Path(id): Path<String>) -> Response {
+async fn get_asset_data(
+    State(state): State<AssetServiceState>,
+    Path(id): Path<String>,
+) -> Response {
     if !valid_id(&id) {
         return not_found();
     }
@@ -433,7 +447,8 @@ async fn delete_asset(State(state): State<AssetServiceState>, Path(id): Path<Str
         Ok(None) => return bool_response(false),
         Err(e) => return server_error("delete_asset", e),
     };
-    if state.allowed_delete_types == DeleteAllowed::MapTile && meta.asset_flags & FLAG_MAPTILE == 0 {
+    if state.allowed_delete_types == DeleteAllowed::MapTile && meta.asset_flags & FLAG_MAPTILE == 0
+    {
         tracing::warn!(%id, "asset delete refused: not a maptile");
         return bool_response(false);
     }

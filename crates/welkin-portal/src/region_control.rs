@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::Json;
 use serde::{Deserialize, Serialize};
 
+use crate::PortalState;
 use crate::error::PortalError;
 use crate::sessions::RequireStaff;
-use crate::PortalState;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -95,13 +95,9 @@ pub async fn handle_start_region(
         .find(|r| r.region_id == id)
         .ok_or(PortalError::NotFound)?;
     region.status = "running".into();
-    state.audit_log.log_action(
-        &staff.0.staff_id,
-        "start_region",
-        &id,
-        "",
-        "",
-    );
+    state
+        .audit_log
+        .log_action(&staff.0.staff_id, "start_region", &id, "", "");
     Ok(Json(region.clone()))
 }
 
@@ -117,13 +113,9 @@ pub async fn handle_stop_region(
         .find(|r| r.region_id == id)
         .ok_or(PortalError::NotFound)?;
     region.status = "stopped".into();
-    state.audit_log.log_action(
-        &staff.0.staff_id,
-        "stop_region",
-        &id,
-        "",
-        "",
-    );
+    state
+        .audit_log
+        .log_action(&staff.0.staff_id, "stop_region", &id, "", "");
     Ok(Json(region.clone()))
 }
 
@@ -138,15 +130,13 @@ pub async fn handle_snapshot_region(
         .iter()
         .find(|r| r.region_id == id)
         .ok_or(PortalError::NotFound)?;
-    state.audit_log.log_action(
-        &staff.0.staff_id,
-        "snapshot_region",
-        &id,
-        "",
-        "",
-    );
+    state
+        .audit_log
+        .log_action(&staff.0.staff_id, "snapshot_region", &id, "", "");
     // TODO: trigger actual snapshot via region-simulator-core
-    Ok(Json(serde_json::json!({ "status": "snapshot_requested", "region_id": id })))
+    Ok(Json(
+        serde_json::json!({ "status": "snapshot_requested", "region_id": id }),
+    ))
 }
 
 pub async fn handle_remove_region(
@@ -161,12 +151,8 @@ pub async fn handle_remove_region(
         .position(|r| r.region_id == id)
         .ok_or(PortalError::NotFound)?;
     regions.remove(idx);
-    state.audit_log.log_action(
-        &staff.0.staff_id,
-        "remove_region",
-        &id,
-        "",
-        "",
-    );
+    state
+        .audit_log
+        .log_action(&staff.0.staff_id, "remove_region", &id, "", "");
     Ok(StatusCode::NO_CONTENT)
 }

@@ -46,12 +46,14 @@ impl FriendsStore {
             .bind(friend.to_string())
             .execute(&mut *tx)
             .await?;
-        sqlx::query("INSERT INTO Friends (PrincipalID, Friend, Flags, Offered) VALUES ($1, $2, $3, '0')")
-            .bind(principal_id.to_string())
-            .bind(friend.to_string())
-            .bind(flags.to_string())
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "INSERT INTO Friends (PrincipalID, Friend, Flags, Offered) VALUES ($1, $2, $3, '0')",
+        )
+        .bind(principal_id.to_string())
+        .bind(friend.to_string())
+        .bind(flags.to_string())
+        .execute(&mut *tx)
+        .await?;
         tx.commit().await?;
         Ok(())
     }
@@ -99,10 +101,7 @@ impl FriendsStore {
                    LEFT JOIN Friends AS b ON a.PrincipalID = b.Friend AND a.Friend = b.PrincipalID \
                    WHERE a.PrincipalID LIKE $1";
         let pattern = format!("{principal_id}%");
-        let rows = sqlx::query(sql)
-            .bind(pattern)
-            .fetch_all(&self.pool)
-            .await?;
+        let rows = sqlx::query(sql).bind(pattern).fetch_all(&self.pool).await?;
         Ok(rows
             .iter()
             .map(|r| FriendWithFlags {

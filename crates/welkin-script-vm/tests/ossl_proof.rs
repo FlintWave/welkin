@@ -21,9 +21,7 @@ use parking_lot::RwLock;
 use uuid::Uuid;
 
 use welkin_script_vm::builtins::ScriptContext;
-use welkin_script_vm::ossl::{
-    function_catalog, register_ossl, OsslConfig, OsslThreatLevel,
-};
+use welkin_script_vm::ossl::{OsslConfig, OsslThreatLevel, function_catalog, register_ossl};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -77,7 +75,7 @@ fn vm_with_allowed(level: OsslThreatLevel, allowed: &[&str]) -> Lua {
 
 /// Assert that a Lua global is nil (not registered).
 fn assert_nil(lua: &Lua, name: &str) {
-    let v: mlua::Value = lua.load(&format!("return {name}")).eval().unwrap();
+    let v: mlua::Value = lua.load(format!("return {name}")).eval().unwrap();
     assert!(
         matches!(v, mlua::Value::Nil),
         "{name} should not be registered but is: {v:?}"
@@ -86,7 +84,7 @@ fn assert_nil(lua: &Lua, name: &str) {
 
 /// Assert that a Lua global is a function (registered).
 fn assert_fn(lua: &Lua, name: &str) {
-    let v: mlua::Value = lua.load(&format!("return {name}")).eval().unwrap();
+    let v: mlua::Value = lua.load(format!("return {name}")).eval().unwrap();
     assert!(
         matches!(v, mlua::Value::Function(_)),
         "{name} should be registered as a function but is: {v:?}"
@@ -154,10 +152,7 @@ fn npc_get_owner_returns_nil_uuid() {
 #[test]
 fn npc_get_pos_returns_zero_vector() {
     let lua = vm_all();
-    let r: String = lua
-        .load(r#"return osNpcGetPos("npc-key")"#)
-        .eval()
-        .unwrap();
+    let r: String = lua.load(r#"return osNpcGetPos("npc-key")"#).eval().unwrap();
     assert_eq!(r, "<0, 0, 0>");
 }
 
@@ -165,10 +160,7 @@ fn npc_get_pos_returns_zero_vector() {
 #[test]
 fn npc_get_rot_returns_identity() {
     let lua = vm_all();
-    let r: String = lua
-        .load(r#"return osNpcGetRot("npc-key")"#)
-        .eval()
-        .unwrap();
+    let r: String = lua.load(r#"return osNpcGetRot("npc-key")"#).eval().unwrap();
     assert_eq!(r, "<0, 0, 0, 1>");
 }
 
@@ -189,9 +181,7 @@ fn npc_movement_stubs_no_panic() {
     lua.load(r#"osNpcMoveToTarget("npc", "<128,128,25>", 0)"#)
         .exec()
         .unwrap();
-    lua.load(r#"osNpcStopMoveToTarget("npc")"#)
-        .exec()
-        .unwrap();
+    lua.load(r#"osNpcStopMoveToTarget("npc")"#).exec().unwrap();
     lua.load(r#"osNpcSit("npc", "prim-key", 0)"#)
         .exec()
         .unwrap();
@@ -209,9 +199,7 @@ fn npc_say_shout_whisper_no_panic() {
     lua.load(r#"osNpcSayTo("npc", "target", 0, "hello")"#)
         .exec()
         .unwrap();
-    lua.load(r#"osNpcShout("npc", 0, "hello")"#)
-        .exec()
-        .unwrap();
+    lua.load(r#"osNpcShout("npc", 0, "hello")"#).exec().unwrap();
     lua.load(r#"osNpcWhisper("npc", 0, "hello")"#)
         .exec()
         .unwrap();
@@ -236,11 +224,9 @@ fn attachment_force_attach_stub_no_panic() {
 #[test]
 fn attachment_force_attach_other_avatar_no_panic() {
     let lua = vm_all();
-    lua.load(
-        r#"osForceAttachToOtherAvatarFromInventory("avatar-key", "sphere", 9)"#,
-    )
-    .exec()
-    .unwrap();
+    lua.load(r#"osForceAttachToOtherAvatarFromInventory("avatar-key", "sphere", 9)"#)
+        .exec()
+        .unwrap();
 }
 
 /// Verify osForceDetachFromAvatar stub doesn't panic.
@@ -403,8 +389,7 @@ fn catalog_has_at_least_200_entries() {
 #[test]
 fn catalog_spot_check_threat_levels() {
     let catalog = function_catalog();
-    let map: std::collections::HashMap<&str, OsslThreatLevel> =
-        catalog.into_iter().collect();
+    let map: std::collections::HashMap<&str, OsslThreatLevel> = catalog.into_iter().collect();
 
     let checks: &[(&str, OsslThreatLevel)] = &[
         ("osNpcCreate", OsslThreatLevel::High),
@@ -421,10 +406,7 @@ fn catalog_spot_check_threat_levels() {
 
     for &(name, expected_level) in checks {
         let actual = map.get(name);
-        assert!(
-            actual.is_some(),
-            "function {name} not found in catalog"
-        );
+        assert!(actual.is_some(), "function {name} not found in catalog");
         assert_eq!(
             *actual.unwrap(),
             expected_level,
@@ -456,10 +438,7 @@ fn catalog_names_start_with_os() {
             name.starts_with("os"),
             "OSSL function name should start with 'os': {name}"
         );
-        assert!(
-            name.len() > 2,
-            "OSSL function name too short: {name}"
-        );
+        assert!(name.len() > 2, "OSSL function name too short: {name}");
     }
 }
 

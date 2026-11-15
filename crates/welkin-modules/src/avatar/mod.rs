@@ -199,7 +199,11 @@ impl AvatarFactoryModule {
     }
 
     /// Persist baked textures to the asset service (stub).
-    pub fn save_baked_textures(&mut self, agent_id: Uuid, textures: HashMap<BakeType, Uuid>) -> bool {
+    pub fn save_baked_textures(
+        &mut self,
+        agent_id: Uuid,
+        textures: HashMap<BakeType, Uuid>,
+    ) -> bool {
         self.bake_cache.insert(agent_id, textures);
         true
     }
@@ -223,6 +227,12 @@ impl AvatarFactoryModule {
         if let Some(appearance) = self.appearances.get_mut(&agent_id) {
             appearance.hover_z = hover_z;
         }
+    }
+}
+
+impl Default for AvatarFactoryModule {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -300,6 +310,12 @@ impl BakedTexturesModule {
     /// Clear all cached textures for an agent.
     pub fn clear_cache(&mut self, agent_id: Uuid) {
         self.cache.retain(|&(aid, _), _| aid != agent_id);
+    }
+}
+
+impl Default for BakedTexturesModule {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -449,6 +465,12 @@ impl FriendsModule {
     }
 }
 
+impl Default for FriendsModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RegionModule for FriendsModule {
     fn name(&self) -> &str {
         "FriendsModule"
@@ -531,6 +553,12 @@ impl LureModule {
     }
 }
 
+impl Default for LureModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RegionModule for LureModule {
     fn name(&self) -> &str {
         "LureModule"
@@ -607,12 +635,21 @@ impl GodsModule {
 
     /// Get the current god level for an agent.
     pub fn get_god_level(&self, agent_id: Uuid) -> GodLevel {
-        self.god_levels.get(&agent_id).copied().unwrap_or(GodLevel::Not)
+        self.god_levels
+            .get(&agent_id)
+            .copied()
+            .unwrap_or(GodLevel::Not)
     }
 
     /// Kick a user from the region (stub — logs intent, would send kick via LLUDP).
     pub fn kick_user(&self, _agent_id: Uuid, _reason: &str) {
         // Stub: in a full implementation this sends a KickUser packet.
+    }
+}
+
+impl Default for GodsModule {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -701,6 +738,12 @@ impl DialogModule {
     }
 }
 
+impl Default for DialogModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RegionModule for DialogModule {
     fn name(&self) -> &str {
         "DialogModule"
@@ -780,6 +823,12 @@ impl CombatModule {
     }
 }
 
+impl Default for CombatModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RegionModule for CombatModule {
     fn name(&self) -> &str {
         "CombatModule"
@@ -856,6 +905,12 @@ impl GesturesModule {
     /// Return the active gestures for an agent.
     pub fn get_active_gestures(&self, agent_id: Uuid) -> Vec<(Uuid, Uuid)> {
         self.active.get(&agent_id).cloned().unwrap_or_default()
+    }
+}
+
+impl Default for GesturesModule {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

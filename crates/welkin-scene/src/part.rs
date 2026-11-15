@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use glam::{Quat, Vec3};
-use welkin_types::PermissionMask;
 use uuid::Uuid;
+use welkin_types::PermissionMask;
 
 bitflags::bitflags! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -49,10 +49,18 @@ impl PartColor {
         Self([r, g, b, a])
     }
 
-    pub fn r(&self) -> u8 { self.0[0] }
-    pub fn g(&self) -> u8 { self.0[1] }
-    pub fn b(&self) -> u8 { self.0[2] }
-    pub fn a(&self) -> u8 { self.0[3] }
+    pub fn r(&self) -> u8 {
+        self.0[0]
+    }
+    pub fn g(&self) -> u8 {
+        self.0[1]
+    }
+    pub fn b(&self) -> u8 {
+        self.0[2]
+    }
+    pub fn a(&self) -> u8 {
+        self.0[3]
+    }
 }
 
 impl Default for PartColor {

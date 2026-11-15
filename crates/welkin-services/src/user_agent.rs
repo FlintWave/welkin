@@ -120,10 +120,7 @@ impl UserAgentService for UserAgentServiceImpl {
         Ok(())
     }
 
-    fn get_home_region(
-        &self,
-        user_id: Uuid,
-    ) -> HgResult<(GridRegionInfo, Vector3, Vector3)> {
+    fn get_home_region(&self, user_id: Uuid) -> HgResult<(GridRegionInfo, Vector3, Vector3)> {
         // Stub -- in production this would query the GridUserService for the
         // user's home region, then the GridService for region details.
         Err(HypergridError::RegionNotFound(format!(
@@ -143,7 +140,10 @@ impl UserAgentService for UserAgentServiceImpl {
         // return first/last name, flags, created date, title.
         let mut info = HashMap::new();
         info.insert("result".into(), "fail".into());
-        info.insert("message".into(), "UserAccountService is not available".into());
+        info.insert(
+            "message".into(),
+            "UserAccountService is not available".into(),
+        );
         Ok(info)
     }
 
@@ -161,11 +161,7 @@ impl UserAgentService for UserAgentServiceImpl {
         Ok(String::new())
     }
 
-    fn get_uui(
-        &self,
-        _requester_id: Uuid,
-        _target_user_id: Uuid,
-    ) -> HgResult<String> {
+    fn get_uui(&self, _requester_id: Uuid, _target_user_id: Uuid) -> HgResult<String> {
         // Stub -- in production this would look up the user account by
         // target_user_id and return "uuid;grid_name;FirstName LastName", or
         // search the friends list for foreign-user UUI.
@@ -328,8 +324,7 @@ fn extract_param(xml: &str, key: &str) -> Option<String> {
     let after_value = &rest[val_start + 7..];
 
     // The value might be wrapped in <string>...</string> or bare text
-    let content = if after_value.starts_with("<string>") {
-        let s = &after_value[8..];
+    let content = if let Some(s) = after_value.strip_prefix("<string>") {
         let end = s.find("</string>")?;
         &s[..end]
     } else {
@@ -348,10 +343,7 @@ fn extract_method_name(xml: &str) -> Option<String> {
     Some(rest[..end].to_string())
 }
 
-async fn handle_xmlrpc(
-    State(state): State<UserAgentHandlerState>,
-    body: Bytes,
-) -> Response {
+async fn handle_xmlrpc(State(state): State<UserAgentHandlerState>, body: Bytes) -> Response {
     let xml = String::from_utf8_lossy(&body);
     let method = match extract_method_name(&xml) {
         Some(m) => m,
@@ -484,9 +476,7 @@ async fn handle_xmlrpc(
                 .unwrap_or(Uuid::nil());
 
             match state.service.locate_user(user_id) {
-                Ok(url) if !url.is_empty() => {
-                    xmlrpc_response(&[("URL", &url)])
-                }
+                Ok(url) if !url.is_empty() => xmlrpc_response(&[("URL", &url)]),
                 _ => xmlrpc_response(&[("result", "Unable to locate user")]),
             }
         }
@@ -500,9 +490,7 @@ async fn handle_xmlrpc(
                 .unwrap_or(Uuid::nil());
 
             match state.service.get_uui(user_id, target_user_id) {
-                Ok(uui) if !uui.is_empty() => {
-                    xmlrpc_response(&[("UUI", &uui)])
-                }
+                Ok(uui) if !uui.is_empty() => xmlrpc_response(&[("UUI", &uui)]),
                 _ => xmlrpc_response(&[("result", "User unknown")]),
             }
         }
@@ -548,7 +536,13 @@ mod tests {
         UserAgentServiceImpl::new(make_config(bypass))
     }
 
-    fn make_travel(session: Uuid, user: Uuid, grid: &str, token: &str, ip: &str) -> TravelingAgentInfo {
+    fn make_travel(
+        session: Uuid,
+        user: Uuid,
+        grid: &str,
+        token: &str,
+        ip: &str,
+    ) -> TravelingAgentInfo {
         TravelingAgentInfo {
             session_id: session,
             user_id: user,
@@ -658,13 +652,15 @@ mod tests {
             "10.0.0.1",
         ));
 
-        assert!(svc
-            .is_agent_coming_home(session, "http://mygrid.example:9000/")
-            .unwrap());
+        assert!(
+            svc.is_agent_coming_home(session, "http://mygrid.example:9000/")
+                .unwrap()
+        );
         // Case-insensitive.
-        assert!(svc
-            .is_agent_coming_home(session, "HTTP://MYGRID.EXAMPLE:9000/")
-            .unwrap());
+        assert!(
+            svc.is_agent_coming_home(session, "HTTP://MYGRID.EXAMPLE:9000/")
+                .unwrap()
+        );
     }
 
     #[test]
@@ -679,17 +675,19 @@ mod tests {
             "10.0.0.1",
         ));
 
-        assert!(!svc
-            .is_agent_coming_home(session, "http://mygrid.example:9000/")
-            .unwrap());
+        assert!(
+            !svc.is_agent_coming_home(session, "http://mygrid.example:9000/")
+                .unwrap()
+        );
     }
 
     #[test]
     fn test_is_agent_coming_home_no_session() {
         let svc = make_service(false);
-        assert!(!svc
-            .is_agent_coming_home(Uuid::new_v4(), "http://mygrid.example:9000/")
-            .unwrap());
+        assert!(
+            !svc.is_agent_coming_home(Uuid::new_v4(), "http://mygrid.example:9000/")
+                .unwrap()
+        );
     }
 
     // ---- locate_user ----
@@ -808,7 +806,11 @@ mod tests {
         let travel = svc.get_travel_info(session).unwrap();
         assert_eq!(travel.user_id, agent);
         assert_eq!(travel.grid_external_name, "http://foreign.example:9000/");
-        assert!(travel.service_token.starts_with("http://foreign.example:9000/;"));
+        assert!(
+            travel
+                .service_token
+                .starts_with("http://foreign.example:9000/;")
+        );
         assert_eq!(travel.client_ip_address, "10.0.0.42");
     }
 
@@ -822,23 +824,14 @@ mod tests {
             <member><name>token</name><value><string>my-token</string></value></member>
             </struct></value></param></params></methodCall>"#;
 
-        assert_eq!(
-            extract_param(xml, "sessionID"),
-            Some("abc-123".into())
-        );
-        assert_eq!(
-            extract_param(xml, "token"),
-            Some("my-token".into())
-        );
+        assert_eq!(extract_param(xml, "sessionID"), Some("abc-123".into()));
+        assert_eq!(extract_param(xml, "token"), Some("my-token".into()));
         assert_eq!(extract_param(xml, "missing"), None);
     }
 
     #[test]
     fn test_extract_method_name() {
         let xml = r#"<?xml version="1.0"?><methodCall><methodName>get_home_region</methodName><params></params></methodCall>"#;
-        assert_eq!(
-            extract_method_name(xml),
-            Some("get_home_region".into())
-        );
+        assert_eq!(extract_method_name(xml), Some("get_home_region".into()));
     }
 }

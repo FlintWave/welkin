@@ -389,6 +389,9 @@ mod tests {
         config2.set_string("Map", "WorldMapModule", "HGWorldMap");
         config2.set_string("HGWorldMap", "MapTileURL", "http://tiles.example.com/map/");
         module2.initialise(&config2).unwrap();
-        assert_eq!(module2.map_image_server_url, "http://tiles.example.com/map/");
+        assert_eq!(
+            module2.map_image_server_url,
+            "http://tiles.example.com/map/"
+        );
     }
 }

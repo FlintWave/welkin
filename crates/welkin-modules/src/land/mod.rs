@@ -12,7 +12,7 @@ pub mod prim_count;
 
 pub use data::*;
 pub use dwell::DwellModule;
-pub use grid::{ParcelGrid, LAND_UNIT};
+pub use grid::{LAND_UNIT, ParcelGrid};
 pub use management::LandManagementModule;
 pub use parcel::LandParcel;
 pub use prim_count::{PrimCountModule, PrimCounts};

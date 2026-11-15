@@ -10,8 +10,8 @@ use std::collections::HashMap;
 
 use uuid::Uuid;
 
-use crate::hypergrid::*;
 use super::xmlrpc_call;
+use crate::hypergrid::*;
 
 /// Outbound HTTP client for a foreign UserAgent service.
 pub struct UserAgentServiceConnector {
@@ -47,11 +47,7 @@ impl UserAgentServiceConnector {
 
     /// Verify that a session token matches the traveling-agent record on
     /// the home grid.
-    pub async fn verify_agent(
-        &self,
-        session_id: Uuid,
-        token: &str,
-    ) -> HgResult<bool> {
+    pub async fn verify_agent(&self, session_id: Uuid, token: &str) -> HgResult<bool> {
         let sid = session_id.to_string();
         let map = self
             .call("verify_agent", &[("sessionID", &sid), ("token", token)])
@@ -63,11 +59,7 @@ impl UserAgentServiceConnector {
     }
 
     /// Verify that the reported client IP matches the one stored at login.
-    pub async fn verify_client(
-        &self,
-        session_id: Uuid,
-        reported_ip: &str,
-    ) -> HgResult<bool> {
+    pub async fn verify_client(&self, session_id: Uuid, reported_ip: &str) -> HgResult<bool> {
         let sid = session_id.to_string();
         let map = self
             .call(
@@ -89,14 +81,9 @@ impl UserAgentServiceConnector {
         user_id: Uuid,
     ) -> HgResult<Option<(GridRegionInfo, Vector3, Vector3)>> {
         let uid = user_id.to_string();
-        let map = self
-            .call("get_home_region", &[("userID", &uid)])
-            .await?;
+        let map = self.call("get_home_region", &[("userID", &uid)]).await?;
 
-        let result = map
-            .get("result")
-            .map(|s| s.as_str())
-            .unwrap_or("false");
+        let result = map.get("result").map(|s| s.as_str()).unwrap_or("false");
         if !result.eq_ignore_ascii_case("true") {
             return Ok(None);
         }
@@ -106,19 +93,10 @@ impl UserAgentServiceConnector {
                 .get("uuid")
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or(Uuid::nil()),
-            region_name: map
-                .get("region_name")
-                .cloned()
-                .unwrap_or_default(),
+            region_name: map.get("region_name").cloned().unwrap_or_default(),
             region_handle: 0,
-            server_uri: map
-                .get("server_uri")
-                .cloned()
-                .unwrap_or_default(),
-            external_host_name: map
-                .get("hostname")
-                .cloned()
-                .unwrap_or_default(),
+            server_uri: map.get("server_uri").cloned().unwrap_or_default(),
+            external_host_name: map.get("hostname").cloned().unwrap_or_default(),
             internal_port: map
                 .get("internal_port")
                 .and_then(|s| s.parse::<u16>().ok())
@@ -141,12 +119,8 @@ impl UserAgentServiceConnector {
                 .unwrap_or(256),
         };
 
-        let position = parse_vector3(
-            map.get("position").map(|s| s.as_str()).unwrap_or(""),
-        );
-        let look_at = parse_vector3(
-            map.get("lookAt").map(|s| s.as_str()).unwrap_or(""),
-        );
+        let position = parse_vector3(map.get("position").map(|s| s.as_str()).unwrap_or(""));
+        let look_at = parse_vector3(map.get("lookAt").map(|s| s.as_str()).unwrap_or(""));
 
         Ok(Some((region, position, look_at)))
     }
@@ -172,27 +146,16 @@ impl UserAgentServiceConnector {
     }
 
     /// Get a user's service URL map (HomeURI, InventoryServerURI, etc.).
-    pub async fn get_server_urls(
-        &self,
-        user_id: Uuid,
-    ) -> HgResult<HashMap<String, String>> {
+    pub async fn get_server_urls(&self, user_id: Uuid) -> HgResult<HashMap<String, String>> {
         let uid = user_id.to_string();
-        let map = self
-            .call("get_server_urls", &[("userID", &uid)])
-            .await?;
+        let map = self.call("get_server_urls", &[("userID", &uid)]).await?;
         // The response contains service URLs as direct key-value pairs.
         // Filter out the "result" key.
-        Ok(map
-            .into_iter()
-            .filter(|(k, _)| k != "result")
-            .collect())
+        Ok(map.into_iter().filter(|(k, _)| k != "result").collect())
     }
 
     /// Get profile information about a user.
-    pub async fn get_user_info(
-        &self,
-        user_id: Uuid,
-    ) -> HgResult<HashMap<String, String>> {
+    pub async fn get_user_info(&self, user_id: Uuid) -> HgResult<HashMap<String, String>> {
         let uid = user_id.to_string();
         self.call("get_user_info", &[("userID", &uid)]).await
     }
@@ -201,19 +164,13 @@ impl UserAgentServiceConnector {
     /// string if they are home.
     pub async fn locate_user(&self, user_id: Uuid) -> HgResult<String> {
         let uid = user_id.to_string();
-        let map = self
-            .call("locate_user", &[("userID", &uid)])
-            .await?;
+        let map = self.call("locate_user", &[("userID", &uid)]).await?;
         Ok(map.get("URL").cloned().unwrap_or_default())
     }
 
     /// Get the Universal User Identifier for a target user on behalf of
     /// the requester.
-    pub async fn get_uui(
-        &self,
-        requester_id: Uuid,
-        target_user_id: Uuid,
-    ) -> HgResult<String> {
+    pub async fn get_uui(&self, requester_id: Uuid, target_user_id: Uuid) -> HgResult<String> {
         let rid = requester_id.to_string();
         let tid = target_user_id.to_string();
         let map = self
@@ -223,11 +180,7 @@ impl UserAgentServiceConnector {
     }
 
     /// Look up a user by first and last name.
-    pub async fn get_uuid(
-        &self,
-        first: &str,
-        last: &str,
-    ) -> HgResult<Option<Uuid>> {
+    pub async fn get_uuid(&self, first: &str, last: &str) -> HgResult<Option<Uuid>> {
         let map = self
             .call("get_uuid", &[("first", first), ("last", last)])
             .await?;
@@ -238,11 +191,7 @@ impl UserAgentServiceConnector {
     }
 
     /// Notify the foreign grid that a user has logged out.
-    pub async fn logout_agent(
-        &self,
-        user_id: Uuid,
-        session_id: Uuid,
-    ) -> HgResult<()> {
+    pub async fn logout_agent(&self, user_id: Uuid, session_id: Uuid) -> HgResult<()> {
         let uid = user_id.to_string();
         let sid = session_id.to_string();
         let _ = self

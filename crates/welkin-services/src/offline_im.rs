@@ -29,15 +29,13 @@ fn percent_decode(input: &str) -> String {
     let bytes = input.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let Ok(byte) = u8::from_str_radix(
-                &input[i + 1..i + 3],
-                16,
-            ) {
-                out.push(byte);
-                i += 3;
-                continue;
-            }
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let Ok(byte) = u8::from_str_radix(&input[i + 1..i + 3], 16)
+        {
+            out.push(byte);
+            i += 3;
+            continue;
         }
         if bytes[i] == b'+' {
             out.push(b' ');
@@ -78,7 +76,10 @@ fn json_response(status: StatusCode, body: Value) -> Response {
 }
 
 fn success_response(result: Value) -> Response {
-    json_response(StatusCode::OK, json!({ "result": "success", "data": result }))
+    json_response(
+        StatusCode::OK,
+        json!({ "result": "success", "data": result }),
+    )
 }
 
 fn failure_response(reason: &str) -> Response {
@@ -138,14 +139,8 @@ async fn handle_store(state: &OfflineIMServiceState, params: &Value) -> Response
         .get("PrincipalID")
         .and_then(Value::as_str)
         .unwrap_or("");
-    let from_id = params
-        .get("FromID")
-        .and_then(Value::as_str)
-        .unwrap_or("");
-    let message = params
-        .get("Message")
-        .and_then(Value::as_str)
-        .unwrap_or("");
+    let from_id = params.get("FromID").and_then(Value::as_str).unwrap_or("");
+    let message = params.get("Message").and_then(Value::as_str).unwrap_or("");
 
     if principal_id.is_empty() || message.is_empty() {
         return failure_response("missing PrincipalID or Message");
@@ -156,7 +151,11 @@ async fn handle_store(state: &OfflineIMServiceState, params: &Value) -> Response
         .unwrap_or_default()
         .as_secs() as i64;
 
-    match state.store.store_message(principal_id, from_id, message, now).await {
+    match state
+        .store
+        .store_message(principal_id, from_id, message, now)
+        .await
+    {
         Ok(true) => success_response(json!(true)),
         Ok(false) => failure_response("Number of offline IMs has maxed out"),
         Err(e) => {

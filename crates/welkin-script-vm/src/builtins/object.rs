@@ -49,10 +49,7 @@ fn make_rot4(lua: &Lua, r: [f64; 4]) -> LuaResult<LuaTable> {
 }
 
 /// Register all object ll* functions as Lua globals.
-pub fn register_object(
-    lua: &Lua,
-    ctx: &Arc<RwLock<ScriptContext>>,
-) -> Result<(), crate::VmError> {
+pub fn register_object(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<(), crate::VmError> {
     // llGetPos() -> vector
     {
         let ctx = Arc::clone(ctx);

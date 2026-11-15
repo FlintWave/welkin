@@ -35,25 +35,35 @@ impl VehicleFlags {
 
 impl std::ops::BitOr for VehicleFlags {
     type Output = Self;
-    fn bitor(self, rhs: Self) -> Self { Self(self.0 | rhs.0) }
+    fn bitor(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
+    }
 }
 
 impl std::ops::BitAnd for VehicleFlags {
     type Output = Self;
-    fn bitand(self, rhs: Self) -> Self { Self(self.0 & rhs.0) }
+    fn bitand(self, rhs: Self) -> Self {
+        Self(self.0 & rhs.0)
+    }
 }
 
 impl std::ops::Not for VehicleFlags {
     type Output = Self;
-    fn not(self) -> Self { Self(!self.0) }
+    fn not(self) -> Self {
+        Self(!self.0)
+    }
 }
 
 impl std::ops::BitOrAssign for VehicleFlags {
-    fn bitor_assign(&mut self, rhs: Self) { self.0 |= rhs.0; }
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
+    }
 }
 
 impl std::ops::BitAndAssign for VehicleFlags {
-    fn bitand_assign(&mut self, rhs: Self) { self.0 &= rhs.0; }
+    fn bitand_assign(&mut self, rhs: Self) {
+        self.0 &= rhs.0;
+    }
 }
 
 pub struct VehicleState {
@@ -386,10 +396,7 @@ impl VehicleState {
         if self.flags.contains(VehicleFlags::MOUSELOOK_STEER)
             || self.flags.contains(VehicleFlags::MOUSELOOK_BANK)
         {
-            if self
-                .flags
-                .contains(VehicleFlags::MOUSELOOK_BANK)
-            {
+            if self.flags.contains(VehicleFlags::MOUSELOOK_BANK) {
                 banking_efficiency = self.banking_efficiency;
                 if vertical_attraction_timescale < 149.9 {
                     vertical_attraction_timescale *= 2.0;
@@ -492,8 +499,8 @@ impl VehicleState {
 
         // Vertical attractor
         if vertical_attraction_timescale < 300.0 {
-            let ftmp = inv_timestep
-                / (vertical_attraction_timescale * vertical_attraction_timescale);
+            let ftmp =
+                inv_timestep / (vertical_attraction_timescale * vertical_attraction_timescale);
             let ftmp2 = 0.5 * self.vertical_attraction_efficiency * inv_timestep;
 
             self.am_damp_x = ftmp2;
@@ -569,17 +576,15 @@ impl VehicleState {
 
         // Angular deflection
         if self.angular_deflection_efficiency > 0.0 {
-            let dirv;
-            if cur_local_vel.x > 0.01 {
-                dirv = cur_local_vel;
+            let dirv = if cur_local_vel.x > 0.01 {
+                cur_local_vel
             } else if cur_local_vel.x < -0.01 {
-                dirv = -cur_local_vel;
+                -cur_local_vel
             } else {
-                dirv = Vec3::new(0.01, cur_local_vel.y, cur_local_vel.z);
-            }
+                Vec3::new(0.01, cur_local_vel.y, cur_local_vel.z)
+            };
 
-            let ftmp =
-                self.angular_deflection_efficiency / self.angular_deflection_timescale;
+            let ftmp = self.angular_deflection_efficiency / self.angular_deflection_timescale;
 
             if dirv.z.abs() > 0.01 {
                 torque.y -= dirv.z.atan2(dirv.x) * ftmp;

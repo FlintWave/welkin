@@ -135,14 +135,13 @@ impl NPCModule {
 
     /// Validate that the caller has permission to manage this NPC.
     fn validate_owner(&self, npc_id: Uuid, caller_id: Uuid) -> Result<(), ModuleError> {
-        let npc = self.avatars.get(&npc_id).ok_or_else(|| {
-            ModuleError::NotFound(format!("NPC {npc_id} not found"))
-        })?;
+        let npc = self
+            .avatars
+            .get(&npc_id)
+            .ok_or_else(|| ModuleError::NotFound(format!("NPC {npc_id} not found")))?;
 
         // If ALLOW_NOT_OWNED is set, anyone can manage unowned NPCs.
-        if self.option_flags.contains(NPCOptionsFlags::ALLOW_NOT_OWNED)
-            && npc.owner_id().is_nil()
-        {
+        if self.option_flags.contains(NPCOptionsFlags::ALLOW_NOT_OWNED) && npc.owner_id().is_nil() {
             return Ok(());
         }
 
@@ -184,7 +183,9 @@ impl INPCModule for NPCModule {
 
         // Check sense_as_agent permission.
         if sense_as_agent
-            && !self.option_flags.contains(NPCOptionsFlags::ALLOW_SENSE_AS_AVATAR)
+            && !self
+                .option_flags
+                .contains(NPCOptionsFlags::ALLOW_SENSE_AS_AVATAR)
         {
             return Err(ModuleError::Other(
                 "SenseAsAvatar is not allowed by module configuration".into(),
@@ -219,17 +220,19 @@ impl INPCModule for NPCModule {
     }
 
     fn move_to(&mut self, npc_id: Uuid, position: [f32; 3]) -> Result<(), ModuleError> {
-        let npc = self.avatars.get_mut(&npc_id).ok_or_else(|| {
-            ModuleError::NotFound(format!("NPC {npc_id} not found"))
-        })?;
+        let npc = self
+            .avatars
+            .get_mut(&npc_id)
+            .ok_or_else(|| ModuleError::NotFound(format!("NPC {npc_id} not found")))?;
         npc.set_position(position);
         Ok(())
     }
 
     fn say(&self, npc_id: Uuid, channel: i32, message: &str) -> Result<(), ModuleError> {
-        let npc = self.avatars.get(&npc_id).ok_or_else(|| {
-            ModuleError::NotFound(format!("NPC {npc_id} not found"))
-        })?;
+        let npc = self
+            .avatars
+            .get(&npc_id)
+            .ok_or_else(|| ModuleError::NotFound(format!("NPC {npc_id} not found")))?;
         if !npc.send_chat_message(message, ChatType::Say, channel) {
             return Err(ModuleError::Other("Failed to send chat message".into()));
         }
@@ -237,17 +240,19 @@ impl INPCModule for NPCModule {
     }
 
     fn sit(&mut self, npc_id: Uuid, target: Uuid) -> Result<(), ModuleError> {
-        let npc = self.avatars.get_mut(&npc_id).ok_or_else(|| {
-            ModuleError::NotFound(format!("NPC {npc_id} not found"))
-        })?;
+        let npc = self
+            .avatars
+            .get_mut(&npc_id)
+            .ok_or_else(|| ModuleError::NotFound(format!("NPC {npc_id} not found")))?;
         npc.sit(target);
         Ok(())
     }
 
     fn stand(&mut self, npc_id: Uuid) -> Result<(), ModuleError> {
-        let npc = self.avatars.get_mut(&npc_id).ok_or_else(|| {
-            ModuleError::NotFound(format!("NPC {npc_id} not found"))
-        })?;
+        let npc = self
+            .avatars
+            .get_mut(&npc_id)
+            .ok_or_else(|| ModuleError::NotFound(format!("NPC {npc_id} not found")))?;
         npc.stand();
         Ok(())
     }
@@ -265,17 +270,19 @@ impl INPCModule for NPCModule {
     }
 
     fn rotate(&mut self, npc_id: Uuid, rotation: [f32; 4]) -> Result<(), ModuleError> {
-        let npc = self.avatars.get_mut(&npc_id).ok_or_else(|| {
-            ModuleError::NotFound(format!("NPC {npc_id} not found"))
-        })?;
+        let npc = self
+            .avatars
+            .get_mut(&npc_id)
+            .ok_or_else(|| ModuleError::NotFound(format!("NPC {npc_id} not found")))?;
         npc.set_rotation(rotation);
         Ok(())
     }
 
     fn touch(&self, npc_id: Uuid, target: Uuid) -> Result<(), ModuleError> {
-        let _npc = self.avatars.get(&npc_id).ok_or_else(|| {
-            ModuleError::NotFound(format!("NPC {npc_id} not found"))
-        })?;
+        let _npc = self
+            .avatars
+            .get(&npc_id)
+            .ok_or_else(|| ModuleError::NotFound(format!("NPC {npc_id} not found")))?;
         // Stub: in a full implementation this would simulate a touch event
         // on the target prim.
         tracing::debug!(npc = %npc_id, target = %target, "NPC touch (stub)");
@@ -496,7 +503,14 @@ mod tests {
         };
         let owner = Uuid::new_v4();
         let npc_id = module
-            .create_npc("Clone", "Test", [0.0, 0.0, 0.0], owner, false, Some(appearance))
+            .create_npc(
+                "Clone",
+                "Test",
+                [0.0, 0.0, 0.0],
+                owner,
+                false,
+                Some(appearance),
+            )
             .unwrap();
         assert!(module.is_npc(npc_id));
         let npc = module.get_npc(npc_id).unwrap();
@@ -619,15 +633,14 @@ mod tests {
 
         // Without ALLOW_SENSE_AS_AVATAR flag, creating with sense_as_agent=true
         // should fail.
-        let result =
-            module.create_npc("Sensor", "NPC", [0.0, 0.0, 0.0], owner, true, None);
+        let result = module.create_npc("Sensor", "NPC", [0.0, 0.0, 0.0], owner, true, None);
         assert!(result.is_err());
 
         // Enable the flag.
         module.option_flags |= NPCOptionsFlags::ALLOW_SENSE_AS_AVATAR;
-        let npc_id =
-            module.create_npc("Sensor", "NPC", [0.0, 0.0, 0.0], owner, true, None)
-                .unwrap();
+        let npc_id = module
+            .create_npc("Sensor", "NPC", [0.0, 0.0, 0.0], owner, true, None)
+            .unwrap();
         assert!(module.get_npc(npc_id).unwrap().sense_as_agent());
     }
 
@@ -711,12 +724,16 @@ mod tests {
 
         assert!(module.enabled);
         assert_eq!(module.max_npcs_per_scene, 100);
-        assert!(module
-            .option_flags
-            .contains(NPCOptionsFlags::ALLOW_NOT_OWNED));
-        assert!(module
-            .option_flags
-            .contains(NPCOptionsFlags::ALLOW_SENSE_AS_AVATAR));
+        assert!(
+            module
+                .option_flags
+                .contains(NPCOptionsFlags::ALLOW_NOT_OWNED)
+        );
+        assert!(
+            module
+                .option_flags
+                .contains(NPCOptionsFlags::ALLOW_SENSE_AS_AVATAR)
+        );
         assert!(module.persistence_enabled);
     }
 

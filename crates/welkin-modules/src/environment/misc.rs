@@ -354,6 +354,12 @@ impl VegetationModule {
     }
 }
 
+impl Default for VegetationModule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RegionModule for VegetationModule {
     fn name(&self) -> &str {
         "VegetationModule"
@@ -411,6 +417,12 @@ impl SceneSerialiser {
     /// Stub — logs and discards the data.
     pub fn deserialize_region(&self, data: &[u8]) {
         tracing::debug!(bytes = data.len(), "deserialize_region (stub)");
+    }
+}
+
+impl Default for SceneSerialiser {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

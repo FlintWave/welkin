@@ -1,9 +1,9 @@
+mod bot_scripting;
+pub mod cutover;
 mod lludp;
 mod pcampbot;
-mod bot_scripting;
 pub mod protocol_replay;
 pub mod service_conformance;
-pub mod cutover;
 pub mod spike;
 pub mod trajectory;
 
@@ -190,25 +190,25 @@ async fn main() {
             config,
             count,
             interval,
-        } => {
-            match pcampbot::run_bots(config, count, interval).await {
-                Ok(report) => {
-                    println!(
-                        "\npCampBot: {} connected, {} disconnected, {} actions ({} failed), avg {:.1}ms",
-                        report.connected, report.disconnected,
-                        report.actions_completed, report.actions_failed,
-                        report.avg_latency_ms,
-                    );
-                    if report.actions_failed > 0 {
-                        process::exit(1);
-                    }
-                }
-                Err(e) => {
-                    error!("pCampBot failed: {e}");
+        } => match pcampbot::run_bots(config, count, interval).await {
+            Ok(report) => {
+                println!(
+                    "\npCampBot: {} connected, {} disconnected, {} actions ({} failed), avg {:.1}ms",
+                    report.connected,
+                    report.disconnected,
+                    report.actions_completed,
+                    report.actions_failed,
+                    report.avg_latency_ms,
+                );
+                if report.actions_failed > 0 {
                     process::exit(1);
                 }
             }
-        }
+            Err(e) => {
+                error!("pCampBot failed: {e}");
+                process::exit(1);
+            }
+        },
         Commands::BotScript {
             script_path,
             login_uri,
@@ -234,10 +234,8 @@ async fn main() {
             target,
             recordings_path,
         } => {
-            let report = service_conformance::run_conformance_suite(
-                &target,
-                recordings_path.as_deref(),
-            );
+            let report =
+                service_conformance::run_conformance_suite(&target, recordings_path.as_deref());
             println!(
                 "\nConformance: {} total, {} passed, {} failed, {} skipped",
                 report.total, report.passed, report.failed, report.skipped

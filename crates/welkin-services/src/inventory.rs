@@ -9,8 +9,8 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
-use welkin_data::inventory::{InventoryFolderRow, InventoryItemRow, InventoryStore};
 use quick_xml::escape::escape;
+use welkin_data::inventory::{InventoryFolderRow, InventoryItemRow, InventoryStore};
 
 const XML_DECL: &str = "<?xml version=\"1.0\"?>";
 
@@ -141,22 +141,46 @@ fn item_xml(name: &str, i: &InventoryItemRow) -> String {
     let mut s = format!("<{name} type=\"List\">");
     tag(&mut s, "AssetID", &i.asset_id);
     tag(&mut s, "AssetType", &i.asset_type.to_string());
-    tag(&mut s, "BasePermissions", &(i.base_permissions as u32).to_string());
+    tag(
+        &mut s,
+        "BasePermissions",
+        &(i.base_permissions as u32).to_string(),
+    );
     tag(&mut s, "CreationDate", &i.creation_date.to_string());
     tag(&mut s, "CreatorId", &i.creator_id);
     tag(&mut s, "CreatorData", "");
-    tag(&mut s, "CurrentPermissions", &(i.current_permissions as u32).to_string());
+    tag(
+        &mut s,
+        "CurrentPermissions",
+        &(i.current_permissions as u32).to_string(),
+    );
     tag(&mut s, "Description", &i.inventory_description);
-    tag(&mut s, "EveryOnePermissions", &(i.everyone_permissions as u32).to_string());
+    tag(
+        &mut s,
+        "EveryOnePermissions",
+        &(i.everyone_permissions as u32).to_string(),
+    );
     tag(&mut s, "Flags", &(i.flags as u32).to_string());
     tag(&mut s, "Folder", &i.parent_folder_id);
     tag(&mut s, "GroupID", &i.group_id);
-    tag(&mut s, "GroupOwned", if i.group_owned != 0 { "True" } else { "False" });
-    tag(&mut s, "GroupPermissions", &(i.group_permissions as u32).to_string());
+    tag(
+        &mut s,
+        "GroupOwned",
+        if i.group_owned != 0 { "True" } else { "False" },
+    );
+    tag(
+        &mut s,
+        "GroupPermissions",
+        &(i.group_permissions as u32).to_string(),
+    );
     tag(&mut s, "ID", &i.inventory_id);
     tag(&mut s, "InvType", &i.inv_type.to_string());
     tag(&mut s, "Name", &i.inventory_name);
-    tag(&mut s, "NextPermissions", &(i.next_permissions as u32).to_string());
+    tag(
+        &mut s,
+        "NextPermissions",
+        &(i.next_permissions as u32).to_string(),
+    );
     tag(&mut s, "Owner", &i.avatar_id);
     tag(&mut s, "SalePrice", &i.sale_price.to_string());
     tag(&mut s, "SaleType", &i.sale_type.to_string());
@@ -237,7 +261,10 @@ async fn handle_xinventory(State(state): State<InventoryServiceState>, body: Byt
 
     match method {
         "GETROOTFOLDER" => {
-            let r = db_err(method, store.get_user_root_folder(form.str("PRINCIPAL")).await);
+            let r = db_err(
+                method,
+                store.get_user_root_folder(form.str("PRINCIPAL")).await,
+            );
             single_folder(r)
         }
         "GETFOLDERFORTYPE" => {
@@ -291,8 +318,10 @@ async fn handle_xinventory(State(state): State<InventoryServiceState>, body: Byt
             xml_response(&s)
         }
         "GETACTIVEGESTURES" => {
-            let Some(items) = db_err(method, store.get_active_gestures(form.str("PRINCIPAL")).await)
-            else {
+            let Some(items) = db_err(
+                method,
+                store.get_active_gestures(form.str("PRINCIPAL")).await,
+            ) else {
                 return xml_response("");
             };
             xml_response(&items_list("ITEMS", &items))
@@ -376,9 +405,18 @@ fn single_folder(r: Option<Option<InventoryFolderRow>>) -> Response {
     }
 }
 
-async fn folder_content_inner(store: &InventoryStore, folder: &InventoryFolderRow) -> Option<String> {
-    let folders = db_err("content", store.get_folders_in_folder(&folder.folder_id).await)?;
-    let items = db_err("content", store.get_items_in_folder(&folder.folder_id).await)?;
+async fn folder_content_inner(
+    store: &InventoryStore,
+    folder: &InventoryFolderRow,
+) -> Option<String> {
+    let folders = db_err(
+        "content",
+        store.get_folders_in_folder(&folder.folder_id).await,
+    )?;
+    let items = db_err(
+        "content",
+        store.get_items_in_folder(&folder.folder_id).await,
+    )?;
     let mut s = folders_list("FOLDERS", &folders);
     s.push_str(&items_list("ITEMS", &items));
     Some(s)

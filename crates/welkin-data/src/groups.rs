@@ -304,7 +304,10 @@ impl GroupsStore {
         Ok(true)
     }
 
-    pub async fn retrieve_group_by_id(&self, group_id: &str) -> Result<Option<GroupRow>, DataError> {
+    pub async fn retrieve_group_by_id(
+        &self,
+        group_id: &str,
+    ) -> Result<Option<GroupRow>, DataError> {
         let sql = format!("SELECT {GROUP_COLS} FROM os_groups_groups WHERE GroupID = $1");
         let row = sqlx::query_as::<_, GroupRow>(&sql)
             .bind(group_id.to_string())
@@ -341,22 +344,19 @@ impl GroupsStore {
     }
 
     pub async fn member_count(&self, group_id: &str) -> Result<i64, DataError> {
-        let row: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM os_groups_membership WHERE GroupID = $1",
-        )
-        .bind(group_id.to_string())
-        .fetch_one(&self.pool)
-        .await?;
+        let row: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM os_groups_membership WHERE GroupID = $1")
+                .bind(group_id.to_string())
+                .fetch_one(&self.pool)
+                .await?;
         Ok(row.0)
     }
 
     pub async fn role_count(&self, group_id: &str) -> Result<i64, DataError> {
-        let row: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM os_groups_roles WHERE GroupID = $1",
-        )
-        .bind(group_id.to_string())
-        .fetch_one(&self.pool)
-        .await?;
+        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM os_groups_roles WHERE GroupID = $1")
+            .bind(group_id.to_string())
+            .fetch_one(&self.pool)
+            .await?;
         Ok(row.0)
     }
 
@@ -416,9 +416,7 @@ impl GroupsStore {
     }
 
     pub async fn retrieve_members(&self, group_id: &str) -> Result<Vec<MembershipRow>, DataError> {
-        let sql = format!(
-            "SELECT {MEMBERSHIP_COLS} FROM os_groups_membership WHERE GroupID = $1"
-        );
+        let sql = format!("SELECT {MEMBERSHIP_COLS} FROM os_groups_membership WHERE GroupID = $1");
         let rows = sqlx::query_as::<_, MembershipRow>(&sql)
             .bind(group_id.to_string())
             .fetch_all(&self.pool)
@@ -430,9 +428,8 @@ impl GroupsStore {
         &self,
         principal_id: &str,
     ) -> Result<Vec<MembershipRow>, DataError> {
-        let sql = format!(
-            "SELECT {MEMBERSHIP_COLS} FROM os_groups_membership WHERE PrincipalID = $1"
-        );
+        let sql =
+            format!("SELECT {MEMBERSHIP_COLS} FROM os_groups_membership WHERE PrincipalID = $1");
         let rows = sqlx::query_as::<_, MembershipRow>(&sql)
             .bind(principal_id.to_string())
             .fetch_all(&self.pool)
@@ -445,13 +442,12 @@ impl GroupsStore {
         group_id: &str,
         principal_id: &str,
     ) -> Result<bool, DataError> {
-        let res = sqlx::query(
-            "DELETE FROM os_groups_membership WHERE GroupID = $1 AND PrincipalID = $2",
-        )
-        .bind(group_id.to_string())
-        .bind(principal_id.to_string())
-        .execute(&self.pool)
-        .await?;
+        let res =
+            sqlx::query("DELETE FROM os_groups_membership WHERE GroupID = $1 AND PrincipalID = $2")
+                .bind(group_id.to_string())
+                .bind(principal_id.to_string())
+                .execute(&self.pool)
+                .await?;
         Ok(res.rows_affected() > 0)
     }
 
@@ -486,9 +482,8 @@ impl GroupsStore {
         group_id: &str,
         role_id: &str,
     ) -> Result<Option<RoleRow>, DataError> {
-        let sql = format!(
-            "SELECT {ROLE_COLS} FROM os_groups_roles WHERE GroupID = $1 AND RoleID = $2"
-        );
+        let sql =
+            format!("SELECT {ROLE_COLS} FROM os_groups_roles WHERE GroupID = $1 AND RoleID = $2");
         let row = sqlx::query_as::<_, RoleRow>(&sql)
             .bind(group_id.to_string())
             .bind(role_id.to_string())
@@ -507,13 +502,11 @@ impl GroupsStore {
     }
 
     pub async fn delete_role(&self, group_id: &str, role_id: &str) -> Result<bool, DataError> {
-        let res = sqlx::query(
-            "DELETE FROM os_groups_roles WHERE GroupID = $1 AND RoleID = $2",
-        )
-        .bind(group_id.to_string())
-        .bind(role_id.to_string())
-        .execute(&self.pool)
-        .await?;
+        let res = sqlx::query("DELETE FROM os_groups_roles WHERE GroupID = $1 AND RoleID = $2")
+            .bind(group_id.to_string())
+            .bind(role_id.to_string())
+            .execute(&self.pool)
+            .await?;
         Ok(res.rows_affected() > 0)
     }
 
@@ -634,9 +627,7 @@ impl GroupsStore {
             .bind(row.principal_id.clone())
             .execute(&mut *tx)
             .await?;
-        let sql = format!(
-            "INSERT INTO os_groups_principals ({PRINCIPAL_COLS}) VALUES ($1, $2)"
-        );
+        let sql = format!("INSERT INTO os_groups_principals ({PRINCIPAL_COLS}) VALUES ($1, $2)");
         sqlx::query(&sql)
             .bind(row.principal_id.clone())
             .bind(row.active_group_id.clone())
@@ -650,9 +641,8 @@ impl GroupsStore {
         &self,
         principal_id: &str,
     ) -> Result<Option<PrincipalRow>, DataError> {
-        let sql = format!(
-            "SELECT {PRINCIPAL_COLS} FROM os_groups_principals WHERE PrincipalID = $1"
-        );
+        let sql =
+            format!("SELECT {PRINCIPAL_COLS} FROM os_groups_principals WHERE PrincipalID = $1");
         let row = sqlx::query_as::<_, PrincipalRow>(&sql)
             .bind(principal_id.to_string())
             .fetch_optional(&self.pool)
@@ -695,9 +685,7 @@ impl GroupsStore {
         &self,
         invite_id: &str,
     ) -> Result<Option<InvitationRow>, DataError> {
-        let sql = format!(
-            "SELECT {INVITATION_COLS} FROM os_groups_invites WHERE InviteID = $1"
-        );
+        let sql = format!("SELECT {INVITATION_COLS} FROM os_groups_invites WHERE InviteID = $1");
         let row = sqlx::query_as::<_, InvitationRow>(&sql)
             .bind(invite_id.to_string())
             .fetch_optional(&self.pool)
@@ -774,13 +762,8 @@ impl GroupsStore {
         Ok(true)
     }
 
-    pub async fn retrieve_notice(
-        &self,
-        notice_id: &str,
-    ) -> Result<Option<NoticeRow>, DataError> {
-        let sql = format!(
-            "SELECT {NOTICE_COLS} FROM os_groups_notices WHERE NoticeID = $1"
-        );
+    pub async fn retrieve_notice(&self, notice_id: &str) -> Result<Option<NoticeRow>, DataError> {
+        let sql = format!("SELECT {NOTICE_COLS} FROM os_groups_notices WHERE NoticeID = $1");
         let row = sqlx::query_as::<_, NoticeRow>(&sql)
             .bind(notice_id.to_string())
             .fetch_optional(&self.pool)

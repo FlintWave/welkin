@@ -7,8 +7,8 @@ use mlua::prelude::*;
 use parking_lot::RwLock;
 use regex::Regex;
 
-use crate::builtins::ScriptContext;
 use super::{OsslFunc, OsslThreatLevel};
+use crate::builtins::ScriptContext;
 
 pub(crate) fn string_functions() -> Vec<OsslFunc> {
     vec![
@@ -71,9 +71,8 @@ pub(crate) fn string_functions() -> Vec<OsslFunc> {
 
 fn register_os_match_string(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(|_, (src, pattern, start): (String, String, i32)| {
-        let re = Regex::new(&pattern).map_err(|e| {
-            mlua::Error::RuntimeError(format!("osMatchString: bad regex: {e}"))
-        })?;
+        let re = Regex::new(&pattern)
+            .map_err(|e| mlua::Error::RuntimeError(format!("osMatchString: bad regex: {e}")))?;
 
         let start_byte = byte_offset_from_char(&src, start.max(0) as usize);
         let haystack = &src[start_byte..];
@@ -136,10 +135,7 @@ fn register_os_string_sub_string(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -
 // osStringStartsWith / osStringEndsWith
 // ---------------------------------------------------------------------------
 
-fn register_os_string_starts_with(
-    lua: &Lua,
-    _ctx: &Arc<RwLock<ScriptContext>>,
-) -> LuaResult<()> {
+fn register_os_string_starts_with(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(|_, (src, prefix): (String, String)| {
         Ok(if src.starts_with(&prefix) { 1i32 } else { 0 })
     })?;
@@ -178,10 +174,7 @@ fn register_os_string_index_of(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> 
     lua.globals().set("osStringIndexOf", f)
 }
 
-fn register_os_string_last_index_of(
-    lua: &Lua,
-    _ctx: &Arc<RwLock<ScriptContext>>,
-) -> LuaResult<()> {
+fn register_os_string_last_index_of(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(|_, (src, value, ignore_case): (String, String, i32)| {
         let (haystack, needle);
         if ignore_case != 0 {
@@ -237,9 +230,8 @@ fn register_os_string_replace(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> L
 
 fn register_os_regex_is_match(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(|_, (input, pattern): (String, String)| {
-        let re = Regex::new(&pattern).map_err(|e| {
-            mlua::Error::RuntimeError(format!("osRegexIsMatch: bad regex: {e}"))
-        })?;
+        let re = Regex::new(&pattern)
+            .map_err(|e| mlua::Error::RuntimeError(format!("osRegexIsMatch: bad regex: {e}")))?;
         Ok(if re.is_match(&input) { 1i32 } else { 0 })
     })?;
     lua.globals().set("osRegexIsMatch", f)

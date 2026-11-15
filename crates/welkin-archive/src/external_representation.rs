@@ -27,7 +27,11 @@ pub fn resolve_hg_uuid(hg_id: &str) -> (Uuid, Option<String>) {
     if let Some((uuid_part, uri_part)) = hg_id.split_once(';') {
         let uuid = Uuid::parse_str(uuid_part.trim()).unwrap_or(Uuid::nil());
         let uri = uri_part.trim();
-        let server_uri = if uri.is_empty() { None } else { Some(uri.to_string()) };
+        let server_uri = if uri.is_empty() {
+            None
+        } else {
+            Some(uri.to_string())
+        };
         (uuid, server_uri)
     } else {
         let uuid = Uuid::parse_str(hg_id).unwrap_or(Uuid::nil());
@@ -112,10 +116,10 @@ impl RewriteContext {
     /// Rewrite a UUID string if a mapping exists, otherwise return the
     /// original.
     pub fn rewrite_uuid_str(&self, uuid_str: &str) -> String {
-        if let Ok(uuid) = Uuid::parse_str(uuid_str.trim()) {
-            if let Some(new_uuid) = self.mapping.get(&uuid) {
-                return new_uuid.to_string();
-            }
+        if let Ok(uuid) = Uuid::parse_str(uuid_str.trim())
+            && let Some(new_uuid) = self.mapping.get(&uuid)
+        {
+            return new_uuid.to_string();
         }
         uuid_str.to_string()
     }
@@ -243,9 +247,8 @@ mod tests {
 
     #[test]
     fn resolve_hg_uuid_with_uri() {
-        let (uuid, uri) = resolve_hg_uuid(
-            "12345678-1234-1234-1234-123456789abc;http://example.com:8002",
-        );
+        let (uuid, uri) =
+            resolve_hg_uuid("12345678-1234-1234-1234-123456789abc;http://example.com:8002");
         assert_eq!(
             uuid,
             Uuid::parse_str("12345678-1234-1234-1234-123456789abc").unwrap()
@@ -255,8 +258,7 @@ mod tests {
 
     #[test]
     fn resolve_hg_uuid_without_uri() {
-        let (uuid, uri) =
-            resolve_hg_uuid("12345678-1234-1234-1234-123456789abc");
+        let (uuid, uri) = resolve_hg_uuid("12345678-1234-1234-1234-123456789abc");
         assert_eq!(
             uuid,
             Uuid::parse_str("12345678-1234-1234-1234-123456789abc").unwrap()
@@ -266,8 +268,7 @@ mod tests {
 
     #[test]
     fn resolve_hg_uuid_empty_uri() {
-        let (uuid, uri) =
-            resolve_hg_uuid("12345678-1234-1234-1234-123456789abc;");
+        let (uuid, uri) = resolve_hg_uuid("12345678-1234-1234-1234-123456789abc;");
         assert_eq!(
             uuid,
             Uuid::parse_str("12345678-1234-1234-1234-123456789abc").unwrap()
@@ -294,10 +295,7 @@ mod tests {
             Uuid::parse_str("12345678-1234-1234-1234-123456789abc").unwrap()
         );
         // Everything after the first semicolon is the URI part
-        assert_eq!(
-            uri,
-            Some("http://example.com:8002;Test User".to_string())
-        );
+        assert_eq!(uri, Some("http://example.com:8002;Test User".to_string()));
     }
 
     #[test]
@@ -352,7 +350,8 @@ mod tests {
         let mut ctx = RewriteContext::new();
         ctx.add_mapping(old, new);
 
-        let xml = "<InventoryItem><Owner>33333333-3333-3333-3333-333333333333</Owner></InventoryItem>";
+        let xml =
+            "<InventoryItem><Owner>33333333-3333-3333-3333-333333333333</Owner></InventoryItem>";
         let result = rewrite_owner_id(xml, &ctx);
         assert!(result.contains("44444444-4444-4444-4444-444444444444"));
         assert!(!result.contains("33333333-3333-3333-3333-333333333333"));

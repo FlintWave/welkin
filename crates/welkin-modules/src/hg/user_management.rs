@@ -34,12 +34,9 @@ impl CachedUser {
         if self.home_uri.is_empty() {
             format!("{} {}", self.first_name, self.last_name)
         } else {
-            let authority = extract_authority(&self.home_uri)
-                .unwrap_or_else(|| self.home_uri.clone());
-            format!(
-                "{}.{}@{}",
-                self.first_name, self.last_name, authority
-            )
+            let authority =
+                extract_authority(&self.home_uri).unwrap_or_else(|| self.home_uri.clone());
+            format!("{}.{}@{}", self.first_name, self.last_name, authority)
         }
     }
 
@@ -97,13 +94,7 @@ impl HGUserManagementModule {
     }
 
     /// Add a user to the cache.
-    pub fn add_user(
-        &mut self,
-        user_id: Uuid,
-        first_name: &str,
-        last_name: &str,
-        home_uri: &str,
-    ) {
+    pub fn add_user(&mut self, user_id: Uuid, first_name: &str, last_name: &str, home_uri: &str) {
         let entry = CachedUser {
             first_name: first_name.to_string(),
             last_name: last_name.to_string(),
@@ -120,12 +111,7 @@ impl HGUserManagementModule {
 
     /// Add a user from a parsed UUI.
     pub fn add_user_from_uui(&mut self, uui: &UniversalUserIdentifier) {
-        self.add_user(
-            uui.user_id,
-            &uui.first_name,
-            &uui.last_name,
-            &uui.home_uri,
-        );
+        self.add_user(uui.user_id, &uui.first_name, &uui.last_name, &uui.home_uri);
     }
 
     /// Look up a user's display name.
@@ -199,11 +185,8 @@ impl RegionModule for HGUserManagementModule {
     }
 
     fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
-        let module_name = config.get_string(
-            "Modules",
-            "UserManagementModule",
-            "UserManagementModule",
-        );
+        let module_name =
+            config.get_string("Modules", "UserManagementModule", "UserManagementModule");
         if module_name != self.name() {
             tracing::debug!("HGUserManagementModule disabled by configuration");
             return Ok(());
@@ -211,11 +194,7 @@ impl RegionModule for HGUserManagementModule {
 
         self.enabled = true;
         self.local_grid_uri = config.get_string("Hypergrid", "GatekeeperURI", "");
-        self.cache_ttl_secs = config.get_int(
-            "HGUserManagement",
-            "CacheTTL",
-            300,
-        ) as u64;
+        self.cache_ttl_secs = config.get_int("HGUserManagement", "CacheTTL", 300) as u64;
 
         tracing::info!(
             enabled = self.enabled,

@@ -4,8 +4,8 @@ use std::collections::VecDeque;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::time::Duration;
 
-use welkin_llsd::{Llsd, Map, to_xml_string};
 use tokio::sync::{Mutex, Notify};
+use welkin_llsd::{Llsd, Map, to_xml_string};
 
 pub struct EventQueue {
     events: Mutex<VecDeque<Vec<u8>>>,
@@ -93,9 +93,7 @@ fn build_event_response(event_blobs: &[Vec<u8>], id: i32) -> Vec<u8> {
     to_xml_string(&Llsd::Map(response)).into_bytes()
 }
 
-pub async fn event_queue_handler(
-    eq: std::sync::Arc<EventQueue>,
-) -> axum::response::Response {
+pub async fn event_queue_handler(eq: std::sync::Arc<EventQueue>) -> axum::response::Response {
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
 
@@ -151,11 +149,8 @@ mod tests {
     async fn test_multiple_events() {
         let eq = EventQueue::new();
         for i in 0..3 {
-            eq.enqueue(
-                &format!("Event{i}"),
-                Llsd::Map(Map::new()),
-            )
-            .await;
+            eq.enqueue(&format!("Event{i}"), Llsd::Map(Map::new()))
+                .await;
         }
 
         let resp = eq.poll(Duration::from_secs(1)).await;
@@ -198,9 +193,7 @@ mod tests {
         let eq = Arc::new(EventQueue::new());
         let eq2 = Arc::clone(&eq);
 
-        let poll_handle = tokio::spawn(async move {
-            eq2.poll(Duration::from_secs(5)).await
-        });
+        let poll_handle = tokio::spawn(async move { eq2.poll(Duration::from_secs(5)).await });
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         eq.enqueue("Wakeup", Llsd::Map(Map::new())).await;

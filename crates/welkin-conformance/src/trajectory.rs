@@ -70,7 +70,10 @@ impl TrajectoryRecording {
     }
 
     pub fn frames_for_actor(&self, local_id: u32) -> Vec<&TrajectoryFrame> {
-        self.frames.iter().filter(|f| f.local_id == local_id).collect()
+        self.frames
+            .iter()
+            .filter(|f| f.local_id == local_id)
+            .collect()
     }
 
     pub fn frames_at_step(&self, step: u32) -> Vec<&TrajectoryFrame> {

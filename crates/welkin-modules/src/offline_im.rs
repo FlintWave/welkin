@@ -150,14 +150,13 @@ impl RegionModule for OfflineIMModule {
 
     fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
         let module_name = config.get_string("Messaging", "OfflineMessageModule", "");
-        self.enabled = module_name == self.name()
-            || config.get_bool("Messaging", "OfflineIMEnabled", false);
+        self.enabled =
+            module_name == self.name() || config.get_bool("Messaging", "OfflineIMEnabled", false);
 
         self.forward_offline_group_messages =
             config.get_bool("Messaging", "ForwardOfflineGroupMessages", true);
 
-        self.max_offline_ims =
-            config.get_int("Messaging", "MaxOfflineIMs", 25) as usize;
+        self.max_offline_ims = config.get_int("Messaging", "MaxOfflineIMs", 25) as usize;
 
         tracing::info!(
             enabled = self.enabled,
@@ -471,10 +470,8 @@ mod tests {
         module.initialise(&config).unwrap();
         assert!(!module.is_enabled());
 
-        let result = module.handle_undelivered(&sample_im(
-            Uuid::new_v4(),
-            IMDialog::MessageFromAgent,
-        ));
+        let result =
+            module.handle_undelivered(&sample_im(Uuid::new_v4(), IMDialog::MessageFromAgent));
         assert!(result.is_err());
     }
 

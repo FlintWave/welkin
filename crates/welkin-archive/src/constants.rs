@@ -4,8 +4,8 @@
 //!
 //! Ported from `OpenSim.Framework.Serialization.ArchiveConstants`.
 
-use welkin_types::AssetType;
 use uuid::Uuid;
+use welkin_types::AssetType;
 
 /// Location of the archive control file.
 pub const CONTROL_FILE_PATH: &str = "archive.xml";
@@ -114,11 +114,7 @@ pub fn extension_to_asset_type(ext: &str) -> Option<AssetType> {
 ///
 /// Coordinates are rounded to the nearest integer for the filename, matching
 /// the C# `MathF.Round` behaviour.
-pub fn create_oar_object_filename(
-    name: &str,
-    uuid: Uuid,
-    pos: (f32, f32, f32),
-) -> String {
+pub fn create_oar_object_filename(name: &str, uuid: Uuid, pos: (f32, f32, f32)) -> String {
     format!(
         "{}_{:03.0}-{:03.0}-{:03.0}__{}.xml",
         name,
@@ -133,12 +129,12 @@ pub fn create_oar_object_filename(
 ///
 /// Prepends [`OBJECTS_PATH`] to the filename produced by
 /// [`create_oar_object_filename`].
-pub fn create_oar_object_path(
-    name: &str,
-    uuid: Uuid,
-    pos: (f32, f32, f32),
-) -> String {
-    format!("{}{}", OBJECTS_PATH, create_oar_object_filename(name, uuid, pos))
+pub fn create_oar_object_path(name: &str, uuid: Uuid, pos: (f32, f32, f32)) -> String {
+    format!(
+        "{}{}",
+        OBJECTS_PATH,
+        create_oar_object_filename(name, uuid, pos)
+    )
 }
 
 /// Create the archive path for a land-data parcel.

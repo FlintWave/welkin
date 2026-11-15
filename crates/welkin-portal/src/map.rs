@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+use axum::Router;
 use axum::extract::{Json, Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post, put};
-use axum::Router;
 use serde::{Deserialize, Serialize};
 
 use crate::sessions::RequireStaff;
@@ -122,14 +122,8 @@ where
     Router::new()
         .route("/portal/api/map/regions", get(handle_list_regions::<S>))
         .route("/portal/api/map/place", post(handle_place::<S>))
-        .route(
-            "/portal/api/map/regions/{id}/move",
-            put(handle_move::<S>),
-        )
-        .route(
-            "/portal/api/map/regions/{id}",
-            delete(handle_remove::<S>),
-        )
+        .route("/portal/api/map/regions/{id}/move", put(handle_move::<S>))
+        .route("/portal/api/map/regions/{id}", delete(handle_remove::<S>))
         .route(
             "/portal/api/map/regions/{id}/settings",
             get(handle_get_settings::<S>).put(handle_set_settings::<S>),
@@ -143,7 +137,11 @@ where
 {
     // TODO: query GridStore for all regions
     let regions: Vec<MapRegion> = Vec::new();
-    (StatusCode::OK, Json(serde_json::json!({ "regions": regions }))).into_response()
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({ "regions": regions })),
+    )
+        .into_response()
 }
 
 async fn handle_place<S>(
@@ -156,9 +154,11 @@ where
 {
     // TODO: query GridStore for existing regions, check conflicts
     let occupied: Vec<(i32, i32, i32, i32)> = Vec::new();
-    let conflict = occupied
-        .iter()
-        .any(|&(ox, oy, osx, osy)| overlaps(req.loc_x, req.loc_y, req.size_x, req.size_y, ox, oy, osx, osy));
+    let conflict = occupied.iter().any(|&(ox, oy, osx, osy)| {
+        overlaps(
+            req.loc_x, req.loc_y, req.size_x, req.size_y, ox, oy, osx, osy,
+        )
+    });
 
     if conflict {
         let suggested = find_free_coords(&occupied, req.loc_x, req.loc_y, req.size_x, req.size_y);

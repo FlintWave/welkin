@@ -5,9 +5,9 @@
 //! Each test creates an in-memory SQLite database with the C# OpenSimulator
 //! schema and verifies that the Rust code can store and load data correctly.
 
-use welkin_data::simulation::*;
-use sqlx::any::AnyPoolOptions;
 use sqlx::AnyPool;
+use sqlx::any::AnyPoolOptions;
+use welkin_data::simulation::*;
 
 // ---------------------------------------------------------------------------
 // Schema & helpers
@@ -453,7 +453,10 @@ async fn test_terrain_roundtrip() {
 
     assert_eq!(loaded.region_uuid, REGION);
     assert_eq!(loaded.revision, 42);
-    assert_eq!(loaded.heightfield, heightfield, "heightfield bytes must match exactly");
+    assert_eq!(
+        loaded.heightfield, heightfield,
+        "heightfield bytes must match exactly"
+    );
 }
 
 #[tokio::test]
@@ -479,7 +482,10 @@ async fn test_region_settings_roundtrip() {
     assert_eq!(loaded.allow_damage, settings.allow_damage);
     assert_eq!(loaded.restrict_pushing, settings.restrict_pushing);
     assert_eq!(loaded.allow_land_resell, settings.allow_land_resell);
-    assert_eq!(loaded.allow_land_join_divide, settings.allow_land_join_divide);
+    assert_eq!(
+        loaded.allow_land_join_divide,
+        settings.allow_land_join_divide
+    );
     assert_eq!(loaded.block_show_in_search, settings.block_show_in_search);
     assert_eq!(loaded.agent_limit, settings.agent_limit);
     assert_eq!(loaded.object_bonus, settings.object_bonus);
@@ -533,14 +539,20 @@ async fn test_remove_object() {
     assert_eq!(before.len(), 1);
 
     // Remove it.
-    store.remove_object(uuid).await.expect("remove_object failed");
+    store
+        .remove_object(uuid)
+        .await
+        .expect("remove_object failed");
 
     // Verify it is gone.
     let after = store.load_objects(REGION).await.expect("load failed");
     assert!(after.is_empty(), "objects should be empty after removal");
 
     // Also check get_object_ids returns empty.
-    let ids = store.get_object_ids(REGION).await.expect("get_object_ids failed");
+    let ids = store
+        .get_object_ids(REGION)
+        .await
+        .expect("get_object_ids failed");
     assert!(ids.is_empty());
 }
 
@@ -592,6 +604,9 @@ async fn test_multiple_objects_in_group() {
     }
 
     // Verify get_object_ids returns all 3.
-    let ids = store.get_object_ids(REGION).await.expect("get_object_ids failed");
+    let ids = store
+        .get_object_ids(REGION)
+        .await
+        .expect("get_object_ids failed");
     assert_eq!(ids.len(), 3);
 }

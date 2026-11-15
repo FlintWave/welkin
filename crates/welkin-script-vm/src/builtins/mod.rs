@@ -150,7 +150,10 @@ mod tests {
             return len
         "#;
 
-        let len: i64 = lua.load(script).eval().expect("multi-function script should work");
+        let len: i64 = lua
+            .load(script)
+            .eval()
+            .expect("multi-function script should work");
         assert_eq!(len, 8); // "TESTPRIM"
     }
 

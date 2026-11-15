@@ -13,12 +13,12 @@
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-use welkin_data::groups::GroupPowers;
 use uuid::Uuid;
+use welkin_data::groups::GroupPowers;
 
 use super::{
-    GroupInviteInfo, GroupMembersData, GroupMembershipData, GroupNoticeData,
-    GroupRecord, GroupRolesData, IGroupsServicesConnector,
+    GroupInviteInfo, GroupMembersData, GroupMembershipData, GroupNoticeData, GroupRecord,
+    GroupRolesData, IGroupsServicesConnector,
 };
 
 // ---------------------------------------------------------------------------
@@ -247,23 +247,14 @@ impl RemoteConnectorCacheWrapper {
     // -- Membership cache ---------------------------------------------------
 
     /// Cache membership data for an agent in a group.
-    pub fn cache_membership(
-        &mut self,
-        agent_id: Uuid,
-        group_id: Uuid,
-        data: &GroupMembershipData,
-    ) {
+    pub fn cache_membership(&mut self, agent_id: Uuid, group_id: Uuid, data: &GroupMembershipData) {
         let key = format!("membership-{agent_id}-{group_id}");
         self.membership_cache
             .insert(key, CacheEntry::new(data.clone(), self.ttl));
     }
 
     /// Look up cached membership for an agent in a group.
-    pub fn get_membership(
-        &self,
-        agent_id: Uuid,
-        group_id: Uuid,
-    ) -> Option<&GroupMembershipData> {
+    pub fn get_membership(&self, agent_id: Uuid, group_id: Uuid) -> Option<&GroupMembershipData> {
         let key = format!("membership-{agent_id}-{group_id}");
         self.membership_cache
             .get(&key)
@@ -589,11 +580,7 @@ impl IGroupsServicesConnector for HGGroupsServiceConnector {
             .unwrap_or_default()
     }
 
-    fn get_group_members(
-        &self,
-        requesting_agent: Uuid,
-        group_id: Uuid,
-    ) -> Vec<GroupMembersData> {
+    fn get_group_members(&self, requesting_agent: Uuid, group_id: Uuid) -> Vec<GroupMembersData> {
         // Check cache.
         if let Some(cached) = self.cache.get_members(group_id) {
             return cached.clone();
@@ -604,11 +591,7 @@ impl IGroupsServicesConnector for HGGroupsServiceConnector {
             .unwrap_or_default()
     }
 
-    fn get_group_roles(
-        &self,
-        requesting_agent: Uuid,
-        group_id: Uuid,
-    ) -> Vec<GroupRolesData> {
+    fn get_group_roles(&self, requesting_agent: Uuid, group_id: Uuid) -> Vec<GroupRolesData> {
         if let Some(cached) = self.cache.get_roles(group_id) {
             return cached.clone();
         }
@@ -618,11 +601,7 @@ impl IGroupsServicesConnector for HGGroupsServiceConnector {
             .unwrap_or_default()
     }
 
-    fn get_group_role_members(
-        &self,
-        requesting_agent: Uuid,
-        group_id: Uuid,
-    ) -> Vec<(Uuid, Uuid)> {
+    fn get_group_role_members(&self, requesting_agent: Uuid, group_id: Uuid) -> Vec<(Uuid, Uuid)> {
         self.local_connector
             .as_ref()
             .map(|c| c.get_group_role_members(requesting_agent, group_id))
@@ -665,7 +644,13 @@ impl IGroupsServicesConnector for HGGroupsServiceConnector {
         self.local_connector
             .as_ref()
             .map(|c| {
-                c.add_agent_to_group_invite(requesting_agent, invite_id, group_id, role_id, agent_id)
+                c.add_agent_to_group_invite(
+                    requesting_agent,
+                    invite_id,
+                    group_id,
+                    role_id,
+                    agent_id,
+                )
             })
             .unwrap_or(false)
     }
@@ -686,12 +671,7 @@ impl IGroupsServicesConnector for HGGroupsServiceConnector {
         }
     }
 
-    fn set_agent_active_group(
-        &self,
-        requesting_agent: Uuid,
-        agent_id: Uuid,
-        group_id: Uuid,
-    ) {
+    fn set_agent_active_group(&self, requesting_agent: Uuid, agent_id: Uuid, group_id: Uuid) {
         if let Some(c) = &self.local_connector {
             c.set_agent_active_group(requesting_agent, agent_id, group_id);
         }
@@ -716,9 +696,11 @@ impl IGroupsServicesConnector for HGGroupsServiceConnector {
         if let Some(cached) = self.cache.get_membership(agent_id, group_id) {
             return Some(cached.clone());
         }
-        self.local_connector
-            .as_ref()?
-            .get_agent_group_membership(requesting_agent, agent_id, group_id)
+        self.local_connector.as_ref()?.get_agent_group_membership(
+            requesting_agent,
+            agent_id,
+            group_id,
+        )
     }
 
     fn get_agent_group_memberships(
@@ -759,12 +741,7 @@ impl IGroupsServicesConnector for HGGroupsServiceConnector {
         }
     }
 
-    fn remove_group_role(
-        &self,
-        requesting_agent: Uuid,
-        group_id: Uuid,
-        role_id: Uuid,
-    ) {
+    fn remove_group_role(&self, requesting_agent: Uuid, group_id: Uuid, role_id: Uuid) {
         if let Some(c) = &self.local_connector {
             c.remove_group_role(requesting_agent, group_id, role_id);
         }
@@ -882,11 +859,7 @@ impl IGroupsServicesConnector for HGGroupsServiceConnector {
             .unwrap_or(false)
     }
 
-    fn get_group_notice(
-        &self,
-        requesting_agent: Uuid,
-        notice_id: Uuid,
-    ) -> Option<GroupNoticeData> {
+    fn get_group_notice(&self, requesting_agent: Uuid, notice_id: Uuid) -> Option<GroupNoticeData> {
         if let Some(cached) = self.cache.get_notice(notice_id) {
             return Some(cached.clone());
         }
@@ -895,11 +868,7 @@ impl IGroupsServicesConnector for HGGroupsServiceConnector {
             .get_group_notice(requesting_agent, notice_id)
     }
 
-    fn get_group_notices(
-        &self,
-        requesting_agent: Uuid,
-        group_id: Uuid,
-    ) -> Vec<GroupNoticeData> {
+    fn get_group_notices(&self, requesting_agent: Uuid, group_id: Uuid) -> Vec<GroupNoticeData> {
         if let Some(cached) = self.cache.get_notices(group_id) {
             return cached.clone();
         }
@@ -936,10 +905,7 @@ mod tests {
     fn foreign_importer_parse_full_uui() {
         let uui = "d3a80b0e-1234-5678-9abc-def012345678;http://example.com;John Doe";
         let uuid = ForeignImporter::parse_uui(uui).unwrap();
-        assert_eq!(
-            uuid.to_string(),
-            "d3a80b0e-1234-5678-9abc-def012345678"
-        );
+        assert_eq!(uuid.to_string(), "d3a80b0e-1234-5678-9abc-def012345678");
     }
 
     // 2. ForeignImporter parse_uui with plain UUID.

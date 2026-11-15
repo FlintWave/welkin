@@ -11,7 +11,7 @@ use rapier3d::parry::utils::Array2;
 use serde::{Deserialize, Serialize};
 
 use welkin_physics::{
-    ActorType, ContactResult, PidHoverType, PhysicsActor, PhysicsScene, RayFilterFlags,
+    ActorType, ContactResult, PhysicsActor, PhysicsScene, PidHoverType, RayFilterFlags,
 };
 
 fn to_rapier(v: Vec3) -> Vector {
@@ -389,7 +389,11 @@ impl RapierPhysicsScene {
         let ids: Vec<u32> = self.actors.keys().copied().collect();
         for id in ids {
             let actor = match self.actors.get(&id) {
-                Some(a) if a.dirty || !a.pending_forces.is_empty() || !a.pending_torques.is_empty() => a,
+                Some(a)
+                    if a.dirty || !a.pending_forces.is_empty() || !a.pending_torques.is_empty() =>
+                {
+                    a
+                }
                 _ => continue,
             };
             let body_handle = actor.body_handle;
@@ -421,13 +425,11 @@ impl RapierPhysicsScene {
                 }
             }
 
-            if was_dirty {
-                if let Some(coll) = self.colliders.get_mut(coll_handle) {
-                    coll.set_sensor(is_phantom);
-                    coll.set_friction(friction);
-                    coll.set_restitution(restitution);
-                    coll.set_density(density);
-                }
+            if was_dirty && let Some(coll) = self.colliders.get_mut(coll_handle) {
+                coll.set_sensor(is_phantom);
+                coll.set_friction(friction);
+                coll.set_restitution(restitution);
+                coll.set_density(density);
             }
 
             if let Some(a) = self.actors.get_mut(&id) {
@@ -463,22 +465,22 @@ impl RapierPhysicsScene {
             let id1 = coll_to_actor.get(&pair.collider1).copied();
             let id2 = coll_to_actor.get(&pair.collider2).copied();
 
-            if let Some(id) = id1 {
-                if let Some(a) = self.actors.get_mut(&id) {
-                    a.colliding = true;
-                    a.collision_score += 1.0;
-                    if id2.is_none() {
-                        a.colliding_ground = true;
-                    }
+            if let Some(id) = id1
+                && let Some(a) = self.actors.get_mut(&id)
+            {
+                a.colliding = true;
+                a.collision_score += 1.0;
+                if id2.is_none() {
+                    a.colliding_ground = true;
                 }
             }
-            if let Some(id) = id2 {
-                if let Some(a) = self.actors.get_mut(&id) {
-                    a.colliding = true;
-                    a.collision_score += 1.0;
-                    if id1.is_none() {
-                        a.colliding_ground = true;
-                    }
+            if let Some(id) = id2
+                && let Some(a) = self.actors.get_mut(&id)
+            {
+                a.colliding = true;
+                a.collision_score += 1.0;
+                if id1.is_none() {
+                    a.colliding_ground = true;
                 }
             }
         }
@@ -496,7 +498,15 @@ impl RapierPhysicsScene {
         is_physical: bool,
     ) -> u32 {
         self.insert_actor_with_shape(
-            local_id, name, actor_type, position, velocity, size, rotation, is_physical, None,
+            local_id,
+            name,
+            actor_type,
+            position,
+            velocity,
+            size,
+            rotation,
+            is_physical,
+            None,
         )
     }
 
@@ -702,9 +712,9 @@ impl PhysicsScene for RapierPhysicsScene {
         .restitution(restitution)
         .build();
 
-        let new_handle =
-            self.colliders
-                .insert_with_parent(collider, body_handle, &mut self.bodies);
+        let new_handle = self
+            .colliders
+            .insert_with_parent(collider, body_handle, &mut self.bodies);
 
         // Update the actor's stored handle.
         if let Some(a) = self.actors.get_mut(&local_id) {
@@ -800,7 +810,8 @@ impl PhysicsScene for RapierPhysicsScene {
             .rotation(Vector::new(std::f32::consts::FRAC_PI_2, 0.0, 0.0))
             .build();
         let bh = self.bodies.insert(body);
-        let ch = self.colliders
+        let ch = self
+            .colliders
             .insert_with_parent(collider, bh, &mut self.bodies);
         self.terrain_handle = Some(bh);
         self.terrain_collider_handle = Some(ch);
@@ -844,30 +855,22 @@ impl PhysicsScene for RapierPhysicsScene {
         if let Some((collider_handle, intersection)) =
             qp.cast_ray_and_get_normal(&ray, length, true)
         {
-            let is_terrain = self
-                .terrain_collider_handle
-                .map_or(false, |th| th == collider_handle);
+            let is_terrain = self.terrain_collider_handle == Some(collider_handle);
 
-            let body_handle = self
-                .colliders
-                .get(collider_handle)
-                .and_then(|c| c.parent());
+            let body_handle = self.colliders.get(collider_handle).and_then(|c| c.parent());
 
-            let actor = body_handle.and_then(|bh| {
-                self.actors.values().find(|a| a.body_handle == bh)
-            });
+            let actor =
+                body_handle.and_then(|bh| self.actors.values().find(|a| a.body_handle == bh));
 
             let dominated = if is_terrain {
                 (flags & RayFilterFlags::LAND).0 == 0
             } else if let Some(a) = actor {
                 let dominated_agent =
                     a.actor_type == ActorType::Agent && (flags & RayFilterFlags::AGENT).0 == 0;
-                let dominated_physical =
-                    a.is_physical && (flags & RayFilterFlags::PHYSICAL).0 == 0;
+                let dominated_physical = a.is_physical && (flags & RayFilterFlags::PHYSICAL).0 == 0;
                 let dominated_nonphysical =
                     !a.is_physical && (flags & RayFilterFlags::NONPHYSICAL).0 == 0;
-                let dominated_phantom =
-                    a.phantom && (flags & RayFilterFlags::PHANTOM).0 == 0;
+                let dominated_phantom = a.phantom && (flags & RayFilterFlags::PHANTOM).0 == 0;
                 dominated_agent || dominated_physical || dominated_nonphysical || dominated_phantom
             } else {
                 false
@@ -947,7 +950,12 @@ impl RapierPhysicsScene {
                 actor_type: a.actor_type as u8,
                 position: a.position.to_array(),
                 velocity: a.velocity.to_array(),
-                orientation: [a.orientation.x, a.orientation.y, a.orientation.z, a.orientation.w],
+                orientation: [
+                    a.orientation.x,
+                    a.orientation.y,
+                    a.orientation.z,
+                    a.orientation.w,
+                ],
                 size: a.size.to_array(),
                 is_physical: a.is_physical,
                 phantom: a.phantom,

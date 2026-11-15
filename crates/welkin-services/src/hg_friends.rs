@@ -82,7 +82,8 @@ impl HGFriendsServiceImpl {
 
     fn delete_friend(&self, principal_id: Uuid, friend_prefix: &str) {
         let mut friends = self.friends.write().unwrap();
-        friends.retain(|r| !(r.principal_id == principal_id && r.friend.starts_with(friend_prefix)));
+        friends
+            .retain(|r| !(r.principal_id == principal_id && r.friend.starts_with(friend_prefix)));
     }
 
     fn get_friends_for(&self, principal_id: Uuid) -> Vec<FriendRecord> {
@@ -144,11 +145,7 @@ impl HypergridFriendsService for HGFriendsServiceImpl {
 
         // Verified user session -- store directly
         if verified {
-            self.store_friend(
-                friend.principal_id,
-                &format!("{}", friend.friend),
-                0,
-            );
+            self.store_friend(friend.principal_id, &friend.friend.to_string(), 0);
             return Ok(true);
         }
 
@@ -168,12 +165,8 @@ impl HypergridFriendsService for HGFriendsServiceImpl {
 
         if user_initiated {
             // Complete friendship in both directions
-            self.store_friend(friend.principal_id, &format!("{}", friend.friend), 1);
-            self.store_friend(
-                friend_id,
-                &friend.principal_id.to_string(),
-                1,
-            );
+            self.store_friend(friend.principal_id, &friend.friend.to_string(), 1);
+            self.store_friend(friend_id, &friend.principal_id.to_string(), 1);
             // Update their_flags for both records
             {
                 let mut friends = self.friends.write().unwrap();
@@ -253,8 +246,7 @@ impl HypergridFriendsService for HGFriendsServiceImpl {
             if let Some((local_user_id, _home_uri, _name, secret)) = Self::parse_uui(uui) {
                 let user_friends = self.get_friends_for(local_user_id);
                 for finfo in &user_friends {
-                    if finfo.friend.starts_with(&foreign_prefix)
-                        && finfo.friend.ends_with(&secret)
+                    if finfo.friend.starts_with(&foreign_prefix) && finfo.friend.ends_with(&secret)
                     {
                         _users_to_notify.push(local_user_id.to_string());
                     }
@@ -332,9 +324,7 @@ fn parse_form(body: &[u8]) -> Form {
 }
 
 fn xml_response(content: &str) -> Response {
-    let body = format!(
-        "<?xml version=\"1.0\"?><ServerResponse>{content}</ServerResponse>"
-    );
+    let body = format!("<?xml version=\"1.0\"?><ServerResponse>{content}</ServerResponse>");
     (
         StatusCode::OK,
         [(header::CONTENT_TYPE, "text/xml; charset=utf-8")],
@@ -372,10 +362,7 @@ fn bool_result(v: bool) -> Response {
     ))
 }
 
-async fn handle_hg_friends(
-    State(state): State<HGFriendsHandlerState>,
-    body: Bytes,
-) -> Response {
+async fn handle_hg_friends(State(state): State<HGFriendsHandlerState>, body: Bytes) -> Response {
     let f = parse_form(&body);
     let method = f.str("METHOD");
     let svc = &state.service;
@@ -560,9 +547,7 @@ mod tests {
     #[test]
     fn test_status_notification_empty() {
         let svc = make_svc();
-        let result = svc
-            .status_notification(&[], Uuid::new_v4(), true)
-            .unwrap();
+        let result = svc.status_notification(&[], Uuid::new_v4(), true).unwrap();
         assert!(result.is_empty());
     }
 

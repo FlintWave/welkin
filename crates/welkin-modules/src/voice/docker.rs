@@ -52,9 +52,7 @@ pub fn generate_compose_service(config: &WolfvoiceDockerConfig) -> String {
     }
 
     yaml.push_str("    healthcheck:\n");
-    yaml.push_str(
-        "      test: [\"CMD\", \"curl\", \"-f\", \"http://localhost:8090/health\"]\n",
-    );
+    yaml.push_str("      test: [\"CMD\", \"curl\", \"-f\", \"http://localhost:8090/health\"]\n");
     yaml.push_str("      interval: 30s\n");
     yaml.push_str("      timeout: 10s\n");
     yaml.push_str("      retries: 3\n");

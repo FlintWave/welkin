@@ -279,16 +279,11 @@ impl RegionModule for WindModule {
         match plugin_name.as_str() {
             "ConfigurableWind" => {
                 let mut cw = ConfigurableWind::new();
-                cw.avg_strength =
-                    config.get_float("Wind", "avg_strength", 5.0) as f32;
-                cw.avg_direction =
-                    config.get_float("Wind", "avg_direction", 0.0) as f32;
-                cw.variance_strength =
-                    config.get_float("Wind", "var_strength", 5.0) as f32;
-                cw.variance_direction =
-                    config.get_float("Wind", "var_direction", 30.0) as f32;
-                cw.rate_of_change =
-                    config.get_float("Wind", "rate_change", 1.0) as f32;
+                cw.avg_strength = config.get_float("Wind", "avg_strength", 5.0) as f32;
+                cw.avg_direction = config.get_float("Wind", "avg_direction", 0.0) as f32;
+                cw.variance_strength = config.get_float("Wind", "var_strength", 5.0) as f32;
+                cw.variance_direction = config.get_float("Wind", "var_direction", 30.0) as f32;
+                cw.rate_of_change = config.get_float("Wind", "rate_change", 1.0) as f32;
                 self.model_name = "ConfigurableWind".to_string();
                 self.model = Box::new(cw);
             }

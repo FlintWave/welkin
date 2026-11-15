@@ -13,8 +13,8 @@ pub mod ossl;
 pub mod scheduler;
 pub mod transfer;
 
-use mlua::prelude::*;
 use mlua::chunk::Compiler;
+use mlua::prelude::*;
 
 pub use instance::{ScriptEvent, ScriptInstance, ScriptInstanceState};
 pub use scheduler::{ScriptScheduler, TimerEntry};
@@ -174,7 +174,9 @@ mod tests {
     fn coroutine_yield_resume() -> Result<(), VmError> {
         let lua = new_vm()?;
 
-        let func = lua.load(r#"
+        let func = lua
+            .load(
+                r#"
             local x = 0
             x = x + 1
             coroutine.yield(x)
@@ -182,7 +184,9 @@ mod tests {
             coroutine.yield(x)
             x = x + 100
             return x
-        "#).into_function()?;
+        "#,
+            )
+            .into_function()?;
 
         let thread = lua.create_thread(func)?;
 
@@ -287,10 +291,14 @@ mod tests {
     fn coroutine_resume_with_args() -> Result<(), VmError> {
         let lua = new_vm()?;
 
-        let func = lua.load(r#"
+        let func = lua
+            .load(
+                r#"
             local input = coroutine.yield()  -- pause, wait for event
             return input * 2
-        "#).into_function()?;
+        "#,
+            )
+            .into_function()?;
 
         let thread = lua.create_thread(func)?;
 
@@ -317,13 +325,17 @@ mod tests {
     fn thread_state_not_serializable() -> Result<(), VmError> {
         let lua = new_vm()?;
 
-        let func = lua.load(r#"
+        let func = lua
+            .load(
+                r#"
             local x = 0
             x = x + 1
             coroutine.yield(x)   -- yields 1
             x = x + 10
             return x             -- would return 11
-        "#).into_function()?;
+        "#,
+            )
+            .into_function()?;
 
         let thread = lua.create_thread(func)?;
 
@@ -384,11 +396,7 @@ mod tests {
         assert_eq!(thread1.status(), ThreadStatus::Resumable);
 
         // --- Serialize the state we CAN save -----------------------
-        let saved = serialize_script_state(
-            &lua1,
-            bytecode.clone(),
-            &["_checkpoint", "_state"],
-        )?;
+        let saved = serialize_script_state(&lua1, bytecode.clone(), &["_checkpoint", "_state"])?;
 
         // Verify it round-trips through JSON
         let json_bytes = serde_json::to_vec(&saved)?;
@@ -408,7 +416,7 @@ mod tests {
         // _checkpoint and skips phase 1.
         let func2 = lua2.load(&restored_state.bytecode).into_function()?;
         let result: i64 = func2.call(())?;
-        assert_eq!(result, 150);   // 100 + 50
+        assert_eq!(result, 150); // 100 + 50
 
         Ok(())
     }
@@ -420,17 +428,20 @@ mod tests {
     fn serialize_globals_multiple_types() -> Result<(), VmError> {
         let lua = Lua::new();
 
-        lua.load(r#"
+        lua.load(
+            r#"
             _num    = 42.5
             _str    = "hello"
             _bool   = true
             _list   = {10, 20, 30}
             _nested = { a = 1, b = "two" }
-        "#).exec()?;
+        "#,
+        )
+        .exec()?;
 
         let saved = serialize_script_state(
             &lua,
-            vec![],  // no bytecode needed for this test
+            vec![], // no bytecode needed for this test
             &["_num", "_str", "_bool", "_list", "_nested"],
         )?;
 
@@ -446,11 +457,15 @@ mod tests {
         assert!(b);
 
         // Verify the list
-        let sum: i64 = lua2.load(r#"
+        let sum: i64 = lua2
+            .load(
+                r#"
             local s = 0
             for _, v in ipairs(_list) do s = s + v end
             return s
-        "#).eval()?;
+        "#,
+            )
+            .eval()?;
         assert_eq!(sum, 60);
 
         // Verify nested table
@@ -480,12 +495,16 @@ mod tests {
         lua.set_memory_limit(baseline + 65_536)?;
 
         // Try to allocate a large table (~400 KB for 100_000 entries)
-        let result = lua.load(r#"
+        let result = lua
+            .load(
+                r#"
             local t = {}
             for i = 1, 100000 do
                 t[i] = i
             end
-        "#).exec();
+        "#,
+            )
+            .exec();
 
         assert!(
             matches!(result, Err(mlua::Error::MemoryError(_))),
@@ -505,12 +524,16 @@ mod tests {
         let baseline = lua.used_memory();
         lua.set_memory_limit(baseline + 65_536)?;
 
-        let func = lua.load(r#"
+        let func = lua
+            .load(
+                r#"
             local t = {}
             for i = 1, 100000 do
                 t[i] = i
             end
-        "#).into_function()?;
+        "#,
+            )
+            .into_function()?;
 
         let thread = lua.create_thread(func)?;
         let result = thread.resume::<()>(());
@@ -528,8 +551,8 @@ mod tests {
     // ---------------------------------------------------------------
     #[test]
     fn preempt_infinite_loop_via_interrupt() -> Result<(), VmError> {
-        use std::sync::atomic::{AtomicU64, Ordering};
         use std::sync::Arc;
+        use std::sync::atomic::{AtomicU64, Ordering};
 
         let lua = Lua::new();
 
@@ -545,14 +568,21 @@ mod tests {
             }
         });
 
-        let result = lua.load(r#"
+        let result = lua
+            .load(
+                r#"
             local x = 0
             while true do
                 x = x + 1
             end
-        "#).exec();
+        "#,
+            )
+            .exec();
 
-        assert!(result.is_err(), "infinite loop should have been interrupted");
+        assert!(
+            result.is_err(),
+            "infinite loop should have been interrupted"
+        );
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("execution limit exceeded"),
@@ -571,8 +601,8 @@ mod tests {
     // ---------------------------------------------------------------
     #[test]
     fn preempt_via_yield() -> Result<(), VmError> {
-        use std::sync::atomic::{AtomicU64, Ordering};
         use std::sync::Arc;
+        use std::sync::atomic::{AtomicU64, Ordering};
 
         let lua = Lua::new();
 
@@ -588,13 +618,17 @@ mod tests {
             }
         });
 
-        let func = lua.load(r#"
+        let func = lua
+            .load(
+                r#"
             local sum = 0
             for i = 1, 1000 do
                 sum = sum + i
             end
             return sum
-        "#).into_function()?;
+        "#,
+            )
+            .into_function()?;
 
         let thread = lua.create_thread(func)?;
 
@@ -616,7 +650,10 @@ mod tests {
             }
         }
 
-        assert!(resumes > 1, "should have been yielded at least once (resumes={resumes})");
+        assert!(
+            resumes > 1,
+            "should have been yielded at least once (resumes={resumes})"
+        );
         assert_eq!(final_result, Some(500500), "sum 1..1000 = 500500");
         assert_eq!(thread.status(), ThreadStatus::Finished);
 
@@ -628,8 +665,8 @@ mod tests {
     // ---------------------------------------------------------------
     #[test]
     fn other_scripts_survive_interruption() -> Result<(), VmError> {
-        use std::sync::atomic::{AtomicU64, Ordering};
         use std::sync::Arc;
+        use std::sync::atomic::{AtomicU64, Ordering};
 
         let lua = Lua::new();
 
@@ -645,9 +682,11 @@ mod tests {
         });
 
         // Script A: infinite loop, will be killed
-        let script_a = lua.load(r#"
+        let script_a = lua.load(
+            r#"
             while true do end
-        "#);
+        "#,
+        );
         let result_a = script_a.exec();
         assert!(result_a.is_err(), "script A should have been interrupted");
 
@@ -656,7 +695,10 @@ mod tests {
 
         // Script B: a normal computation should succeed
         let result_b: i64 = lua.load("return 6 * 7").eval()?;
-        assert_eq!(result_b, 42, "script B should run normally after A was interrupted");
+        assert_eq!(
+            result_b, 42,
+            "script B should run normally after A was interrupted"
+        );
 
         Ok(())
     }
@@ -672,20 +714,27 @@ mod tests {
         lua.set_memory_limit(baseline + 1024)?;
 
         // This should fail
-        let result = lua.load(r#"
+        let result = lua
+            .load(
+                r#"
             local t = {}
             for i = 1, 100000 do t[i] = i end
-        "#).exec();
+        "#,
+            )
+            .exec();
         assert!(result.is_err());
 
         // Lift the limit (0 = no limit)
         lua.set_memory_limit(0)?;
 
         // Now the same allocation should succeed
-        lua.load(r#"
+        lua.load(
+            r#"
             local t = {}
             for i = 1, 100000 do t[i] = i end
-        "#).exec()?;
+        "#,
+        )
+        .exec()?;
 
         Ok(())
     }

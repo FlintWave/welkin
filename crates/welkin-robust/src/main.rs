@@ -39,10 +39,10 @@ async fn get_only_filter(req: Request, next: Next) -> axum::response::Response {
 }
 
 fn redact_connection_string(url: &str) -> String {
-    if let Some(at) = url.find('@') {
-        if let Some(scheme_end) = url.find("://") {
-            return format!("{}://***@{}", &url[..scheme_end], &url[at + 1..]);
-        }
+    if let Some(at) = url.find('@')
+        && let Some(scheme_end) = url.find("://")
+    {
+        return format!("{}://***@{}", &url[..scheme_end], &url[at + 1..]);
     }
     url.to_string()
 }
@@ -58,11 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     config.apply_env_overrides();
     config.resolve_substitutions()?;
 
-    let conn_str = config.get_string_or(
-        "DatabaseService",
-        "ConnectionString",
-        "sqlite:robust.db",
-    );
+    let conn_str = config.get_string_or("DatabaseService", "ConnectionString", "sqlite:robust.db");
     info!(url = %redact_connection_string(&conn_str), "Connecting to database");
     let pool = DataPool::connect(&conn_str).await?;
     info!("Database connection established");
@@ -229,9 +225,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let profiles_store = Arc::new(welkin_data::profiles::ProfilesStore::new(p.clone()));
     let asset_store = Arc::new(welkin_data::assets::AssetStore::new(p.clone()));
 
-    let tile_dir = Arc::new(PathBuf::from(
-        config.get_string_or("MapService", "TileDir", "./maptiles"),
-    ));
+    let tile_dir = Arc::new(PathBuf::from(config.get_string_or(
+        "MapService",
+        "TileDir",
+        "./maptiles",
+    )));
 
     let allowed_delete_types = config
         .get_string_or("AssetService", "AllowedDeleteTypes", "None")
@@ -242,7 +240,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let gridnick = config.get_string_or("GridInfoService", "gridnick", "opensimrust");
     let login_uri = format!("http://127.0.0.1:{}/", cli.public_port);
 
-    info!(public_port = cli.public_port, private_port = cli.private_port, "Port configuration");
+    info!(
+        public_port = cli.public_port,
+        private_port = cli.private_port,
+        "Port configuration"
+    );
 
     // --- PUBLIC router: login, map (GET-only), grid info ---
 
@@ -293,7 +295,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let private_router = Router::new()
         .merge(welkin_services::auth::router(
-            welkin_services::auth::AuthServiceState { store: auth_store.clone() },
+            welkin_services::auth::AuthServiceState {
+                store: auth_store.clone(),
+            },
         ))
         .merge(welkin_services::assets::router(
             welkin_services::assets::AssetServiceState {
@@ -302,16 +306,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             },
         ))
         .merge(welkin_services::inventory::router(
-            welkin_services::inventory::InventoryServiceState { store: inventory_store.clone() },
+            welkin_services::inventory::InventoryServiceState {
+                store: inventory_store.clone(),
+            },
         ))
         .merge(welkin_services::grid::router(
-            welkin_services::grid::GridServiceState { store: grid_store.clone() },
+            welkin_services::grid::GridServiceState {
+                store: grid_store.clone(),
+            },
         ))
         .merge(welkin_services::avatar::router(
-            welkin_services::avatar::AvatarServiceState { store: avatar_store.clone() },
+            welkin_services::avatar::AvatarServiceState {
+                store: avatar_store.clone(),
+            },
         ))
         .merge(welkin_services::presence::router(
-            welkin_services::presence::PresenceServiceState { store: presence_store.clone() },
+            welkin_services::presence::PresenceServiceState {
+                store: presence_store.clone(),
+            },
         ))
         .merge(welkin_services::accounts::router(
             welkin_services::accounts::AccountsServiceState {
@@ -321,34 +333,52 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             },
         ))
         .merge(welkin_services::griduser::router(
-            welkin_services::griduser::GridUserServiceState { store: griduser_store.clone() },
+            welkin_services::griduser::GridUserServiceState {
+                store: griduser_store.clone(),
+            },
         ))
         .merge(welkin_services::friends::router(
-            welkin_services::friends::FriendsServiceState { store: friends_store.clone() },
+            welkin_services::friends::FriendsServiceState {
+                store: friends_store.clone(),
+            },
         ))
         .merge(welkin_services::agentprefs::router(
-            welkin_services::agentprefs::AgentPrefsServiceState { store: agentprefs_store.clone() },
+            welkin_services::agentprefs::AgentPrefsServiceState {
+                store: agentprefs_store.clone(),
+            },
         ))
         .merge(welkin_services::mute::router(
-            welkin_services::mute::MuteServiceState { store: mute_store.clone() },
+            welkin_services::mute::MuteServiceState {
+                store: mute_store.clone(),
+            },
         ))
         .merge(welkin_services::offline_im::router(
-            welkin_services::offline_im::OfflineIMServiceState { store: offline_im_store.clone() },
+            welkin_services::offline_im::OfflineIMServiceState {
+                store: offline_im_store.clone(),
+            },
         ))
         .merge(welkin_services::groups::router(
-            welkin_services::groups::GroupsServiceState { store: groups_store.clone() },
+            welkin_services::groups::GroupsServiceState {
+                store: groups_store.clone(),
+            },
         ))
         .merge(welkin_services::estate::router(
-            welkin_services::estate::EstateServiceState { store: estate_store.clone() },
+            welkin_services::estate::EstateServiceState {
+                store: estate_store.clone(),
+            },
         ))
         .merge(welkin_services::profiles::router(
-            welkin_services::profiles::ProfilesServiceState { store: profiles_store.clone() },
+            welkin_services::profiles::ProfilesServiceState {
+                store: profiles_store.clone(),
+            },
         ))
         .merge(welkin_services::authorization::router(
             welkin_services::authorization::AuthorizationServiceState,
         ))
         .merge(welkin_services::map::router(
-            welkin_services::map::MapImageServiceState { tile_dir: tile_dir.clone() },
+            welkin_services::map::MapImageServiceState {
+                tile_dir: tile_dir.clone(),
+            },
         ));
 
     // --- Start both listeners ---
@@ -356,8 +386,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let public_listener = TcpListener::bind(("0.0.0.0", cli.public_port)).await?;
     let private_listener = TcpListener::bind(("0.0.0.0", cli.private_port)).await?;
 
-    info!(port = cli.public_port, "Public server listening (login, gridinfo, map)");
-    info!(port = cli.private_port, "Private server listening (all grid services)");
+    info!(
+        port = cli.public_port,
+        "Public server listening (login, gridinfo, map)"
+    );
+    info!(
+        port = cli.private_port,
+        "Private server listening (all grid services)"
+    );
 
     let public_handle = tokio::spawn(async move {
         if let Err(e) = axum::serve(public_listener, public_router)

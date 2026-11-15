@@ -6,7 +6,9 @@
 use std::sync::Arc;
 
 use http_body_util::BodyExt;
+use tower::ServiceExt;
 use welkin_data::{
+    accounts::UserAccountStore,
     assets::AssetStore,
     auth::AuthStore,
     avatar::AvatarStore,
@@ -17,7 +19,6 @@ use welkin_data::{
     migrations::{Backend, MigrationRunner},
     mute::MuteStore,
     presence::PresenceStore,
-    accounts::UserAccountStore,
 };
 use welkin_services::{
     accounts::AccountsServiceState,
@@ -31,7 +32,6 @@ use welkin_services::{
     mute::MuteServiceState,
     presence::PresenceServiceState,
 };
-use tower::ServiceExt;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -54,8 +54,8 @@ const SALT: &str = "test-salt-uuid";
 // ---------------------------------------------------------------------------
 
 fn extract_xml_leaves(xml: &str) -> Vec<(String, String)> {
-    use quick_xml::events::Event;
     use quick_xml::Reader;
+    use quick_xml::events::Event;
 
     let mut reader = Reader::from_str(xml);
     let mut stack: Vec<String> = Vec::new();
@@ -172,7 +172,9 @@ async fn replay_grid_services() {
     // (an attached legacy DB). We manually create the inventory tables and pre-set the
     // migration version so run_all skips that problematic migration step.
     sqlx::query("CREATE TABLE IF NOT EXISTS migrations(name VARCHAR(100), version INT)")
-        .execute(&pool).await.unwrap();
+        .execute(&pool)
+        .await
+        .unwrap();
 
     // Create inventory tables (equivalent to InventoryStore v1)
     for stmt in [
@@ -203,7 +205,9 @@ async fn replay_grid_services() {
     }
     // Record InventoryStore at version 2 so run_all skips both v1 and v2
     sqlx::query("INSERT INTO migrations(name, version) VALUES ('InventoryStore', 2)")
-        .execute(&pool).await.unwrap();
+        .execute(&pool)
+        .await
+        .unwrap();
 
     let runner = MigrationRunner::new(pool.clone(), Backend::SQLite);
     // The SQLite migrations use legacy column names that differ from what the Rust
@@ -211,7 +215,9 @@ async fn replay_grid_services() {
     // the stores whose SQLite schemas match the Rust query columns.
     for store in ["FriendsStore", "Avatar", "MuteListStore"] {
         if let Some(content) = welkin_data::migrations::migration_content(store, Backend::SQLite) {
-            runner.run_migrations(store, content).await
+            runner
+                .run_migrations(store, content)
+                .await
                 .unwrap_or_else(|e| panic!("migration failed for {store}: {e}"));
         }
     }
@@ -245,8 +251,11 @@ async fn replay_grid_services() {
     // UserAccount: run v1 and v2 from the migration file, but replace v3's
     // BOOLEAN column with INTEGER to avoid SQLx Any driver decode errors.
     {
-        let content = welkin_data::migrations::migration_content("UserAccount", Backend::SQLite).unwrap();
-        runner.run_migrations("UserAccount", content).await
+        let content =
+            welkin_data::migrations::migration_content("UserAccount", Backend::SQLite).unwrap();
+        runner
+            .run_migrations("UserAccount", content)
+            .await
             .unwrap_or_else(|e| panic!("migration failed for UserAccount: {e}"));
         // Migration v3 used BOOLEAN which causes decode issues with SQLx Any driver.
         // Drop and re-add the column as INTEGER. Since ALTER TABLE DROP COLUMN isn't
@@ -254,7 +263,10 @@ async fn replay_grid_services() {
     }
 
     // Fix: recreate UserAccounts with the correct column type
-    sqlx::query("DROP TABLE IF EXISTS UserAccounts").execute(&pool).await.unwrap();
+    sqlx::query("DROP TABLE IF EXISTS UserAccounts")
+        .execute(&pool)
+        .await
+        .unwrap();
     sqlx::query(
         "CREATE TABLE UserAccounts (
             PrincipalID CHAR(36) PRIMARY KEY,
@@ -403,11 +415,12 @@ async fn replay_grid_services() {
         }));
 
     // 6. Load fixtures sorted by name
-    let fixture_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/grid-services");
+    let fixture_dir =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/grid-services");
     let mut entries: Vec<_> = std::fs::read_dir(&fixture_dir)
         .unwrap()
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map_or(false, |ext| ext == "json"))
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
         .collect();
     entries.sort_by_key(|e| e.file_name());
 
@@ -437,9 +450,7 @@ async fn replay_grid_services() {
                 builder = builder.header(k.as_str(), v.as_str().unwrap());
             }
         }
-        let request = builder
-            .body(axum::body::Body::from(body_str))
-            .unwrap();
+        let request = builder.body(axum::body::Body::from(body_str)).unwrap();
 
         // Send via tower oneshot
         let response = app.clone().oneshot(request).await.unwrap();
@@ -506,10 +517,9 @@ async fn replay_grid_services() {
                 let start = start + 8;
                 if let Some(end) = actual_body[start..].find("</result>") {
                     let b64 = &actual_body[start..start + end];
-                    if let Ok(decoded) = base64::Engine::decode(
-                        &base64::engine::general_purpose::STANDARD,
-                        b64,
-                    ) {
+                    if let Ok(decoded) =
+                        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, b64)
+                    {
                         let text = String::from_utf8_lossy(&decoded);
                         assert!(
                             text.contains(FRIEND_UUID),
@@ -752,15 +762,13 @@ async fn seed_data(pool: &sqlx::AnyPool) {
         ("Serial", "1"),
         ("Wearables", "0"),
     ] {
-        sqlx::query(
-            "INSERT INTO Avatars (PrincipalID, Name, Value) VALUES ($1, $2, $3)",
-        )
-        .bind(PRINCIPAL)
-        .bind(name)
-        .bind(value)
-        .execute(pool)
-        .await
-        .unwrap();
+        sqlx::query("INSERT INTO Avatars (PrincipalID, Name, Value) VALUES ($1, $2, $3)")
+            .bind(PRINCIPAL)
+            .bind(name)
+            .bind(value)
+            .execute(pool)
+            .await
+            .unwrap();
     }
 
     // -- MuteList --

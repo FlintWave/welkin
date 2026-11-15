@@ -67,14 +67,15 @@ impl LandParcel {
     }
 
     /// OR two bitmaps together.  Both must have the same dimensions.
-    pub fn merge_bitmaps(
-        base: &[Vec<bool>],
-        add: &[Vec<bool>],
-    ) -> Vec<Vec<bool>> {
+    pub fn merge_bitmaps(base: &[Vec<bool>], add: &[Vec<bool>]) -> Vec<Vec<bool>> {
         assert_eq!(base.len(), add.len(), "bitmap x dimensions must match");
         let mut out = base.to_vec();
         for (col_out, col_add) in out.iter_mut().zip(add.iter()) {
-            assert_eq!(col_out.len(), col_add.len(), "bitmap y dimensions must match");
+            assert_eq!(
+                col_out.len(),
+                col_add.len(),
+                "bitmap y dimensions must match"
+            );
             for (cell, &a) in col_out.iter_mut().zip(col_add.iter()) {
                 *cell |= a;
             }
@@ -91,7 +92,7 @@ impl LandParcel {
         let x_len = bm.len();
         let y_len = bm[0].len();
         let total_bits = x_len * y_len;
-        let mut bytes = vec![0u8; (total_bits + 7) / 8];
+        let mut bytes = vec![0u8; total_bits.div_ceil(8)];
         let mut bit_idx = 0usize;
         for gy in 0..y_len {
             for gx in 0..x_len {

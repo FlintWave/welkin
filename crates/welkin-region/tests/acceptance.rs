@@ -11,14 +11,14 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use axum::Router;
-use welkin_caps::handlers::cap_routes;
-use welkin_caps::server::CapabilityServer;
-use welkin_msg::{build_packet, Msg};
-use welkin_net::server::LLUDPServer;
 use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
+use welkin_caps::handlers::cap_routes;
+use welkin_caps::server::CapabilityServer;
+use welkin_msg::{Msg, build_packet};
+use welkin_net::server::LLUDPServer;
 
 // ---------------------------------------------------------------------------
 // 1. UDP listener — UseCircuitCode round-trip
@@ -166,9 +166,7 @@ async fn http_get(url: &str) -> (u16, String) {
     };
 
     let mut stream = TcpStream::connect(authority).await.unwrap();
-    let request = format!(
-        "GET {path} HTTP/1.1\r\nHost: {authority}\r\nConnection: close\r\n\r\n"
-    );
+    let request = format!("GET {path} HTTP/1.1\r\nHost: {authority}\r\nConnection: close\r\n\r\n");
     stream.write_all(request.as_bytes()).await.unwrap();
 
     let mut response = Vec::new();

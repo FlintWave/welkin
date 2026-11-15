@@ -100,7 +100,11 @@ impl fmt::Display for ValidationReport {
         if self.diffs.is_empty() {
             return write!(f, "Schema validation passed — no differences found.");
         }
-        writeln!(f, "Schema validation found {} difference(s):", self.diffs.len())?;
+        writeln!(
+            f,
+            "Schema validation found {} difference(s):",
+            self.diffs.len()
+        )?;
         for d in &self.diffs {
             match d {
                 SchemaDiff::MissingTable(t) => {
@@ -165,14 +169,14 @@ pub fn compare_schemas(expected: &ExpectedSchema, actual: &ActualSchema) -> Vali
         .collect();
 
     // Missing tables (in expected but not actual).
-    for (name, _) in &expected_map {
+    for name in expected_map.keys() {
         if !actual_map.contains_key(name) {
             diffs.push(SchemaDiff::MissingTable(name.clone()));
         }
     }
 
     // Extra tables (in actual but not expected).
-    for (name, _) in &actual_map {
+    for name in actual_map.keys() {
         if !expected_map.contains_key(name) {
             diffs.push(SchemaDiff::ExtraTable(name.clone()));
         }
@@ -370,250 +374,304 @@ fn table(name: &str, columns: Vec<ColumnDef>) -> TableDef {
 pub fn expected_schema() -> ExpectedSchema {
     ExpectedSchema {
         tables: vec![
-            table("UserAccounts", vec![
-                col("PrincipalID", "CHAR(36)", false),
-                col("ScopeID", "CHAR(36)", true),
-                col("FirstName", "VARCHAR(64)", false),
-                col("LastName", "VARCHAR(64)", false),
-                col("Email", "VARCHAR(64)", true),
-                col("ServiceURLs", "TEXT", true),
-                col("Created", "INTEGER", true),
-                col("UserLevel", "INTEGER", true),
-                col("UserFlags", "INTEGER", true),
-                col("UserTitle", "VARCHAR(64)", true),
-            ]),
-            table("auth", vec![
-                col("UUID", "CHAR(36)", false),
-                col("passwordHash", "CHAR(32)", false),
-                col("passwordSalt", "CHAR(32)", false),
-                col("webLoginKey", "CHAR(36)", true),
-                col("accountType", "VARCHAR(32)", true),
-            ]),
-            table("tokens", vec![
-                col("UUID", "CHAR(36)", false),
-                col("token", "VARCHAR(255)", false),
-                col("validity", "DATETIME", false),
-            ]),
-            table("Presence", vec![
-                col("UserID", "VARCHAR(255)", false),
-                col("RegionID", "CHAR(36)", false),
-                col("SessionID", "CHAR(36)", false),
-                col("SecureSessionID", "CHAR(36)", false),
-            ]),
-            table("GridUser", vec![
-                col("UserID", "VARCHAR(255)", false),
-                col("HomeRegionID", "CHAR(36)", true),
-                col("HomePosition", "CHAR(64)", true),
-                col("HomeLookAt", "CHAR(64)", true),
-                col("LastRegionID", "CHAR(36)", true),
-                col("LastPosition", "CHAR(64)", true),
-                col("LastLookAt", "CHAR(64)", true),
-                col("Online", "CHAR(5)", true),
-                col("Login", "CHAR(16)", true),
-                col("Logout", "CHAR(16)", true),
-            ]),
-            table("inventoryfolders", vec![
-                col("folderName", "VARCHAR(64)", true),
-                col("type", "SMALLINT", false),
-                col("version", "INTEGER", true),
-                col("folderID", "CHAR(36)", false),
-                col("agentID", "CHAR(36)", true),
-                col("parentFolderID", "CHAR(36)", true),
-            ]),
-            table("inventoryitems", vec![
-                col("assetID", "CHAR(36)", true),
-                col("assetType", "INTEGER", true),
-                col("inventoryName", "VARCHAR(64)", true),
-                col("inventoryDescription", "VARCHAR(128)", true),
-                col("inventoryNextPermissions", "INTEGER", true),
-                col("inventoryCurrentPermissions", "INTEGER", true),
-                col("invType", "INTEGER", true),
-                col("creatorID", "VARCHAR(128)", true),
-                col("inventoryBasePermissions", "INTEGER", true),
-                col("inventoryEveryOnePermissions", "INTEGER", true),
-                col("salePrice", "INTEGER", true),
-                col("saleType", "TINYINT", true),
-                col("creationDate", "INTEGER", true),
-                col("groupID", "CHAR(36)", true),
-                col("groupOwned", "BOOLEAN", true),
-                col("flags", "INTEGER", true),
-                col("inventoryID", "CHAR(36)", false),
-                col("avatarID", "CHAR(36)", true),
-                col("parentFolderID", "CHAR(36)", true),
-                col("inventoryGroupPermissions", "INTEGER", true),
-            ]),
-            table("assets", vec![
-                col("name", "VARCHAR(64)", true),
-                col("description", "VARCHAR(64)", true),
-                col("assetType", "TINYINT", false),
-                col("local", "BOOLEAN", false),
-                col("temporary", "BOOLEAN", false),
-                col("data", "LONGBLOB", false),
-                col("id", "CHAR(36)", false),
-                col("create_time", "INTEGER", true),
-                col("access_time", "INTEGER", true),
-                col("asset_flags", "INTEGER", true),
-                col("CreatorID", "VARCHAR(128)", true),
-            ]),
-            table("regions", vec![
-                col("uuid", "CHAR(36)", false),
-                col("regionHandle", "BIGINT", true),
-                col("regionName", "VARCHAR(128)", true),
-                col("regionDataURI", "VARCHAR(255)", true),
-                col("serverIP", "VARCHAR(64)", true),
-                col("serverPort", "INTEGER", true),
-                col("serverURI", "VARCHAR(255)", true),
-                col("locX", "INTEGER", true),
-                col("locY", "INTEGER", true),
-                col("locZ", "INTEGER", true),
-                col("eastOverrideHandle", "BIGINT", true),
-                col("westOverrideHandle", "BIGINT", true),
-                col("southOverrideHandle", "BIGINT", true),
-                col("northOverrideHandle", "BIGINT", true),
-                col("regionAssetURI", "VARCHAR(255)", true),
-                col("regionAssetRecvKey", "VARCHAR(128)", true),
-                col("regionAssetSendKey", "VARCHAR(128)", true),
-                col("regionUserURI", "VARCHAR(255)", true),
-                col("regionUserRecvKey", "VARCHAR(128)", true),
-                col("regionUserSendKey", "VARCHAR(128)", true),
-                col("regionMapTexture", "CHAR(36)", true),
-                col("serverHttpPort", "INTEGER", true),
-                col("serverRemotingPort", "INTEGER", true),
-                col("owner_uuid", "CHAR(36)", true),
-                col("PrincipalID", "CHAR(36)", true),
-                col("Token", "VARCHAR(255)", true),
-                col("sizeX", "INTEGER", true),
-                col("sizeY", "INTEGER", true),
-                col("flags", "INTEGER", true),
-                col("last_seen", "INTEGER", true),
-                col("parcelMapTexture", "CHAR(36)", true),
-            ]),
-            table("estate_settings", vec![
-                col("EstateID", "INTEGER", false),
-                col("EstateName", "VARCHAR(64)", true),
-                col("AbuseEmailToEstateOwner", "BOOLEAN", true),
-                col("DenyAnonymous", "BOOLEAN", true),
-                col("ResetHomeOnTeleport", "BOOLEAN", true),
-                col("FixedSun", "BOOLEAN", true),
-                col("DenyTransacted", "BOOLEAN", true),
-                col("BlockDwell", "BOOLEAN", true),
-                col("DenyIdentified", "BOOLEAN", true),
-                col("AllowVoice", "BOOLEAN", true),
-                col("UseGlobalTime", "BOOLEAN", true),
-                col("PricePerMeter", "INTEGER", true),
-                col("TaxFree", "BOOLEAN", true),
-                col("AllowDirectTeleport", "BOOLEAN", true),
-                col("RedirectGridX", "INTEGER", true),
-                col("RedirectGridY", "INTEGER", true),
-                col("ParentEstateID", "INTEGER", true),
-                col("SunPosition", "DOUBLE", true),
-                col("EstateSkipScripts", "BOOLEAN", true),
-                col("BillableFactor", "FLOAT", true),
-                col("PublicAccess", "BOOLEAN", true),
-                col("AbuseEmail", "VARCHAR(255)", true),
-                col("EstateOwner", "CHAR(36)", true),
-                col("DenyMinors", "BOOLEAN", true),
-                col("AllowLandmark", "BOOLEAN", true),
-                col("AllowParcelChanges", "BOOLEAN", true),
-                col("AllowSetHome", "BOOLEAN", true),
-            ]),
-            table("estate_map", vec![
-                col("RegionID", "CHAR(36)", false),
-                col("EstateID", "INTEGER", false),
-            ]),
-            table("os_groups_groups", vec![
-                col("GroupID", "CHAR(36)", false),
-                col("Location", "VARCHAR(255)", true),
-                col("Name", "VARCHAR(255)", true),
-                col("Charter", "TEXT", true),
-                col("InsigniaID", "CHAR(36)", true),
-                col("FounderID", "CHAR(36)", true),
-                col("MembershipFee", "INTEGER", true),
-                col("OpenEnrollment", "VARCHAR(255)", true),
-                col("ShowInList", "BOOLEAN", true),
-                col("AllowPublish", "BOOLEAN", true),
-                col("MaturePublish", "BOOLEAN", true),
-                col("OwnerRoleID", "CHAR(36)", true),
-            ]),
-            table("os_groups_membership", vec![
-                col("GroupID", "CHAR(36)", false),
-                col("PrincipalID", "VARCHAR(255)", false),
-                col("SelectedRoleID", "CHAR(36)", true),
-                col("Contribution", "INTEGER", true),
-                col("ListInProfile", "BOOLEAN", true),
-                col("AcceptNotices", "BOOLEAN", true),
-                col("AccessToken", "CHAR(36)", true),
-            ]),
-            table("os_groups_roles", vec![
-                col("GroupID", "CHAR(36)", false),
-                col("RoleID", "CHAR(36)", false),
-                col("Name", "VARCHAR(255)", true),
-                col("Description", "VARCHAR(255)", true),
-                col("Title", "VARCHAR(255)", true),
-                col("Powers", "BIGINT", true),
-            ]),
-            table("Friends", vec![
-                col("PrincipalID", "VARCHAR(255)", false),
-                col("Friend", "VARCHAR(255)", false),
-                col("Flags", "VARCHAR(16)", true),
-                col("Offered", "VARCHAR(32)", true),
-            ]),
-            table("Avatars", vec![
-                col("PrincipalID", "CHAR(36)", false),
-                col("Name", "VARCHAR(32)", false),
-                col("Value", "TEXT", true),
-            ]),
-            table("land", vec![
-                col("UUID", "CHAR(36)", false),
-                col("RegionUUID", "CHAR(36)", true),
-                col("LocalLandID", "INTEGER", true),
-                col("Bitmap", "LONGBLOB", true),
-                col("Name", "VARCHAR(255)", true),
-                col("Description", "VARCHAR(255)", true),
-                col("OwnerUUID", "CHAR(36)", true),
-                col("IsGroupOwned", "BOOLEAN", true),
-                col("Area", "INTEGER", true),
-                col("AuctionID", "INTEGER", true),
-                col("Category", "TINYINT", true),
-                col("ClaimDate", "INTEGER", true),
-                col("ClaimPrice", "INTEGER", true),
-                col("GroupUUID", "CHAR(36)", true),
-                col("SalePrice", "INTEGER", true),
-                col("LandStatus", "TINYINT", true),
-                col("LandFlags", "INTEGER", true),
-                col("LandingType", "TINYINT", true),
-                col("MediaAutoScale", "TINYINT", true),
-                col("MediaTextureUUID", "CHAR(36)", true),
-                col("MediaURL", "VARCHAR(255)", true),
-                col("MusicURL", "VARCHAR(255)", true),
-                col("PassHours", "FLOAT", true),
-                col("PassPrice", "INTEGER", true),
-                col("SnapshotUUID", "CHAR(36)", true),
-                col("UserLocationX", "FLOAT", true),
-                col("UserLocationY", "FLOAT", true),
-                col("UserLocationZ", "FLOAT", true),
-                col("UserLookAtX", "FLOAT", true),
-                col("UserLookAtY", "FLOAT", true),
-                col("UserLookAtZ", "FLOAT", true),
-                col("AuthbuyerID", "CHAR(36)", true),
-                col("OtherCleanTime", "INTEGER", true),
-                col("Dwell", "FLOAT", true),
-                col("MediaType", "VARCHAR(32)", true),
-                col("MediaDescription", "VARCHAR(255)", true),
-                col("MediaSize", "VARCHAR(16)", true),
-                col("MediaLoop", "BOOLEAN", true),
-                col("ObscureMusic", "BOOLEAN", true),
-                col("ObscureMedia", "BOOLEAN", true),
-                col("SeeAVs", "BOOLEAN", true),
-                col("AnyAVSounds", "BOOLEAN", true),
-                col("GroupAVSounds", "BOOLEAN", true),
-            ]),
-            table("landaccesslist", vec![
-                col("LandUUID", "CHAR(36)", true),
-                col("AccessUUID", "CHAR(36)", true),
-                col("Flags", "INTEGER", true),
-                col("Expires", "INTEGER", true),
-            ]),
+            table(
+                "UserAccounts",
+                vec![
+                    col("PrincipalID", "CHAR(36)", false),
+                    col("ScopeID", "CHAR(36)", true),
+                    col("FirstName", "VARCHAR(64)", false),
+                    col("LastName", "VARCHAR(64)", false),
+                    col("Email", "VARCHAR(64)", true),
+                    col("ServiceURLs", "TEXT", true),
+                    col("Created", "INTEGER", true),
+                    col("UserLevel", "INTEGER", true),
+                    col("UserFlags", "INTEGER", true),
+                    col("UserTitle", "VARCHAR(64)", true),
+                ],
+            ),
+            table(
+                "auth",
+                vec![
+                    col("UUID", "CHAR(36)", false),
+                    col("passwordHash", "CHAR(32)", false),
+                    col("passwordSalt", "CHAR(32)", false),
+                    col("webLoginKey", "CHAR(36)", true),
+                    col("accountType", "VARCHAR(32)", true),
+                ],
+            ),
+            table(
+                "tokens",
+                vec![
+                    col("UUID", "CHAR(36)", false),
+                    col("token", "VARCHAR(255)", false),
+                    col("validity", "DATETIME", false),
+                ],
+            ),
+            table(
+                "Presence",
+                vec![
+                    col("UserID", "VARCHAR(255)", false),
+                    col("RegionID", "CHAR(36)", false),
+                    col("SessionID", "CHAR(36)", false),
+                    col("SecureSessionID", "CHAR(36)", false),
+                ],
+            ),
+            table(
+                "GridUser",
+                vec![
+                    col("UserID", "VARCHAR(255)", false),
+                    col("HomeRegionID", "CHAR(36)", true),
+                    col("HomePosition", "CHAR(64)", true),
+                    col("HomeLookAt", "CHAR(64)", true),
+                    col("LastRegionID", "CHAR(36)", true),
+                    col("LastPosition", "CHAR(64)", true),
+                    col("LastLookAt", "CHAR(64)", true),
+                    col("Online", "CHAR(5)", true),
+                    col("Login", "CHAR(16)", true),
+                    col("Logout", "CHAR(16)", true),
+                ],
+            ),
+            table(
+                "inventoryfolders",
+                vec![
+                    col("folderName", "VARCHAR(64)", true),
+                    col("type", "SMALLINT", false),
+                    col("version", "INTEGER", true),
+                    col("folderID", "CHAR(36)", false),
+                    col("agentID", "CHAR(36)", true),
+                    col("parentFolderID", "CHAR(36)", true),
+                ],
+            ),
+            table(
+                "inventoryitems",
+                vec![
+                    col("assetID", "CHAR(36)", true),
+                    col("assetType", "INTEGER", true),
+                    col("inventoryName", "VARCHAR(64)", true),
+                    col("inventoryDescription", "VARCHAR(128)", true),
+                    col("inventoryNextPermissions", "INTEGER", true),
+                    col("inventoryCurrentPermissions", "INTEGER", true),
+                    col("invType", "INTEGER", true),
+                    col("creatorID", "VARCHAR(128)", true),
+                    col("inventoryBasePermissions", "INTEGER", true),
+                    col("inventoryEveryOnePermissions", "INTEGER", true),
+                    col("salePrice", "INTEGER", true),
+                    col("saleType", "TINYINT", true),
+                    col("creationDate", "INTEGER", true),
+                    col("groupID", "CHAR(36)", true),
+                    col("groupOwned", "BOOLEAN", true),
+                    col("flags", "INTEGER", true),
+                    col("inventoryID", "CHAR(36)", false),
+                    col("avatarID", "CHAR(36)", true),
+                    col("parentFolderID", "CHAR(36)", true),
+                    col("inventoryGroupPermissions", "INTEGER", true),
+                ],
+            ),
+            table(
+                "assets",
+                vec![
+                    col("name", "VARCHAR(64)", true),
+                    col("description", "VARCHAR(64)", true),
+                    col("assetType", "TINYINT", false),
+                    col("local", "BOOLEAN", false),
+                    col("temporary", "BOOLEAN", false),
+                    col("data", "LONGBLOB", false),
+                    col("id", "CHAR(36)", false),
+                    col("create_time", "INTEGER", true),
+                    col("access_time", "INTEGER", true),
+                    col("asset_flags", "INTEGER", true),
+                    col("CreatorID", "VARCHAR(128)", true),
+                ],
+            ),
+            table(
+                "regions",
+                vec![
+                    col("uuid", "CHAR(36)", false),
+                    col("regionHandle", "BIGINT", true),
+                    col("regionName", "VARCHAR(128)", true),
+                    col("regionDataURI", "VARCHAR(255)", true),
+                    col("serverIP", "VARCHAR(64)", true),
+                    col("serverPort", "INTEGER", true),
+                    col("serverURI", "VARCHAR(255)", true),
+                    col("locX", "INTEGER", true),
+                    col("locY", "INTEGER", true),
+                    col("locZ", "INTEGER", true),
+                    col("eastOverrideHandle", "BIGINT", true),
+                    col("westOverrideHandle", "BIGINT", true),
+                    col("southOverrideHandle", "BIGINT", true),
+                    col("northOverrideHandle", "BIGINT", true),
+                    col("regionAssetURI", "VARCHAR(255)", true),
+                    col("regionAssetRecvKey", "VARCHAR(128)", true),
+                    col("regionAssetSendKey", "VARCHAR(128)", true),
+                    col("regionUserURI", "VARCHAR(255)", true),
+                    col("regionUserRecvKey", "VARCHAR(128)", true),
+                    col("regionUserSendKey", "VARCHAR(128)", true),
+                    col("regionMapTexture", "CHAR(36)", true),
+                    col("serverHttpPort", "INTEGER", true),
+                    col("serverRemotingPort", "INTEGER", true),
+                    col("owner_uuid", "CHAR(36)", true),
+                    col("PrincipalID", "CHAR(36)", true),
+                    col("Token", "VARCHAR(255)", true),
+                    col("sizeX", "INTEGER", true),
+                    col("sizeY", "INTEGER", true),
+                    col("flags", "INTEGER", true),
+                    col("last_seen", "INTEGER", true),
+                    col("parcelMapTexture", "CHAR(36)", true),
+                ],
+            ),
+            table(
+                "estate_settings",
+                vec![
+                    col("EstateID", "INTEGER", false),
+                    col("EstateName", "VARCHAR(64)", true),
+                    col("AbuseEmailToEstateOwner", "BOOLEAN", true),
+                    col("DenyAnonymous", "BOOLEAN", true),
+                    col("ResetHomeOnTeleport", "BOOLEAN", true),
+                    col("FixedSun", "BOOLEAN", true),
+                    col("DenyTransacted", "BOOLEAN", true),
+                    col("BlockDwell", "BOOLEAN", true),
+                    col("DenyIdentified", "BOOLEAN", true),
+                    col("AllowVoice", "BOOLEAN", true),
+                    col("UseGlobalTime", "BOOLEAN", true),
+                    col("PricePerMeter", "INTEGER", true),
+                    col("TaxFree", "BOOLEAN", true),
+                    col("AllowDirectTeleport", "BOOLEAN", true),
+                    col("RedirectGridX", "INTEGER", true),
+                    col("RedirectGridY", "INTEGER", true),
+                    col("ParentEstateID", "INTEGER", true),
+                    col("SunPosition", "DOUBLE", true),
+                    col("EstateSkipScripts", "BOOLEAN", true),
+                    col("BillableFactor", "FLOAT", true),
+                    col("PublicAccess", "BOOLEAN", true),
+                    col("AbuseEmail", "VARCHAR(255)", true),
+                    col("EstateOwner", "CHAR(36)", true),
+                    col("DenyMinors", "BOOLEAN", true),
+                    col("AllowLandmark", "BOOLEAN", true),
+                    col("AllowParcelChanges", "BOOLEAN", true),
+                    col("AllowSetHome", "BOOLEAN", true),
+                ],
+            ),
+            table(
+                "estate_map",
+                vec![
+                    col("RegionID", "CHAR(36)", false),
+                    col("EstateID", "INTEGER", false),
+                ],
+            ),
+            table(
+                "os_groups_groups",
+                vec![
+                    col("GroupID", "CHAR(36)", false),
+                    col("Location", "VARCHAR(255)", true),
+                    col("Name", "VARCHAR(255)", true),
+                    col("Charter", "TEXT", true),
+                    col("InsigniaID", "CHAR(36)", true),
+                    col("FounderID", "CHAR(36)", true),
+                    col("MembershipFee", "INTEGER", true),
+                    col("OpenEnrollment", "VARCHAR(255)", true),
+                    col("ShowInList", "BOOLEAN", true),
+                    col("AllowPublish", "BOOLEAN", true),
+                    col("MaturePublish", "BOOLEAN", true),
+                    col("OwnerRoleID", "CHAR(36)", true),
+                ],
+            ),
+            table(
+                "os_groups_membership",
+                vec![
+                    col("GroupID", "CHAR(36)", false),
+                    col("PrincipalID", "VARCHAR(255)", false),
+                    col("SelectedRoleID", "CHAR(36)", true),
+                    col("Contribution", "INTEGER", true),
+                    col("ListInProfile", "BOOLEAN", true),
+                    col("AcceptNotices", "BOOLEAN", true),
+                    col("AccessToken", "CHAR(36)", true),
+                ],
+            ),
+            table(
+                "os_groups_roles",
+                vec![
+                    col("GroupID", "CHAR(36)", false),
+                    col("RoleID", "CHAR(36)", false),
+                    col("Name", "VARCHAR(255)", true),
+                    col("Description", "VARCHAR(255)", true),
+                    col("Title", "VARCHAR(255)", true),
+                    col("Powers", "BIGINT", true),
+                ],
+            ),
+            table(
+                "Friends",
+                vec![
+                    col("PrincipalID", "VARCHAR(255)", false),
+                    col("Friend", "VARCHAR(255)", false),
+                    col("Flags", "VARCHAR(16)", true),
+                    col("Offered", "VARCHAR(32)", true),
+                ],
+            ),
+            table(
+                "Avatars",
+                vec![
+                    col("PrincipalID", "CHAR(36)", false),
+                    col("Name", "VARCHAR(32)", false),
+                    col("Value", "TEXT", true),
+                ],
+            ),
+            table(
+                "land",
+                vec![
+                    col("UUID", "CHAR(36)", false),
+                    col("RegionUUID", "CHAR(36)", true),
+                    col("LocalLandID", "INTEGER", true),
+                    col("Bitmap", "LONGBLOB", true),
+                    col("Name", "VARCHAR(255)", true),
+                    col("Description", "VARCHAR(255)", true),
+                    col("OwnerUUID", "CHAR(36)", true),
+                    col("IsGroupOwned", "BOOLEAN", true),
+                    col("Area", "INTEGER", true),
+                    col("AuctionID", "INTEGER", true),
+                    col("Category", "TINYINT", true),
+                    col("ClaimDate", "INTEGER", true),
+                    col("ClaimPrice", "INTEGER", true),
+                    col("GroupUUID", "CHAR(36)", true),
+                    col("SalePrice", "INTEGER", true),
+                    col("LandStatus", "TINYINT", true),
+                    col("LandFlags", "INTEGER", true),
+                    col("LandingType", "TINYINT", true),
+                    col("MediaAutoScale", "TINYINT", true),
+                    col("MediaTextureUUID", "CHAR(36)", true),
+                    col("MediaURL", "VARCHAR(255)", true),
+                    col("MusicURL", "VARCHAR(255)", true),
+                    col("PassHours", "FLOAT", true),
+                    col("PassPrice", "INTEGER", true),
+                    col("SnapshotUUID", "CHAR(36)", true),
+                    col("UserLocationX", "FLOAT", true),
+                    col("UserLocationY", "FLOAT", true),
+                    col("UserLocationZ", "FLOAT", true),
+                    col("UserLookAtX", "FLOAT", true),
+                    col("UserLookAtY", "FLOAT", true),
+                    col("UserLookAtZ", "FLOAT", true),
+                    col("AuthbuyerID", "CHAR(36)", true),
+                    col("OtherCleanTime", "INTEGER", true),
+                    col("Dwell", "FLOAT", true),
+                    col("MediaType", "VARCHAR(32)", true),
+                    col("MediaDescription", "VARCHAR(255)", true),
+                    col("MediaSize", "VARCHAR(16)", true),
+                    col("MediaLoop", "BOOLEAN", true),
+                    col("ObscureMusic", "BOOLEAN", true),
+                    col("ObscureMedia", "BOOLEAN", true),
+                    col("SeeAVs", "BOOLEAN", true),
+                    col("AnyAVSounds", "BOOLEAN", true),
+                    col("GroupAVSounds", "BOOLEAN", true),
+                ],
+            ),
+            table(
+                "landaccesslist",
+                vec![
+                    col("LandUUID", "CHAR(36)", true),
+                    col("AccessUUID", "CHAR(36)", true),
+                    col("Flags", "INTEGER", true),
+                    col("Expires", "INTEGER", true),
+                ],
+            ),
         ],
     }
 }
@@ -696,11 +754,14 @@ mod tests {
         };
         let actual = actual(vec![("Foo", vec![col("id", "INTEGER", false)])]);
         let report = compare_schemas(&expected, &actual);
-        assert!(report.diffs.iter().any(|d| matches!(
-            d,
-            SchemaDiff::MissingColumn { table, column }
-                if table == "foo" && column == "name"
-        )), "should detect missing column: {report}");
+        assert!(
+            report.diffs.iter().any(|d| matches!(
+                d,
+                SchemaDiff::MissingColumn { table, column }
+                    if table == "foo" && column == "name"
+            )),
+            "should detect missing column: {report}"
+        );
     }
 
     #[test]
@@ -713,11 +774,14 @@ mod tests {
             vec![col("id", "INTEGER", false), col("extra", "TEXT", true)],
         )]);
         let report = compare_schemas(&expected, &actual);
-        assert!(report.diffs.iter().any(|d| matches!(
-            d,
-            SchemaDiff::ExtraColumn { table, column }
-                if table == "foo" && column == "extra"
-        )), "should detect extra column: {report}");
+        assert!(
+            report.diffs.iter().any(|d| matches!(
+                d,
+                SchemaDiff::ExtraColumn { table, column }
+                    if table == "foo" && column == "extra"
+            )),
+            "should detect extra column: {report}"
+        );
     }
 
     #[test]
@@ -727,12 +791,15 @@ mod tests {
         };
         let actual = actual(vec![("Foo", vec![col("val", "TEXT", false)])]);
         let report = compare_schemas(&expected, &actual);
-        assert!(report.diffs.iter().any(|d| matches!(
-            d,
-            SchemaDiff::TypeMismatch { table, column, expected, actual }
-                if table == "foo" && column == "val"
-                    && expected == "VARCHAR(64)" && actual == "TEXT"
-        )), "should detect type mismatch: {report}");
+        assert!(
+            report.diffs.iter().any(|d| matches!(
+                d,
+                SchemaDiff::TypeMismatch { table, column, expected, actual }
+                    if table == "foo" && column == "val"
+                        && expected == "VARCHAR(64)" && actual == "TEXT"
+            )),
+            "should detect type mismatch: {report}"
+        );
     }
 
     #[test]
@@ -742,15 +809,18 @@ mod tests {
         };
         let actual = actual(vec![("Foo", vec![col("id", "INTEGER", true)])]);
         let report = compare_schemas(&expected, &actual);
-        assert!(report.diffs.iter().any(|d| matches!(
-            d,
-            SchemaDiff::NullabilityMismatch {
-                table,
-                column,
-                expected_nullable: false,
-                actual_nullable: true,
-            } if table == "foo" && column == "id"
-        )), "should detect nullability mismatch: {report}");
+        assert!(
+            report.diffs.iter().any(|d| matches!(
+                d,
+                SchemaDiff::NullabilityMismatch {
+                    table,
+                    column,
+                    expected_nullable: false,
+                    actual_nullable: true,
+                } if table == "foo" && column == "id"
+            )),
+            "should detect nullability mismatch: {report}"
+        );
     }
 
     #[test]
@@ -760,22 +830,29 @@ mod tests {
         };
         let actual = actual(vec![("Foo", vec![col("n", "INTEGER", false)])]);
         let report = compare_schemas(&expected, &actual);
-        assert!(report.is_ok(), "INT and INTEGER should be equivalent: {report}");
+        assert!(
+            report.is_ok(),
+            "INT and INTEGER should be equivalent: {report}"
+        );
     }
 
     #[test]
     fn case_insensitive_table_and_column_names() {
         let expected = ExpectedSchema {
-            tables: vec![table("UserAccounts", vec![
-                col("PrincipalID", "CHAR(36)", false),
-            ])],
+            tables: vec![table(
+                "UserAccounts",
+                vec![col("PrincipalID", "CHAR(36)", false)],
+            )],
         };
         let actual = actual(vec![(
             "useraccounts",
             vec![col("principalid", "CHAR(36)", false)],
         )]);
         let report = compare_schemas(&expected, &actual);
-        assert!(report.is_ok(), "comparison should be case-insensitive: {report}");
+        assert!(
+            report.is_ok(),
+            "comparison should be case-insensitive: {report}"
+        );
     }
 
     #[test]
@@ -788,8 +865,16 @@ mod tests {
         };
         let stmts = generate_alter_statements(&report);
         assert_eq!(stmts.len(), 1);
-        assert!(stmts[0].contains("ADD COLUMN"), "should produce ADD COLUMN: {}", stmts[0]);
-        assert!(stmts[0].contains("argon2Hash"), "should name the column: {}", stmts[0]);
+        assert!(
+            stmts[0].contains("ADD COLUMN"),
+            "should produce ADD COLUMN: {}",
+            stmts[0]
+        );
+        assert!(
+            stmts[0].contains("argon2Hash"),
+            "should name the column: {}",
+            stmts[0]
+        );
     }
 
     #[test]
@@ -804,8 +889,16 @@ mod tests {
         };
         let stmts = generate_alter_statements(&report);
         assert_eq!(stmts.len(), 1);
-        assert!(stmts[0].contains("MODIFY COLUMN"), "should produce MODIFY COLUMN: {}", stmts[0]);
-        assert!(stmts[0].contains("LONGBLOB"), "should use expected type: {}", stmts[0]);
+        assert!(
+            stmts[0].contains("MODIFY COLUMN"),
+            "should produce MODIFY COLUMN: {}",
+            stmts[0]
+        );
+        assert!(
+            stmts[0].contains("LONGBLOB"),
+            "should use expected type: {}",
+            stmts[0]
+        );
     }
 
     #[test]
@@ -844,7 +937,10 @@ mod tests {
             "landaccesslist",
         ];
         for req in required {
-            assert!(names.contains(&req.to_string()), "expected schema must contain table {req}");
+            assert!(
+                names.contains(&req.to_string()),
+                "expected schema must contain table {req}"
+            );
         }
     }
 

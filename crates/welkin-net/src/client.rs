@@ -9,12 +9,12 @@
 use crate::circuit::CircuitTick;
 use crate::server::ClientSession;
 use crate::throttle::ThrottleCategory;
-use welkin_msg::Msg;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::UdpSocket;
 use tokio::sync::Mutex;
+use welkin_msg::Msg;
 
 /// Default timeout before a client is considered disconnected.
 const CLIENT_TIMEOUT: Duration = Duration::from_secs(60);
@@ -125,24 +125,16 @@ impl LLUDPClient {
 mod tests {
     use super::*;
     use crate::server::ClientSession;
-    use welkin_msg::msgs;
     use uuid::Uuid;
+    use welkin_msg::msgs;
 
     async fn make_pair() -> (LLUDPClient, UdpSocket) {
         let server_sock = UdpSocket::bind("127.0.0.1:0").await.unwrap();
         let viewer_sock = UdpSocket::bind("127.0.0.1:0").await.unwrap();
         let viewer_addr = viewer_sock.local_addr().unwrap();
 
-        let session = ClientSession::new(
-            viewer_addr,
-            42,
-            Uuid::from_u128(1),
-            Uuid::from_u128(2),
-        );
-        let client = LLUDPClient::new(
-            Arc::new(Mutex::new(session)),
-            Arc::new(server_sock),
-        );
+        let session = ClientSession::new(viewer_addr, 42, Uuid::from_u128(1), Uuid::from_u128(2));
+        let client = LLUDPClient::new(Arc::new(Mutex::new(session)), Arc::new(server_sock));
         (client, viewer_sock)
     }
 
@@ -161,11 +153,10 @@ mod tests {
         client.send_msg(&ping, false).await.unwrap();
 
         let mut buf = [0u8; 2048];
-        let (len, _src) =
-            tokio::time::timeout(Duration::from_secs(1), viewer.recv_from(&mut buf))
-                .await
-                .expect("timeout")
-                .expect("recv failed");
+        let (len, _src) = tokio::time::timeout(Duration::from_secs(1), viewer.recv_from(&mut buf))
+            .await
+            .expect("timeout")
+            .expect("recv failed");
         assert!(len > 0);
 
         // Parse what arrived and verify the message type.
@@ -188,11 +179,10 @@ mod tests {
         client.send_raw(&w.buf, false, true).await.unwrap();
 
         let mut buf = [0u8; 2048];
-        let (len, _) =
-            tokio::time::timeout(Duration::from_secs(1), viewer.recv_from(&mut buf))
-                .await
-                .unwrap()
-                .unwrap();
+        let (len, _) = tokio::time::timeout(Duration::from_secs(1), viewer.recv_from(&mut buf))
+            .await
+            .unwrap()
+            .unwrap();
         let pkt = welkin_msg::parse_packet(&buf[..len]).unwrap();
         assert_eq!(pkt.id, msgs::CompletePingCheck::ID);
         assert!(pkt.reliable());
@@ -227,10 +217,6 @@ mod tests {
         client.update_throttle(&data).await;
 
         // After updating, the throttle should allow a small send.
-        assert!(
-            client
-                .try_throttle(ThrottleCategory::Task, 100)
-                .await
-        );
+        assert!(client.try_throttle(ThrottleCategory::Task, 100).await);
     }
 }

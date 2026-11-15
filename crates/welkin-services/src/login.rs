@@ -4,14 +4,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use axum::Router;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
-use axum::Router;
 
-use quick_xml::events::Event;
 use quick_xml::Reader;
+use quick_xml::events::Event;
 use uuid::Uuid;
 
 use welkin_data::accounts::UserAccountStore;
@@ -76,7 +76,10 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>)
     let first = params.get("first").cloned().unwrap_or_default();
     let last = params.get("last").cloned().unwrap_or_default();
     let passwd = params.get("passwd").cloned().unwrap_or_default();
-    let start = params.get("start").cloned().unwrap_or_else(|| "home".to_string());
+    let start = params
+        .get("start")
+        .cloned()
+        .unwrap_or_else(|| "home".to_string());
 
     if first.is_empty() || last.is_empty() {
         return error_response("key", "Missing name");
@@ -89,11 +92,17 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>)
         Ok(Some(a)) => a,
         Ok(None) => {
             tracing::debug!("login: user not found");
-            return error_response("key", "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist.");
+            return error_response(
+                "key",
+                "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist.",
+            );
         }
         Err(e) => {
             tracing::warn!(error = %e, "login: account lookup failed");
-            return error_response("key", "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist.");
+            return error_response(
+                "key",
+                "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist.",
+            );
         }
     };
 
@@ -102,10 +111,18 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>)
     // 2. Authentication
     let auth = match state.auth_store.get(&principal_id).await {
         Ok(Some(a)) => a,
-        Ok(None) => return error_response("key", "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist."),
+        Ok(None) => {
+            return error_response(
+                "key",
+                "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist.",
+            );
+        }
         Err(e) => {
             tracing::warn!(error = %e, "login: auth lookup failed");
-            return error_response("key", "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist.");
+            return error_response(
+                "key",
+                "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist.",
+            );
         }
     };
 
@@ -119,7 +136,10 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>)
     let computed = md5_hex(&format!("{}:{}", stripped, auth.password_salt));
     if !crate::constant_time_eq(&computed, &auth.password_hash) {
         tracing::debug!(principal = %principal_id, "login: password mismatch");
-        return error_response("key", "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist.");
+        return error_response(
+            "key",
+            "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist.",
+        );
     }
 
     // 3. Generate session tokens
@@ -199,13 +219,18 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>)
     }
 
     if region.is_none()
-        && let Ok(mut defaults) = state.grid_store.get_default_regions(&account.scope_id).await
+        && let Ok(mut defaults) = state
+            .grid_store
+            .get_default_regions(&account.scope_id)
+            .await
     {
         region = defaults.drain(..).next();
     }
     if region.is_none()
-        && let Ok(mut fallbacks) =
-            state.grid_store.get_fallback_regions(&account.scope_id).await
+        && let Ok(mut fallbacks) = state
+            .grid_store
+            .get_fallback_regions(&account.scope_id)
+            .await
     {
         region = fallbacks.drain(..).next();
     }
@@ -310,33 +335,21 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>)
         xml_str("gendered", "Y"),
         xml_str("ever_logged_in", "Y")
     );
-    let login_flags_member =
-        xml_array_of_structs("login-flags", &xml_struct(&login_flags_members));
+    let login_flags_member = xml_array_of_structs("login-flags", &xml_struct(&login_flags_members));
 
     // Build global-textures
     let global_textures_members = format!(
         "{}{}{}",
-        xml_str(
-            "sun_texture_id",
-            "cce0f112-878f-4586-a2e2-a8f104bba271"
-        ),
-        xml_str(
-            "cloud_texture_id",
-            "dc4b9f0b-d008-45c6-96a4-01dd947ac621"
-        ),
-        xml_str(
-            "moon_texture_id",
-            "ec4b9f0b-d008-45c6-96a4-01dd947ac621"
-        )
+        xml_str("sun_texture_id", "cce0f112-878f-4586-a2e2-a8f104bba271"),
+        xml_str("cloud_texture_id", "dc4b9f0b-d008-45c6-96a4-01dd947ac621"),
+        xml_str("moon_texture_id", "ec4b9f0b-d008-45c6-96a4-01dd947ac621")
     );
     let global_textures_member =
         xml_array_of_structs("global-textures", &xml_struct(&global_textures_members));
 
     // Build ui-config
-    let ui_config_member = xml_array_of_structs(
-        "ui-config",
-        &xml_struct(&xml_str("allow_first_life", "Y")),
-    );
+    let ui_config_member =
+        xml_array_of_structs("ui-config", &xml_struct(&xml_str("allow_first_life", "Y")));
 
     // Build classified_categories
     let classified_cats = [
@@ -352,7 +365,11 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>)
     ];
     let mut classified_items = String::new();
     for (name, id) in classified_cats {
-        let members = format!("{}{}", xml_str("category_name", name), xml_i4("category_id", id));
+        let members = format!(
+            "{}{}",
+            xml_str("category_name", name),
+            xml_i4("category_id", id)
+        );
         classified_items.push_str(&xml_struct(&members));
     }
     let classified_member = xml_array_of_structs("classified_categories", &classified_items);
@@ -379,8 +396,7 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>)
         );
         inventory_structs.push_str(&xml_struct(&folder_members));
     }
-    let inventory_skeleton_member =
-        xml_array_of_structs("inventory-skeleton", &inventory_structs);
+    let inventory_skeleton_member = xml_array_of_structs("inventory-skeleton", &inventory_structs);
 
     // Build inventory-root
     let root_folder_id = root_folder.map(|f| f.folder_id).unwrap_or_default();
@@ -399,10 +415,7 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>)
     );
     let inventory_lib_owner_member = xml_array_of_structs(
         "inventory-lib-owner",
-        &xml_struct(&xml_str(
-            "agent_id",
-            "11111111-1111-0000-0000-000100bba000",
-        )),
+        &xml_struct(&xml_str("agent_id", "11111111-1111-0000-0000-000100bba000")),
     );
 
     // Build gestures
@@ -461,7 +474,14 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>)
     members.push_str(&xml_i4("max-agent-groups", 42));
     members.push_str(&xml_str("look_at", "[r0,r0,r0]"));
     members.push_str(&xml_str("home", &home_field));
-    members.push_str(&xml_str("map-server-url", &format!("http://{}:{}/", region.server_ip, region.server_http_port.unwrap_or(8003))));
+    members.push_str(&xml_str(
+        "map-server-url",
+        &format!(
+            "http://{}:{}/",
+            region.server_ip,
+            region.server_http_port.unwrap_or(8003)
+        ),
+    ));
     members.push_str(&login_flags_member);
     members.push_str(&global_textures_member);
     members.push_str(&ui_config_member);
@@ -696,9 +716,7 @@ fn parse_llsd_login(input: &str) -> Result<HashMap<String, String>, String> {
                 let local = local.as_ref();
                 match local {
                     b"map" => {
-                        if depth > 0 {
-                            depth -= 1;
-                        }
+                        depth = depth.saturating_sub(1);
                     }
                     b"key" => in_key = false,
                     b"string" | b"integer" | b"boolean" => in_value = false,
@@ -732,12 +750,13 @@ async fn xmlrpc_response_to_llsd(response: Response) -> Response {
     };
     let xmlrpc_body = String::from_utf8_lossy(&bytes);
     let llsd_body = convert_xmlrpc_to_llsd(&xmlrpc_body);
-    let mut resp = (
+
+    (
         parts.status,
         [("content-type", "application/llsd+xml")],
         llsd_body,
-    ).into_response();
-    resp
+    )
+        .into_response()
 }
 
 fn convert_xmlrpc_to_llsd(xmlrpc: &str) -> String {
@@ -752,7 +771,9 @@ fn convert_xmlrpc_to_llsd(xmlrpc: &str) -> String {
                 let tag = e.name();
                 let tag = tag.as_ref();
                 match tag {
-                    b"methodResponse" | b"params" | b"param" => { skip_depth += 1; }
+                    b"methodResponse" | b"params" | b"param" => {
+                        skip_depth += 1;
+                    }
                     b"struct" => out.push_str("<map>"),
                     b"member" => {}
                     b"name" => out.push_str("<key>"),
@@ -770,7 +791,9 @@ fn convert_xmlrpc_to_llsd(xmlrpc: &str) -> String {
                 let tag = e.name();
                 let tag = tag.as_ref();
                 match tag {
-                    b"methodResponse" | b"params" | b"param" => { skip_depth -= 1; }
+                    b"methodResponse" | b"params" | b"param" => {
+                        skip_depth -= 1;
+                    }
                     b"struct" => out.push_str("</map>"),
                     b"member" => {}
                     b"name" => out.push_str("</key>"),

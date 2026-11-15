@@ -11,13 +11,12 @@ use std::collections::HashMap;
 use tracing::{debug, error, warn};
 use uuid::Uuid;
 
-use crate::constants::{
-    self, ASSETS_PATH, CONTROL_FILE_PATH, INVENTORY_NODE_NAME_COMPONENT_SEPARATOR,
-    INVENTORY_PATH,
-};
-use crate::iar_write::{deserialize_inventory_item, unescape_archive_path, InventoryItem};
-use crate::osp_resolver::{OspResolverCache, UserService};
 use crate::ArchiveError;
+use crate::constants::{
+    self, ASSETS_PATH, CONTROL_FILE_PATH, INVENTORY_NODE_NAME_COMPONENT_SEPARATOR, INVENTORY_PATH,
+};
+use crate::iar_write::{InventoryItem, deserialize_inventory_item, unescape_archive_path};
+use crate::osp_resolver::{OspResolverCache, UserService};
 
 use welkin_types::AssetType;
 
@@ -191,16 +190,10 @@ impl IarReader {
             if !suffix.is_empty() {
                 self.load_asset(path, data, importer)?;
             }
-        } else if let Some(suffix) = path.strip_prefix(INVENTORY_PATH) {
-            if !suffix.is_empty() {
-                self.load_inventory_entry(
-                    suffix,
-                    data,
-                    is_directory,
-                    importer,
-                    user_service,
-                )?;
-            }
+        } else if let Some(suffix) = path.strip_prefix(INVENTORY_PATH)
+            && !suffix.is_empty()
+        {
+            self.load_inventory_entry(suffix, data, is_directory, importer, user_service)?;
         }
         // Silently ignore entries with unrecognised prefixes (e.g. userprofiles/)
 
@@ -242,23 +235,23 @@ impl IarReader {
         let mut major: Option<i32> = None;
 
         // Simple attribute extraction without full XML parse
-        if let Some(idx) = text.find("major_version") {
-            if let Some(start) = text[idx..].find('"') {
-                let after_quote = idx + start + 1;
-                if let Some(end) = text[after_quote..].find('"') {
-                    if let Ok(v) = text[after_quote..after_quote + end].parse::<i32>() {
-                        major = Some(v);
-                    }
-                }
+        if let Some(idx) = text.find("major_version")
+            && let Some(start) = text[idx..].find('"')
+        {
+            let after_quote = idx + start + 1;
+            if let Some(end) = text[after_quote..].find('"')
+                && let Ok(v) = text[after_quote..after_quote + end].parse::<i32>()
+            {
+                major = Some(v);
             }
         }
 
-        if let Some(v) = major {
-            if v > MAX_MAJOR_VERSION {
-                return Err(ArchiveError::Invalid(format!(
-                    "IAR major version {v} exceeds maximum supported version {MAX_MAJOR_VERSION}"
-                )));
-            }
+        if let Some(v) = major
+            && v > MAX_MAJOR_VERSION
+        {
+            return Err(ArchiveError::Invalid(format!(
+                "IAR major version {v} exceeds maximum supported version {MAX_MAJOR_VERSION}"
+            )));
         }
 
         self.control_file_loaded = true;
@@ -324,9 +317,7 @@ impl IarReader {
             self.item_id_map.insert(old_id, new_id);
 
             // Resolve OSPA creator to a real UUID
-            if let Some(resolved) =
-                self.osp_cache.resolve(&item.creator_id, user_service)
-            {
+            if let Some(resolved) = self.osp_cache.resolve(&item.creator_id, user_service) {
                 item.creator_id = resolved.to_string();
                 item.creator_uuid = resolved;
                 item.creator_data = String::new();
@@ -344,7 +335,8 @@ impl IarReader {
             if item.asset_type == AssetType::Link.to_i32() {
                 self.deferred_links.push(item);
             } else {
-                self.creator_for_asset.insert(item.asset_id, item.creator_uuid);
+                self.creator_for_asset
+                    .insert(item.asset_id, item.creator_uuid);
                 if let Err(e) = importer.add_item(&item) {
                     warn!(name = %item.name, error = %e, "failed to add item");
                 } else {
@@ -427,10 +419,13 @@ impl IarReader {
             }
         }
 
-        if self.stats.successful_asset_restores % 50 == 0
+        if self.stats.successful_asset_restores.is_multiple_of(50)
             && self.stats.successful_asset_restores > 0
         {
-            debug!(count = self.stats.successful_asset_restores, "loaded assets");
+            debug!(
+                count = self.stats.successful_asset_restores,
+                "loaded assets"
+            );
         }
 
         self.assets_loaded = true;
@@ -455,10 +450,7 @@ impl IarReader {
         }
 
         // Build up the path incrementally
-        let components: Vec<&str> = iar_path
-            .split('/')
-            .filter(|s| !s.is_empty())
-            .collect();
+        let components: Vec<&str> = iar_path.split('/').filter(|s| !s.is_empty()).collect();
 
         let mut current_path = String::new();
         let mut parent_id = self.root_folder_id;
@@ -474,8 +466,7 @@ impl IarReader {
 
             // Extract the human-readable name from "Name__uuid" format
             let folder_name =
-                if let Some(sep_idx) = component.rfind(INVENTORY_NODE_NAME_COMPONENT_SEPARATOR)
-                {
+                if let Some(sep_idx) = component.rfind(INVENTORY_NODE_NAME_COMPONENT_SEPARATOR) {
                     let raw_name = &component[..sep_idx];
                     unescape_archive_path(raw_name)
                 } else {
@@ -483,8 +474,7 @@ impl IarReader {
                 };
 
             // Create the folder
-            let new_folder_id =
-                importer.create_folder(&folder_name, self.owner_id, parent_id)?;
+            let new_folder_id = importer.create_folder(&folder_name, self.owner_id, parent_id)?;
 
             self.resolved_folders
                 .insert(current_path.clone(), (new_folder_id, folder_name));
@@ -621,8 +611,7 @@ mod tests {
   <assets_included>True</assets_included>
 </archive>"#;
 
-        let result =
-            reader.process_entry("archive.xml", control_xml, false, &mut importer, &users);
+        let result = reader.process_entry("archive.xml", control_xml, false, &mut importer, &users);
         assert!(result.is_err());
     }
 

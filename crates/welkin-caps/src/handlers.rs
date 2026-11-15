@@ -9,14 +9,14 @@ use axum::{
     extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post, MethodRouter},
+    routing::{MethodRouter, get, post},
 };
-use welkin_llsd::{from_xml, to_xml_string, Llsd, Map};
 use base64::Engine as _;
-use quick_xml::events::Event;
 use quick_xml::Reader as XmlReader;
+use quick_xml::events::Event;
 use tokio::sync::RwLock;
 use uuid::Uuid;
+use welkin_llsd::{Llsd, Map, from_xml, to_xml_string};
 
 use crate::event_queue::{EventQueue, EventQueueResponse};
 
@@ -75,15 +75,10 @@ pub struct BakeUploadState {
 
 async fn fetch_asset(state: &AssetServiceState, asset_id: &str) -> Result<Vec<u8>, StatusCode> {
     let url = format!("{}/assets/{asset_id}", state.asset_url);
-    let resp = state
-        .client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| {
-            tracing::warn!(error = %e, "asset service request failed");
-            StatusCode::SERVICE_UNAVAILABLE
-        })?;
+    let resp = state.client.get(&url).send().await.map_err(|e| {
+        tracing::warn!(error = %e, "asset service request failed");
+        StatusCode::SERVICE_UNAVAILABLE
+    })?;
     if resp.status() == reqwest::StatusCode::NOT_FOUND {
         return Err(StatusCode::NOT_FOUND);
     }
@@ -120,7 +115,12 @@ pub async fn get_mesh(
     };
     tracing::debug!(mesh_id, "GetMesh");
     match fetch_asset(&state, mesh_id).await {
-        Ok(data) => (StatusCode::OK, [("Content-Type", "application/vnd.ll.mesh")], data).into_response(),
+        Ok(data) => (
+            StatusCode::OK,
+            [("Content-Type", "application/vnd.ll.mesh")],
+            data,
+        )
+            .into_response(),
         Err(status) => status.into_response(),
     }
 }
@@ -134,7 +134,12 @@ pub async fn get_mesh2(
     };
     tracing::debug!(mesh_id, "GetMesh2");
     match fetch_asset(&state, mesh_id).await {
-        Ok(data) => (StatusCode::OK, [("Content-Type", "application/vnd.ll.mesh")], data).into_response(),
+        Ok(data) => (
+            StatusCode::OK,
+            [("Content-Type", "application/vnd.ll.mesh")],
+            data,
+        )
+            .into_response(),
         Err(status) => status.into_response(),
     }
 }
@@ -148,7 +153,10 @@ pub async fn simulator_features() -> Response {
     map.insert("AnimatedObjects".into(), Llsd::Boolean(true));
     map.insert("MaxAgentGroupsBasic".into(), Llsd::Integer(42));
     map.insert("MaxAgentGroupsPremium".into(), Llsd::Integer(60));
-    map.insert("map-server-url".into(), Llsd::String("http://127.0.0.1:8002/map/".into()));
+    map.insert(
+        "map-server-url".into(),
+        Llsd::String("http://127.0.0.1:8002/map/".into()),
+    );
     llsd_response(Llsd::Map(map))
 }
 
@@ -376,7 +384,10 @@ fn item_to_llsd(it: &XItem) -> Llsd {
     perms.insert("base_mask".into(), Llsd::Integer(it.base_permissions));
     perms.insert("owner_mask".into(), Llsd::Integer(it.current_permissions));
     perms.insert("group_mask".into(), Llsd::Integer(it.group_permissions));
-    perms.insert("everyone_mask".into(), Llsd::Integer(it.everyone_permissions));
+    perms.insert(
+        "everyone_mask".into(),
+        Llsd::Integer(it.everyone_permissions),
+    );
     perms.insert("next_owner_mask".into(), Llsd::Integer(it.next_permissions));
     perms.insert("is_owner_group".into(), Llsd::Boolean(it.group_owned));
 
@@ -474,10 +485,7 @@ pub async fn fetch_inventory_descendents2(
     llsd_response(Llsd::Map(root))
 }
 
-pub async fn fetch_inventory2(
-    State(inv): State<InventoryProxyState>,
-    body: Bytes,
-) -> Response {
+pub async fn fetch_inventory2(State(inv): State<InventoryProxyState>, body: Bytes) -> Response {
     let parsed = from_xml(&body).unwrap_or(Llsd::Undef);
     let agent_id = parsed.get("agent_id").as_uuid();
 
@@ -525,10 +533,7 @@ pub async fn fetch_inventory2(
     llsd_response(Llsd::Map(root))
 }
 
-pub async fn upload_baked_texture(
-    State(bake): State<BakeUploadState>,
-    _body: Bytes,
-) -> Response {
+pub async fn upload_baked_texture(State(bake): State<BakeUploadState>, _body: Bytes) -> Response {
     let token = Uuid::new_v4().to_string();
     bake.pending.write().await.insert(token.clone(), ());
     let uploader_url = format!("{}/bake-upload/{}", bake.caps_url, token);
@@ -608,7 +613,12 @@ pub async fn viewer_asset(
     };
     tracing::debug!(asset_id, "ViewerAsset");
     match fetch_asset(&state, asset_id).await {
-        Ok(data) => (StatusCode::OK, [("Content-Type", "application/octet-stream")], data).into_response(),
+        Ok(data) => (
+            StatusCode::OK,
+            [("Content-Type", "application/octet-stream")],
+            data,
+        )
+            .into_response(),
         Err(status) => status.into_response(),
     }
 }
@@ -750,10 +760,7 @@ fn log_upload_body(cap_name: &str, body: &[u8]) {
 
 pub type EventQueueMap = Arc<RwLock<HashMap<Uuid, Arc<EventQueue>>>>;
 
-pub async fn event_queue_get(
-    State(eq_map): State<EventQueueMap>,
-    body: Bytes,
-) -> Response {
+pub async fn event_queue_get(State(eq_map): State<EventQueueMap>, body: Bytes) -> Response {
     let agent_id = match from_xml(&body) {
         Ok(llsd) => {
             let id_str = llsd.get("agent-id").as_str().to_string();
@@ -809,7 +816,10 @@ pub fn cap_routes(
     bake_state: BakeUploadState,
 ) -> Vec<(&'static str, MethodRouter)> {
     vec![
-        ("GetTexture", get(get_texture).with_state(asset_state.clone())),
+        (
+            "GetTexture",
+            get(get_texture).with_state(asset_state.clone()),
+        ),
         ("GetMesh", get(get_mesh).with_state(asset_state.clone())),
         ("GetMesh2", get(get_mesh2).with_state(asset_state.clone())),
         ("ViewerAsset", get(viewer_asset).with_state(asset_state)),
@@ -830,19 +840,28 @@ pub fn cap_routes(
             "FetchInventoryDescendents2",
             post(fetch_inventory_descendents2).with_state(inv_state.clone()),
         ),
-        ("FetchInventory2", post(fetch_inventory2).with_state(inv_state.clone())),
+        (
+            "FetchInventory2",
+            post(fetch_inventory2).with_state(inv_state.clone()),
+        ),
         ("FetchLib2", post(fetch_lib2)),
         ("GetDisplayNames", get(get_display_names)),
         ("HomeLocation", post(home_location)),
-        ("CreateInventoryCategory", post(create_inventory_category).with_state(inv_state)),
-        ("UploadBakedTexture", post(upload_baked_texture).with_state(bake_state)),
+        (
+            "CreateInventoryCategory",
+            post(create_inventory_category).with_state(inv_state),
+        ),
+        (
+            "UploadBakedTexture",
+            post(upload_baked_texture).with_state(bake_state),
+        ),
     ]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{body::Body, http::Request, Router};
+    use axum::{Router, body::Body, http::Request};
     use http_body_util::BodyExt;
     use tower::ServiceExt;
 
@@ -871,7 +890,9 @@ mod tests {
 
     fn test_router() -> Router {
         let mut router = Router::new();
-        for (name, method_router) in cap_routes(test_asset_state(), test_inv_state(), test_bake_state()) {
+        for (name, method_router) in
+            cap_routes(test_asset_state(), test_inv_state(), test_bake_state())
+        {
             router = router.route(&format!("/{name}"), method_router);
         }
         router
@@ -904,9 +925,7 @@ mod tests {
     #[tokio::test]
     async fn test_region_info_response() {
         let app = test_router();
-        let req = Request::get("/RegionInfo")
-            .body(Body::empty())
-            .unwrap();
+        let req = Request::get("/RegionInfo").body(Body::empty()).unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
 
@@ -930,9 +949,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_texture_missing_param() {
         let app = test_router();
-        let req = Request::get("/GetTexture")
-            .body(Body::empty())
-            .unwrap();
+        let req = Request::get("/GetTexture").body(Body::empty()).unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }

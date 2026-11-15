@@ -336,7 +336,10 @@ mod tests {
         let call = parse_call(doc.as_bytes()).unwrap();
         assert_eq!(call.params[0]["blob"], Llsd::Binary(bytes.clone()));
         let resp = build_response(&p);
-        assert_eq!(parse_response(resp.as_bytes()).unwrap()["blob"], Llsd::Binary(bytes));
+        assert_eq!(
+            parse_response(resp.as_bytes()).unwrap()["blob"],
+            Llsd::Binary(bytes)
+        );
     }
 
     #[test]
@@ -349,6 +352,9 @@ mod tests {
             parse_call(b"<methodCall><params></params></methodCall>"),
             Err(XmlRpcError::Malformed)
         ));
-        assert!(matches!(parse_call(b"<methodCall><oops"), Err(XmlRpcError::Xml(_))));
+        assert!(matches!(
+            parse_call(b"<methodCall><oops"),
+            Err(XmlRpcError::Xml(_))
+        ));
     }
 }

@@ -7,8 +7,8 @@
 
 use uuid::Uuid;
 
-use crate::hypergrid::*;
 use super::xmlrpc_call;
+use crate::hypergrid::*;
 
 /// Outbound HTTP client for a foreign Gatekeeper service.
 pub struct GatekeeperServiceConnector {
@@ -37,25 +37,12 @@ impl GatekeeperServiceConnector {
     /// `link_region` XML-RPC method.
     ///
     /// Returns the linked region metadata on success.
-    pub async fn link_region(
-        &self,
-        region_name: &str,
-    ) -> HgResult<LinkedRegionInfo> {
-        let params: Vec<(&str, &str)> =
-            vec![("region_name", region_name)];
+    pub async fn link_region(&self, region_name: &str) -> HgResult<LinkedRegionInfo> {
+        let params: Vec<(&str, &str)> = vec![("region_name", region_name)];
 
-        let map = xmlrpc_call(
-            &self.client,
-            &self.server_url,
-            "link_region",
-            &params,
-        )
-        .await?;
+        let map = xmlrpc_call(&self.client, &self.server_url, "link_region", &params).await?;
 
-        let result = map
-            .get("result")
-            .map(|s| s.as_str())
-            .unwrap_or("false");
+        let result = map.get("result").map(|s| s.as_str()).unwrap_or("false");
         if !result.eq_ignore_ascii_case("true") {
             let reason = map
                 .get("reason")
@@ -75,14 +62,8 @@ impl GatekeeperServiceConnector {
             .get("handle")
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(0);
-        let external_name = map
-            .get("external_name")
-            .cloned()
-            .unwrap_or_default();
-        let image_url = map
-            .get("region_image")
-            .cloned()
-            .unwrap_or_default();
+        let external_name = map.get("external_name").cloned().unwrap_or_default();
+        let image_url = map.get("region_image").cloned().unwrap_or_default();
         let size_x = map
             .get("size_x")
             .and_then(|s| s.parse::<u32>().ok())
@@ -115,28 +96,17 @@ impl GatekeeperServiceConnector {
     ) -> HgResult<Option<(GridRegionInfo, Option<String>)>> {
         let region_uuid = region_id.to_string();
         let agent_str = agent_id.to_string();
-        let mut params: Vec<(&str, &str)> = vec![
-            ("region_uuid", &region_uuid),
-            ("agent_id", &agent_str),
-        ];
+        let mut params: Vec<(&str, &str)> =
+            vec![("region_uuid", &region_uuid), ("agent_id", &agent_str)];
         let home_uri_owned;
         if let Some(uri) = agent_home_uri {
             home_uri_owned = uri.to_string();
             params.push(("agent_home_uri", &home_uri_owned));
         }
 
-        let map = xmlrpc_call(
-            &self.client,
-            &self.server_url,
-            "get_region",
-            &params,
-        )
-        .await?;
+        let map = xmlrpc_call(&self.client, &self.server_url, "get_region", &params).await?;
 
-        let result = map
-            .get("result")
-            .map(|s| s.as_str())
-            .unwrap_or("false");
+        let result = map.get("result").map(|s| s.as_str()).unwrap_or("false");
         if !result.eq_ignore_ascii_case("true") {
             return Ok(None);
         }
@@ -148,19 +118,10 @@ impl GatekeeperServiceConnector {
                 .get("uuid")
                 .and_then(|s| Uuid::parse_str(s).ok())
                 .unwrap_or(Uuid::nil()),
-            region_name: map
-                .get("region_name")
-                .cloned()
-                .unwrap_or_default(),
+            region_name: map.get("region_name").cloned().unwrap_or_default(),
             region_handle: 0, // Computed from x/y
-            server_uri: map
-                .get("server_uri")
-                .cloned()
-                .unwrap_or_default(),
-            external_host_name: map
-                .get("hostname")
-                .cloned()
-                .unwrap_or_default(),
+            server_uri: map.get("server_uri").cloned().unwrap_or_default(),
+            external_host_name: map.get("hostname").cloned().unwrap_or_default(),
             internal_port: map
                 .get("internal_port")
                 .and_then(|s| s.parse::<u16>().ok())

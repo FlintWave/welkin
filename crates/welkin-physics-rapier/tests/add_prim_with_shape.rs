@@ -58,7 +58,9 @@ fn add_prim_with_wrong_type_falls_back_to_cuboid() {
         Some(wrong),
     );
     assert_eq!(id, 7);
-    let actor = scene.get_actor(7).expect("actor must exist after bad downcast");
+    let actor = scene
+        .get_actor(7)
+        .expect("actor must exist after bad downcast");
     assert_eq!(actor.name(), "wrong_type");
 }
 
@@ -79,6 +81,8 @@ fn default_trait_impl_delegates_to_add_prim() {
         Some(ball),
     );
     assert_eq!(id, 99);
-    let actor = scene.get_actor(99).expect("NullPhysicsScene must create actor via default impl");
+    let actor = scene
+        .get_actor(99)
+        .expect("NullPhysicsScene must create actor via default impl");
     assert_eq!(actor.name(), "null_prim");
 }

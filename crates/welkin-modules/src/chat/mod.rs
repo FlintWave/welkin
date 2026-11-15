@@ -180,11 +180,7 @@ impl ChatModule {
     /// and listener positions is compared against
     /// [`ChatType::range_squared`].  Unlimited-range types always return
     /// `true`.
-    pub fn deliver_chat_to_client(
-        &self,
-        msg: &ChatMessage,
-        listener_position: [f32; 3],
-    ) -> bool {
+    pub fn deliver_chat_to_client(&self, msg: &ChatMessage, listener_position: [f32; 3]) -> bool {
         match msg.chat_type.range_squared() {
             None => true,
             Some(max_dist_sq) => {

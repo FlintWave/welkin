@@ -136,7 +136,10 @@ async fn handle_presence(State(state): State<PresenceServiceState>, body: Bytes)
                 result(false)
             }
         },
-        "report" => match store.report_agent(f.str("SessionID"), f.str("RegionID")).await {
+        "report" => match store
+            .report_agent(f.str("SessionID"), f.str("RegionID"))
+            .await
+        {
             Ok(()) => result(true),
             Err(e) => {
                 tracing::warn!(error = %e, "report failed");

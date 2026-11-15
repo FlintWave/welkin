@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::Json;
 use serde::{Deserialize, Serialize};
 
 use argon2::PasswordHasher;
 
+use crate::PortalState;
 use crate::error::PortalError;
 use crate::roles::StaffRole;
 use crate::sessions::RequireStaff;
-use crate::PortalState;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StaffAccount {
@@ -133,13 +133,9 @@ pub async fn handle_logout(
     State(state): State<PortalState>,
     staff: RequireStaff,
 ) -> impl IntoResponse {
-    state.audit_log.log_action(
-        &staff.0.staff_id,
-        "logout",
-        "",
-        "session destroyed",
-        "",
-    );
+    state
+        .audit_log
+        .log_action(&staff.0.staff_id, "logout", "", "session destroyed", "");
     state.sessions.destroy_session(&staff.0.id);
     StatusCode::OK
 }

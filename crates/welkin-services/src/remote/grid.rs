@@ -5,8 +5,8 @@
 //! Talks to a Robust grid endpoint over HTTP using URL-encoded form POSTs and
 //! `<ServerResponse>` XML replies.
 
-use welkin_data::grid::RegionRow;
 use quick_xml::{Reader, events::Event};
+use welkin_data::grid::RegionRow;
 
 use super::RemoteError;
 
@@ -40,7 +40,10 @@ impl RemoteGridConnector {
             ("serverIP", &region.server_ip),
             ("serverPort", &region.server_port.unwrap_or(0).to_string()),
             ("serverURI", &region.server_uri),
-            ("serverHttpPort", &region.server_http_port.unwrap_or(0).to_string()),
+            (
+                "serverHttpPort",
+                &region.server_http_port.unwrap_or(0).to_string(),
+            ),
             ("regionMapTexture", &region.region_map_texture),
             ("parcelMapTexture", &region.parcel_map_texture),
             ("access", &region.access.to_string()),
@@ -146,10 +149,10 @@ impl RemoteGridConnector {
 /// region, or `<result>null</result>` for "not found".
 fn parse_single_region(xml: &str) -> Result<Option<RegionRow>, RemoteError> {
     // Quick check for the "null" sentinel.
-    if let Some(text) = super::extract_text(xml, "result") {
-        if text == "null" {
-            return Ok(None);
-        }
+    if let Some(text) = super::extract_text(xml, "result")
+        && text == "null"
+    {
+        return Ok(None);
     }
     // Try to parse the region from <result type="List">...</result>
     let regions = parse_regions_from_xml(xml)?;
@@ -191,22 +194,21 @@ fn parse_regions_from_xml(xml: &str) -> Result<Vec<RegionRow>, RemoteError> {
             }
             Ok(Event::End(_)) => {
                 depth.pop();
-                if depth.len() == 1 {
-                    if let Some(builder) = current.take() {
-                        if let Some(r) = builder.build() {
-                            regions.push(r);
-                        }
-                    }
+                if depth.len() == 1
+                    && let Some(builder) = current.take()
+                    && let Some(r) = builder.build()
+                {
+                    regions.push(r);
                 }
                 if depth.len() == 2 {
                     current_field = None;
                 }
             }
             Ok(Event::Text(t)) => {
-                if let (Some(b), Some(field)) = (&mut current, &current_field) {
-                    if let Ok(text) = t.unescape() {
-                        b.set(field, &text);
-                    }
+                if let (Some(b), Some(field)) = (&mut current, &current_field)
+                    && let Ok(text) = t.unescape()
+                {
+                    b.set(field, &text);
                 }
             }
             Ok(Event::Eof) => break,

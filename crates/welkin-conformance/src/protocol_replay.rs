@@ -8,8 +8,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
-use tracing::{info, warn};
+use std::path::Path;
+use tracing::warn;
 
 // ---------------------------------------------------------------------------
 // Recorded exchange
@@ -422,7 +422,13 @@ mod tests {
         let recorded = make_response(200, "ok");
         let actual = make_response(500, "ok");
         let diffs = ReplaySession::compare_responses(&recorded, &actual);
-        assert!(diffs.iter().any(|d| matches!(d, DiffResult::StatusDifference { expected: 200, actual: 500 })));
+        assert!(diffs.iter().any(|d| matches!(
+            d,
+            DiffResult::StatusDifference {
+                expected: 200,
+                actual: 500
+            }
+        )));
     }
 
     #[test]
@@ -430,7 +436,11 @@ mod tests {
         let recorded = make_response(200, "expected body");
         let actual = make_response(200, "actual body");
         let diffs = ReplaySession::compare_responses(&recorded, &actual);
-        assert!(diffs.iter().any(|d| matches!(d, DiffResult::ContentDifference { field, .. } if field == "body")));
+        assert!(
+            diffs.iter().any(
+                |d| matches!(d, DiffResult::ContentDifference { field, .. } if field == "body")
+            )
+        );
     }
 
     #[test]
@@ -441,7 +451,11 @@ mod tests {
             .insert("x-custom".to_string(), "value".to_string());
         let actual = make_response(200, "ok");
         let diffs = ReplaySession::compare_responses(&recorded, &actual);
-        assert!(diffs.iter().any(|d| matches!(d, DiffResult::MissingField { name } if name == "x-custom")));
+        assert!(
+            diffs
+                .iter()
+                .any(|d| matches!(d, DiffResult::MissingField { name } if name == "x-custom"))
+        );
     }
 
     #[test]
@@ -452,7 +466,11 @@ mod tests {
             .headers
             .insert("x-extra".to_string(), "value".to_string());
         let diffs = ReplaySession::compare_responses(&recorded, &actual);
-        assert!(diffs.iter().any(|d| matches!(d, DiffResult::ExtraField { name } if name == "x-extra")));
+        assert!(
+            diffs
+                .iter()
+                .any(|d| matches!(d, DiffResult::ExtraField { name } if name == "x-extra"))
+        );
     }
 
     #[test]
@@ -566,9 +584,11 @@ mod tests {
     fn test_categorization_rules_default() {
         let rules = CategorizationRules::default();
         assert!(rules.cosmetic_headers.contains(&"date".to_string()));
-        assert!(rules
-            .intentional_headers
-            .contains(&"x-opensim-version".to_string()));
+        assert!(
+            rules
+                .intentional_headers
+                .contains(&"x-opensim-version".to_string())
+        );
     }
 
     #[test]

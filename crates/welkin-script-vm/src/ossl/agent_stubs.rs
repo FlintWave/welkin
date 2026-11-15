@@ -1,34 +1,114 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Agent, avatar, and teleport stub functions (Task 9.1).
 
-use std::sync::Arc;
+use super::{OsslFunc, OsslThreatLevel};
+use crate::builtins::ScriptContext;
 use mlua::prelude::*;
 use parking_lot::RwLock;
-use crate::builtins::ScriptContext;
-use super::{OsslFunc, OsslThreatLevel};
+use std::sync::Arc;
 
 pub(super) fn ossl_agent_funcs() -> Vec<OsslFunc> {
     vec![
-        OsslFunc { name: "osGetAgents", level: OsslThreatLevel::Moderate, register: register_os_get_agents },
-        OsslFunc { name: "osGetAvatarList", level: OsslThreatLevel::None, register: register_os_get_avatar_list },
-        OsslFunc { name: "osGetNPCList", level: OsslThreatLevel::None, register: register_os_get_npc_list },
-        OsslFunc { name: "osSetOwnerSpeed", level: OsslThreatLevel::Moderate, register: register_os_set_owner_speed },
-        OsslFunc { name: "osGetHealth", level: OsslThreatLevel::None, register: register_os_get_health },
-        OsslFunc { name: "osCauseHealing", level: OsslThreatLevel::High, register: register_os_cause_healing },
-        OsslFunc { name: "osCauseDamage", level: OsslThreatLevel::High, register: register_os_cause_damage },
-        OsslFunc { name: "osSetHealth", level: OsslThreatLevel::High, register: register_os_set_health },
-        OsslFunc { name: "osSetHealRate", level: OsslThreatLevel::High, register: register_os_set_heal_rate },
-        OsslFunc { name: "osGetHealRate", level: OsslThreatLevel::None, register: register_os_get_heal_rate },
-        OsslFunc { name: "osKickAvatar", level: OsslThreatLevel::Severe, register: register_os_kick_avatar },
-        OsslFunc { name: "osForceOtherSit", level: OsslThreatLevel::VeryHigh, register: register_os_force_other_sit },
-        OsslFunc { name: "osAvatarType", level: OsslThreatLevel::None, register: register_os_avatar_type },
-        OsslFunc { name: "osGetGender", level: OsslThreatLevel::None, register: register_os_get_gender },
-        OsslFunc { name: "osDetectedCountry", level: OsslThreatLevel::None, register: register_os_detected_country },
-        OsslFunc { name: "osGetAgentCountry", level: OsslThreatLevel::None, register: register_os_get_agent_country },
-        OsslFunc { name: "osAvatarPlayAnimation", level: OsslThreatLevel::VeryHigh, register: register_os_avatar_play_animation },
-        OsslFunc { name: "osAvatarStopAnimation", level: OsslThreatLevel::VeryHigh, register: register_os_avatar_stop_animation },
-        OsslFunc { name: "osLocalTeleportAgent", level: OsslThreatLevel::Moderate, register: register_os_local_teleport_agent },
-        OsslFunc { name: "osTeleportObject", level: OsslThreatLevel::Severe, register: register_os_teleport_object },
+        OsslFunc {
+            name: "osGetAgents",
+            level: OsslThreatLevel::Moderate,
+            register: register_os_get_agents,
+        },
+        OsslFunc {
+            name: "osGetAvatarList",
+            level: OsslThreatLevel::None,
+            register: register_os_get_avatar_list,
+        },
+        OsslFunc {
+            name: "osGetNPCList",
+            level: OsslThreatLevel::None,
+            register: register_os_get_npc_list,
+        },
+        OsslFunc {
+            name: "osSetOwnerSpeed",
+            level: OsslThreatLevel::Moderate,
+            register: register_os_set_owner_speed,
+        },
+        OsslFunc {
+            name: "osGetHealth",
+            level: OsslThreatLevel::None,
+            register: register_os_get_health,
+        },
+        OsslFunc {
+            name: "osCauseHealing",
+            level: OsslThreatLevel::High,
+            register: register_os_cause_healing,
+        },
+        OsslFunc {
+            name: "osCauseDamage",
+            level: OsslThreatLevel::High,
+            register: register_os_cause_damage,
+        },
+        OsslFunc {
+            name: "osSetHealth",
+            level: OsslThreatLevel::High,
+            register: register_os_set_health,
+        },
+        OsslFunc {
+            name: "osSetHealRate",
+            level: OsslThreatLevel::High,
+            register: register_os_set_heal_rate,
+        },
+        OsslFunc {
+            name: "osGetHealRate",
+            level: OsslThreatLevel::None,
+            register: register_os_get_heal_rate,
+        },
+        OsslFunc {
+            name: "osKickAvatar",
+            level: OsslThreatLevel::Severe,
+            register: register_os_kick_avatar,
+        },
+        OsslFunc {
+            name: "osForceOtherSit",
+            level: OsslThreatLevel::VeryHigh,
+            register: register_os_force_other_sit,
+        },
+        OsslFunc {
+            name: "osAvatarType",
+            level: OsslThreatLevel::None,
+            register: register_os_avatar_type,
+        },
+        OsslFunc {
+            name: "osGetGender",
+            level: OsslThreatLevel::None,
+            register: register_os_get_gender,
+        },
+        OsslFunc {
+            name: "osDetectedCountry",
+            level: OsslThreatLevel::None,
+            register: register_os_detected_country,
+        },
+        OsslFunc {
+            name: "osGetAgentCountry",
+            level: OsslThreatLevel::None,
+            register: register_os_get_agent_country,
+        },
+        OsslFunc {
+            name: "osAvatarPlayAnimation",
+            level: OsslThreatLevel::VeryHigh,
+            register: register_os_avatar_play_animation,
+        },
+        OsslFunc {
+            name: "osAvatarStopAnimation",
+            level: OsslThreatLevel::VeryHigh,
+            register: register_os_avatar_stop_animation,
+        },
+        OsslFunc {
+            name: "osLocalTeleportAgent",
+            level: OsslThreatLevel::Moderate,
+            register: register_os_local_teleport_agent,
+        },
+        OsslFunc {
+            name: "osTeleportObject",
+            level: OsslThreatLevel::Severe,
+            register: register_os_teleport_object,
+        },
     ]
 }
 
@@ -214,20 +294,32 @@ fn register_os_avatar_stop_animation(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>
 
 fn register_os_local_teleport_agent(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
-    let f = lua.create_function(move |_, (_agent, _pos, _vel, _lookat, _flags): (String, String, String, String, i32)| {
-        let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, "osLocalTeleportAgent called (stub)");
-        Ok(())
-    })?;
+    let f = lua.create_function(
+        move |_, (_agent, _pos, _vel, _lookat, _flags): (String, String, String, String, i32)| {
+            let c = ctx.read();
+            tracing::debug!(script_id = %c.script_id, "osLocalTeleportAgent called (stub)");
+            Ok(())
+        },
+    )?;
     lua.globals().set("osLocalTeleportAgent", f)
 }
 
 fn register_os_teleport_object(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
-    let f = lua.create_function(move |_, (_obj_key, _region_x, _region_y, _pos, _rot): (String, i32, i32, String, String)| {
-        let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, "osTeleportObject called (stub)");
-        Ok(0i32)
-    })?;
+    let f =
+        lua.create_function(
+            move |_,
+                  (_obj_key, _region_x, _region_y, _pos, _rot): (
+                String,
+                i32,
+                i32,
+                String,
+                String,
+            )| {
+                let c = ctx.read();
+                tracing::debug!(script_id = %c.script_id, "osTeleportObject called (stub)");
+                Ok(0i32)
+            },
+        )?;
     lua.globals().set("osTeleportObject", f)
 }

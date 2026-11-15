@@ -141,11 +141,7 @@ impl HGFriendsModule {
     /// - `friend_uui;secret` -> `user_id`
     ///
     /// Returns the generated secret.
-    pub fn store_hg_friendship(
-        &mut self,
-        user_id: Uuid,
-        friend_uui: &str,
-    ) -> String {
+    pub fn store_hg_friendship(&mut self, user_id: Uuid, friend_uui: &str) -> String {
         let secret = Uuid::new_v4().to_string()[..8].to_string();
         let friend_with_secret = format!("{};{}", friend_uui, secret);
 
@@ -155,10 +151,7 @@ impl HGFriendsModule {
             their_flags: 1,
         };
 
-        self.friend_lists
-            .entry(user_id)
-            .or_default()
-            .push(record);
+        self.friend_lists.entry(user_id).or_default().push(record);
 
         tracing::debug!(
             user = %user_id,
@@ -172,12 +165,7 @@ impl HGFriendsModule {
     /// Delete a cross-grid friendship, verified by the shared secret.
     ///
     /// Returns `true` if the friendship was found and removed.
-    pub fn delete_hg_friendship(
-        &mut self,
-        user_id: Uuid,
-        friend_id: Uuid,
-        secret: &str,
-    ) -> bool {
+    pub fn delete_hg_friendship(&mut self, user_id: Uuid, friend_id: Uuid, secret: &str) -> bool {
         if let Some(friends) = self.friend_lists.get_mut(&user_id) {
             let friend_str = friend_id.to_string();
             let initial_len = friends.len();
@@ -218,9 +206,7 @@ impl HGFriendsModule {
 
         for friend in friends {
             if friend.is_foreign() {
-                if let (Some(uuid), Some(uri)) =
-                    (friend.friend_uuid(), friend.friend_home_uri())
-                {
+                if let (Some(uuid), Some(uri)) = (friend.friend_uuid(), friend.friend_home_uri()) {
                     let normalised = normalise_grid_uri(&uri);
                     foreign.entry(normalised).or_default().push(uuid);
                 }
@@ -235,12 +221,7 @@ impl HGFriendsModule {
     /// Send a local status notification (online/offline).
     ///
     /// Returns `true` if the target user is locally present and was notified.
-    pub fn local_status_notification(
-        &self,
-        _from_id: Uuid,
-        to_id: Uuid,
-        _online: bool,
-    ) -> bool {
+    pub fn local_status_notification(&self, _from_id: Uuid, to_id: Uuid, _online: bool) -> bool {
         // In a real implementation, this would notify the target client.
         self.online_users.contains_key(&to_id)
     }
@@ -440,10 +421,7 @@ mod tests {
         let mut module = HGFriendsModule::new();
         let user = Uuid::new_v4();
         let friend_uuid = Uuid::new_v4();
-        let friend_uui = format!(
-            "{};http://foreign.grid:8002;Alice Wonderland",
-            friend_uuid
-        );
+        let friend_uui = format!("{};http://foreign.grid:8002;Alice Wonderland", friend_uuid);
 
         let secret = module.store_hg_friendship(user, &friend_uui);
         assert_eq!(secret.len(), 8);
@@ -462,10 +440,7 @@ mod tests {
         let mut module = HGFriendsModule::new();
         let user = Uuid::new_v4();
         let friend_uuid = Uuid::new_v4();
-        let friend_uui = format!(
-            "{};http://foreign.grid:8002;Bob Builder",
-            friend_uuid
-        );
+        let friend_uui = format!("{};http://foreign.grid:8002;Bob Builder", friend_uuid);
 
         let secret = module.store_hg_friendship(user, &friend_uui);
         assert!(module.delete_hg_friendship(user, friend_uuid, &secret));
@@ -479,10 +454,7 @@ mod tests {
         let mut module = HGFriendsModule::new();
         let user = Uuid::new_v4();
         let friend_uuid = Uuid::new_v4();
-        let friend_uui = format!(
-            "{};http://foreign.grid:8002;Carol Candle",
-            friend_uuid
-        );
+        let friend_uui = format!("{};http://foreign.grid:8002;Carol Candle", friend_uuid);
 
         let _secret = module.store_hg_friendship(user, &friend_uui);
         assert!(!module.delete_hg_friendship(user, friend_uuid, "wrongsec"));
@@ -545,8 +517,16 @@ mod tests {
     fn friendship_message_foreign() {
         let module = HGFriendsModule::new();
         let foreign = format!("{};http://grid.com;Name Here", Uuid::new_v4());
-        assert!(module.friendship_message(&foreign).contains("another HG grid"));
-        assert!(!module.friendship_message(&Uuid::new_v4().to_string()).contains("HG"));
+        assert!(
+            module
+                .friendship_message(&foreign)
+                .contains("another HG grid")
+        );
+        assert!(
+            !module
+                .friendship_message(&Uuid::new_v4().to_string())
+                .contains("HG")
+        );
     }
 
     // -- 10. HGFriendRecord is_foreign / friend_uuid / friend_home_uri --------
@@ -571,7 +551,10 @@ mod tests {
         };
         assert!(foreign.is_foreign());
         assert_eq!(foreign.friend_uuid(), Some(uuid));
-        assert_eq!(foreign.friend_home_uri(), Some("http://grid.com:8002".to_string()));
+        assert_eq!(
+            foreign.friend_home_uri(),
+            Some("http://grid.com:8002".to_string())
+        );
         assert_eq!(foreign.secret(), Some("abc12345"));
     }
 

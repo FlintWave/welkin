@@ -192,10 +192,7 @@ impl<T: HttpTransport> WolfvoiceClient<T> {
         }
         // The sidecar returns an empty object `{}` on success, which
         // deserialises to `serde_json::Value` with no issues.
-        let _: serde_json::Value = self.call(
-            "destroy_channel",
-            Params { channel_uri },
-        )?;
+        let _: serde_json::Value = self.call("destroy_channel", Params { channel_uri })?;
         Ok(())
     }
 
@@ -249,10 +246,7 @@ mod tests {
 
     impl HttpTransport for MockTransport {
         fn post_json(&self, _url: &str, body: &[u8]) -> Result<Vec<u8>, WolfvoiceError> {
-            self.captured_requests
-                .lock()
-                .unwrap()
-                .push(body.to_vec());
+            self.captured_requests.lock().unwrap().push(body.to_vec());
             let mut responses = self.responses.lock().unwrap();
             if responses.is_empty() {
                 return Err(WolfvoiceError::Transport(
@@ -265,10 +259,7 @@ mod tests {
 
     /// Build a successful JSON-RPC response wrapping the given result JSON.
     fn ok_response(result_json: &str) -> String {
-        format!(
-            r#"{{"jsonrpc":"2.0","result":{},"id":1}}"#,
-            result_json
-        )
+        format!(r#"{{"jsonrpc":"2.0","result":{},"id":1}}"#, result_json)
     }
 
     /// Build an error JSON-RPC response.
@@ -289,9 +280,7 @@ mod tests {
         let transport = MockTransport::new(vec![response]);
         let client = WolfvoiceClient::new("http://localhost:8090".to_string(), transport);
 
-        let creds = client
-            .provision_account(Uuid::nil(), "Test User")
-            .unwrap();
+        let creds = client.provision_account(Uuid::nil(), "Test User").unwrap();
         assert_eq!(creds.username, "agent_voice");
         assert_eq!(creds.password, "secret123");
         assert_eq!(creds.voice_server_uri, "wss://voice.example.com");
@@ -402,9 +391,8 @@ mod tests {
 
     #[test]
     fn provision_account_request_fields() {
-        let response = ok_response(
-            r#"{"username":"u","password":"p","voice_server_uri":"wss://v"}"#,
-        );
+        let response =
+            ok_response(r#"{"username":"u","password":"p","voice_server_uri":"wss://v"}"#);
         let transport = MockTransport::new(vec![response]);
         let client = WolfvoiceClient::new("http://localhost:8090".to_string(), transport);
 
@@ -425,9 +413,7 @@ mod tests {
 
     #[test]
     fn create_channel_request_includes_type() {
-        let response = ok_response(
-            r#"{"channel_uri":"wss://v/ch/1","channel_name":"estate-1"}"#,
-        );
+        let response = ok_response(r#"{"channel_uri":"wss://v/ch/1","channel_name":"estate-1"}"#);
         let transport = MockTransport::new(vec![response]);
         let client = WolfvoiceClient::new("http://localhost:8090".to_string(), transport);
 

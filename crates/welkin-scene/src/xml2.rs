@@ -5,10 +5,10 @@ use std::str::FromStr;
 
 use base64::Engine;
 use glam::{Quat, Vec3};
-use welkin_types::PermissionMask;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::{Reader, Writer};
 use uuid::Uuid;
+use welkin_types::PermissionMask;
 
 use crate::group::SceneObjectGroup;
 use crate::part::{PartColor, PrimFlags, PrimShape, SceneObjectPart};
@@ -29,7 +29,7 @@ impl From<XmlError> for std::io::Error {
     fn from(e: XmlError) -> Self {
         match e {
             XmlError::Io(io) => io,
-            other => std::io::Error::new(std::io::ErrorKind::Other, other.to_string()),
+            other => std::io::Error::other(other.to_string()),
         }
     }
 }
@@ -138,34 +138,90 @@ fn write_color(w: &mut W, tag: &str, c: &PartColor) -> Result<(), XmlError> {
 
 fn flags_to_string(flags: PrimFlags) -> String {
     let mut parts = Vec::new();
-    if flags.contains(PrimFlags::PHYSICS) { parts.push("Physics"); }
-    if flags.contains(PrimFlags::CREATE_SELECTED) { parts.push("CreateSelected"); }
-    if flags.contains(PrimFlags::OBJECT_MODIFY) { parts.push("ObjectModify"); }
-    if flags.contains(PrimFlags::OBJECT_COPY) { parts.push("ObjectCopy"); }
-    if flags.contains(PrimFlags::OBJECT_ANY_OWNER) { parts.push("ObjectAnyOwner"); }
-    if flags.contains(PrimFlags::OBJECT_YOU_OWNER) { parts.push("ObjectYouOwner"); }
-    if flags.contains(PrimFlags::SCRIPTED) { parts.push("Scripted"); }
-    if flags.contains(PrimFlags::TOUCH) { parts.push("Touch"); }
-    if flags.contains(PrimFlags::OBJECT_MOVE) { parts.push("ObjectMove"); }
-    if flags.contains(PrimFlags::TAKES_MONEY) { parts.push("Money"); }
-    if flags.contains(PrimFlags::PHANTOM) { parts.push("Phantom"); }
-    if flags.contains(PrimFlags::INVENTORY_EMPTY) { parts.push("InventoryEmpty"); }
-    if flags.contains(PrimFlags::AFFECTS_NAVMESH) { parts.push("AffectsNavmesh"); }
-    if flags.contains(PrimFlags::CHARACTER) { parts.push("Character"); }
-    if flags.contains(PrimFlags::VOLUME_DETECT) { parts.push("VolumeDetect"); }
-    if flags.contains(PrimFlags::INCLUDE_IN_SEARCH) { parts.push("IncludeInSearch"); }
-    if flags.contains(PrimFlags::ALLOW_INVENTORY_DROP) { parts.push("AllowInventoryDrop"); }
-    if flags.contains(PrimFlags::OBJECT_TRANSFER) { parts.push("ObjectTransfer"); }
-    if flags.contains(PrimFlags::OBJECT_GROUP_OWNED) { parts.push("ObjectGroupOwned"); }
-    if flags.contains(PrimFlags::OBJECT_YOU_OFFICER) { parts.push("ObjectYouOfficer"); }
-    if flags.contains(PrimFlags::CAMERA_DECOUPLED) { parts.push("CameraDecoupled"); }
-    if flags.contains(PrimFlags::ANIM_SOURCE) { parts.push("AnimSource"); }
-    if flags.contains(PrimFlags::CAMERA_SOURCE) { parts.push("CameraSource"); }
-    if flags.contains(PrimFlags::CAST_SHADOWS) { parts.push("CastShadows"); }
-    if flags.contains(PrimFlags::OBJECT_OWNER_MODIFY) { parts.push("ObjectOwnerModify"); }
-    if flags.contains(PrimFlags::TEMPORARY_ON_REZ) { parts.push("TemporaryOnRez"); }
-    if flags.contains(PrimFlags::TEMPORARY) { parts.push("Temporary"); }
-    if flags.contains(PrimFlags::ZONE_FLY) { parts.push("ZoneFly"); }
+    if flags.contains(PrimFlags::PHYSICS) {
+        parts.push("Physics");
+    }
+    if flags.contains(PrimFlags::CREATE_SELECTED) {
+        parts.push("CreateSelected");
+    }
+    if flags.contains(PrimFlags::OBJECT_MODIFY) {
+        parts.push("ObjectModify");
+    }
+    if flags.contains(PrimFlags::OBJECT_COPY) {
+        parts.push("ObjectCopy");
+    }
+    if flags.contains(PrimFlags::OBJECT_ANY_OWNER) {
+        parts.push("ObjectAnyOwner");
+    }
+    if flags.contains(PrimFlags::OBJECT_YOU_OWNER) {
+        parts.push("ObjectYouOwner");
+    }
+    if flags.contains(PrimFlags::SCRIPTED) {
+        parts.push("Scripted");
+    }
+    if flags.contains(PrimFlags::TOUCH) {
+        parts.push("Touch");
+    }
+    if flags.contains(PrimFlags::OBJECT_MOVE) {
+        parts.push("ObjectMove");
+    }
+    if flags.contains(PrimFlags::TAKES_MONEY) {
+        parts.push("Money");
+    }
+    if flags.contains(PrimFlags::PHANTOM) {
+        parts.push("Phantom");
+    }
+    if flags.contains(PrimFlags::INVENTORY_EMPTY) {
+        parts.push("InventoryEmpty");
+    }
+    if flags.contains(PrimFlags::AFFECTS_NAVMESH) {
+        parts.push("AffectsNavmesh");
+    }
+    if flags.contains(PrimFlags::CHARACTER) {
+        parts.push("Character");
+    }
+    if flags.contains(PrimFlags::VOLUME_DETECT) {
+        parts.push("VolumeDetect");
+    }
+    if flags.contains(PrimFlags::INCLUDE_IN_SEARCH) {
+        parts.push("IncludeInSearch");
+    }
+    if flags.contains(PrimFlags::ALLOW_INVENTORY_DROP) {
+        parts.push("AllowInventoryDrop");
+    }
+    if flags.contains(PrimFlags::OBJECT_TRANSFER) {
+        parts.push("ObjectTransfer");
+    }
+    if flags.contains(PrimFlags::OBJECT_GROUP_OWNED) {
+        parts.push("ObjectGroupOwned");
+    }
+    if flags.contains(PrimFlags::OBJECT_YOU_OFFICER) {
+        parts.push("ObjectYouOfficer");
+    }
+    if flags.contains(PrimFlags::CAMERA_DECOUPLED) {
+        parts.push("CameraDecoupled");
+    }
+    if flags.contains(PrimFlags::ANIM_SOURCE) {
+        parts.push("AnimSource");
+    }
+    if flags.contains(PrimFlags::CAMERA_SOURCE) {
+        parts.push("CameraSource");
+    }
+    if flags.contains(PrimFlags::CAST_SHADOWS) {
+        parts.push("CastShadows");
+    }
+    if flags.contains(PrimFlags::OBJECT_OWNER_MODIFY) {
+        parts.push("ObjectOwnerModify");
+    }
+    if flags.contains(PrimFlags::TEMPORARY_ON_REZ) {
+        parts.push("TemporaryOnRez");
+    }
+    if flags.contains(PrimFlags::TEMPORARY) {
+        parts.push("Temporary");
+    }
+    if flags.contains(PrimFlags::ZONE_FLY) {
+        parts.push("ZoneFly");
+    }
     if parts.is_empty() {
         String::from("None")
     } else {
@@ -443,10 +499,10 @@ fn read_uuid_field(reader: &mut Reader<&[u8]>) -> Result<Uuid, XmlError> {
             }
             Event::Text(e) => {
                 let s = e.unescape()?.trim().to_string();
-                if !s.is_empty() {
-                    if let Ok(u) = Uuid::from_str(&s) {
-                        result = u;
-                    }
+                if !s.is_empty()
+                    && let Ok(u) = Uuid::from_str(&s)
+                {
+                    result = u;
                 }
             }
             Event::End(_) => break,
@@ -575,7 +631,9 @@ fn read_shape(reader: &mut Reader<&[u8]>) -> Result<PrimShape, XmlError> {
             Event::Start(e) => {
                 let tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
                 match tag.as_str() {
-                    "ProfileCurve" => s.profile_curve = read_text(reader)?.trim().parse().unwrap_or(0),
+                    "ProfileCurve" => {
+                        s.profile_curve = read_text(reader)?.trim().parse().unwrap_or(0)
+                    }
                     "TextureEntry" => {
                         let txt = read_text(reader)?;
                         s.texture_entry = b64().decode(txt.trim()).unwrap_or_default();
@@ -587,8 +645,12 @@ fn read_shape(reader: &mut Reader<&[u8]>) -> Result<PrimShape, XmlError> {
                     "PathBegin" => s.path_begin = read_text(reader)?.trim().parse().unwrap_or(0),
                     "PathCurve" => s.path_curve = read_text(reader)?.trim().parse().unwrap_or(0),
                     "PathEnd" => s.path_end = read_text(reader)?.trim().parse().unwrap_or(0),
-                    "PathRadiusOffset" => s.path_radius_offset = read_text(reader)?.trim().parse().unwrap_or(0),
-                    "PathRevolutions" => s.path_revolutions = read_text(reader)?.trim().parse().unwrap_or(0),
+                    "PathRadiusOffset" => {
+                        s.path_radius_offset = read_text(reader)?.trim().parse().unwrap_or(0)
+                    }
+                    "PathRevolutions" => {
+                        s.path_revolutions = read_text(reader)?.trim().parse().unwrap_or(0)
+                    }
                     "PathScaleX" => s.path_scale_x = read_text(reader)?.trim().parse().unwrap_or(0),
                     "PathScaleY" => s.path_scale_y = read_text(reader)?.trim().parse().unwrap_or(0),
                     "PathShearX" => s.path_shear_x = read_text(reader)?.trim().parse().unwrap_or(0),
@@ -597,33 +659,69 @@ fn read_shape(reader: &mut Reader<&[u8]>) -> Result<PrimShape, XmlError> {
                     "PathTaperX" => s.path_taper_x = read_text(reader)?.trim().parse().unwrap_or(0),
                     "PathTaperY" => s.path_taper_y = read_text(reader)?.trim().parse().unwrap_or(0),
                     "PathTwist" => s.path_twist = read_text(reader)?.trim().parse().unwrap_or(0),
-                    "PathTwistBegin" => s.path_twist_begin = read_text(reader)?.trim().parse().unwrap_or(0),
+                    "PathTwistBegin" => {
+                        s.path_twist_begin = read_text(reader)?.trim().parse().unwrap_or(0)
+                    }
                     "PCode" => s.pcode = read_text(reader)?.trim().parse().unwrap_or(0),
-                    "ProfileBegin" => s.profile_begin = read_text(reader)?.trim().parse().unwrap_or(0),
+                    "ProfileBegin" => {
+                        s.profile_begin = read_text(reader)?.trim().parse().unwrap_or(0)
+                    }
                     "ProfileEnd" => s.profile_end = read_text(reader)?.trim().parse().unwrap_or(0),
-                    "ProfileHollow" => s.profile_hollow = read_text(reader)?.trim().parse().unwrap_or(0),
+                    "ProfileHollow" => {
+                        s.profile_hollow = read_text(reader)?.trim().parse().unwrap_or(0)
+                    }
                     "State" => s.state = read_text(reader)?.trim().parse().unwrap_or(0),
-                    "LastAttachPoint" => s.last_attach_point = read_text(reader)?.trim().parse().unwrap_or(0),
+                    "LastAttachPoint" => {
+                        s.last_attach_point = read_text(reader)?.trim().parse().unwrap_or(0)
+                    }
                     "ProfileShape" => s.profile_shape = read_text(reader)?.trim().to_string(),
                     "HollowShape" => s.hollow_shape = read_text(reader)?.trim().to_string(),
                     "SculptTexture" => s.sculpt_texture = read_uuid_field(reader)?,
                     "SculptType" => s.sculpt_type = read_text(reader)?.trim().parse().unwrap_or(0),
-                    "FlexiSoftness" => s.flexi_softness = read_text(reader)?.trim().parse().unwrap_or(0),
-                    "FlexiTension" => s.flexi_tension = read_text(reader)?.trim().parse().unwrap_or(0.0),
+                    "FlexiSoftness" => {
+                        s.flexi_softness = read_text(reader)?.trim().parse().unwrap_or(0)
+                    }
+                    "FlexiTension" => {
+                        s.flexi_tension = read_text(reader)?.trim().parse().unwrap_or(0.0)
+                    }
                     "FlexiDrag" => s.flexi_drag = read_text(reader)?.trim().parse().unwrap_or(0.0),
-                    "FlexiGravity" => s.flexi_gravity = read_text(reader)?.trim().parse().unwrap_or(0.0),
+                    "FlexiGravity" => {
+                        s.flexi_gravity = read_text(reader)?.trim().parse().unwrap_or(0.0)
+                    }
                     "FlexiWind" => s.flexi_wind = read_text(reader)?.trim().parse().unwrap_or(0.0),
-                    "FlexiForceX" => s.flexi_force_x = read_text(reader)?.trim().parse().unwrap_or(0.0),
-                    "FlexiForceY" => s.flexi_force_y = read_text(reader)?.trim().parse().unwrap_or(0.0),
-                    "FlexiForceZ" => s.flexi_force_z = read_text(reader)?.trim().parse().unwrap_or(0.0),
-                    "LightColorR" => s.light_color_r = read_text(reader)?.trim().parse().unwrap_or(0.0),
-                    "LightColorG" => s.light_color_g = read_text(reader)?.trim().parse().unwrap_or(0.0),
-                    "LightColorB" => s.light_color_b = read_text(reader)?.trim().parse().unwrap_or(0.0),
-                    "LightColorA" => s.light_color_a = read_text(reader)?.trim().parse().unwrap_or(1.0),
-                    "LightRadius" => s.light_radius = read_text(reader)?.trim().parse().unwrap_or(0.0),
-                    "LightCutoff" => s.light_cutoff = read_text(reader)?.trim().parse().unwrap_or(0.0),
-                    "LightFalloff" => s.light_falloff = read_text(reader)?.trim().parse().unwrap_or(0.0),
-                    "LightIntensity" => s.light_intensity = read_text(reader)?.trim().parse().unwrap_or(0.0),
+                    "FlexiForceX" => {
+                        s.flexi_force_x = read_text(reader)?.trim().parse().unwrap_or(0.0)
+                    }
+                    "FlexiForceY" => {
+                        s.flexi_force_y = read_text(reader)?.trim().parse().unwrap_or(0.0)
+                    }
+                    "FlexiForceZ" => {
+                        s.flexi_force_z = read_text(reader)?.trim().parse().unwrap_or(0.0)
+                    }
+                    "LightColorR" => {
+                        s.light_color_r = read_text(reader)?.trim().parse().unwrap_or(0.0)
+                    }
+                    "LightColorG" => {
+                        s.light_color_g = read_text(reader)?.trim().parse().unwrap_or(0.0)
+                    }
+                    "LightColorB" => {
+                        s.light_color_b = read_text(reader)?.trim().parse().unwrap_or(0.0)
+                    }
+                    "LightColorA" => {
+                        s.light_color_a = read_text(reader)?.trim().parse().unwrap_or(1.0)
+                    }
+                    "LightRadius" => {
+                        s.light_radius = read_text(reader)?.trim().parse().unwrap_or(0.0)
+                    }
+                    "LightCutoff" => {
+                        s.light_cutoff = read_text(reader)?.trim().parse().unwrap_or(0.0)
+                    }
+                    "LightFalloff" => {
+                        s.light_falloff = read_text(reader)?.trim().parse().unwrap_or(0.0)
+                    }
+                    "LightIntensity" => {
+                        s.light_intensity = read_text(reader)?.trim().parse().unwrap_or(0.0)
+                    }
                     "FlexiEntry" => s.flexi_entry = read_text(reader)?.trim() == "true",
                     "LightEntry" => s.light_entry = read_text(reader)?.trim() == "true",
                     "SculptEntry" => s.sculpt_entry = read_text(reader)?.trim() == "true",
@@ -660,15 +758,21 @@ fn read_part(reader: &mut Reader<&[u8]>) -> Result<SceneObjectPart, XmlError> {
                     "CreatorID" => p.creator_id = read_uuid_field(reader)?,
                     "CreatorData" => p.creator_data = read_text(reader)?.trim().to_string(),
                     "FolderID" => p.folder_id = read_uuid_field(reader)?,
-                    "InventorySerial" => p.inventory_serial = read_text(reader)?.trim().parse().unwrap_or(0),
+                    "InventorySerial" => {
+                        p.inventory_serial = read_text(reader)?.trim().parse().unwrap_or(0)
+                    }
                     "UUID" => p.uuid = read_uuid_field(reader)?,
                     "LocalId" => p.local_id = read_text(reader)?.trim().parse().unwrap_or(0),
                     "Name" => p.name = read_text(reader)?,
                     "Material" => p.material = read_text(reader)?.trim().parse().unwrap_or(0),
                     "PassTouches" => p.pass_touches = read_text(reader)?.trim() == "true",
                     "PassCollisions" => p.pass_collisions = read_text(reader)?.trim() == "true",
-                    "RegionHandle" => p.region_handle = read_text(reader)?.trim().parse().unwrap_or(0),
-                    "ScriptAccessPin" => p.script_access_pin = read_text(reader)?.trim().parse().unwrap_or(0),
+                    "RegionHandle" => {
+                        p.region_handle = read_text(reader)?.trim().parse().unwrap_or(0)
+                    }
+                    "ScriptAccessPin" => {
+                        p.script_access_pin = read_text(reader)?.trim().parse().unwrap_or(0)
+                    }
                     "GroupPosition" => p.group_position = read_vec3_field(reader)?,
                     "OffsetPosition" => p.offset_position = read_vec3_field(reader)?,
                     "RotationOffset" => p.rotation_offset = read_quat_field(reader)?,
@@ -681,41 +785,63 @@ fn read_part(reader: &mut Reader<&[u8]>) -> Result<SceneObjectPart, XmlError> {
                     "SitName" => p.sit_name = read_text(reader)?,
                     "TouchName" => p.touch_name = read_text(reader)?,
                     "LinkNum" => p.link_num = read_text(reader)?.trim().parse().unwrap_or(0),
-                    "ClickAction" => p.click_action = read_text(reader)?.trim().parse().unwrap_or(0),
+                    "ClickAction" => {
+                        p.click_action = read_text(reader)?.trim().parse().unwrap_or(0)
+                    }
                     "Shape" => p.shape = read_shape(reader)?,
                     "Scale" => p.scale = read_vec3_field(reader)?,
                     "SitTargetOrientation" => p.sit_target_orientation = read_quat_field(reader)?,
                     "SitTargetPosition" => p.sit_target_position = read_vec3_field(reader)?,
                     "SitTargetPositionLL" => p.sit_target_position_ll = read_vec3_field(reader)?,
-                    "SitTargetOrientationLL" => p.sit_target_orientation_ll = read_quat_field(reader)?,
+                    "SitTargetOrientationLL" => {
+                        p.sit_target_orientation_ll = read_quat_field(reader)?
+                    }
                     "ParentID" => p.parent_id = read_text(reader)?.trim().parse().unwrap_or(0),
-                    "CreationDate" => p.creation_date = read_text(reader)?.trim().parse().unwrap_or(0),
+                    "CreationDate" => {
+                        p.creation_date = read_text(reader)?.trim().parse().unwrap_or(0)
+                    }
                     "Category" => p.category = read_text(reader)?.trim().parse().unwrap_or(0),
                     "SalePrice" => p.sale_price = read_text(reader)?.trim().parse().unwrap_or(0),
-                    "ObjectSaleType" => p.object_sale_type = read_text(reader)?.trim().parse().unwrap_or(0),
-                    "OwnershipCost" => p.ownership_cost = read_text(reader)?.trim().parse().unwrap_or(0),
+                    "ObjectSaleType" => {
+                        p.object_sale_type = read_text(reader)?.trim().parse().unwrap_or(0)
+                    }
+                    "OwnershipCost" => {
+                        p.ownership_cost = read_text(reader)?.trim().parse().unwrap_or(0)
+                    }
                     "GroupID" => p.group_id = read_uuid_field(reader)?,
                     "OwnerID" => p.owner_id = read_uuid_field(reader)?,
                     "LastOwnerID" => p.last_owner_id = read_uuid_field(reader)?,
                     "RezzerID" => p.rezzer_id = read_uuid_field(reader)?,
-                    "BaseMask" => p.base_mask = PermissionMask::from_bits_truncate(
-                        read_text(reader)?.trim().parse().unwrap_or(0),
-                    ),
-                    "OwnerMask" => p.owner_mask = PermissionMask::from_bits_truncate(
-                        read_text(reader)?.trim().parse().unwrap_or(0),
-                    ),
-                    "GroupMask" => p.group_mask = PermissionMask::from_bits_truncate(
-                        read_text(reader)?.trim().parse().unwrap_or(0),
-                    ),
-                    "EveryoneMask" => p.everyone_mask = PermissionMask::from_bits_truncate(
-                        read_text(reader)?.trim().parse().unwrap_or(0),
-                    ),
-                    "NextOwnerMask" => p.next_owner_mask = PermissionMask::from_bits_truncate(
-                        read_text(reader)?.trim().parse().unwrap_or(0),
-                    ),
+                    "BaseMask" => {
+                        p.base_mask = PermissionMask::from_bits_truncate(
+                            read_text(reader)?.trim().parse().unwrap_or(0),
+                        )
+                    }
+                    "OwnerMask" => {
+                        p.owner_mask = PermissionMask::from_bits_truncate(
+                            read_text(reader)?.trim().parse().unwrap_or(0),
+                        )
+                    }
+                    "GroupMask" => {
+                        p.group_mask = PermissionMask::from_bits_truncate(
+                            read_text(reader)?.trim().parse().unwrap_or(0),
+                        )
+                    }
+                    "EveryoneMask" => {
+                        p.everyone_mask = PermissionMask::from_bits_truncate(
+                            read_text(reader)?.trim().parse().unwrap_or(0),
+                        )
+                    }
+                    "NextOwnerMask" => {
+                        p.next_owner_mask = PermissionMask::from_bits_truncate(
+                            read_text(reader)?.trim().parse().unwrap_or(0),
+                        )
+                    }
                     "Flags" => p.flags = flags_from_string(&read_text(reader)?),
                     "CollisionSound" => p.collision_sound = read_uuid_field(reader)?,
-                    "CollisionSoundVolume" => p.collision_sound_volume = read_text(reader)?.trim().parse().unwrap_or(0.0),
+                    "CollisionSoundVolume" => {
+                        p.collision_sound_volume = read_text(reader)?.trim().parse().unwrap_or(0.0)
+                    }
                     "MediaUrl" => p.media_url = read_text(reader)?,
                     "AttachedPos" => p.attached_pos = read_vec3_field(reader)?,
                     "TextureAnimation" => {
@@ -734,21 +860,33 @@ fn read_part(reader: &mut Reader<&[u8]>) -> Result<SceneObjectPart, XmlError> {
                     "Buoyancy" => p.buoyancy = read_text(reader)?.trim().parse().unwrap_or(0.0),
                     "Force" => p.force = read_vec3_field(reader)?,
                     "Torque" => p.torque = read_vec3_field(reader)?,
-                    "VolumeDetectActive" => p.volume_detect_active = read_text(reader)?.trim() == "true",
-                    "PhysicsShapeType" => p.physics_shape_type = read_text(reader)?.trim().parse().unwrap_or(0),
+                    "VolumeDetectActive" => {
+                        p.volume_detect_active = read_text(reader)?.trim() == "true"
+                    }
+                    "PhysicsShapeType" => {
+                        p.physics_shape_type = read_text(reader)?.trim().parse().unwrap_or(0)
+                    }
                     "Density" => p.density = read_text(reader)?.trim().parse().unwrap_or(1000.0),
                     "Friction" => p.friction = read_text(reader)?.trim().parse().unwrap_or(0.6),
                     "Bounce" => p.bounce = read_text(reader)?.trim().parse().unwrap_or(0.5),
-                    "GravityModifier" => p.gravity_modifier = read_text(reader)?.trim().parse().unwrap_or(1.0),
+                    "GravityModifier" => {
+                        p.gravity_modifier = read_text(reader)?.trim().parse().unwrap_or(1.0)
+                    }
                     "CameraEyeOffset" => p.camera_eye_offset = read_vec3_field(reader)?,
                     "CameraAtOffset" => p.camera_at_offset = read_vec3_field(reader)?,
                     "SoundID" => p.sound_id = read_uuid_field(reader)?,
                     "SoundGain" => p.sound_gain = read_text(reader)?.trim().parse().unwrap_or(0.0),
                     "SoundFlags" => p.sound_flags = read_text(reader)?.trim().parse().unwrap_or(0),
-                    "SoundRadius" => p.sound_radius = read_text(reader)?.trim().parse().unwrap_or(0.0),
+                    "SoundRadius" => {
+                        p.sound_radius = read_text(reader)?.trim().parse().unwrap_or(0.0)
+                    }
                     "SoundQueueing" => p.sound_queueing = read_text(reader)?.trim() == "true",
-                    "SitActRange" => p.sit_act_range = read_text(reader)?.trim().parse().unwrap_or(0.0),
-                    "StandTarget" => { let _ = read_vec3_field(reader)?; }
+                    "SitActRange" => {
+                        p.sit_act_range = read_text(reader)?.trim().parse().unwrap_or(0.0)
+                    }
+                    "StandTarget" => {
+                        let _ = read_vec3_field(reader)?;
+                    }
                     "TaskInventory" | "DynAttrs" | "Vehicle" | "PhysicsInertia"
                     | "RotationAxisLocks" | "SOPAnims" => skip_element(reader)?,
                     _ => skip_element(reader)?,
@@ -854,7 +992,10 @@ mod tests {
         assert_eq!(restored.uuid(), root_uuid);
         assert_eq!(restored.root_part().name, "Round Trip Box");
         assert_eq!(restored.root_part().owner_id, owner);
-        assert_eq!(restored.root_part().group_position, Vec3::new(128.0, 128.0, 25.0));
+        assert_eq!(
+            restored.root_part().group_position,
+            Vec3::new(128.0, 128.0, 25.0)
+        );
         assert_eq!(restored.root_part().scale, Vec3::new(1.0, 2.0, 3.0));
         assert!((restored.root_part().rotation_offset.x - 0.0).abs() < 0.001);
         assert!((restored.root_part().rotation_offset.z - 0.707).abs() < 0.001);
@@ -863,7 +1004,10 @@ mod tests {
         assert_eq!(restored.root_part().bounce, 0.8);
         assert!(restored.root_part().flags.contains(PrimFlags::PHYSICS));
         assert!(restored.root_part().flags.contains(PrimFlags::PHANTOM));
-        assert_eq!(restored.root_part().text_color, PartColor::new(200, 100, 50, 255));
+        assert_eq!(
+            restored.root_part().text_color,
+            PartColor::new(200, 100, 50, 255)
+        );
         assert_eq!(restored.part_count(), 1);
     }
 

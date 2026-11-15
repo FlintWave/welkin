@@ -9,7 +9,7 @@ use mlua::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{compile_source, restore_script_state, serialize_script_state, ScriptState, VmError};
+use crate::{ScriptState, VmError, compile_source, restore_script_state, serialize_script_state};
 
 // ---------------------------------------------------------------------------
 // ScriptEvent
@@ -372,12 +372,7 @@ mod tests {
 
     #[test]
     fn create_instance_and_run_touch() -> Result<(), VmError> {
-        let mut inst = ScriptInstance::new(
-            Uuid::new_v4(),
-            Uuid::new_v4(),
-            HANDLER_SOURCE,
-            0,
-        )?;
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), HANDLER_SOURCE, 0)?;
 
         assert!(!inst.has_pending_events());
         assert_eq!(inst.state, ScriptInstanceState::Idle);
@@ -396,12 +391,7 @@ mod tests {
 
     #[test]
     fn run_multiple_event_types() -> Result<(), VmError> {
-        let mut inst = ScriptInstance::new(
-            Uuid::new_v4(),
-            Uuid::new_v4(),
-            HANDLER_SOURCE,
-            0,
-        )?;
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), HANDLER_SOURCE, 0)?;
 
         inst.post_event(ScriptEvent::StateEntry);
         inst.post_event(ScriptEvent::Timer);
@@ -431,12 +421,7 @@ mod tests {
     #[test]
     fn missing_handler_is_noop() -> Result<(), VmError> {
         // Script with NO handlers defined
-        let mut inst = ScriptInstance::new(
-            Uuid::new_v4(),
-            Uuid::new_v4(),
-            "-- empty script",
-            0,
-        )?;
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), "-- empty script", 0)?;
 
         inst.post_event(ScriptEvent::Timer);
         inst.run_next_event()?;
@@ -479,12 +464,7 @@ mod tests {
 
     #[test]
     fn stopped_instance_ignores_events() -> Result<(), VmError> {
-        let mut inst = ScriptInstance::new(
-            Uuid::new_v4(),
-            Uuid::new_v4(),
-            HANDLER_SOURCE,
-            0,
-        )?;
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), HANDLER_SOURCE, 0)?;
 
         inst.state = ScriptInstanceState::Stopped;
         inst.post_event(ScriptEvent::Timer);
@@ -501,19 +481,11 @@ mod tests {
             end
         "#;
 
-        let mut inst = ScriptInstance::new(
-            Uuid::new_v4(),
-            Uuid::new_v4(),
-            source,
-            0,
-        )?;
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), source, 0)?;
 
         inst.post_event(ScriptEvent::Custom {
             name: "my_custom".into(),
-            args: vec![
-                serde_json::Value::from(10),
-                serde_json::Value::from(32),
-            ],
+            args: vec![serde_json::Value::from(10), serde_json::Value::from(32)],
         });
 
         inst.run_next_event()?;

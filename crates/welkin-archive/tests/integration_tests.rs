@@ -15,24 +15,20 @@ use std::io::Cursor;
 
 use uuid::Uuid;
 
+use welkin_archive::ArchiveError;
 use welkin_archive::assets_request::AssetData;
 use welkin_archive::constants;
-use welkin_archive::external_representation::{
-    self, RewriteContext,
-};
+use welkin_archive::external_representation::{self, RewriteContext};
 use welkin_archive::iar_read::{IarReader, InventoryImporter};
-use welkin_archive::iar_write::{
-    self, IarWriteOptions, InventoryItem,
-};
+use welkin_archive::iar_write::{self, IarWriteOptions, InventoryItem};
 use welkin_archive::land_data::ArchiveLandData;
 use welkin_archive::oar_read::{self, OarLoadOptions};
 use welkin_archive::oar_write::{
-    self, ArchiveScenesGroup, OarRegionData, OarSceneObject, OarTerrain,
-    OarWriteOptions, PermissionChecker, PermissionClass,
+    self, ArchiveScenesGroup, OarRegionData, OarSceneObject, OarTerrain, OarWriteOptions,
+    PermissionChecker, PermissionClass,
 };
 use welkin_archive::osp_resolver::{self, UserService};
 use welkin_archive::region_settings::RegionSettings;
-use welkin_archive::ArchiveError;
 use welkin_types::{AssetType, PermissionMask};
 
 // =========================================================================
@@ -227,9 +223,7 @@ impl PermissionChecker for MockPermissionChecker {
 // =========================================================================
 
 fn make_flat_heightfield() -> Vec<u8> {
-    (0..65536u32)
-        .flat_map(|_| 25.0f32.to_le_bytes())
-        .collect()
+    (0..65536u32).flat_map(|_| 25.0f32.to_le_bytes()).collect()
 }
 
 fn make_test_region(name: &str, gx: u32, gy: u32) -> OarRegionData {
@@ -483,11 +477,7 @@ fn oar_rotation_rotates_positions() {
     assert!((pos.2 - 50.0).abs() < f32::EPSILON);
 
     // 180 degrees
-    let pos2 = oar_read::apply_rotation(
-        (256.0, 128.0, 50.0),
-        std::f32::consts::PI,
-        (128.0, 128.0),
-    );
+    let pos2 = oar_read::apply_rotation((256.0, 128.0, 50.0), std::f32::consts::PI, (128.0, 128.0));
     // (256,128) -> (0, 128)
     assert!((pos2.0 - 0.0).abs() < 0.01, "x2={}", pos2.0);
     assert!((pos2.1 - 128.0).abs() < 0.01, "y2={}", pos2.1);
@@ -620,11 +610,7 @@ fn oar_multi_region_roundtrip() {
     assert_eq!(contents.regions.len(), 2);
 
     // Each region should have its own object
-    let total_objects: usize = contents
-        .regions
-        .values()
-        .map(|r| r.objects_xml.len())
-        .sum();
+    let total_objects: usize = contents.regions.values().map(|r| r.objects_xml.len()).sum();
     assert_eq!(total_objects, 2);
 }
 
@@ -825,8 +811,7 @@ fn iar_creator_resolution_via_osp() {
 // 12. IAR permission filter
 #[test]
 fn iar_permission_filter() {
-    let copy_transfer =
-        PermissionMask::COPY.bits() | PermissionMask::TRANSFER.bits();
+    let copy_transfer = PermissionMask::COPY.bits() | PermissionMask::TRANSFER.bits();
     let transfer_only = PermissionMask::TRANSFER.bits();
     let none: u32 = 0;
 
@@ -964,7 +949,10 @@ fn osp_resolver_roundtrip() {
     assert_eq!(h1, h2);
 
     // Different names produce different hashes
-    assert_ne!(osp_resolver::hash_name("Jane Doe"), osp_resolver::hash_name("John Smith"));
+    assert_ne!(
+        osp_resolver::hash_name("Jane Doe"),
+        osp_resolver::hash_name("John Smith")
+    );
 }
 
 // 14b. OspResolver cache deduplicates lookups
@@ -1032,9 +1020,8 @@ fn external_representation_uuid_rewrite_roundtrip() {
 #[test]
 fn hg_uuid_parse_and_rewrite() {
     // Plain UUID
-    let (uuid, uri) = external_representation::resolve_hg_uuid(
-        "12345678-1234-1234-1234-123456789abc",
-    );
+    let (uuid, uri) =
+        external_representation::resolve_hg_uuid("12345678-1234-1234-1234-123456789abc");
     assert_eq!(
         uuid,
         Uuid::parse_str("12345678-1234-1234-1234-123456789abc").unwrap()
@@ -1049,15 +1036,11 @@ fn hg_uuid_parse_and_rewrite() {
         uuid2,
         Uuid::parse_str("12345678-1234-1234-1234-123456789abc").unwrap()
     );
-    assert_eq!(
-        uri2,
-        Some("http://grid.example.com:8002".to_string())
-    );
+    assert_eq!(uri2, Some("http://grid.example.com:8002".to_string()));
 
     // Invalid UUID with server URI
-    let (uuid3, uri3) = external_representation::resolve_hg_uuid(
-        "not-a-uuid;http://grid.example.com",
-    );
+    let (uuid3, uri3) =
+        external_representation::resolve_hg_uuid("not-a-uuid;http://grid.example.com");
     assert_eq!(uuid3, Uuid::nil());
     assert_eq!(uri3, Some("http://grid.example.com".to_string()));
 
@@ -1067,9 +1050,7 @@ fn hg_uuid_parse_and_rewrite() {
     let mut ctx = RewriteContext::new();
     ctx.add_mapping(old, new);
 
-    let hg_xml = format!(
-        "<Part><CreatorID>{old};http://grid.example.com</CreatorID></Part>"
-    );
+    let hg_xml = format!("<Part><CreatorID>{old};http://grid.example.com</CreatorID></Part>");
     let result = external_representation::rewrite_creator_id(&hg_xml, &ctx);
     assert!(result.contains(&new.to_string()));
     assert!(!result.contains(&old.to_string()));
@@ -1080,10 +1061,7 @@ fn hg_uuid_parse_and_rewrite() {
 // 16b. CreatorData format helpers
 #[test]
 fn creator_data_format_helpers() {
-    let cd = external_representation::calc_creator_data(
-        "http://grid.example.com:8002",
-        "Jane Doe",
-    );
+    let cd = external_representation::calc_creator_data("http://grid.example.com:8002", "Jane Doe");
     assert_eq!(cd, "http://grid.example.com:8002;Jane Doe");
 
     let uuid = Uuid::parse_str("12345678-1234-1234-1234-123456789abc").unwrap();
@@ -1097,9 +1075,8 @@ fn creator_data_format_helpers() {
         "http://grid.example.com:8002/12345678-1234-1234-1234-123456789abc;Jane Doe"
     );
 
-    let (server, name) = external_representation::parse_creator_data(
-        "http://grid.example.com:8002;Jane Doe",
-    );
+    let (server, name) =
+        external_representation::parse_creator_data("http://grid.example.com:8002;Jane Doe");
     assert_eq!(server, "http://grid.example.com:8002");
     assert_eq!(name, Some("Jane Doe".to_string()));
 }

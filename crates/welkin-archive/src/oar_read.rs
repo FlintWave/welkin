@@ -8,17 +8,17 @@ use std::collections::HashMap;
 use std::io::Read;
 
 use flate2::read::GzDecoder;
-use welkin_types::AssetType;
 use tar::Archive;
 use uuid::Uuid;
+use welkin_types::AssetType;
 
+use crate::ArchiveError;
 use crate::assets_request::AssetData;
 use crate::constants;
 use crate::control_file::{self, ArchiveControlFile};
 use crate::land_data::{self, ArchiveLandData};
 use crate::oar_write::PermissionChecker;
 use crate::region_settings::{self, RegionSettings};
-use crate::ArchiveError;
 
 // ---------------------------------------------------------------------------
 // Load options
@@ -110,7 +110,7 @@ pub struct OarContents {
 }
 
 /// Contents of a single region within the archive.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct OarRegionContents {
     /// Region settings (if present).
     pub settings: Option<RegionSettings>,
@@ -122,18 +122,6 @@ pub struct OarRegionContents {
     pub terrain_filename: Option<String>,
     /// Serialized object XML strings.
     pub objects_xml: Vec<String>,
-}
-
-impl Default for OarRegionContents {
-    fn default() -> Self {
-        Self {
-            settings: None,
-            parcels: Vec::new(),
-            terrain: None,
-            terrain_filename: None,
-            objects_xml: Vec::new(),
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -222,7 +210,10 @@ fn route_path(full_path: &str, is_multi_region: bool) -> Option<(String, String)
 ///
 /// - All tar entry paths are validated against path traversal attacks.
 /// - Entry sizes are checked against [`constants::MAX_ARCHIVE_SIZE`].
-pub fn read_archive<R: Read>(reader: R, options: &OarLoadOptions) -> Result<OarContents, ArchiveError> {
+pub fn read_archive<R: Read>(
+    reader: R,
+    options: &OarLoadOptions,
+) -> Result<OarContents, ArchiveError> {
     let gz = GzDecoder::new(reader);
     let mut archive = Archive::new(gz);
 
@@ -230,7 +221,9 @@ pub fn read_archive<R: Read>(reader: R, options: &OarLoadOptions) -> Result<OarC
     let mut assets: Vec<AssetData> = Vec::new();
     let mut regions: HashMap<String, OarRegionContents> = HashMap::new();
 
-    let entries = archive.entries().map_err(|e| ArchiveError::Tar(e.to_string()))?;
+    let entries = archive
+        .entries()
+        .map_err(|e| ArchiveError::Tar(e.to_string()))?;
 
     for entry_result in entries {
         let mut entry = entry_result.map_err(|e| ArchiveError::Tar(e.to_string()))?;
@@ -247,12 +240,17 @@ pub fn read_archive<R: Read>(reader: R, options: &OarLoadOptions) -> Result<OarC
         validate_path(&full_path)?;
 
         // Security: validate size
-        let entry_size = entry.header().size().map_err(|e| ArchiveError::Tar(e.to_string()))?;
+        let entry_size = entry
+            .header()
+            .size()
+            .map_err(|e| ArchiveError::Tar(e.to_string()))?;
         validate_size(entry_size, &full_path)?;
 
         // Read entry data
         let mut data = Vec::with_capacity(entry_size as usize);
-        entry.read_to_end(&mut data).map_err(|e| ArchiveError::Tar(e.to_string()))?;
+        entry
+            .read_to_end(&mut data)
+            .map_err(|e| ArchiveError::Tar(e.to_string()))?;
 
         // Handle control file
         if full_path == constants::CONTROL_FILE_PATH {
@@ -264,16 +262,16 @@ pub fn read_archive<R: Read>(reader: R, options: &OarLoadOptions) -> Result<OarC
 
         // Handle assets (global, not per-region)
         if full_path.starts_with(constants::ASSETS_PATH) {
-            if !options.skip_assets {
-                if let Some(asset) = parse_asset_entry(&full_path, data) {
-                    assets.push(asset);
-                }
+            if !options.skip_assets
+                && let Some(asset) = parse_asset_entry(&full_path, data)
+            {
+                assets.push(asset);
             }
             continue;
         }
 
         // Determine the multi-region flag from the control file if we have it
-        let is_multi = control_file.as_ref().map_or(false, |cf| cf.is_multi_region);
+        let is_multi = control_file.as_ref().is_some_and(|cf| cf.is_multi_region);
 
         // Route to region
         if let Some((region_dir, local_path)) = route_path(&full_path, is_multi) {
@@ -307,7 +305,9 @@ pub fn read_archive_into<R: Read>(
 
     let mut control_file: Option<ArchiveControlFile> = None;
 
-    let entries = archive.entries().map_err(|e| ArchiveError::Tar(e.to_string()))?;
+    let entries = archive
+        .entries()
+        .map_err(|e| ArchiveError::Tar(e.to_string()))?;
 
     for entry_result in entries {
         let mut entry = entry_result.map_err(|e| ArchiveError::Tar(e.to_string()))?;
@@ -321,11 +321,16 @@ pub fn read_archive_into<R: Read>(
 
         validate_path(&full_path)?;
 
-        let entry_size = entry.header().size().map_err(|e| ArchiveError::Tar(e.to_string()))?;
+        let entry_size = entry
+            .header()
+            .size()
+            .map_err(|e| ArchiveError::Tar(e.to_string()))?;
         validate_size(entry_size, &full_path)?;
 
         let mut data = Vec::with_capacity(entry_size as usize);
-        entry.read_to_end(&mut data).map_err(|e| ArchiveError::Tar(e.to_string()))?;
+        entry
+            .read_to_end(&mut data)
+            .map_err(|e| ArchiveError::Tar(e.to_string()))?;
 
         if full_path == constants::CONTROL_FILE_PATH {
             let xml = String::from_utf8_lossy(&data);
@@ -334,7 +339,7 @@ pub fn read_archive_into<R: Read>(
         }
 
         // Determine the local path
-        let is_multi = control_file.as_ref().map_or(false, |cf| cf.is_multi_region);
+        let is_multi = control_file.as_ref().is_some_and(|cf| cf.is_multi_region);
         let local_path = if is_multi && full_path.starts_with(constants::REGIONS_PATH) {
             let after = &full_path[constants::REGIONS_PATH.len()..];
             match after.find('/') {
@@ -351,10 +356,10 @@ pub fn read_archive_into<R: Read>(
 
         // Process
         if local_path.starts_with(constants::ASSETS_PATH) {
-            if !options.skip_assets {
-                if let Some(asset) = parse_asset_entry(&local_path, data) {
-                    importer.store_asset(asset)?;
-                }
+            if !options.skip_assets
+                && let Some(asset) = parse_asset_entry(&local_path, data)
+            {
+                importer.store_asset(asset)?;
             }
         } else if local_path.starts_with(constants::OBJECTS_PATH) {
             if !options.no_objects {
@@ -399,10 +404,7 @@ pub fn read_archive_into<R: Read>(
 // ---------------------------------------------------------------------------
 
 /// Apply displacement to a position.
-pub fn apply_displacement(
-    pos: (f32, f32, f32),
-    displacement: (f32, f32, f32),
-) -> (f32, f32, f32) {
+pub fn apply_displacement(pos: (f32, f32, f32), displacement: (f32, f32, f32)) -> (f32, f32, f32) {
     (
         pos.0 + displacement.0,
         pos.1 + displacement.1,
@@ -450,8 +452,7 @@ pub fn check_import_permission(
     checker: Option<&dyn PermissionChecker>,
 ) -> bool {
     // If no permission checker is installed, allow everything
-    checker.is_none()
-        || true // Import permission is always granted in the current C# code
+    checker.is_none() || true // Import permission is always granted in the current C# code
 }
 
 // ---------------------------------------------------------------------------
@@ -543,7 +544,10 @@ mod tests {
     fn accept_normal_paths() {
         assert!(validate_path("archive.xml").is_ok());
         assert!(validate_path("assets/00000000-0000-0000-0000-000000000001_texture.jp2").is_ok());
-        assert!(validate_path("objects/Box_128-128-025__abcdef01-2345-6789-abcd-ef0123456789.xml").is_ok());
+        assert!(
+            validate_path("objects/Box_128-128-025__abcdef01-2345-6789-abcd-ef0123456789.xml")
+                .is_ok()
+        );
         assert!(validate_path("regions/1_1_TestRegion/objects/Box.xml").is_ok());
     }
 
@@ -570,7 +574,10 @@ mod tests {
     #[test]
     fn route_single_region() {
         let result = route_path("objects/Box.xml", false);
-        assert_eq!(result, Some(("".to_string(), "objects/Box.xml".to_string())));
+        assert_eq!(
+            result,
+            Some(("".to_string(), "objects/Box.xml".to_string()))
+        );
     }
 
     #[test]
@@ -627,7 +634,11 @@ mod tests {
     #[test]
     fn rotation_90_degrees() {
         // 90 degrees = PI/2 radians
-        let pos = apply_rotation((256.0, 128.0, 50.0), std::f32::consts::FRAC_PI_2, (128.0, 128.0));
+        let pos = apply_rotation(
+            (256.0, 128.0, 50.0),
+            std::f32::consts::FRAC_PI_2,
+            (128.0, 128.0),
+        );
         // After 90 deg CCW around (128,128): (256,128) -> (128, 256)
         assert!((pos.0 - 128.0).abs() < 0.01, "x={}", pos.0);
         assert!((pos.1 - 256.0).abs() < 0.01, "y={}", pos.1);
@@ -651,14 +662,10 @@ mod tests {
 
     #[test]
     fn single_region_roundtrip() {
-        use crate::oar_write::{
-            OarRegionData, OarSceneObject, OarTerrain, OarWriteOptions,
-        };
+        use crate::oar_write::{OarRegionData, OarSceneObject, OarTerrain, OarWriteOptions};
 
         // Build a region
-        let heightfield: Vec<u8> = (0..65536u32)
-            .flat_map(|_| 25.0f32.to_le_bytes())
-            .collect();
+        let heightfield: Vec<u8> = (0..65536u32).flat_map(|_| 25.0f32.to_le_bytes()).collect();
 
         let parcel_uuid = Uuid::new_v4();
         let obj_uuid = Uuid::new_v4();
@@ -754,14 +761,11 @@ mod tests {
     #[test]
     fn multi_region_roundtrip() {
         use crate::oar_write::{
-            ArchiveScenesGroup, OarRegionData, OarSceneObject, OarTerrain,
-            OarWriteOptions,
+            ArchiveScenesGroup, OarRegionData, OarSceneObject, OarTerrain, OarWriteOptions,
         };
 
         let make_region = |name: &str, gx: u32, gy: u32| -> OarRegionData {
-            let heightfield: Vec<u8> = (0..65536u32)
-                .flat_map(|_| 25.0f32.to_le_bytes())
-                .collect();
+            let heightfield: Vec<u8> = (0..65536u32).flat_map(|_| 25.0f32.to_le_bytes()).collect();
             OarRegionData {
                 region_name: name.to_string(),
                 size_x: 256,
@@ -819,13 +823,9 @@ mod tests {
 
     #[test]
     fn merge_skips_terrain_and_settings() {
-        use crate::oar_write::{
-            OarRegionData, OarSceneObject, OarTerrain, OarWriteOptions,
-        };
+        use crate::oar_write::{OarRegionData, OarSceneObject, OarTerrain, OarWriteOptions};
 
-        let heightfield: Vec<u8> = (0..65536u32)
-            .flat_map(|_| 25.0f32.to_le_bytes())
-            .collect();
+        let heightfield: Vec<u8> = (0..65536u32).flat_map(|_| 25.0f32.to_le_bytes()).collect();
 
         let region = OarRegionData {
             region_name: "MergeTest".to_string(),
@@ -859,8 +859,14 @@ mod tests {
 
         let options = OarWriteOptions::default();
         let mut buf = Vec::new();
-        oar_write::write_archive(&mut buf, &region, &[], &options, None::<fn(&oar_write::OarProgress)>)
-            .expect("write failed");
+        oar_write::write_archive(
+            &mut buf,
+            &region,
+            &[],
+            &options,
+            None::<fn(&oar_write::OarProgress)>,
+        )
+        .expect("write failed");
 
         // Read with merge: should skip terrain, settings, parcels
         let read_opts = OarLoadOptions {
@@ -870,21 +876,26 @@ mod tests {
         let contents = read_archive(std::io::Cursor::new(buf), &read_opts).expect("read failed");
 
         let rc = contents.regions.get("").unwrap();
-        assert!(rc.settings.is_none(), "settings should be skipped in merge mode");
-        assert!(rc.terrain.is_none(), "terrain should be skipped in merge mode");
-        assert!(rc.parcels.is_empty(), "parcels should be skipped in merge mode");
+        assert!(
+            rc.settings.is_none(),
+            "settings should be skipped in merge mode"
+        );
+        assert!(
+            rc.terrain.is_none(),
+            "terrain should be skipped in merge mode"
+        );
+        assert!(
+            rc.parcels.is_empty(),
+            "parcels should be skipped in merge mode"
+        );
         assert_eq!(rc.objects_xml.len(), 1, "objects should still be loaded");
     }
 
     #[test]
     fn merge_force_terrain() {
-        use crate::oar_write::{
-            OarRegionData, OarTerrain, OarWriteOptions,
-        };
+        use crate::oar_write::{OarRegionData, OarTerrain, OarWriteOptions};
 
-        let heightfield: Vec<u8> = (0..65536u32)
-            .flat_map(|_| 25.0f32.to_le_bytes())
-            .collect();
+        let heightfield: Vec<u8> = (0..65536u32).flat_map(|_| 25.0f32.to_le_bytes()).collect();
 
         let region = OarRegionData {
             region_name: "ForceT".to_string(),
@@ -906,8 +917,14 @@ mod tests {
 
         let options = OarWriteOptions::default();
         let mut buf = Vec::new();
-        oar_write::write_archive(&mut buf, &region, &[], &options, None::<fn(&oar_write::OarProgress)>)
-            .expect("write failed");
+        oar_write::write_archive(
+            &mut buf,
+            &region,
+            &[],
+            &options,
+            None::<fn(&oar_write::OarProgress)>,
+        )
+        .expect("write failed");
 
         let read_opts = OarLoadOptions {
             merge: true,
@@ -917,18 +934,17 @@ mod tests {
         let contents = read_archive(std::io::Cursor::new(buf), &read_opts).expect("read failed");
 
         let rc = contents.regions.get("").unwrap();
-        assert!(rc.terrain.is_some(), "terrain should load when force_terrain is set");
+        assert!(
+            rc.terrain.is_some(),
+            "terrain should load when force_terrain is set"
+        );
     }
 
     #[test]
     fn no_assets_mode() {
-        use crate::oar_write::{
-            OarRegionData, OarTerrain, OarWriteOptions,
-        };
+        use crate::oar_write::{OarRegionData, OarTerrain, OarWriteOptions};
 
-        let heightfield: Vec<u8> = (0..65536u32)
-            .flat_map(|_| 25.0f32.to_le_bytes())
-            .collect();
+        let heightfield: Vec<u8> = (0..65536u32).flat_map(|_| 25.0f32.to_le_bytes()).collect();
 
         let region = OarRegionData {
             region_name: "NoAssets".to_string(),
@@ -960,24 +976,29 @@ mod tests {
         }];
 
         let mut buf = Vec::new();
-        oar_write::write_archive(&mut buf, &region, &assets, &options, None::<fn(&oar_write::OarProgress)>)
-            .expect("write failed");
+        oar_write::write_archive(
+            &mut buf,
+            &region,
+            &assets,
+            &options,
+            None::<fn(&oar_write::OarProgress)>,
+        )
+        .expect("write failed");
 
         let read_opts = OarLoadOptions::default();
         let contents = read_archive(std::io::Cursor::new(buf), &read_opts).expect("read failed");
 
-        assert!(contents.assets.is_empty(), "no assets should be present in no_assets mode");
+        assert!(
+            contents.assets.is_empty(),
+            "no assets should be present in no_assets mode"
+        );
     }
 
     #[test]
     fn skip_assets_on_load() {
-        use crate::oar_write::{
-            OarRegionData, OarTerrain, OarWriteOptions,
-        };
+        use crate::oar_write::{OarRegionData, OarTerrain, OarWriteOptions};
 
-        let heightfield: Vec<u8> = (0..65536u32)
-            .flat_map(|_| 25.0f32.to_le_bytes())
-            .collect();
+        let heightfield: Vec<u8> = (0..65536u32).flat_map(|_| 25.0f32.to_le_bytes()).collect();
 
         let region = OarRegionData {
             region_name: "SkipAssetsLoad".to_string(),
@@ -1005,8 +1026,14 @@ mod tests {
 
         let options = OarWriteOptions::default();
         let mut buf = Vec::new();
-        oar_write::write_archive(&mut buf, &region, &assets, &options, None::<fn(&oar_write::OarProgress)>)
-            .expect("write failed");
+        oar_write::write_archive(
+            &mut buf,
+            &region,
+            &assets,
+            &options,
+            None::<fn(&oar_write::OarProgress)>,
+        )
+        .expect("write failed");
 
         let read_opts = OarLoadOptions {
             skip_assets: true,
@@ -1014,6 +1041,9 @@ mod tests {
         };
         let contents = read_archive(std::io::Cursor::new(buf), &read_opts).expect("read failed");
 
-        assert!(contents.assets.is_empty(), "skip_assets should suppress asset loading");
+        assert!(
+            contents.assets.is_empty(),
+            "skip_assets should suppress asset loading"
+        );
     }
 }

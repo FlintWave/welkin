@@ -7,8 +7,8 @@
 use std::collections::HashSet;
 use std::time::Duration;
 
-use welkin_types::AssetType;
 use uuid::Uuid;
+use welkin_types::AssetType;
 
 /// Data for a single asset to be included in (or loaded from) an archive.
 #[derive(Debug, Clone)]
@@ -106,11 +106,7 @@ impl AssetGatherer {
     /// single failure; all assets are attempted.
     ///
     /// An optional progress callback is invoked after each asset fetch.
-    pub async fn gather_all<S, F>(
-        &self,
-        service: &S,
-        mut progress: Option<F>,
-    ) -> GatherResult
+    pub async fn gather_all<S, F>(&self, service: &S, mut progress: Option<F>) -> GatherResult
     where
         S: AssetService,
         F: FnMut(&AssetGatherProgress),
@@ -372,9 +368,12 @@ mod tests {
         let cc = call_count.clone();
 
         let result = gatherer
-            .gather_all(&svc, Some(move |_progress: &AssetGatherProgress| {
-                cc.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            }))
+            .gather_all(
+                &svc,
+                Some(move |_progress: &AssetGatherProgress| {
+                    cc.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }),
+            )
             .await;
 
         assert_eq!(result.assets.len(), 1);

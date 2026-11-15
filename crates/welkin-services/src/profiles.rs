@@ -10,9 +10,7 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
-use welkin_data::profiles::{
-    ClassifiedRow, PickRow, ProfileRow, ProfilesStore, UserSettingsRow,
-};
+use welkin_data::profiles::{ClassifiedRow, PickRow, ProfileRow, ProfilesStore, UserSettingsRow};
 
 #[derive(Clone)]
 pub struct ProfilesServiceState {
@@ -69,7 +67,10 @@ fn str_param<'a>(params: &'a Value, key: &str) -> &'a str {
 fn int_param(params: &Value, key: &str) -> i32 {
     params
         .get(key)
-        .and_then(|v| v.as_i64().or_else(|| v.as_str().and_then(|s| s.parse().ok())))
+        .and_then(|v| {
+            v.as_i64()
+                .or_else(|| v.as_str().and_then(|s| s.parse().ok()))
+        })
         .unwrap_or(0) as i32
 }
 

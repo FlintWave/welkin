@@ -77,9 +77,10 @@ impl HypergridInventoryService for HGInventoryServiceImpl {
         let folders = self.folders.read().unwrap();
 
         // Look for an existing suitcase folder
-        if let Some(f) = folders.iter().find(|f| {
-            f.owner_id == principal_id && f.folder_type == FOLDER_TYPE_SUITCASE
-        }) {
+        if let Some(f) = folders
+            .iter()
+            .find(|f| f.owner_id == principal_id && f.folder_type == FOLDER_TYPE_SUITCASE)
+        {
             // Return it as a normal folder type (like C# SetAsNormalFolder)
             let mut out = f.clone();
             out.folder_type = FOLDER_TYPE_NORMAL;
@@ -87,9 +88,10 @@ impl HypergridInventoryService for HGInventoryServiceImpl {
         }
 
         // Also accept a folder named "My Suitcase"
-        if let Some(f) = folders.iter().find(|f| {
-            f.owner_id == principal_id && f.name == "My Suitcase"
-        }) {
+        if let Some(f) = folders
+            .iter()
+            .find(|f| f.owner_id == principal_id && f.name == "My Suitcase")
+        {
             let mut out = f.clone();
             out.folder_type = FOLDER_TYPE_NORMAL;
             return Ok(out);
@@ -142,15 +144,12 @@ impl HypergridInventoryService for HGInventoryServiceImpl {
         })
     }
 
-    fn get_item(
-        &self,
-        principal_id: Uuid,
-        item_id: Uuid,
-    ) -> HgResult<Option<HgInventoryItem>> {
+    fn get_item(&self, principal_id: Uuid, item_id: Uuid) -> HgResult<Option<HgInventoryItem>> {
         let items = self.items.read().unwrap();
-        let Some(item) = items.iter().find(|i| {
-            i.item_id == item_id && i.owner_id == principal_id
-        }) else {
+        let Some(item) = items
+            .iter()
+            .find(|i| i.item_id == item_id && i.owner_id == principal_id)
+        else {
             return Ok(None);
         };
 
@@ -207,10 +206,16 @@ impl HGSuitcaseInventoryServiceImpl {
 
     /// Register a suitcase root for a user and its descendant tree.
     pub fn register_suitcase(&self, owner_id: Uuid, root_id: Uuid, tree_ids: Vec<Uuid>) {
-        self.suitcase_roots.write().unwrap().insert(owner_id, root_id);
+        self.suitcase_roots
+            .write()
+            .unwrap()
+            .insert(owner_id, root_id);
         let mut full_tree = vec![root_id];
         full_tree.extend(tree_ids);
-        self.suitcase_tree.write().unwrap().insert(owner_id, full_tree);
+        self.suitcase_tree
+            .write()
+            .unwrap()
+            .insert(owner_id, full_tree);
     }
 
     /// Check whether a folder is within the suitcase tree for a user.
@@ -249,16 +254,20 @@ impl HypergridInventoryService for HGSuitcaseInventoryServiceImpl {
 
         // Look for a suitcase folder by type
         let folders = self.folders.read().unwrap();
-        if let Some(f) = folders.iter().find(|f| {
-            f.owner_id == principal_id && f.folder_type == FOLDER_TYPE_SUITCASE
-        }) {
+        if let Some(f) = folders
+            .iter()
+            .find(|f| f.owner_id == principal_id && f.folder_type == FOLDER_TYPE_SUITCASE)
+        {
             let root_id = f.folder_id;
             let mut out = f.clone();
             out.folder_type = FOLDER_TYPE_NORMAL;
 
             // Auto-register
             drop(folders);
-            self.suitcase_roots.write().unwrap().insert(principal_id, root_id);
+            self.suitcase_roots
+                .write()
+                .unwrap()
+                .insert(principal_id, root_id);
             self.suitcase_tree
                 .write()
                 .unwrap()
@@ -269,15 +278,19 @@ impl HypergridInventoryService for HGSuitcaseInventoryServiceImpl {
         }
 
         // Also accept "My Suitcase" by name
-        if let Some(f) = folders.iter().find(|f| {
-            f.owner_id == principal_id && f.name == "My Suitcase"
-        }) {
+        if let Some(f) = folders
+            .iter()
+            .find(|f| f.owner_id == principal_id && f.name == "My Suitcase")
+        {
             let root_id = f.folder_id;
             let mut out = f.clone();
             out.folder_type = FOLDER_TYPE_NORMAL;
 
             drop(folders);
-            self.suitcase_roots.write().unwrap().insert(principal_id, root_id);
+            self.suitcase_roots
+                .write()
+                .unwrap()
+                .insert(principal_id, root_id);
             self.suitcase_tree
                 .write()
                 .unwrap()
@@ -334,15 +347,12 @@ impl HypergridInventoryService for HGSuitcaseInventoryServiceImpl {
         })
     }
 
-    fn get_item(
-        &self,
-        principal_id: Uuid,
-        item_id: Uuid,
-    ) -> HgResult<Option<HgInventoryItem>> {
+    fn get_item(&self, principal_id: Uuid, item_id: Uuid) -> HgResult<Option<HgInventoryItem>> {
         let items = self.items.read().unwrap();
-        let Some(item) = items.iter().find(|i| {
-            i.item_id == item_id && i.owner_id == principal_id
-        }) else {
+        let Some(item) = items
+            .iter()
+            .find(|i| i.item_id == item_id && i.owner_id == principal_id)
+        else {
             return Ok(None);
         };
 
@@ -554,7 +564,10 @@ mod tests {
 
         let item = make_item(Uuid::new_v4(), child_folder_id, owner, "c");
         let ok = svc.add_item(&item).unwrap();
-        assert!(ok, "add_item should succeed for folder within suitcase tree");
+        assert!(
+            ok,
+            "add_item should succeed for folder within suitcase tree"
+        );
     }
 
     #[test]
@@ -596,8 +609,20 @@ mod tests {
         let suitcase_id = Uuid::new_v4();
         let child_folder_id = Uuid::new_v4();
 
-        svc.add_folder(make_folder(suitcase_id, Uuid::nil(), owner, "My Suitcase", FOLDER_TYPE_SUITCASE));
-        svc.add_folder(make_folder(child_folder_id, suitcase_id, owner, "Textures", 8));
+        svc.add_folder(make_folder(
+            suitcase_id,
+            Uuid::nil(),
+            owner,
+            "My Suitcase",
+            FOLDER_TYPE_SUITCASE,
+        ));
+        svc.add_folder(make_folder(
+            child_folder_id,
+            suitcase_id,
+            owner,
+            "Textures",
+            8,
+        ));
         svc.register_suitcase(owner, suitcase_id, vec![child_folder_id]);
 
         svc.add_item_direct(make_item(Uuid::new_v4(), suitcase_id, owner, "c"));

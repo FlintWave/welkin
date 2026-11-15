@@ -4,10 +4,10 @@ use std::io::Read;
 
 use flate2::read::ZlibDecoder;
 use glam::Vec3;
-use welkin_llsd::{Llsd, Map, from_binary};
 use rapier3d::geometry::SharedShape;
 use rapier3d::math::Vector;
 use thiserror::Error;
+use welkin_llsd::{Llsd, Map, from_binary};
 
 #[derive(Debug, Error)]
 pub enum MeshAssetError {
@@ -62,8 +62,7 @@ pub struct MeshAsset {
 }
 
 pub fn parse_mesh_header(data: &[u8]) -> Result<(Map, usize), MeshAssetError> {
-    let (llsd, consumed) = from_binary(data)
-        .map_err(|e| MeshAssetError::Llsd(e.to_string()))?;
+    let (llsd, consumed) = from_binary(data).map_err(|e| MeshAssetError::Llsd(e.to_string()))?;
     let map = llsd
         .as_map()
         .ok_or_else(|| MeshAssetError::Llsd("header is not a map".into()))?
@@ -131,24 +130,28 @@ fn decode_one_submesh(submesh: &Llsd) -> Result<DecodedMesh, MeshAssetError> {
     let domain_min = parse_vec3(domain.get("Min"));
     let domain_max = parse_vec3(domain.get("Max"));
 
-    if pos_bytes.len() % 6 != 0 {
+    if !pos_bytes.len().is_multiple_of(6) {
         return Err(MeshAssetError::InvalidData(
             "Position byte count not divisible by 6".into(),
         ));
     }
-    if idx_bytes.len() % 2 != 0 {
+    if !idx_bytes.len().is_multiple_of(2) {
         return Err(MeshAssetError::InvalidData(
             "TriangleList byte count not divisible by 2".into(),
         ));
     }
 
     let vertices: Vec<Vec3> = pos_bytes
-        .chunks_exact(6)
+        .as_chunks::<6>()
+        .0
+        .iter()
         .map(|chunk| decode_vertex(chunk, domain_min, domain_max))
         .collect();
 
     let indices: Vec<u32> = idx_bytes
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]) as u32)
         .collect();
 
@@ -164,8 +167,7 @@ fn decode_one_submesh(submesh: &Llsd) -> Result<DecodedMesh, MeshAssetError> {
 }
 
 pub fn decode_submeshes(data: &[u8]) -> Result<Vec<DecodedMesh>, MeshAssetError> {
-    let (llsd, _) =
-        from_binary(data).map_err(|e| MeshAssetError::Llsd(e.to_string()))?;
+    let (llsd, _) = from_binary(data).map_err(|e| MeshAssetError::Llsd(e.to_string()))?;
     let arr = llsd.as_array();
     if arr.is_empty() && !llsd.is_array() {
         return Err(MeshAssetError::InvalidData(
@@ -180,12 +182,11 @@ pub fn decode_mesh_asset(data: &[u8]) -> Result<MeshAsset, MeshAssetError> {
     let body = &data[header_end..];
     let mut lods = Vec::new();
     for lod in ALL_LODS {
-        if let Ok(decompressed) = extract_lod_block(body, &header, lod.key()) {
-            if let Ok(submeshes) = decode_submeshes(&decompressed) {
-                if !submeshes.is_empty() {
-                    lods.push((lod, submeshes));
-                }
-            }
+        if let Ok(decompressed) = extract_lod_block(body, &header, lod.key())
+            && let Ok(submeshes) = decode_submeshes(&decompressed)
+            && !submeshes.is_empty()
+        {
+            lods.push((lod, submeshes));
         }
     }
     if lods.is_empty() {
@@ -230,10 +231,10 @@ pub fn mesh_to_shape(meshes: &[DecodedMesh]) -> SharedShape {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use flate2::write::ZlibEncoder;
     use flate2::Compression;
-    use welkin_llsd::{Llsd, Map, to_binary};
+    use flate2::write::ZlibEncoder;
     use std::io::Write;
+    use welkin_llsd::{Llsd, Map, to_binary};
 
     fn llsd_map(entries: &[(&str, Llsd)]) -> Llsd {
         let mut m = Map::new();
@@ -258,8 +259,7 @@ mod tests {
         let mut pos_bytes = Vec::new();
         for p in positions {
             for (i, &val) in p.iter().enumerate() {
-                let norm =
-                    (val - domain_min[i]) / (domain_max[i] - domain_min[i]);
+                let norm = (val - domain_min[i]) / (domain_max[i] - domain_min[i]);
                 let q = (norm * 65535.0).round().clamp(0.0, 65535.0) as u16;
                 pos_bytes.extend_from_slice(&q.to_le_bytes());
             }
@@ -270,10 +270,19 @@ mod tests {
         }
         llsd_map(&[
             ("Position", Llsd::Binary(pos_bytes)),
-            ("PositionDomain", llsd_map(&[
-                ("Max", Llsd::Array(domain_max.iter().map(|&v| Llsd::Real(v as f64)).collect())),
-                ("Min", Llsd::Array(domain_min.iter().map(|&v| Llsd::Real(v as f64)).collect())),
-            ])),
+            (
+                "PositionDomain",
+                llsd_map(&[
+                    (
+                        "Max",
+                        Llsd::Array(domain_max.iter().map(|&v| Llsd::Real(v as f64)).collect()),
+                    ),
+                    (
+                        "Min",
+                        Llsd::Array(domain_min.iter().map(|&v| Llsd::Real(v as f64)).collect()),
+                    ),
+                ]),
+            ),
             ("TriangleList", Llsd::Binary(idx_bytes)),
         ])
     }
@@ -342,8 +351,7 @@ mod tests {
         let meshes = physics.unwrap();
         assert!(!meshes.is_empty());
 
-        let has_physics =
-            asset.lods.iter().any(|(l, _)| *l == MeshLod::Physics);
+        let has_physics = asset.lods.iter().any(|(l, _)| *l == MeshLod::Physics);
         assert!(!has_physics);
     }
 
@@ -396,7 +404,10 @@ mod tests {
         );
         let submesh_data = to_binary(&Llsd::Array(vec![submesh]));
         let result = decode_submeshes(&submesh_data);
-        assert!(result.is_err(), "out-of-bounds index should return an error");
+        assert!(
+            result.is_err(),
+            "out-of-bounds index should return an error"
+        );
         match result {
             Err(MeshAssetError::InvalidData(msg)) => {
                 assert!(msg.contains("out of bounds"), "error message: {msg}");
@@ -449,12 +460,13 @@ mod tests {
         let submesh_data = to_binary(&Llsd::Array(vec![]));
         let compressed = zlib_compress(&submesh_data);
 
-        let header = llsd_map(&[
-            ("high_lod", llsd_map(&[
+        let header = llsd_map(&[(
+            "high_lod",
+            llsd_map(&[
                 ("offset", Llsd::Integer(0)),
                 ("size", Llsd::Integer(compressed.len() as i32)),
-            ])),
-        ]);
+            ]),
+        )]);
         let mut data = to_binary(&header);
         data.extend_from_slice(&compressed);
 

@@ -188,11 +188,7 @@ impl HGEntityTransferModule {
         }
 
         for asset in wearable_assets {
-            if !self
-                .allowed_wearables
-                .iter()
-                .any(|w| w.asset_id == *asset)
-            {
+            if !self.allowed_wearables.iter().any(|w| w.asset_id == *asset) {
                 return Err(format!(
                     "wearable {} not allowed for cross-grid teleport",
                     asset
@@ -244,10 +240,7 @@ impl HGEntityTransferModule {
 
     /// Teleport a foreign user home via their home grid's
     /// UserAgentService.
-    pub fn teleport_home_foreign(
-        &self,
-        agent_id: Uuid,
-    ) -> Result<(), String> {
+    pub fn teleport_home_foreign(&self, agent_id: Uuid) -> Result<(), String> {
         let info = self
             .foreign_agents
             .get(&agent_id)
@@ -272,11 +265,7 @@ impl HGEntityTransferModule {
 
     /// Verify an incoming foreign agent by calling back to their home
     /// grid's UserAgentService.
-    pub fn verify_agent(
-        &self,
-        session_id: Uuid,
-        token: &str,
-    ) -> Result<bool, String> {
+    pub fn verify_agent(&self, session_id: Uuid, token: &str) -> Result<bool, String> {
         if let Some(ref uas) = self.user_agent_service {
             match uas.verify_agent(session_id, token) {
                 Ok(valid) => Ok(valid),
@@ -309,8 +298,7 @@ impl RegionModule for HGEntityTransferModule {
     }
 
     fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
-        let module_name =
-            config.get_string("Modules", "EntityTransferModule", "");
+        let module_name = config.get_string("Modules", "EntityTransferModule", "");
         if module_name != self.name() {
             tracing::debug!("HGEntityTransferModule disabled by configuration");
             return Ok(());
@@ -318,8 +306,7 @@ impl RegionModule for HGEntityTransferModule {
 
         self.enabled = true;
         self.local_grid_uri = config.get_string("Hypergrid", "GatekeeperURI", "");
-        self.level_hg_teleport =
-            config.get_int("EntityTransfer", "LevelHGTeleport", 0) as i32;
+        self.level_hg_teleport = config.get_int("EntityTransfer", "LevelHGTeleport", 0) as i32;
         self.restrict_appearance_abroad =
             config.get_bool("EntityTransfer", "RestrictAppearanceAbroad", false);
         self.appearance_account_name =
@@ -476,9 +463,11 @@ mod tests {
     #[test]
     fn appearance_validation_disabled() {
         let module = HGEntityTransferModule::new();
-        assert!(module
-            .validate_appearance(&[Uuid::new_v4()], &[Uuid::new_v4()])
-            .is_ok());
+        assert!(
+            module
+                .validate_appearance(&[Uuid::new_v4()], &[Uuid::new_v4()])
+                .is_ok()
+        );
     }
 
     // -- 5. Appearance validation fails for unknown items ----------------
@@ -493,12 +482,8 @@ mod tests {
             wearable_type: 0,
         });
 
-        assert!(module
-            .validate_appearance(&[allowed_asset], &[])
-            .is_ok());
-        assert!(module
-            .validate_appearance(&[Uuid::new_v4()], &[])
-            .is_err());
+        assert!(module.validate_appearance(&[allowed_asset], &[]).is_ok());
+        assert!(module.validate_appearance(&[Uuid::new_v4()], &[]).is_err());
     }
 
     // -- 6. Foreign agent registration -----------------------------------
@@ -553,8 +538,7 @@ mod tests {
     fn teleport_foreign_no_uas() {
         let module = HGEntityTransferModule::new();
         let dest = GridRegion::new(Uuid::new_v4(), "ForeignRegion");
-        let result =
-            module.teleport_to_foreign_grid(Uuid::new_v4(), "http://home.grid", &dest);
+        let result = module.teleport_to_foreign_grid(Uuid::new_v4(), "http://home.grid", &dest);
         assert!(result.is_err());
     }
 
@@ -566,13 +550,11 @@ mod tests {
         let region = GridRegion::new(Uuid::new_v4(), "TestRegion");
 
         // Non-hyperlink: returns original region.
-        let result =
-            module.get_final_destination(&region, Uuid::new_v4(), None, false);
+        let result = module.get_final_destination(&region, Uuid::new_v4(), None, false);
         assert!(result.is_ok());
 
         // Hyperlink without gatekeeper: returns error.
-        let result =
-            module.get_final_destination(&region, Uuid::new_v4(), None, true);
+        let result = module.get_final_destination(&region, Uuid::new_v4(), None, true);
         assert!(result.is_err());
     }
 }

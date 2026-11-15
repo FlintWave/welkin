@@ -8,15 +8,15 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use cbc::cipher::KeyIvInit;
 use cbc::cipher::block_padding::NoPadding;
-use cbc::cipher::{BlockEncryptMut, BlockDecryptMut};
+use cbc::cipher::{BlockDecryptMut, BlockEncryptMut};
 use hmac::Hmac;
 use mlua::prelude::*;
 use parking_lot::RwLock;
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
 
-use crate::builtins::ScriptContext;
 use super::{OsslFunc, OsslThreatLevel};
+use crate::builtins::ScriptContext;
 
 type Aes256CbcEnc = cbc::Encryptor<Aes256>;
 type Aes256CbcDec = cbc::Decryptor<Aes256>;
@@ -68,18 +68,16 @@ const IV_LEN: usize = 16;
 ///
 /// Uses HMAC-SHA1 to match the .NET `Rfc2898DeriveBytes` default, ensuring
 /// interoperability with data encrypted by the C# OpenSimulator.
-fn derive_key_iv(passphrase: &str, salt: &[u8]) -> Result<([u8; KEY_LEN], [u8; IV_LEN]), mlua::Error> {
+fn derive_key_iv(
+    passphrase: &str,
+    salt: &[u8],
+) -> Result<([u8; KEY_LEN], [u8; IV_LEN]), mlua::Error> {
     let mut key = [0u8; KEY_LEN];
     let mut iv = [0u8; IV_LEN];
     // Derive key + iv in one pass (48 bytes)
     let mut buf = [0u8; KEY_LEN + IV_LEN];
-    pbkdf2::pbkdf2::<Hmac<Sha1>>(
-        passphrase.as_bytes(),
-        salt,
-        PBKDF2_ITERATIONS,
-        &mut buf,
-    )
-    .map_err(|e| mlua::Error::RuntimeError(format!("PBKDF2 key derivation failed: {e}")))?;
+    pbkdf2::pbkdf2::<Hmac<Sha1>>(passphrase.as_bytes(), salt, PBKDF2_ITERATIONS, &mut buf)
+        .map_err(|e| mlua::Error::RuntimeError(format!("PBKDF2 key derivation failed: {e}")))?;
     key.copy_from_slice(&buf[..KEY_LEN]);
     iv.copy_from_slice(&buf[KEY_LEN..]);
     Ok((key, iv))
@@ -165,9 +163,8 @@ fn register_os_aes_encrypt(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaR
     let f = lua.create_function(|_, (key_passphrase, data): (String, String)| {
         let (key, iv) = derive_key_iv(&key_passphrase, DEFAULT_SALT)?;
         let padded = pkcs7_pad(data.as_bytes());
-        let ciphertext = aes_cbc_encrypt(&key, &iv, &padded).map_err(|e| {
-            mlua::Error::RuntimeError(format!("osAESEncrypt: {e}"))
-        })?;
+        let ciphertext = aes_cbc_encrypt(&key, &iv, &padded)
+            .map_err(|e| mlua::Error::RuntimeError(format!("osAESEncrypt: {e}")))?;
         Ok(BASE64.encode(&ciphertext))
     })?;
     lua.globals().set("osAESEncrypt", f)
@@ -176,21 +173,18 @@ fn register_os_aes_encrypt(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaR
 fn register_os_aes_decrypt(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let f = lua.create_function(|_, (key_passphrase, data_b64): (String, String)| {
         let (key, iv) = derive_key_iv(&key_passphrase, DEFAULT_SALT)?;
-        let ciphertext = BASE64.decode(data_b64.as_bytes()).map_err(|e| {
-            mlua::Error::RuntimeError(format!("osAESDecrypt: bad base64: {e}"))
-        })?;
+        let ciphertext = BASE64
+            .decode(data_b64.as_bytes())
+            .map_err(|e| mlua::Error::RuntimeError(format!("osAESDecrypt: bad base64: {e}")))?;
 
-        let decrypted = aes_cbc_decrypt(&key, &iv, &ciphertext).map_err(|e| {
-            mlua::Error::RuntimeError(format!("osAESDecrypt: {e}"))
-        })?;
+        let decrypted = aes_cbc_decrypt(&key, &iv, &ciphertext)
+            .map_err(|e| mlua::Error::RuntimeError(format!("osAESDecrypt: {e}")))?;
 
-        let unpadded = pkcs7_unpad(&decrypted).map_err(|e| {
-            mlua::Error::RuntimeError(format!("osAESDecrypt: {e}"))
-        })?;
+        let unpadded = pkcs7_unpad(&decrypted)
+            .map_err(|e| mlua::Error::RuntimeError(format!("osAESDecrypt: {e}")))?;
 
-        String::from_utf8(unpadded.to_vec()).map_err(|e| {
-            mlua::Error::RuntimeError(format!("osAESDecrypt: invalid UTF-8: {e}"))
-        })
+        String::from_utf8(unpadded.to_vec())
+            .map_err(|e| mlua::Error::RuntimeError(format!("osAESDecrypt: invalid UTF-8: {e}")))
     })?;
     lua.globals().set("osAESDecrypt", f)
 }
@@ -218,9 +212,8 @@ fn register_os_aes_encrypt_to(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> L
             let mut iv_arr = [0u8; IV_LEN];
             iv_arr.copy_from_slice(&iv_bytes);
 
-            let ciphertext = aes_cbc_encrypt(&key, &iv_arr, &padded).map_err(|e| {
-                mlua::Error::RuntimeError(format!("osAESEncryptTo: {e}"))
-            })?;
+            let ciphertext = aes_cbc_encrypt(&key, &iv_arr, &padded)
+                .map_err(|e| mlua::Error::RuntimeError(format!("osAESEncryptTo: {e}")))?;
             Ok(BASE64.encode(&ciphertext))
         },
     )?;
@@ -247,13 +240,11 @@ fn register_os_aes_decrypt_from(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) ->
             let mut iv_arr = [0u8; IV_LEN];
             iv_arr.copy_from_slice(&iv_bytes);
 
-            let decrypted = aes_cbc_decrypt(&key, &iv_arr, &ciphertext).map_err(|e| {
-                mlua::Error::RuntimeError(format!("osAESDecryptFrom: {e}"))
-            })?;
+            let decrypted = aes_cbc_decrypt(&key, &iv_arr, &ciphertext)
+                .map_err(|e| mlua::Error::RuntimeError(format!("osAESDecryptFrom: {e}")))?;
 
-            let unpadded = pkcs7_unpad(&decrypted).map_err(|e| {
-                mlua::Error::RuntimeError(format!("osAESDecryptFrom: {e}"))
-            })?;
+            let unpadded = pkcs7_unpad(&decrypted)
+                .map_err(|e| mlua::Error::RuntimeError(format!("osAESDecryptFrom: {e}")))?;
 
             String::from_utf8(unpadded.to_vec()).map_err(|e| {
                 mlua::Error::RuntimeError(format!("osAESDecryptFrom: invalid UTF-8: {e}"))

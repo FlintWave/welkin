@@ -119,8 +119,7 @@ impl ReconnectBackoff {
     /// Record a failed connection attempt and advance the backoff.
     pub fn on_failure(&mut self) {
         self.failure_count += 1;
-        let new_millis =
-            (self.current_delay.as_millis() as f64 * self.multiplier) as u64;
+        let new_millis = (self.current_delay.as_millis() as f64 * self.multiplier) as u64;
         self.current_delay = Duration::from_millis(new_millis).min(self.max_delay);
     }
 
@@ -364,19 +363,13 @@ impl RegionModule for IRCBridgeModule {
         self.config.server = config.get_string("IRC", "server", "");
         self.config.port = config.get_int("IRC", "port", 6667) as u16;
         self.config.channel = config.get_string("IRC", "channel", "");
-        self.config.nick_format =
-            config.get_string("IRC", "nick_format", "[OS] {0}");
-        self.config.bot_nick =
-            config.get_string("IRC", "bot_nick", "OpenSimBot");
+        self.config.nick_format = config.get_string("IRC", "nick_format", "[OS] {0}");
+        self.config.bot_nick = config.get_string("IRC", "bot_nick", "OpenSimBot");
         self.config.use_ssl = config.get_bool("IRC", "use_ssl", false);
-        self.config.in_world_channel =
-            config.get_int("IRC", "in_world_channel", 0) as i32;
-        self.config.server_password =
-            config.get_string("IRC", "server_password", "");
-        self.config.relay_to_irc =
-            config.get_bool("IRC", "relay_to_irc", true);
-        self.config.relay_to_inworld =
-            config.get_bool("IRC", "relay_to_inworld", true);
+        self.config.in_world_channel = config.get_int("IRC", "in_world_channel", 0) as i32;
+        self.config.server_password = config.get_string("IRC", "server_password", "");
+        self.config.relay_to_irc = config.get_bool("IRC", "relay_to_irc", true);
+        self.config.relay_to_inworld = config.get_bool("IRC", "relay_to_inworld", true);
 
         tracing::info!(
             enabled = self.enabled,
@@ -675,15 +668,15 @@ mod tests {
         module.add_region(&scene).unwrap();
 
         // Module is disabled by default.
-        assert!(module
-            .on_chat_from_world("Eve", "hello", 0)
-            .is_none());
-        assert!(module
-            .on_irc_event(IRCEvent::PrivMsg {
-                nick: "x".into(),
-                message: "y".into(),
-            })
-            .is_none());
+        assert!(module.on_chat_from_world("Eve", "hello", 0).is_none());
+        assert!(
+            module
+                .on_irc_event(IRCEvent::PrivMsg {
+                    nick: "x".into(),
+                    message: "y".into(),
+                })
+                .is_none()
+        );
     }
 
     // -- Test 11: RegionModule lifecycle --------------------------------------

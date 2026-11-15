@@ -243,13 +243,10 @@ impl RegionModule for DefaultPermissionsModule {
         let serverside = config.get_bool(section, "serverside_object_permissions", true);
         self.config.bypass_permissions = !serverside;
 
-        self.config.propagate_permissions =
-            config.get_bool(section, "propagate_permissions", true);
-        self.config.allow_grid_gods =
-            config.get_bool(section, "allow_grid_gods", false);
+        self.config.propagate_permissions = config.get_bool(section, "propagate_permissions", true);
+        self.config.allow_grid_gods = config.get_bool(section, "allow_grid_gods", false);
 
-        self.config.force_grid_gods_only =
-            config.get_bool(section, "force_grid_gods_only", false);
+        self.config.force_grid_gods_only = config.get_bool(section, "force_grid_gods_only", false);
 
         if self.config.force_grid_gods_only {
             // When forcing grid gods only, estate owner/manager are NOT admins
@@ -258,16 +255,13 @@ impl RegionModule for DefaultPermissionsModule {
             self.config.region_owner_is_god = false;
             self.config.region_manager_is_god = false;
         } else {
-            self.config.region_owner_is_god =
-                config.get_bool(section, "region_owner_is_god", true);
+            self.config.region_owner_is_god = config.get_bool(section, "region_owner_is_god", true);
             self.config.region_manager_is_god =
                 config.get_bool(section, "region_manager_is_god", false);
         }
 
-        self.config.automatic_gods =
-            config.get_bool(section, "automatic_gods", false);
-        self.config.implicit_gods =
-            config.get_bool(section, "implicit_gods", false);
+        self.config.automatic_gods = config.get_bool(section, "automatic_gods", false);
+        self.config.implicit_gods = config.get_bool(section, "implicit_gods", false);
         if self.config.implicit_gods {
             self.config.automatic_gods = false;
         }

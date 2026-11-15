@@ -16,9 +16,7 @@ use uuid::Uuid;
 
 use crate::module::{ModuleConfig, ModuleError, ModuleType, RegionModule};
 use crate::registry::SceneRef;
-use welkin_services::hypergrid::{
-    HypergridAssetService, HypergridInventoryService, HgAsset, HgInventoryItem,
-};
+use welkin_services::hypergrid::{HgInventoryItem, HypergridInventoryService};
 
 // ---------------------------------------------------------------------------
 // HGAssetMapper
@@ -68,12 +66,7 @@ impl HGAssetMapper {
     /// In a real implementation, this would download the asset and all
     /// its referenced sub-assets (textures, scripts, etc.) from the
     /// remote grid.
-    pub fn get_asset(
-        &self,
-        _asset_id: Uuid,
-        _owner_id: Uuid,
-        _remote_asset_url: &str,
-    ) -> bool {
+    pub fn get_asset(&self, _asset_id: Uuid, _owner_id: Uuid, _remote_asset_url: &str) -> bool {
         tracing::debug!("HGAssetMapper::get_asset (stub)");
         true
     }
@@ -81,12 +74,7 @@ impl HGAssetMapper {
     /// Post (upload) an asset to a remote grid's asset server (stub).
     ///
     /// Rewrites creator identifiers to UUI format before sending.
-    pub fn post_asset(
-        &mut self,
-        asset_id: Uuid,
-        _owner_id: Uuid,
-        remote_asset_url: &str,
-    ) -> bool {
+    pub fn post_asset(&mut self, asset_id: Uuid, _owner_id: Uuid, remote_asset_url: &str) -> bool {
         let key = (asset_id, remote_asset_url.to_string());
         if self.posted_assets.contains(&key) {
             tracing::debug!(
@@ -248,7 +236,9 @@ impl HGInventoryAccessModule {
 
     /// Get the asset server URL for a foreign user.
     pub fn get_foreign_asset_url(&self, user_id: Uuid) -> Option<&str> {
-        self.foreign_user_asset_urls.get(&user_id).map(|s| s.as_str())
+        self.foreign_user_asset_urls
+            .get(&user_id)
+            .map(|s| s.as_str())
     }
 
     /// Handle a new inventory item being uploaded: if the owner is a
@@ -259,12 +249,11 @@ impl HGInventoryAccessModule {
         asset_id: Uuid,
         _asset_name: &str,
     ) -> bool {
-        if let Some(url) = self.foreign_user_asset_urls.get(&owner_id).cloned() {
-            if self.outbound_permission {
-                if let Some(ref mut mapper) = self.asset_mapper {
-                    return mapper.post_asset(asset_id, owner_id, &url);
-                }
-            }
+        if let Some(url) = self.foreign_user_asset_urls.get(&owner_id).cloned()
+            && self.outbound_permission
+            && let Some(ref mut mapper) = self.asset_mapper
+        {
+            return mapper.post_asset(asset_id, owner_id, &url);
         }
         false
     }
@@ -301,8 +290,7 @@ impl RegionModule for HGInventoryAccessModule {
     }
 
     fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
-        let module_name =
-            config.get_string("Modules", "InventoryAccessModule", "");
+        let module_name = config.get_string("Modules", "InventoryAccessModule", "");
         if module_name != self.name() {
             tracing::debug!("HGInventoryAccessModule disabled by configuration");
             return Ok(());
@@ -312,8 +300,11 @@ impl RegionModule for HGInventoryAccessModule {
         self.local_grid_uri = config.get_string("Hypergrid", "GatekeeperURI", "");
         self.outbound_permission =
             config.get_bool("HGInventoryAccessModule", "OutboundPermission", true);
-        self.restrict_inventory_access_abroad =
-            config.get_bool("HGInventoryAccessModule", "RestrictInventoryAccessAbroad", true);
+        self.restrict_inventory_access_abroad = config.get_bool(
+            "HGInventoryAccessModule",
+            "RestrictInventoryAccessAbroad",
+            true,
+        );
         self.check_separate_assets =
             config.get_bool("HGInventoryAccessModule", "CheckSeparateAssets", false);
         self.local_assets_url =
@@ -475,7 +466,11 @@ mod tests {
     fn module_initialise_enabled() {
         let mut module = HGInventoryAccessModule::new();
         let mut config = TestConfig::new();
-        config.set_string("Modules", "InventoryAccessModule", "HGInventoryAccessModule");
+        config.set_string(
+            "Modules",
+            "InventoryAccessModule",
+            "HGInventoryAccessModule",
+        );
         config.set_string("Hypergrid", "GatekeeperURI", "http://mygrid.com:8002");
         config.set_bool("HGInventoryAccessModule", "OutboundPermission", false);
         module.initialise(&config).unwrap();
@@ -492,7 +487,11 @@ mod tests {
     fn post_inventory_asset_foreign() {
         let mut module = HGInventoryAccessModule::new();
         let mut config = TestConfig::new();
-        config.set_string("Modules", "InventoryAccessModule", "HGInventoryAccessModule");
+        config.set_string(
+            "Modules",
+            "InventoryAccessModule",
+            "HGInventoryAccessModule",
+        );
         config.set_string("Hypergrid", "GatekeeperURI", "http://mygrid.com:8002");
         module.initialise(&config).unwrap();
 
@@ -513,7 +512,11 @@ mod tests {
     fn module_lifecycle() {
         let mut module = HGInventoryAccessModule::new();
         let mut config = TestConfig::new();
-        config.set_string("Modules", "InventoryAccessModule", "HGInventoryAccessModule");
+        config.set_string(
+            "Modules",
+            "InventoryAccessModule",
+            "HGInventoryAccessModule",
+        );
         module.initialise(&config).unwrap();
 
         let scene = scene_ref();

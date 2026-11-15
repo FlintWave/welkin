@@ -18,11 +18,10 @@ use rapier3d::parry::transformation::vhacd::VHACDParameters;
 use uuid::Uuid;
 
 use crate::{
-    VolumeParams, generate_volume, generate_sculpt, sculpt_placeholder,
-    LL_PCODE_PATH_LINE, LL_PCODE_PROFILE_CIRCLE, LL_PCODE_PROFILE_SQUARE,
-    LL_SCULPT_FLAG_INVERT, LL_SCULPT_FLAG_MIRROR, LL_SCULPT_TYPE_MASK,
-    LL_SCULPT_TYPE_NONE, LL_SCULPT_TYPE_SPHERE, LL_SCULPT_TYPE_TORUS,
-    LL_SCULPT_TYPE_PLANE, LL_SCULPT_TYPE_CYLINDER,
+    LL_PCODE_PATH_LINE, LL_PCODE_PROFILE_CIRCLE, LL_PCODE_PROFILE_SQUARE, LL_SCULPT_FLAG_INVERT,
+    LL_SCULPT_FLAG_MIRROR, LL_SCULPT_TYPE_CYLINDER, LL_SCULPT_TYPE_MASK, LL_SCULPT_TYPE_NONE,
+    LL_SCULPT_TYPE_PLANE, LL_SCULPT_TYPE_SPHERE, LL_SCULPT_TYPE_TORUS, VolumeParams,
+    generate_sculpt, generate_volume, sculpt_placeholder,
 };
 
 // ---------------------------------------------------------------------------
@@ -169,12 +168,19 @@ impl ShapeCache {
 
     /// Look up a cached shape.  Returns `None` on a miss.
     pub fn get(&self, key: u64) -> Option<SharedShape> {
-        self.inner.lock().unwrap_or_else(|e| e.into_inner()).get(&key).cloned()
+        self.inner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&key)
+            .cloned()
     }
 
     /// Insert a shape into the cache, returning the previous value (if any).
     pub fn insert(&self, key: u64, shape: SharedShape) -> Option<SharedShape> {
-        self.inner.lock().unwrap_or_else(|e| e.into_inner()).insert(key, shape)
+        self.inner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(key, shape)
     }
 
     /// Number of cached entries.
@@ -213,12 +219,19 @@ impl DecompCache {
 
     /// Look up a cached decomposition.  Returns `None` on a miss.
     pub fn get(&self, key: u64) -> Option<SharedShape> {
-        self.cache.lock().unwrap_or_else(|e| e.into_inner()).get(&key).cloned()
+        self.cache
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&key)
+            .cloned()
     }
 
     /// Insert a decomposed shape into the cache.
     pub fn insert(&self, key: u64, shape: SharedShape) {
-        self.cache.lock().unwrap_or_else(|e| e.into_inner()).insert(key, shape);
+        self.cache
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(key, shape);
     }
 
     /// Number of cached entries.
@@ -312,11 +325,7 @@ pub fn is_sphere(params: &VolumeParams) -> bool {
 /// Calls `generate_volume` to produce geometry, then converts the resulting
 /// faces into a trimesh.  `size` scales the unit-prim positions.  `detail`
 /// controls LOD (see `aurora_prim::volume::DETAIL_SCALES`).
-pub fn shape_from_volume(
-    params: &VolumeParams,
-    size: Vec3,
-    detail: f32,
-) -> MeshingResult {
+pub fn shape_from_volume(params: &VolumeParams, size: Vec3, detail: f32) -> MeshingResult {
     let start = Instant::now();
     let mesh = generate_volume(params, detail);
 
@@ -393,11 +402,7 @@ pub fn decompose_convex(
 /// Uses V-HACD decomposition with default [`ConvexDecompParams`].  Falls back
 /// to a simple convex hull when decomposition produces no parts, and to a tiny
 /// sphere for degenerate geometry (< 4 vertices).
-fn shape_convex_from_volume(
-    params: &VolumeParams,
-    size: Vec3,
-    detail: f32,
-) -> MeshingResult {
+fn shape_convex_from_volume(params: &VolumeParams, size: Vec3, detail: f32) -> MeshingResult {
     let start = Instant::now();
     let mesh = generate_volume(params, detail);
 
@@ -548,15 +553,15 @@ pub fn create_physics_shape_with_sculpt(
     }
 
     // Cache lookup (skip when key is 0).
-    if cache_key != 0 {
-        if let Some(shape) = cache.get(cache_key) {
-            return Some(MeshingResult {
-                shape,
-                vertex_count: 0,
-                triangle_count: 0,
-                elapsed_us: 0,
-            });
-        }
+    if cache_key != 0
+        && let Some(shape) = cache.get(cache_key)
+    {
+        return Some(MeshingResult {
+            shape,
+            vertex_count: 0,
+            triangle_count: 0,
+            elapsed_us: 0,
+        });
     }
 
     let start = Instant::now();
@@ -564,9 +569,9 @@ pub fn create_physics_shape_with_sculpt(
     // Sculpted prims bypass analytic shape detection and volume meshing.
     if params.is_sculpt() {
         let detail = PhysicsLod::from_size(size).detail();
-        let texture_data = params.sculpt.and_then(|sp| {
-            sculpt_source.and_then(|src| src.decode_sculpt_texture(&sp.texture))
-        });
+        let texture_data = params
+            .sculpt
+            .and_then(|sp| sculpt_source.and_then(|src| src.decode_sculpt_texture(&sp.texture)));
         let result = shape_from_sculpt(params, size, detail, texture_data.as_ref());
         if cache_key != 0 {
             cache.insert(cache_key, result.shape.clone());
@@ -791,13 +796,7 @@ mod tests {
         let size = Vec3::new(2.0, 4.0, 6.0);
         let cache = ShapeCache::new();
 
-        let result = create_physics_shape(
-            &params,
-            size,
-            PhysicsShapeType::Prim,
-            &cache,
-            0,
-        );
+        let result = create_physics_shape(&params, size, PhysicsShapeType::Prim, &cache, 0);
 
         let result = result.expect("box should produce a shape");
         // Analytic shapes have zero vertex/triangle counts.
@@ -811,13 +810,7 @@ mod tests {
         let size = Vec3::splat(3.0);
         let cache = ShapeCache::new();
 
-        let result = create_physics_shape(
-            &params,
-            size,
-            PhysicsShapeType::Prim,
-            &cache,
-            0,
-        );
+        let result = create_physics_shape(&params, size, PhysicsShapeType::Prim, &cache, 0);
 
         let result = result.expect("sphere should produce a shape");
         assert_eq!(result.vertex_count, 0);
@@ -830,13 +823,7 @@ mod tests {
         let size = Vec3::splat(1.0);
         let cache = ShapeCache::new();
 
-        let result = create_physics_shape(
-            &params,
-            size,
-            PhysicsShapeType::None,
-            &cache,
-            0,
-        );
+        let result = create_physics_shape(&params, size, PhysicsShapeType::None, &cache, 0);
 
         assert!(result.is_none());
     }
@@ -851,24 +838,12 @@ mod tests {
         assert!(cache.is_empty());
 
         // First call: cache miss, populates the cache.
-        let r1 = create_physics_shape(
-            &params,
-            size,
-            PhysicsShapeType::Prim,
-            &cache,
-            key,
-        );
+        let r1 = create_physics_shape(&params, size, PhysicsShapeType::Prim, &cache, key);
         assert!(r1.is_some());
         assert_eq!(cache.len(), 1);
 
         // Second call: cache hit.
-        let r2 = create_physics_shape(
-            &params,
-            size,
-            PhysicsShapeType::Prim,
-            &cache,
-            key,
-        );
+        let r2 = create_physics_shape(&params, size, PhysicsShapeType::Prim, &cache, key);
         let r2 = r2.unwrap();
         // Cache hits report zero elapsed time.
         assert_eq!(r2.elapsed_us, 0);
@@ -890,13 +865,7 @@ mod tests {
         let size = Vec3::splat(1.0);
         let cache = ShapeCache::new();
 
-        let result = create_physics_shape(
-            &params,
-            size,
-            PhysicsShapeType::Prim,
-            &cache,
-            0,
-        );
+        let result = create_physics_shape(&params, size, PhysicsShapeType::Prim, &cache, 0);
 
         let result = result.expect("hollowed box should produce a shape");
         assert!(result.vertex_count > 0, "trimesh should have vertices");
@@ -911,16 +880,13 @@ mod tests {
         let size = Vec3::new(1.0, 2.0, 1.0); // non-uniform => not analytic sphere
         let cache = ShapeCache::new();
 
-        let result = create_physics_shape(
-            &params,
-            size,
-            PhysicsShapeType::Convex,
-            &cache,
-            0,
-        );
+        let result = create_physics_shape(&params, size, PhysicsShapeType::Convex, &cache, 0);
 
         let result = result.expect("convex hull should produce a shape");
-        assert!(result.vertex_count > 0, "convex hull should have input vertices");
+        assert!(
+            result.vertex_count > 0,
+            "convex hull should have input vertices"
+        );
     }
 
     #[test]
@@ -964,8 +930,14 @@ mod tests {
     #[test]
     fn lod_uses_max_dimension() {
         // Non-uniform: largest dimension should determine LOD
-        assert_eq!(PhysicsLod::from_size(Vec3::new(1.0, 1.0, 100.0)), PhysicsLod::High);
-        assert_eq!(PhysicsLod::from_size(Vec3::new(100.0, 1.0, 1.0)), PhysicsLod::High);
+        assert_eq!(
+            PhysicsLod::from_size(Vec3::new(1.0, 1.0, 100.0)),
+            PhysicsLod::High
+        );
+        assert_eq!(
+            PhysicsLod::from_size(Vec3::new(100.0, 1.0, 1.0)),
+            PhysicsLod::High
+        );
     }
 
     #[test]
@@ -980,11 +952,26 @@ mod tests {
 
     #[test]
     fn test_sculpt_type_from_raw() {
-        assert_eq!(SculptType::from_raw(LL_SCULPT_TYPE_NONE), (SculptType::None, false, false));
-        assert_eq!(SculptType::from_raw(LL_SCULPT_TYPE_SPHERE), (SculptType::Sphere, false, false));
-        assert_eq!(SculptType::from_raw(LL_SCULPT_TYPE_TORUS), (SculptType::Torus, false, false));
-        assert_eq!(SculptType::from_raw(LL_SCULPT_TYPE_PLANE), (SculptType::Plane, false, false));
-        assert_eq!(SculptType::from_raw(LL_SCULPT_TYPE_CYLINDER), (SculptType::Cylinder, false, false));
+        assert_eq!(
+            SculptType::from_raw(LL_SCULPT_TYPE_NONE),
+            (SculptType::None, false, false)
+        );
+        assert_eq!(
+            SculptType::from_raw(LL_SCULPT_TYPE_SPHERE),
+            (SculptType::Sphere, false, false)
+        );
+        assert_eq!(
+            SculptType::from_raw(LL_SCULPT_TYPE_TORUS),
+            (SculptType::Torus, false, false)
+        );
+        assert_eq!(
+            SculptType::from_raw(LL_SCULPT_TYPE_PLANE),
+            (SculptType::Plane, false, false)
+        );
+        assert_eq!(
+            SculptType::from_raw(LL_SCULPT_TYPE_CYLINDER),
+            (SculptType::Cylinder, false, false)
+        );
         assert_eq!(SculptType::from_raw(7), (SculptType::None, false, false));
     }
 
@@ -1062,27 +1049,33 @@ mod tests {
     fn box_mesh() -> (Vec<Vector>, Vec<[u32; 3]>) {
         let vertices = vec![
             Vector::new(-0.5, -0.5, -0.5), // 0
-            Vector::new( 0.5, -0.5, -0.5), // 1
-            Vector::new( 0.5,  0.5, -0.5), // 2
-            Vector::new(-0.5,  0.5, -0.5), // 3
-            Vector::new(-0.5, -0.5,  0.5), // 4
-            Vector::new( 0.5, -0.5,  0.5), // 5
-            Vector::new( 0.5,  0.5,  0.5), // 6
-            Vector::new(-0.5,  0.5,  0.5), // 7
+            Vector::new(0.5, -0.5, -0.5),  // 1
+            Vector::new(0.5, 0.5, -0.5),   // 2
+            Vector::new(-0.5, 0.5, -0.5),  // 3
+            Vector::new(-0.5, -0.5, 0.5),  // 4
+            Vector::new(0.5, -0.5, 0.5),   // 5
+            Vector::new(0.5, 0.5, 0.5),    // 6
+            Vector::new(-0.5, 0.5, 0.5),   // 7
         ];
         let indices = vec![
             // front
-            [0, 1, 2], [0, 2, 3],
+            [0, 1, 2],
+            [0, 2, 3],
             // back
-            [5, 4, 7], [5, 7, 6],
+            [5, 4, 7],
+            [5, 7, 6],
             // left
-            [4, 0, 3], [4, 3, 7],
+            [4, 0, 3],
+            [4, 3, 7],
             // right
-            [1, 5, 6], [1, 6, 2],
+            [1, 5, 6],
+            [1, 6, 2],
             // top
-            [3, 2, 6], [3, 6, 7],
+            [3, 2, 6],
+            [3, 6, 7],
             // bottom
-            [4, 5, 1], [4, 1, 0],
+            [4, 5, 1],
+            [4, 1, 0],
         ];
         (vertices, indices)
     }

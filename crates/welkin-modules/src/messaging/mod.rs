@@ -218,10 +218,7 @@ impl OfflineMessageModule {
     /// Queue a message for later delivery.
     pub fn store_message(&mut self, im: GridInstantMessage) {
         tracing::debug!(to = %im.to_agent_id, "storing offline message");
-        self.messages
-            .entry(im.to_agent_id)
-            .or_default()
-            .push(im);
+        self.messages.entry(im.to_agent_id).or_default().push(im);
     }
 
     /// Retrieve and drain all pending messages for `agent_id`.
@@ -231,9 +228,7 @@ impl OfflineMessageModule {
 
     /// Number of messages queued for a specific agent.
     pub fn pending_count(&self, agent_id: Uuid) -> usize {
-        self.messages
-            .get(&agent_id)
-            .map_or(0, |v| v.len())
+        self.messages.get(&agent_id).map_or(0, |v| v.len())
     }
 
     /// Total number of messages queued across all agents.
@@ -303,9 +298,10 @@ impl MuteListModule {
     /// is replaced; otherwise the new entry is appended.
     pub fn update_mute(&mut self, owner_id: Uuid, entry: MuteEntry) {
         let list = self.mutes.entry(owner_id).or_default();
-        if let Some(pos) = list.iter().position(|e| {
-            e.mute_id == entry.mute_id && e.mute_type == entry.mute_type
-        }) {
+        if let Some(pos) = list
+            .iter()
+            .position(|e| e.mute_id == entry.mute_id && e.mute_type == entry.mute_type)
+        {
             list[pos] = entry;
         } else {
             list.push(entry);
@@ -321,17 +317,14 @@ impl MuteListModule {
 
     /// Return a clone of the mute list for `owner_id`.
     pub fn get_mutes(&self, owner_id: Uuid) -> Vec<MuteEntry> {
-        self.mutes
-            .get(&owner_id)
-            .cloned()
-            .unwrap_or_default()
+        self.mutes.get(&owner_id).cloned().unwrap_or_default()
     }
 
     /// Check whether `target_id` is on `owner_id`'s mute list (by `mute_id`).
     pub fn is_muted(&self, owner_id: Uuid, target_id: Uuid) -> bool {
         self.mutes
             .get(&owner_id)
-            .map_or(false, |list| list.iter().any(|e| e.mute_id == target_id))
+            .is_some_and(|list| list.iter().any(|e| e.mute_id == target_id))
     }
 }
 

@@ -4,12 +4,12 @@
 //! Exercises the full portal flow through HTTP, proving every section works
 //! together: wizard, auth, regions, map, people, content, and portal pages.
 
+use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use axum::Router;
 use tower::ServiceExt;
 
-use welkin_portal::{auth, content, map, people, portal_router, roles, wizard, PortalState};
+use welkin_portal::{PortalState, auth, content, map, people, portal_router, roles, wizard};
 
 fn build_full_router() -> Router {
     let state = PortalState::new("0.1.0-e2e");
@@ -33,8 +33,8 @@ async fn json_resp(resp: axum::response::Response) -> (StatusCode, serde_json::V
     if bytes.is_empty() {
         return (status, serde_json::json!({}));
     }
-    let json: serde_json::Value =
-        serde_json::from_slice(&bytes).unwrap_or(serde_json::json!({"_raw": String::from_utf8_lossy(&bytes).into_owned()}));
+    let json: serde_json::Value = serde_json::from_slice(&bytes)
+        .unwrap_or(serde_json::json!({"_raw": String::from_utf8_lossy(&bytes).into_owned()}));
     (status, json)
 }
 
@@ -82,11 +82,7 @@ async fn post_empty(app: &Router, path: &str) -> (StatusCode, serde_json::Value)
     json_resp(app.clone().oneshot(req).await.unwrap()).await
 }
 
-async fn post_empty_auth(
-    app: &Router,
-    path: &str,
-    token: &str,
-) -> (StatusCode, serde_json::Value) {
+async fn post_empty_auth(app: &Router, path: &str, token: &str) -> (StatusCode, serde_json::Value) {
     let req = Request::post(path)
         .header("authorization", format!("Bearer {token}"))
         .body(Body::empty())
@@ -192,7 +188,10 @@ async fn full_portal_flow() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    let token = json["token"].as_str().expect("login must return token").to_string();
+    let token = json["token"]
+        .as_str()
+        .expect("login must return token")
+        .to_string();
     assert!(!token.is_empty());
     assert_eq!(json["role"], "admin");
 
@@ -220,7 +219,10 @@ async fn full_portal_flow() {
     )
     .await;
     assert_eq!(status, StatusCode::CREATED);
-    let region_id = json["region_id"].as_str().expect("region must have id").to_string();
+    let region_id = json["region_id"]
+        .as_str()
+        .expect("region must have id")
+        .to_string();
 
     // ── 6. Region start ──
     let (status, json) = post_empty_auth(
@@ -352,5 +354,9 @@ async fn full_portal_flow() {
 
     // Token should now be invalid
     let (status, _) = get_auth(&app, "/portal/api/regions", &token).await;
-    assert_eq!(status, StatusCode::UNAUTHORIZED, "token invalidated after logout");
+    assert_eq!(
+        status,
+        StatusCode::UNAUTHORIZED,
+        "token invalidated after logout"
+    );
 }

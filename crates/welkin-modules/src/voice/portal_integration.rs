@@ -3,23 +3,12 @@
 //! Grid portal integration: voice status and estate voice toggle endpoints.
 
 /// Voice service status reported to the grid portal.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
 pub struct VoiceServiceStatus {
     pub healthy: bool,
     pub active_channels: usize,
     pub active_users: usize,
     pub wolfvoice_version: Option<String>,
-}
-
-impl Default for VoiceServiceStatus {
-    fn default() -> Self {
-        Self {
-            healthy: false,
-            active_channels: 0,
-            active_users: 0,
-            wolfvoice_version: None,
-        }
-    }
 }
 
 /// Request to toggle voice for an estate.
@@ -76,9 +65,7 @@ pub fn handle_voice_status_request(
 /// Handle an estate voice toggle request.
 ///
 /// Returns a response indicating the new state.
-pub fn handle_estate_voice_toggle(
-    request: &EstateVoiceToggleRequest,
-) -> EstateVoiceToggleResponse {
+pub fn handle_estate_voice_toggle(request: &EstateVoiceToggleRequest) -> EstateVoiceToggleResponse {
     let message = if request.enabled {
         format!("Voice enabled for estate {}", request.estate_id)
     } else {
@@ -174,8 +161,7 @@ mod tests {
     fn json_roundtrip_for_voice_service_status() {
         let original = build_voice_status(true, 10, 25, Some("3.0.0".to_string()));
         let json = serde_json::to_string(&original).expect("serialize");
-        let roundtripped: VoiceServiceStatus =
-            serde_json::from_str(&json).expect("deserialize");
+        let roundtripped: VoiceServiceStatus = serde_json::from_str(&json).expect("deserialize");
 
         assert_eq!(original.healthy, roundtripped.healthy);
         assert_eq!(original.active_channels, roundtripped.active_channels);

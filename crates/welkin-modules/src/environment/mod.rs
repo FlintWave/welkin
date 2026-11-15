@@ -179,7 +179,10 @@ impl LightShareModule {
     pub fn reset_windlight(&mut self) {
         self.windlight = WindlightPreset::default();
         self.env_version += 1;
-        tracing::debug!(version = self.env_version, "windlight preset reset to defaults");
+        tracing::debug!(
+            version = self.env_version,
+            "windlight preset reset to defaults"
+        );
     }
 
     /// Returns whether the module is enabled.

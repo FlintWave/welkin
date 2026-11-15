@@ -12,9 +12,9 @@ use std::time::Instant;
 
 use uuid::Uuid;
 
+use crate::messaging::{GridInstantMessage, IMDialog};
 use crate::module::{ModuleConfig, ModuleError, ModuleType, RegionModule};
 use crate::registry::SceneRef;
-use crate::messaging::{GridInstantMessage, IMDialog};
 use welkin_services::hypergrid::UserAgentService;
 
 // ---------------------------------------------------------------------------
@@ -44,10 +44,10 @@ impl UserLocationCache {
     }
 
     fn get(&self, user_id: &Uuid) -> Option<&str> {
-        if let Some(entry) = self.entries.get(user_id) {
-            if Instant::now() < entry.expires {
-                return Some(&entry.url);
-            }
+        if let Some(entry) = self.entries.get(user_id)
+            && Instant::now() < entry.expires
+        {
+            return Some(&entry.url);
         }
         None
     }
@@ -155,29 +155,27 @@ impl HGInstantMessageService {
         }
 
         // 3. Try locating the user via UserAgentService.
-        if !foreigner {
-            if let Some(ref uas) = self.user_agent_service {
-                match uas.locate_user(to_agent_id) {
-                    Ok(url) if !url.is_empty() => {
-                        // Avoid retrying same URL we already failed on.
-                        if !foreigner_url.is_empty()
-                            && super::normalise_grid_uri(&url)
-                                == super::normalise_grid_uri(foreigner_url)
-                        {
-                            tracing::debug!(
-                                agent = %to_agent_id,
-                                "UAS returned same URL we already tried"
-                            );
-                            return false;
-                        }
-                        return self.forward_im_to_grid(&url, im, to_agent_id);
+        if !foreigner && let Some(ref uas) = self.user_agent_service {
+            match uas.locate_user(to_agent_id) {
+                Ok(url) if !url.is_empty() => {
+                    // Avoid retrying same URL we already failed on.
+                    if !foreigner_url.is_empty()
+                        && super::normalise_grid_uri(&url)
+                            == super::normalise_grid_uri(foreigner_url)
+                    {
+                        tracing::debug!(
+                            agent = %to_agent_id,
+                            "UAS returned same URL we already tried"
+                        );
+                        return false;
                     }
-                    Ok(_) => {
-                        tracing::debug!(agent = %to_agent_id, "UAS returned empty location");
-                    }
-                    Err(e) => {
-                        tracing::warn!(agent = %to_agent_id, error = %e, "LocateUser failed");
-                    }
+                    return self.forward_im_to_grid(&url, im, to_agent_id);
+                }
+                Ok(_) => {
+                    tracing::debug!(agent = %to_agent_id, "UAS returned empty location");
+                }
+                Err(e) => {
+                    tracing::warn!(agent = %to_agent_id, error = %e, "LocateUser failed");
                 }
             }
         }
@@ -304,8 +302,7 @@ impl HGMessageTransferModule {
                 url = %url,
                 "routing IM to foreign grid"
             );
-            self.im_service
-                .try_send_instant_message(im, &url, true)
+            self.im_service.try_send_instant_message(im, &url, true)
         } else {
             // Try local delivery first (stub: always try remote).
             tracing::debug!(
@@ -313,8 +310,7 @@ impl HGMessageTransferModule {
                 to = %im.to_agent_id,
                 "routing IM locally then via HG"
             );
-            self.im_service
-                .try_send_instant_message(im, "", false)
+            self.im_service.try_send_instant_message(im, "", false)
         }
     }
 
@@ -359,7 +355,11 @@ impl RegionModule for HGMessageTransferModule {
     }
 
     fn initialise(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
-        let module_name = config.get_string("Messaging", "MessageTransferModule", "MessageTransferModule");
+        let module_name = config.get_string(
+            "Messaging",
+            "MessageTransferModule",
+            "MessageTransferModule",
+        );
         if module_name != self.name() {
             tracing::debug!("HGMessageTransferModule disabled by configuration");
             return Ok(());
@@ -510,7 +510,11 @@ mod tests {
     fn module_initialise_enabled() {
         let mut module = HGMessageTransferModule::new();
         let mut config = TestConfig::new();
-        config.set_string("Messaging", "MessageTransferModule", "HGMessageTransferModule");
+        config.set_string(
+            "Messaging",
+            "MessageTransferModule",
+            "HGMessageTransferModule",
+        );
         config.set_string("Hypergrid", "GatekeeperURI", "http://mygrid.com:8002");
         module.initialise(&config).unwrap();
         assert!(module.enabled);
@@ -607,7 +611,11 @@ mod tests {
     fn module_lifecycle() {
         let mut module = HGMessageTransferModule::new();
         let mut config = TestConfig::new();
-        config.set_string("Messaging", "MessageTransferModule", "HGMessageTransferModule");
+        config.set_string(
+            "Messaging",
+            "MessageTransferModule",
+            "HGMessageTransferModule",
+        );
         module.initialise(&config).unwrap();
 
         let scene = scene_ref();

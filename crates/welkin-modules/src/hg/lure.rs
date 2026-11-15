@@ -58,10 +58,10 @@ impl PendingLureCache {
     }
 
     fn get(&self, session_id: &Uuid) -> Option<&PendingLure> {
-        if let Some(lure) = self.entries.get(session_id) {
-            if Instant::now() < lure.expires {
-                return Some(lure);
-            }
+        if let Some(lure) = self.entries.get(session_id)
+            && Instant::now() < lure.expires
+        {
+            return Some(lure);
         }
         None
     }
@@ -147,10 +147,7 @@ impl HGLureModule {
     /// the lure is still valid, or `None` if it has expired or was not found.
     ///
     /// Mirrors the C# `OnTeleportLureRequest`.
-    pub fn accept_lure(
-        &mut self,
-        lure_id: Uuid,
-    ) -> Option<AcceptedLure> {
+    pub fn accept_lure(&mut self, lure_id: Uuid) -> Option<AcceptedLure> {
         let lure = self.pending_lures.remove(&lure_id)?;
         if Instant::now() >= lure.expires {
             return None;
@@ -382,7 +379,12 @@ mod tests {
         let to = Uuid::new_v4();
         let region = Uuid::new_v4();
         let (session, message) = module.start_lure(
-            from, "Test User", to, "Join me", region, [128.0, 128.0, 25.0],
+            from,
+            "Test User",
+            to,
+            "Join me",
+            region,
+            [128.0, 128.0, 25.0],
         );
 
         assert!(!session.is_nil());
@@ -401,8 +403,12 @@ mod tests {
         let from = Uuid::new_v4();
         let region = Uuid::new_v4();
         let (session, _) = module.start_lure(
-            from, "Test User", Uuid::new_v4(), "Come here",
-            region, [100.0, 200.0, 30.0],
+            from,
+            "Test User",
+            Uuid::new_v4(),
+            "Come here",
+            region,
+            [100.0, 200.0, 30.0],
         );
 
         let accepted = module.accept_lure(session).unwrap();
@@ -410,10 +416,7 @@ mod tests {
         assert_eq!(accepted.region_id, region);
         assert_eq!(accepted.position, [100.0, 200.0, 30.0]);
         assert!(accepted.gatekeeper_uri.is_some());
-        assert_eq!(
-            accepted.gatekeeper_uri.unwrap(),
-            "http://mygrid.com:8002"
-        );
+        assert_eq!(accepted.gatekeeper_uri.unwrap(), "http://mygrid.com:8002");
         // Lure removed from cache.
         assert_eq!(module.pending_count(), 0);
     }
@@ -438,12 +441,22 @@ mod tests {
         let region = Uuid::new_v4();
 
         let first = module.handle_incoming_lure(
-            session, from, "Sender", region, "hi@http://other.grid", [0.0, 0.0, 0.0],
+            session,
+            from,
+            "Sender",
+            region,
+            "hi@http://other.grid",
+            [0.0, 0.0, 0.0],
         );
         assert!(first);
 
         let second = module.handle_incoming_lure(
-            session, from, "Sender", region, "hi@http://other.grid", [0.0, 0.0, 0.0],
+            session,
+            from,
+            "Sender",
+            region,
+            "hi@http://other.grid",
+            [0.0, 0.0, 0.0],
         );
         assert!(!second);
 

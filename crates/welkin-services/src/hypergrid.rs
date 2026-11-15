@@ -278,10 +278,7 @@ pub trait GatekeeperService: Send + Sync {
     ///
     /// Called via the `link_region` XML-RPC method.  Returns region metadata
     /// that the calling grid stores as a "linked region" placeholder.
-    fn link_local_region(
-        &self,
-        region_name: &str,
-    ) -> HgResult<LinkedRegionInfo>;
+    fn link_local_region(&self, region_name: &str) -> HgResult<LinkedRegionInfo>;
 
     /// Resolve a hyperlink-region UUID to the actual `GridRegionInfo` that a
     /// visiting agent should enter.
@@ -348,10 +345,7 @@ pub trait UserAgentService: Send + Sync {
     fn logout_agent(&self, user_id: Uuid, session_id: Uuid) -> HgResult<()>;
 
     /// Return the user's home region, position and look-at direction.
-    fn get_home_region(
-        &self,
-        user_id: Uuid,
-    ) -> HgResult<(GridRegionInfo, Vector3, Vector3)>;
+    fn get_home_region(&self, user_id: Uuid) -> HgResult<(GridRegionInfo, Vector3, Vector3)>;
 
     /// Return the user's service URL map (HomeURI, InventoryServerURI, etc.).
     fn get_server_urls(&self, user_id: Uuid) -> HgResult<HashMap<String, String>>;
@@ -533,11 +527,7 @@ pub trait HypergridFriendsService: Send + Sync {
     ) -> HgResult<bool>;
 
     /// Validate that a pending friendship offer exists between two users.
-    fn validate_friendship_offered(
-        &self,
-        from_id: Uuid,
-        to_id: Uuid,
-    ) -> HgResult<bool>;
+    fn validate_friendship_offered(&self, from_id: Uuid, to_id: Uuid) -> HgResult<bool>;
 
     /// Relay online/offline status notifications for a list of cross-grid
     /// friends.  Returns the subset of friends that are online locally.

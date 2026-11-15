@@ -139,9 +139,7 @@ pub fn handle_provision_voice_account(
 
 /// Build a ParcelVoiceInfoResponse, checking estate and parcel voice flags.
 /// If voice is not enabled at either level, returns empty channel_uri.
-pub fn build_parcel_voice_response(
-    request: &ParcelVoiceInfoRequest,
-) -> ParcelVoiceInfoResponse {
+pub fn build_parcel_voice_response(request: &ParcelVoiceInfoRequest) -> ParcelVoiceInfoResponse {
     let (channel_uri, channel_credentials) =
         if request.estate_voice_enabled && request.parcel_voice_enabled {
             (
@@ -186,9 +184,7 @@ pub fn encode_parcel_voice_response(resp: &ParcelVoiceInfoResponse) -> String {
 
 /// Handle the ParcelVoiceInfoRequest capability.
 /// Returns the LLSD XML response string.
-pub fn handle_parcel_voice_info(
-    request: &ParcelVoiceInfoRequest,
-) -> String {
+pub fn handle_parcel_voice_info(request: &ParcelVoiceInfoRequest) -> String {
     debug!(
         agent_id = %request.agent_id,
         region = %request.region_name,
@@ -261,7 +257,9 @@ mod tests {
         assert!(xml.contains("<key>username</key><string>test_user</string>"));
         assert!(xml.contains("<key>password</key><string>pass</string>"));
         assert!(xml.contains("<key>voice_server_type</key><string>webrtc</string>"));
-        assert!(xml.contains("<key>voice_sip_uri_hostname</key><string>voice.example.com</string>"));
+        assert!(
+            xml.contains("<key>voice_sip_uri_hostname</key><string>voice.example.com</string>")
+        );
     }
 
     #[test]
@@ -277,7 +275,9 @@ mod tests {
         assert!(xml.contains("<key>username</key><string>agent_user</string>"));
         assert!(xml.contains("<key>password</key><string>s3cret</string>"));
         assert!(xml.contains("<key>voice_server_type</key><string>webrtc</string>"));
-        assert!(xml.contains("<key>voice_sip_uri_hostname</key><string>voice.example.com</string>"));
+        assert!(
+            xml.contains("<key>voice_sip_uri_hostname</key><string>voice.example.com</string>")
+        );
     }
 
     #[test]
@@ -369,7 +369,10 @@ mod tests {
 
     #[test]
     fn test_extract_hostname_with_port() {
-        assert_eq!(extract_hostname("voice.example.com:9000"), "voice.example.com");
+        assert_eq!(
+            extract_hostname("voice.example.com:9000"),
+            "voice.example.com"
+        );
     }
 
     #[test]

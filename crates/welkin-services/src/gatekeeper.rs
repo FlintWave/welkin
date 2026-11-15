@@ -244,21 +244,21 @@ impl GatekeeperService for GatekeeperServiceImpl {
         let cur_viewer = Self::get_viewer_name(circuit);
 
         // -- Check allowed clients --
-        if let Some(ref re) = self.config.allowed_clients {
-            if !re.is_match(&cur_viewer) {
-                return Err(HypergridError::AccessDenied(format!(
-                    "Login failed: client {cur_viewer} is not allowed"
-                )));
-            }
+        if let Some(ref re) = self.config.allowed_clients
+            && !re.is_match(&cur_viewer)
+        {
+            return Err(HypergridError::AccessDenied(format!(
+                "Login failed: client {cur_viewer} is not allowed"
+            )));
         }
 
         // -- Check denied clients --
-        if let Some(ref re) = self.config.denied_clients {
-            if re.is_match(&cur_viewer) {
-                return Err(HypergridError::AccessDenied(format!(
-                    "Login failed: client {cur_viewer} is denied"
-                )));
-            }
+        if let Some(ref re) = self.config.denied_clients
+            && re.is_match(&cur_viewer)
+        {
+            return Err(HypergridError::AccessDenied(format!(
+                "Login failed: client {cur_viewer} is denied"
+            )));
         }
 
         // -- Check denied MACs --
@@ -469,10 +469,7 @@ fn extract_xmlrpc_method(xml: &str) -> Option<String> {
     Some(rest[..end].trim().to_string())
 }
 
-async fn handle_xmlrpc(
-    State(state): State<GatekeeperHandlerState>,
-    body: Bytes,
-) -> Response {
+async fn handle_xmlrpc(State(state): State<GatekeeperHandlerState>, body: Bytes) -> Response {
     let xml = String::from_utf8_lossy(&body);
     let method = extract_xmlrpc_method(&xml).unwrap_or_default();
 
@@ -601,10 +598,7 @@ mod tests {
     /// Helper: build a minimal agent circuit for testing.
     fn test_circuit() -> AgentCircuitInfo {
         let mut service_urls = HashMap::new();
-        service_urls.insert(
-            "HomeURI".into(),
-            "http://foreigngrid.example:9000/".into(),
-        );
+        service_urls.insert("HomeURI".into(), "http://foreigngrid.example:9000/".into());
 
         AgentCircuitInfo {
             agent_id: Uuid::new_v4(),
@@ -613,10 +607,7 @@ mod tests {
             first_name: "Test".into(),
             last_name: "User".into(),
             start_pos: Vector3::default(),
-            service_session_id: format!(
-                "http://mygrid.example:9000/;{}",
-                Uuid::new_v4()
-            ),
+            service_session_id: format!("http://mygrid.example:9000/;{}", Uuid::new_v4()),
             service_urls,
             ip_address: "192.168.1.100".into(),
             viewer: "Firestorm 6.5.0".into(),
@@ -707,8 +698,7 @@ mod tests {
     fn test_foreign_agent_exception() {
         // Foreign agents allowed, but with an exception for a specific grid
         let mut config = test_config();
-        config.foreigns_allowed_exceptions =
-            vec!["http://banned-grid.example:9000/".into()];
+        config.foreigns_allowed_exceptions = vec!["http://banned-grid.example:9000/".into()];
         let svc = GatekeeperServiceImpl::new(config, Some(test_region()));
 
         // Agent from the banned grid

@@ -157,8 +157,8 @@ mod tests {
         HGAssetServiceImpl::new(
             "http://mygrid.example:9000".to_string(),
             AssetPermissions::new(
-                vec![TEXTURE, SOUND, OBJECT],  // allowed export
-                vec![TEXTURE, SOUND],          // allowed import
+                vec![TEXTURE, SOUND, OBJECT], // allowed export
+                vec![TEXTURE, SOUND],         // allowed import
             ),
         )
     }
@@ -183,7 +183,10 @@ mod tests {
         svc.insert_local_asset(make_asset(id, TEXTURE, "creator-uuid"));
 
         let result = svc.get_asset(id).unwrap();
-        assert!(result.is_some(), "asset with allowed export type should be returned");
+        assert!(
+            result.is_some(),
+            "asset with allowed export type should be returned"
+        );
     }
 
     #[test]
@@ -193,7 +196,10 @@ mod tests {
         svc.insert_local_asset(make_asset(id, SCRIPT, "creator-uuid"));
 
         let result = svc.get_asset(id).unwrap();
-        assert!(result.is_none(), "asset with denied export type should not be returned");
+        assert!(
+            result.is_none(),
+            "asset with denied export type should not be returned"
+        );
     }
 
     #[test]
@@ -212,7 +218,10 @@ mod tests {
         let asset = make_asset(Uuid::new_v4(), SCRIPT, "foreign-creator");
 
         let result = svc.store_asset(asset).unwrap();
-        assert!(result.is_none(), "asset with denied import type should not be stored");
+        assert!(
+            result.is_none(),
+            "asset with denied import type should not be stored"
+        );
     }
 
     #[test]
@@ -245,7 +254,10 @@ mod tests {
         svc.insert_local_asset(make_asset(id, TEXTURE, uui));
 
         let asset = svc.get_asset(id).unwrap().unwrap();
-        assert_eq!(asset.creator_id, uui, "already-UUI creator should not be rewritten");
+        assert_eq!(
+            asset.creator_id, uui,
+            "already-UUI creator should not be rewritten"
+        );
     }
 
     #[test]
@@ -268,7 +280,10 @@ mod tests {
         svc.insert_local_asset(make_asset(id, SCRIPT, "creator"));
 
         let result = svc.get_metadata(id).unwrap();
-        assert!(result.is_none(), "metadata for denied export type should be None");
+        assert!(
+            result.is_none(),
+            "metadata for denied export type should be None"
+        );
     }
 
     #[test]

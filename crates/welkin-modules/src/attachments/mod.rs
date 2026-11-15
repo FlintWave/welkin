@@ -186,10 +186,7 @@ impl AttachmentsModule {
     /// removing them from local state.
     pub fn prepare_for_transfer(&self, agent_id: Uuid) -> Vec<AttachmentInfo> {
         tracing::debug!(%agent_id, "AttachmentsModule: preparing attachments for transfer");
-        self.attachments
-            .get(&agent_id)
-            .cloned()
-            .unwrap_or_default()
+        self.attachments.get(&agent_id).cloned().unwrap_or_default()
     }
 }
 

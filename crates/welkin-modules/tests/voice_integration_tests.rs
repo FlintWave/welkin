@@ -15,19 +15,19 @@ use uuid::Uuid;
 use welkin_modules::module::{ModuleConfig, RegionModule};
 use welkin_modules::registry::SceneRef;
 use welkin_modules::voice::capabilities::{
-    build_parcel_voice_response, build_provision_response,
-    encode_provision_response, handle_parcel_voice_info, handle_provision_voice_account,
-    llsd_undef, make_channel_uri, ParcelVoiceInfoRequest, ProvisionVoiceAccountRequest,
+    ParcelVoiceInfoRequest, ProvisionVoiceAccountRequest, build_parcel_voice_response,
+    build_provision_response, encode_provision_response, handle_parcel_voice_info,
+    handle_provision_voice_account, llsd_undef, make_channel_uri,
 };
 use welkin_modules::voice::docker::{
-    generate_compose_file, validate_config, WolfvoiceDockerConfig,
+    WolfvoiceDockerConfig, generate_compose_file, validate_config,
 };
 use welkin_modules::voice::ossl_integration::{
-    os_clear_parcel_sip_address, os_set_parcel_sip_address, validate_sip_address, OsslVoiceResult,
+    OsslVoiceResult, os_clear_parcel_sip_address, os_set_parcel_sip_address, validate_sip_address,
 };
 use welkin_modules::voice::portal_integration::{
-    build_voice_status, encode_voice_status, handle_estate_voice_toggle,
-    handle_voice_status_request, EstateVoiceToggleRequest, VoiceServiceStatus,
+    EstateVoiceToggleRequest, VoiceServiceStatus, build_voice_status, encode_voice_status,
+    handle_estate_voice_toggle, handle_voice_status_request,
 };
 use welkin_modules::voice::wolfvoice_client::{
     ChannelType, HttpTransport, VoiceCredentials, WolfvoiceClient, WolfvoiceError,
@@ -149,10 +149,7 @@ impl HttpTransport for MockTransport {
 
 /// Build a successful JSON-RPC response wrapping the given result JSON.
 fn ok_response(result_json: &str) -> String {
-    format!(
-        r#"{{"jsonrpc":"2.0","result":{},"id":1}}"#,
-        result_json
-    )
+    format!(r#"{{"jsonrpc":"2.0","result":{},"id":1}}"#, result_json)
 }
 
 /// Build an error JSON-RPC response.
@@ -177,9 +174,7 @@ fn wolfvoice_provision_success() {
     let client = WolfvoiceClient::new("http://localhost:8090".to_string(), transport);
 
     let agent_id = Uuid::new_v4();
-    let creds = client
-        .provision_account(agent_id, "Test Agent")
-        .unwrap();
+    let creds = client.provision_account(agent_id, "Test Agent").unwrap();
 
     assert_eq!(creds.username, "voice_user");
     assert_eq!(creds.password, "s3cret");
@@ -290,9 +285,7 @@ fn provision_flow_agent_to_credentials() {
     let client = WolfvoiceClient::new("http://localhost:8090".to_string(), transport);
 
     let agent_id = Uuid::new_v4();
-    let creds = client
-        .provision_account(agent_id, "Alice Linden")
-        .unwrap();
+    let creds = client.provision_account(agent_id, "Alice Linden").unwrap();
 
     // Step 2: Build capability response from credentials.
     let request = ProvisionVoiceAccountRequest {
@@ -315,12 +308,8 @@ fn provision_flow_agent_to_credentials() {
 #[test]
 fn provision_flow_credential_isolation() {
     let responses = vec![
-        ok_response(
-            r#"{"username":"user_A","password":"passA","voice_server_uri":"wss://v1"}"#,
-        ),
-        ok_response(
-            r#"{"username":"user_B","password":"passB","voice_server_uri":"wss://v2"}"#,
-        ),
+        ok_response(r#"{"username":"user_A","password":"passA","voice_server_uri":"wss://v1"}"#),
+        ok_response(r#"{"username":"user_B","password":"passB","voice_server_uri":"wss://v2"}"#),
     ];
     let transport = MockTransport::simple(responses);
     let client = WolfvoiceClient::new("http://localhost:8090".to_string(), transport);
@@ -436,7 +425,9 @@ fn parcel_crossing_with_sip_override() {
     let mut module = setup_module();
     let parcel_global_id = Uuid::new_v4();
 
-    module.create_channel(10, "default-ch", ChannelType::Parcel).unwrap();
+    module
+        .create_channel(10, "default-ch", ChannelType::Parcel)
+        .unwrap();
     module.set_land_sip_address(parcel_global_id, "sip:custom@voice.grid.local");
 
     // Verify the SIP override is stored and retrievable.
@@ -546,9 +537,15 @@ fn estate_disable_destroys_parcel_channels() {
     let mut module = setup_module();
 
     // Create three channels across the estate.
-    module.create_channel(1, "ch-1", ChannelType::Parcel).unwrap();
-    module.create_channel(2, "ch-2", ChannelType::Parcel).unwrap();
-    module.create_channel(3, "ch-3", ChannelType::Estate).unwrap();
+    module
+        .create_channel(1, "ch-1", ChannelType::Parcel)
+        .unwrap();
+    module
+        .create_channel(2, "ch-2", ChannelType::Parcel)
+        .unwrap();
+    module
+        .create_channel(3, "ch-3", ChannelType::Estate)
+        .unwrap();
     assert_eq!(module.active_channel_count(), 3);
 
     // Simulate estate-wide voice disable by destroying all channels.
@@ -684,8 +681,12 @@ fn module_full_lifecycle() {
     module.add_region(&scene).unwrap();
 
     // Create some channels.
-    module.create_channel(1, "ch-1", ChannelType::Parcel).unwrap();
-    module.create_channel(2, "ch-2", ChannelType::Estate).unwrap();
+    module
+        .create_channel(1, "ch-1", ChannelType::Parcel)
+        .unwrap();
+    module
+        .create_channel(2, "ch-2", ChannelType::Estate)
+        .unwrap();
     assert_eq!(module.active_channel_count(), 2);
 
     // Set a SIP override.
@@ -725,10 +726,7 @@ fn ossl_set_sip_address_roundtrip() {
 
     let result = os_set_parcel_sip_address(&mut module, parcel_id, addr);
     assert_eq!(result, OsslVoiceResult::Success);
-    assert_eq!(
-        module.get_sip_override(parcel_id),
-        Some(&addr.to_string())
-    );
+    assert_eq!(module.get_sip_override(parcel_id), Some(&addr.to_string()));
 }
 
 /// osSetParcelSIPAddress rejects empty address.
@@ -935,13 +933,19 @@ fn parcel_voice_info_llsd_encoding() {
 fn channel_types_all_variants() {
     let mut module = setup_module();
 
-    let parcel = module.create_channel(1, "parcel-ch", ChannelType::Parcel).unwrap();
+    let parcel = module
+        .create_channel(1, "parcel-ch", ChannelType::Parcel)
+        .unwrap();
     assert!(parcel.channel_info.channel_uri.contains("parcel"));
 
-    let estate = module.create_channel(2, "estate-ch", ChannelType::Estate).unwrap();
+    let estate = module
+        .create_channel(2, "estate-ch", ChannelType::Estate)
+        .unwrap();
     assert!(estate.channel_info.channel_uri.contains("estate"));
 
-    let group = module.create_channel(3, "group-ch", ChannelType::Group).unwrap();
+    let group = module
+        .create_channel(3, "group-ch", ChannelType::Group)
+        .unwrap();
     assert!(group.channel_info.channel_uri.contains("group"));
 
     assert_eq!(module.active_channel_count(), 3);
@@ -959,8 +963,12 @@ fn destroy_nonexistent_channel_errors() {
 #[test]
 fn viewer_count_tracking() {
     let mut module = setup_module();
-    module.create_channel(1, "ch-a", ChannelType::Parcel).unwrap();
-    module.create_channel(2, "ch-b", ChannelType::Estate).unwrap();
+    module
+        .create_channel(1, "ch-a", ChannelType::Parcel)
+        .unwrap();
+    module
+        .create_channel(2, "ch-b", ChannelType::Estate)
+        .unwrap();
 
     module.increment_viewers(1);
     module.increment_viewers(1);
@@ -1002,8 +1010,12 @@ fn enable_voice_no_channel_noop() {
 #[test]
 fn channel_replace_on_same_parcel() {
     let mut module = setup_module();
-    module.create_channel(1, "old-ch", ChannelType::Parcel).unwrap();
-    module.create_channel(1, "new-ch", ChannelType::Estate).unwrap();
+    module
+        .create_channel(1, "old-ch", ChannelType::Parcel)
+        .unwrap();
+    module
+        .create_channel(1, "new-ch", ChannelType::Estate)
+        .unwrap();
 
     // Only one channel for parcel 1.
     assert_eq!(module.active_channel_count(), 1);

@@ -258,10 +258,7 @@ mod tests {
     #[test]
     fn sha1_string() {
         let lua = vm();
-        let r: String = lua
-            .load(r#"return llSHA1String("Hello")"#)
-            .eval()
-            .unwrap();
+        let r: String = lua.load(r#"return llSHA1String("Hello")"#).eval().unwrap();
         // SHA-1 of "Hello"
         assert_eq!(r, "f7ff9e8b7bb2e09b70935a5d785e0cc5d9d0abf0");
     }

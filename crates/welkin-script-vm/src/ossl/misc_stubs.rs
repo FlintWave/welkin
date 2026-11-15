@@ -2,48 +2,160 @@
 //! Remaining stub functions (Task 12.1): notecard extras, appearance,
 //! inertia, sit, and miscellaneous.
 
-use std::sync::Arc;
+use super::{OsslFunc, OsslThreatLevel};
+use crate::builtins::ScriptContext;
 use mlua::prelude::*;
 use parking_lot::RwLock;
+use std::sync::Arc;
 use uuid::Uuid;
-use crate::builtins::ScriptContext;
-use super::{OsslFunc, OsslThreatLevel};
 
 pub(super) fn ossl_misc_funcs() -> Vec<OsslFunc> {
     vec![
         // Notecard extras
-        OsslFunc { name: "osLoadedCreationDate", level: OsslThreatLevel::Low, register: register_os_loaded_creation_date },
-        OsslFunc { name: "osLoadedCreationTime", level: OsslThreatLevel::Low, register: register_os_loaded_creation_time },
-        OsslFunc { name: "osLoadedCreationID", level: OsslThreatLevel::Low, register: register_os_loaded_creation_id },
+        OsslFunc {
+            name: "osLoadedCreationDate",
+            level: OsslThreatLevel::Low,
+            register: register_os_loaded_creation_date,
+        },
+        OsslFunc {
+            name: "osLoadedCreationTime",
+            level: OsslThreatLevel::Low,
+            register: register_os_loaded_creation_time,
+        },
+        OsslFunc {
+            name: "osLoadedCreationID",
+            level: OsslThreatLevel::Low,
+            register: register_os_loaded_creation_id,
+        },
         // Appearance (VeryHigh)
-        OsslFunc { name: "osOwnerSaveAppearance", level: OsslThreatLevel::VeryHigh, register: register_os_owner_save_appearance },
-        OsslFunc { name: "osAgentSaveAppearance", level: OsslThreatLevel::VeryHigh, register: register_os_agent_save_appearance },
-        OsslFunc { name: "osGetRegionMapTexture", level: OsslThreatLevel::High, register: register_os_get_region_map_texture },
+        OsslFunc {
+            name: "osOwnerSaveAppearance",
+            level: OsslThreatLevel::VeryHigh,
+            register: register_os_owner_save_appearance,
+        },
+        OsslFunc {
+            name: "osAgentSaveAppearance",
+            level: OsslThreatLevel::VeryHigh,
+            register: register_os_agent_save_appearance,
+        },
+        OsslFunc {
+            name: "osGetRegionMapTexture",
+            level: OsslThreatLevel::High,
+            register: register_os_get_region_map_texture,
+        },
         // Inertia (None)
-        OsslFunc { name: "osGetInertiaData", level: OsslThreatLevel::None, register: register_os_get_inertia_data },
-        OsslFunc { name: "osSetInertia", level: OsslThreatLevel::None, register: register_os_set_inertia },
-        OsslFunc { name: "osSetInertiaAsBox", level: OsslThreatLevel::None, register: register_os_set_inertia_as_box },
-        OsslFunc { name: "osSetInertiaAsSphere", level: OsslThreatLevel::None, register: register_os_set_inertia_as_sphere },
-        OsslFunc { name: "osSetInertiaAsCylinder", level: OsslThreatLevel::None, register: register_os_set_inertia_as_cylinder },
-        OsslFunc { name: "osClearInertia", level: OsslThreatLevel::None, register: register_os_clear_inertia },
+        OsslFunc {
+            name: "osGetInertiaData",
+            level: OsslThreatLevel::None,
+            register: register_os_get_inertia_data,
+        },
+        OsslFunc {
+            name: "osSetInertia",
+            level: OsslThreatLevel::None,
+            register: register_os_set_inertia,
+        },
+        OsslFunc {
+            name: "osSetInertiaAsBox",
+            level: OsslThreatLevel::None,
+            register: register_os_set_inertia_as_box,
+        },
+        OsslFunc {
+            name: "osSetInertiaAsSphere",
+            level: OsslThreatLevel::None,
+            register: register_os_set_inertia_as_sphere,
+        },
+        OsslFunc {
+            name: "osSetInertiaAsCylinder",
+            level: OsslThreatLevel::None,
+            register: register_os_set_inertia_as_cylinder,
+        },
+        OsslFunc {
+            name: "osClearInertia",
+            level: OsslThreatLevel::None,
+            register: register_os_clear_inertia,
+        },
         // Sit
-        OsslFunc { name: "osSitOnLink", level: OsslThreatLevel::Moderate, register: register_os_sit_on_link },
+        OsslFunc {
+            name: "osSitOnLink",
+            level: OsslThreatLevel::Moderate,
+            register: register_os_sit_on_link,
+        },
         // Misc
-        OsslFunc { name: "osClearObjectAnimations", level: OsslThreatLevel::VeryLow, register: register_os_clear_object_animations },
-        OsslFunc { name: "osResetAllScripts", level: OsslThreatLevel::Moderate, register: register_os_reset_all_scripts },
-        OsslFunc { name: "osParticleSystem", level: OsslThreatLevel::VeryLow, register: register_os_particle_system },
-        OsslFunc { name: "osLinkParticleSystem", level: OsslThreatLevel::VeryLow, register: register_os_link_particle_system },
-        OsslFunc { name: "osInviteToGroup", level: OsslThreatLevel::VeryLow, register: register_os_invite_to_group },
-        OsslFunc { name: "osEjectFromGroup", level: OsslThreatLevel::VeryLow, register: register_os_eject_from_group },
-        OsslFunc { name: "osConsoleCommand", level: OsslThreatLevel::Severe, register: register_os_console_command },
-        OsslFunc { name: "osRequestURL", level: OsslThreatLevel::Moderate, register: register_os_request_url },
-        OsslFunc { name: "osRequestSecureURL", level: OsslThreatLevel::Moderate, register: register_os_request_secure_url },
-        OsslFunc { name: "osSetRot", level: OsslThreatLevel::VeryHigh, register: register_os_set_rot },
-        OsslFunc { name: "osGetLinkColor", level: OsslThreatLevel::None, register: register_os_get_link_color },
-        OsslFunc { name: "osKey2Name", level: OsslThreatLevel::Low, register: register_os_key2name },
-        OsslFunc { name: "osAvatarName2Key", level: OsslThreatLevel::Low, register: register_os_avatar_name2key },
-        OsslFunc { name: "osGetAvatarHomeURI", level: OsslThreatLevel::Low, register: register_os_get_avatar_home_uri },
-        OsslFunc { name: "osListenRegex", level: OsslThreatLevel::None, register: register_os_listen_regex },
+        OsslFunc {
+            name: "osClearObjectAnimations",
+            level: OsslThreatLevel::VeryLow,
+            register: register_os_clear_object_animations,
+        },
+        OsslFunc {
+            name: "osResetAllScripts",
+            level: OsslThreatLevel::Moderate,
+            register: register_os_reset_all_scripts,
+        },
+        OsslFunc {
+            name: "osParticleSystem",
+            level: OsslThreatLevel::VeryLow,
+            register: register_os_particle_system,
+        },
+        OsslFunc {
+            name: "osLinkParticleSystem",
+            level: OsslThreatLevel::VeryLow,
+            register: register_os_link_particle_system,
+        },
+        OsslFunc {
+            name: "osInviteToGroup",
+            level: OsslThreatLevel::VeryLow,
+            register: register_os_invite_to_group,
+        },
+        OsslFunc {
+            name: "osEjectFromGroup",
+            level: OsslThreatLevel::VeryLow,
+            register: register_os_eject_from_group,
+        },
+        OsslFunc {
+            name: "osConsoleCommand",
+            level: OsslThreatLevel::Severe,
+            register: register_os_console_command,
+        },
+        OsslFunc {
+            name: "osRequestURL",
+            level: OsslThreatLevel::Moderate,
+            register: register_os_request_url,
+        },
+        OsslFunc {
+            name: "osRequestSecureURL",
+            level: OsslThreatLevel::Moderate,
+            register: register_os_request_secure_url,
+        },
+        OsslFunc {
+            name: "osSetRot",
+            level: OsslThreatLevel::VeryHigh,
+            register: register_os_set_rot,
+        },
+        OsslFunc {
+            name: "osGetLinkColor",
+            level: OsslThreatLevel::None,
+            register: register_os_get_link_color,
+        },
+        OsslFunc {
+            name: "osKey2Name",
+            level: OsslThreatLevel::Low,
+            register: register_os_key2name,
+        },
+        OsslFunc {
+            name: "osAvatarName2Key",
+            level: OsslThreatLevel::Low,
+            register: register_os_avatar_name2key,
+        },
+        OsslFunc {
+            name: "osGetAvatarHomeURI",
+            level: OsslThreatLevel::Low,
+            register: register_os_get_avatar_home_uri,
+        },
+        OsslFunc {
+            name: "osListenRegex",
+            level: OsslThreatLevel::None,
+            register: register_os_listen_regex,
+        },
     ]
 }
 
@@ -105,7 +217,10 @@ fn register_os_agent_save_appearance(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>
     lua.globals().set("osAgentSaveAppearance", f)
 }
 
-fn register_os_get_region_map_texture(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+fn register_os_get_region_map_texture(
+    lua: &Lua,
+    ctx: &Arc<RwLock<ScriptContext>>,
+) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, _region_name: String| {
         let c = ctx.read();
@@ -131,41 +246,52 @@ fn register_os_get_inertia_data(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> 
 
 fn register_os_set_inertia(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
-    let f = lua.create_function(move |_, (_mass, _com, _principal_axes, _rot): (f64, String, String, String)| {
-        let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, "osSetInertia called (stub)");
-        Ok(())
-    })?;
+    let f = lua.create_function(
+        move |_, (_mass, _com, _principal_axes, _rot): (f64, String, String, String)| {
+            let c = ctx.read();
+            tracing::debug!(script_id = %c.script_id, "osSetInertia called (stub)");
+            Ok(())
+        },
+    )?;
     lua.globals().set("osSetInertia", f)
 }
 
 fn register_os_set_inertia_as_box(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
-    let f = lua.create_function(move |_, (_mass, _box_size, _com, _rot): (f64, String, String, String)| {
-        let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, "osSetInertiaAsBox called (stub)");
-        Ok(())
-    })?;
+    let f = lua.create_function(
+        move |_, (_mass, _box_size, _com, _rot): (f64, String, String, String)| {
+            let c = ctx.read();
+            tracing::debug!(script_id = %c.script_id, "osSetInertiaAsBox called (stub)");
+            Ok(())
+        },
+    )?;
     lua.globals().set("osSetInertiaAsBox", f)
 }
 
 fn register_os_set_inertia_as_sphere(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
-    let f = lua.create_function(move |_, (_mass, _radius, _com, _rot): (f64, f64, String, String)| {
-        let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, "osSetInertiaAsSphere called (stub)");
-        Ok(())
-    })?;
+    let f = lua.create_function(
+        move |_, (_mass, _radius, _com, _rot): (f64, f64, String, String)| {
+            let c = ctx.read();
+            tracing::debug!(script_id = %c.script_id, "osSetInertiaAsSphere called (stub)");
+            Ok(())
+        },
+    )?;
     lua.globals().set("osSetInertiaAsSphere", f)
 }
 
-fn register_os_set_inertia_as_cylinder(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+fn register_os_set_inertia_as_cylinder(
+    lua: &Lua,
+    ctx: &Arc<RwLock<ScriptContext>>,
+) -> LuaResult<()> {
     let ctx = ctx.clone();
-    let f = lua.create_function(move |_, (_mass, _radius, _length, _com, _rot): (f64, f64, f64, String, String)| {
-        let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, "osSetInertiaAsCylinder called (stub)");
-        Ok(())
-    })?;
+    let f = lua.create_function(
+        move |_, (_mass, _radius, _length, _com, _rot): (f64, f64, f64, String, String)| {
+            let c = ctx.read();
+            tracing::debug!(script_id = %c.script_id, "osSetInertiaAsCylinder called (stub)");
+            Ok(())
+        },
+    )?;
     lua.globals().set("osSetInertiaAsCylinder", f)
 }
 
@@ -197,7 +323,10 @@ fn register_os_sit_on_link(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaRe
 // Misc
 // ---------------------------------------------------------------------------
 
-fn register_os_clear_object_animations(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+fn register_os_clear_object_animations(
+    lua: &Lua,
+    ctx: &Arc<RwLock<ScriptContext>>,
+) -> LuaResult<()> {
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, ()| {
         let c = ctx.read();
@@ -339,10 +468,19 @@ fn register_os_get_avatar_home_uri(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) 
 
 fn register_os_listen_regex(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
     let ctx = ctx.clone();
-    let f = lua.create_function(move |_, (_channel, _name, _key, _regex, _regex_bitfield): (i32, String, String, String, i32)| {
-        let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, "osListenRegex called (stub)");
-        Ok(-1i32)
-    })?;
+    let f = lua.create_function(
+        move |_,
+              (_channel, _name, _key, _regex, _regex_bitfield): (
+            i32,
+            String,
+            String,
+            String,
+            i32,
+        )| {
+            let c = ctx.read();
+            tracing::debug!(script_id = %c.script_id, "osListenRegex called (stub)");
+            Ok(-1i32)
+        },
+    )?;
     lua.globals().set("osListenRegex", f)
 }

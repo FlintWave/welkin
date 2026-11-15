@@ -11,9 +11,9 @@ use std::path::Path;
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
+use crate::ArchiveError;
 use crate::oar_read::OarLoadOptions;
 use crate::oar_write::OarWriteOptions;
-use crate::ArchiveError;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -38,10 +38,7 @@ pub enum ArchiveEvent {
         request_id: Uuid,
     },
     /// An OAR save completed successfully.
-    SaveCompleted {
-        path: String,
-        request_id: Uuid,
-    },
+    SaveCompleted { path: String, request_id: Uuid },
     /// An OAR save failed.
     SaveFailed {
         path: String,
@@ -49,15 +46,9 @@ pub enum ArchiveEvent {
         error: String,
     },
     /// An OAR load has started.
-    LoadStarted {
-        path: String,
-        request_id: Uuid,
-    },
+    LoadStarted { path: String, request_id: Uuid },
     /// An OAR load completed successfully.
-    LoadCompleted {
-        path: String,
-        request_id: Uuid,
-    },
+    LoadCompleted { path: String, request_id: Uuid },
     /// An OAR load failed.
     LoadFailed {
         path: String,
@@ -269,12 +260,9 @@ impl ArchiverModule {
                             "--rotation requires a degrees value".to_string(),
                         ));
                     }
-                    let degrees: f32 = args[i]
-                        .parse()
-                        .map_err(|_| ArchiveError::Invalid(format!(
-                            "invalid rotation value: {}",
-                            args[i]
-                        )))?;
+                    let degrees: f32 = args[i].parse().map_err(|_| {
+                        ArchiveError::Invalid(format!("invalid rotation value: {}", args[i]))
+                    })?;
                     let clamped = degrees.clamp(-359.0, 359.0);
                     options.rotation = Some(clamped.to_radians());
                 }
@@ -286,14 +274,11 @@ impl ArchiverModule {
                         ));
                     }
                     let origin = parse_vector3(args[i])?;
-                    let existing_size = options
-                        .bounding_box
-                        .map(|(_, s)| s)
-                        .unwrap_or((
-                            self.region_size_x as f32,
-                            self.region_size_y as f32,
-                            f32::MAX,
-                        ));
+                    let existing_size = options.bounding_box.map(|(_, s)| s).unwrap_or((
+                        self.region_size_x as f32,
+                        self.region_size_y as f32,
+                        f32::MAX,
+                    ));
                     options.bounding_box = Some((origin, existing_size));
                 }
                 "--bounding-size" => {
@@ -384,13 +369,14 @@ impl ArchiverModule {
         }
         // Check the parent directory exists (if specified)
         let p = Path::new(path);
-        if let Some(parent) = p.parent() {
-            if !parent.as_os_str().is_empty() && !parent.exists() {
-                return Err(ArchiveError::Io(std::io::Error::new(
-                    std::io::ErrorKind::NotFound,
-                    format!("parent directory does not exist: {}", parent.display()),
-                )));
-            }
+        if let Some(parent) = p.parent()
+            && !parent.as_os_str().is_empty()
+            && !parent.exists()
+        {
+            return Err(ArchiveError::Io(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("parent directory does not exist: {}", parent.display()),
+            )));
         }
         Ok(())
     }
@@ -783,18 +769,14 @@ mod tests {
     #[test]
     fn parse_load_oar_legacy_forceterrain() {
         let module = make_module();
-        let (opts, _) = module
-            .parse_load_oar_command(&["--forceterrain"])
-            .unwrap();
+        let (opts, _) = module.parse_load_oar_command(&["--forceterrain"]).unwrap();
         assert!(opts.force_terrain);
     }
 
     #[test]
     fn parse_load_oar_legacy_forceparcels() {
         let module = make_module();
-        let (opts, _) = module
-            .parse_load_oar_command(&["--forceparcels"])
-            .unwrap();
+        let (opts, _) = module.parse_load_oar_command(&["--forceparcels"]).unwrap();
         assert!(opts.force_parcels);
     }
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use crate::terrain::{TerrainChannel, TERRAIN_PATCH_SIZE};
+use crate::terrain::{TERRAIN_PATCH_SIZE, TerrainChannel};
 
 pub const END_OF_PATCHES: u8 = 97;
 pub const STRIDE: u16 = 264;
@@ -86,7 +86,7 @@ impl PatchEncoder {
         if remainder != 0 {
             self.bit_offset += 8 - remainder;
         }
-        while self.buf.len() < (self.bit_offset + 7) / 8 {
+        while self.buf.len() < self.bit_offset.div_ceil(8) {
             self.buf.push(0);
         }
     }
@@ -198,14 +198,14 @@ pub fn encode_layer_data(terrain: &TerrainChannel, patches: &[(u32, u32)]) -> Ve
 
     for &(px, py) in patches {
         let mut heights = [0.0f32; 256];
-        let base_x = px * TERRAIN_PATCH_SIZE as u32;
-        let base_y = py * TERRAIN_PATCH_SIZE as u32;
+        let base_x = px * TERRAIN_PATCH_SIZE;
+        let base_y = py * TERRAIN_PATCH_SIZE;
 
-        for ly in 0..TERRAIN_PATCH_SIZE as u32 {
-            for lx in 0..TERRAIN_PATCH_SIZE as u32 {
+        for ly in 0..TERRAIN_PATCH_SIZE {
+            for lx in 0..TERRAIN_PATCH_SIZE {
                 let gx = base_x + lx;
                 let gy = base_y + ly;
-                heights[(ly * TERRAIN_PATCH_SIZE as u32 + lx) as usize] = terrain.get(gx, gy);
+                heights[(ly * TERRAIN_PATCH_SIZE + lx) as usize] = terrain.get(gx, gy);
             }
         }
 

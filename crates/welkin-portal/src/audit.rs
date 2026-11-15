@@ -27,14 +27,7 @@ impl AuditLog {
         }
     }
 
-    pub fn log_action(
-        &self,
-        staff_id: &str,
-        action: &str,
-        target: &str,
-        detail: &str,
-        ip: &str,
-    ) {
+    pub fn log_action(&self, staff_id: &str, action: &str, target: &str, detail: &str, ip: &str) {
         let entry = AuditEntry {
             id: uuid::Uuid::new_v4().to_string(),
             staff_id: staff_id.to_string(),

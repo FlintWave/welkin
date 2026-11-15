@@ -18,7 +18,9 @@ pub struct GridServiceState {
 }
 
 pub fn router(state: GridServiceState) -> Router {
-    Router::new().route("/grid", post(handle_grid)).with_state(state)
+    Router::new()
+        .route("/grid", post(handle_grid))
+        .with_state(state)
 }
 
 #[derive(Default)]
@@ -39,7 +41,6 @@ impl Form {
     fn num<T: std::str::FromStr + Default>(&self, key: &str) -> T {
         self.str(key).trim().parse().unwrap_or_default()
     }
-
 }
 
 fn url_decode(s: &str) -> String {
@@ -99,7 +100,10 @@ fn ok(success: bool, msg: &str) -> Response {
     if success {
         xml_response("<Result>Success</Result>")
     } else {
-        xml_response(&format!("<Result>Failure</Result><Message>{}</Message>", escape(msg)))
+        xml_response(&format!(
+            "<Result>Failure</Result><Message>{}</Message>",
+            escape(msg)
+        ))
     }
 }
 
@@ -113,9 +117,17 @@ fn region_xml(name: &str, r: &RegionRow) -> String {
     tag(&mut s, "regionName", &r.region_name);
     tag(&mut s, "flags", &r.flags.to_string());
     tag(&mut s, "serverIP", &r.server_ip);
-    tag(&mut s, "serverHttpPort", &r.server_http_port.unwrap_or(0).to_string());
+    tag(
+        &mut s,
+        "serverHttpPort",
+        &r.server_http_port.unwrap_or(0).to_string(),
+    );
     tag(&mut s, "serverURI", &r.server_uri);
-    tag(&mut s, "serverPort", &r.server_port.unwrap_or(0).to_string());
+    tag(
+        &mut s,
+        "serverPort",
+        &r.server_port.unwrap_or(0).to_string(),
+    );
     tag(&mut s, "regionMapTexture", &r.region_map_texture);
     tag(&mut s, "parcelMapTexture", &r.parcel_map_texture);
     tag(&mut s, "access", &r.access.to_string());
@@ -153,9 +165,19 @@ fn many(r: Result<Vec<RegionRow>, welkin_data::DataError>) -> Response {
 fn region_from_form(f: &Form) -> RegionRow {
     let loc_x: i32 = f.num("locX");
     let loc_y: i32 = f.num("locY");
-    let scope = if f.str("ScopeID").is_empty() { f.str("SCOPEID") } else { f.str("ScopeID") };
+    let scope = if f.str("ScopeID").is_empty() {
+        f.str("SCOPEID")
+    } else {
+        f.str("ScopeID")
+    };
     let zero = "00000000-0000-0000-0000-000000000000";
-    let or_zero = |s: &str| if s.is_empty() { zero.to_string() } else { s.to_string() };
+    let or_zero = |s: &str| {
+        if s.is_empty() {
+            zero.to_string()
+        } else {
+            s.to_string()
+        }
+    };
     let size_x: i32 = f.num("sizeX");
     let size_y: i32 = f.num("sizeY");
     RegionRow {
@@ -172,7 +194,11 @@ fn region_from_form(f: &Form) -> RegionRow {
         region_map_texture: or_zero(f.str("regionMapTexture")),
         server_http_port: Some(f.num("serverHttpPort")),
         owner_uuid: or_zero(f.str("owner_uuid")),
-        access: if f.get("access").is_some() { f.num("access") } else { 1 },
+        access: if f.get("access").is_some() {
+            f.num("access")
+        } else {
+            1
+        },
         scope_id: or_zero(scope),
         size_x: if size_x == 0 { 256 } else { size_x },
         size_y: if size_y == 0 { 256 } else { size_y },
@@ -229,16 +255,27 @@ async fn handle_grid(State(state): State<GridServiceState>, body: Bytes) -> Resp
         "get_regions_by_name" => {
             let max: usize = f.num("MAX");
             let pattern = format!("{}%", f.str("NAME"));
-            many(store.get_regions_by_name(scope, &pattern).await.map(|mut v| {
-                if max > 0 {
-                    v.truncate(max);
-                }
-                v
-            }))
+            many(
+                store
+                    .get_regions_by_name(scope, &pattern)
+                    .await
+                    .map(|mut v| {
+                        if max > 0 {
+                            v.truncate(max);
+                        }
+                        v
+                    }),
+            )
         }
         "get_region_range" => many(
             store
-                .get_regions_in_range(scope, f.num("XMIN"), f.num("XMAX"), f.num("YMIN"), f.num("YMAX"))
+                .get_regions_in_range(
+                    scope,
+                    f.num("XMIN"),
+                    f.num("XMAX"),
+                    f.num("YMIN"),
+                    f.num("YMAX"),
+                )
                 .await,
         ),
         "get_default_regions" => many(store.get_default_regions(scope).await),
