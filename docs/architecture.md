@@ -361,7 +361,8 @@ and 2 MEDIUM (role checks deferred, `expect()` in crypto); see
 
 `welkin-modules` holds the region modules (land, permissions, estate,
 inventory, attachments, chat, IM, world map, environment, avatar, entity
-transfer, framework). See `docs/region-modules-summary.md`.
+transfer, framework). See `docs/region-modules-summary.md`. To write your
+own module, see the [module development guide](module-development.md).
 
 | Component | Role |
 |---|---|
