@@ -2,13 +2,22 @@
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use clap::Parser;
+use tokio::net::UdpSocket;
+use tokio::sync::{Mutex, RwLock};
 use tracing::{error, info, warn};
 use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
 
 use opensim_config::Config;
 use opensim_data::DataPool;
+use opensim_msg::msgs::*;
+use opensim_msg::Msg;
+use opensim_net::dispatch::{HandleError, PacketContext, PacketDispatcher};
+use opensim_net::server::ClientSession;
 use opensim_scene::scene::{RegionInfo, Scene, SceneConfig};
 
 /// OpenSimulator Region Simulator
@@ -170,6 +179,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let udp_addr = SocketAddr::from(([0, 0, 0, 0], region_config.internal_port));
     let udp_server = opensim_net::server::LLUDPServer::bind(udp_addr).await?;
 
+    let udp_socket = udp_server.socket().clone();
+    let udp_clients = udp_server.clients().clone();
+
     let (msg_tx, msg_rx) = tokio::sync::mpsc::unbounded_channel();
     let udp_cancel = cancel.clone();
     let udp_handle = tokio::spawn(async move {
@@ -177,6 +189,26 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     info!(addr = %udp_addr, "LLUDP receive loop started");
+
+    // --- Message processing loop ---
+    let mut dispatcher = PacketDispatcher::new();
+    opensim_net::handlers::register_core_handlers(&mut dispatcher);
+
+    let process_cancel = cancel.clone();
+    let process_region = scene.region_info.clone();
+    let process_socket = udp_socket.clone();
+    let process_clients = udp_clients.clone();
+    let process_handle = tokio::spawn(async move {
+        process_messages(
+            msg_rx,
+            dispatcher,
+            process_socket,
+            process_clients,
+            process_region,
+            process_cancel,
+        )
+        .await;
+    });
 
     // --- Capability HTTP server ---
     let caps_port = region_config.internal_port.wrapping_add(1);
@@ -215,17 +247,155 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     cancel.cancel();
 
-    // Drop the receiver so the LLUDP task's sender will see closure.
-    drop(msg_rx);
-
     // Wait for background tasks to finish.
     let _ = udp_handle.await;
+    let _ = process_handle.await;
     let _ = caps_handle.await;
 
     scene.shutdown();
     info!("Region simulator shut down");
 
     Ok(())
+}
+
+type ClientMap = Arc<RwLock<std::collections::HashMap<SocketAddr, Arc<Mutex<ClientSession>>>>>;
+
+async fn process_messages(
+    mut msg_rx: tokio::sync::mpsc::UnboundedReceiver<(SocketAddr, opensim_msg::IncomingPacket)>,
+    dispatcher: PacketDispatcher,
+    socket: Arc<UdpSocket>,
+    clients: ClientMap,
+    region_info: RegionInfo,
+    cancel: CancellationToken,
+) {
+    loop {
+        let (src, pkt) = tokio::select! {
+            _ = cancel.cancelled() => break,
+            msg = msg_rx.recv() => match msg {
+                Some(m) => m,
+                None => break,
+            },
+        };
+
+        let client = { clients.read().await.get(&src).cloned() };
+        let (agent_id, session_id, circuit_code) = match &client {
+            Some(c) => {
+                let s = c.lock().await;
+                (s.agent_id, s.session_id, s.circuit_code)
+            }
+            None => (Uuid::nil(), Uuid::nil(), 0),
+        };
+
+        let ctx = PacketContext {
+            agent_id,
+            session_id,
+            circuit_code,
+            addr: src,
+        };
+
+        let msg_id = pkt.id;
+
+        match dispatcher.dispatch(&ctx, &pkt) {
+            Ok(()) => {}
+            Err(HandleError::Unhandled) => {
+                tracing::trace!(id = ?msg_id, from = %src, "unhandled message");
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, id = ?msg_id, "handler error");
+            }
+        }
+
+        if msg_id == CompleteAgentMovement::ID {
+            if let Some(client) = &client {
+                send_movement_complete(&socket, client, src, &region_info).await;
+            }
+        }
+    }
+}
+
+async fn send_movement_complete(
+    socket: &Arc<UdpSocket>,
+    client: &Arc<Mutex<ClientSession>>,
+    addr: SocketAddr,
+    region_info: &RegionInfo,
+) {
+    let mut session = client.lock().await;
+
+    let movement = AgentMovementComplete {
+        agent_data: agent_movement_complete::AgentData {
+            agent_id: session.agent_id,
+            session_id: session.session_id,
+        },
+        data: agent_movement_complete::Data {
+            position: glam::Vec3::new(128.0, 128.0, 25.0),
+            look_at: glam::Vec3::new(1.0, 0.0, 0.0),
+            region_handle: region_info.region_handle,
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_secs() as u32)
+                .unwrap_or(0),
+        },
+        sim_data: agent_movement_complete::SimData {
+            channel_version: b"OpenSimulator-Rust 0.1".to_vec(),
+        },
+    };
+
+    let (pkt, _seq) = session.circuit.send_msg(&movement, true);
+    if let Err(e) = socket.send_to(&pkt, addr).await {
+        tracing::warn!(error = %e, "failed to send AgentMovementComplete");
+        return;
+    }
+    info!(agent = %session.agent_id, "sent AgentMovementComplete");
+
+    let handshake = RegionHandshake {
+        region_info: region_handshake::RegionInfo {
+            region_flags: 0,
+            sim_access: 13, // Mature
+            sim_name: region_info.region_name.as_bytes().to_vec(),
+            sim_owner: Uuid::nil(),
+            is_estate_manager: false,
+            water_height: 20.0,
+            billable_factor: 0.0,
+            cache_id: Uuid::new_v4(),
+            terrain_base0: Uuid::nil(),
+            terrain_base1: Uuid::nil(),
+            terrain_base2: Uuid::nil(),
+            terrain_base3: Uuid::nil(),
+            terrain_detail0: Uuid::nil(),
+            terrain_detail1: Uuid::nil(),
+            terrain_detail2: Uuid::nil(),
+            terrain_detail3: Uuid::nil(),
+            terrain_start_height00: 10.0,
+            terrain_start_height01: 10.0,
+            terrain_start_height10: 10.0,
+            terrain_start_height11: 10.0,
+            terrain_height_range00: 60.0,
+            terrain_height_range01: 60.0,
+            terrain_height_range10: 60.0,
+            terrain_height_range11: 60.0,
+        },
+        region_info2: region_handshake::RegionInfo2 {
+            region_id: region_info.region_id,
+        },
+        region_info3: region_handshake::RegionInfo3 {
+            cpu_class_id: 0,
+            cpu_ratio: 0,
+            colo_name: Vec::new(),
+            product_sku: Vec::new(),
+            product_name: b"OpenSimulator-Rust".to_vec(),
+        },
+        region_info4: vec![region_handshake::RegionInfo4 {
+            region_flags_extended: 0,
+            region_protocols: 0,
+        }],
+    };
+
+    let (pkt, _seq) = session.circuit.send_msg(&handshake, true);
+    if let Err(e) = socket.send_to(&pkt, addr).await {
+        tracing::warn!(error = %e, "failed to send RegionHandshake");
+        return;
+    }
+    info!(agent = %session.agent_id, region = %region_info.region_name, "sent RegionHandshake");
 }
 
 /// Redacts credentials from a connection string for safe logging.

@@ -1,0 +1,18 @@
+[Region]
+RegionName = "Test Region"
+RegionLocX = 1000
+RegionLocY = 1000
+
+[Network]
+ExternalHostName = "127.0.0.1"
+InternalPort = 9000
+
+[DatabaseService]
+ConnectionString = "sqlite:region.db?mode=rwc"
+
+[GridService]
+GridServerURI = "http://127.0.0.1:8003"
+
+[Scene]
+PhysicsEnabled = false
+ScriptsEnabled = false

@@ -18,12 +18,13 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 clap = { workspace = true }
+opensim-msg = { path = "../opensim-msg" }
 tokio-util = { workspace = true }
 axum = { workspace = true }
+uuid = { workspace = true }
+glam = { workspace = true }
 
 [dev-dependencies]
-opensim-msg = { path = "../opensim-msg" }
-uuid = { workspace = true }
 
 [lints]
 workspace = true

@@ -2517,6 +2517,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "clap",
+ "glam 0.34.3",
  "opensim-caps",
  "opensim-config",
  "opensim-data",
