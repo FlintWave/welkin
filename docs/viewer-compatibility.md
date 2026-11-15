@@ -10,47 +10,47 @@ Current viewer compatibility status, updated as live testing progresses.
 | Viewer | Login | In-world | Status |
 |---|---|---|---|
 | Aurora Viewer | Yes | Partial | First connected 2026-11-14 |
-| Firestorm (OpenSim build) | Yes | Partial | Testing in progress |
+| Firestorm (OpenSim build) | Yes | Core features working | Tested 2026-11-14 |
 | LibreMetaverse bot | Yes | 13/13 tests pass | Automated test client |
 
 ## Firestorm session (2026-11-14)
 
 Tested with the Firestorm OpenSim build against a local Welkin grid
-(ROBUST + one region).
+(ROBUST + one region). Commits 053b903 through 079f043.
 
 ### Working
 
-- XMLRPC and LLSD login (LibreMetaverse 3.x sends LLSD, Firestorm sends XMLRPC)
+- XMLRPC and LLSD login (Firestorm sends XMLRPC, LibreMetaverse 3.x sends LLSD)
 - Circuit establishment (UseCircuitCode, CompleteAgentMovement, RegionHandshake)
-- Inventory panel with correct folder tree (16 categories)
-- Inventory caps: FetchInventoryDescendents2, FetchInventory2, FetchLib2, CreateInventoryCategory
+- WASD movement with walk, run and fly transitions
 - Chat send and receive (ChatFromViewer routed through ChatModule)
-- AgentUpdate and ViewerEffect flowing
+- Inventory panel with full folder tree (16 categories)
+- Inventory caps: FetchInventoryDescendents2, FetchInventory2, FetchLib2, CreateInventoryCategory
 - Baked texture upload (UploadBakedTexture cap, two-phase, stored in ROBUST)
+- Map and minimap via MapLayer cap (POST and GET)
+- Local teleport via map
+- Object creation (ObjectAdd with FullObjectUpdate broadcast)
+- Sit and stand on objects
+- Avatar profile viewing
+- Multi-user presence (new users see existing avatars)
+- AgentUpdate and ViewerEffect flowing
 - PacketAck processing (server clears acked packets)
-- ViewerAsset cap
-- GetDisplayNames cap
-- HomeLocation cap
-- map-server-url in login response
+- ViewerAsset, GetDisplayNames, HomeLocation caps
 - Region handle formula: `((loc_x * 256) << 32) | (loc_y * 256)`
 - ROBUST config separation (robust.toml for grid DB, welkin.toml for region DB)
 - Inventory creation idempotency guard
+- 22 HTTP capability handlers
+- 18 UDP packet handlers
 
-### In progress
+### Known limitations
 
-- Chat echo fixed (stub handler was masking real implementation, removed in commit 9d82a90)
-- Map display fixed (MapBlockRequest now returns region data, commit 9d82a90)
-- Avatar appearance: AgentSetAppearance handler added (commit f4ec89f), orange cloud expected to clear with populated inventory
-- 21 log-only stub handlers removed (commit 6f04835, -297 lines)
-- Awaiting re-test of chat, map, and avatar appearance in Firestorm
-
-### Not yet working
-
-- Local teleport (same-region)
+- Object editing (MultipleObjectUpdate and related packets)
+- Instant messaging
+- Inventory wear and rez
+- ~30 region modules written but not yet loaded
+- Script engine: Luau VM runs but no LSL compiler yet
+- Currency and economy: interface defined, not implemented
 - Cross-region teleport
-- Object editing (rez, modify, delete via viewer)
-- ViewerEffect relay to other clients
-- Movement direction and speed tuning
 
 ### Known viewer messages
 
@@ -88,24 +88,32 @@ The server handles both layouts via the `aurora-msg` crate.
 
 ## Capabilities
 
-19 capability handlers implemented:
+22 capability handlers implemented:
 
 | Cap | Status |
 |---|---|
-| Seed | Working |
+| AgentPreferences | Working |
+| CreateInventoryCategory | Working |
 | EventQueueGet | Working (25s long-poll) |
-| GetTexture | Proxied to ROBUST asset service |
+| FetchInventory2 | Wired to ROBUST xinventory |
+| FetchInventoryDescendents2 | Wired to ROBUST xinventory |
+| FetchLib2 | Working |
+| GetDisplayNames | Working |
 | GetMesh | Proxied to ROBUST asset service |
 | GetMesh2 | Proxied to ROBUST asset service |
-| ViewerAsset | Working |
-| FetchInventoryDescendents2 | Wired to ROBUST xinventory |
-| FetchInventory2 | Wired to ROBUST xinventory |
-| FetchLib2 | Working |
-| CreateInventoryCategory | Working |
-| UploadBakedTexture | Two-phase, stores in ROBUST |
-| GetDisplayNames | Working |
+| GetTexture | Proxied to ROBUST asset service |
 | HomeLocation | Working |
-| Upload caps (misc) | Return valid LLSD responses |
+| MapLayer | Working (POST and GET) |
+| NewFileAgentInventory | Working |
+| RegionInfo | Working |
+| SimulatorFeatures | Working |
+| UpdateAgentInformation | Working |
+| UpdateAgentLanguage | Working |
+| UpdateNotecardAgentInventory | Working |
+| UpdateScriptAgent | Working |
+| UploadBakedTexture | Two-phase, stores in ROBUST |
+| ViewerAsset | Working |
+| ViewerStats | Working |
 
 ## Protocol notes
 
@@ -124,3 +132,5 @@ The server handles both layouts via the `aurora-msg` crate.
 | `9d82a90` | Remove chat stub, fix MapBlockRequest, fix ChatFromViewer routing |
 | `6f04835` | Remove 21 log-only stub handlers (-297 lines) |
 | `f4ec89f` | AgentSetAppearance handler (orange cloud fix) |
+| `3d927ae` | Movement, teleport and object creation support |
+| `079f043` | Firestorm session completion (sit/stand, profiles, multi-user) |
