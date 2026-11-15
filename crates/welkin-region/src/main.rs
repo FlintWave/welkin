@@ -1070,7 +1070,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 source_type: 1,
                 chat_type: 1,
                 audible: 1,
-                position: [0.0, 0.0, 0.0],
+                position: glam::Vec3::ZERO,
                 message: b"Region shutting down".to_vec(),
             },
         };
