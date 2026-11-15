@@ -2527,6 +2527,8 @@ dependencies = [
  "opensim-physics-rapier",
  "opensim-runtime",
  "opensim-scene",
+ "opensim-services",
+ "reqwest 0.12.28",
  "tokio",
  "tokio-util",
  "tracing",

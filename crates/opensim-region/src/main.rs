@@ -158,19 +158,64 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let scene = Scene::new(region_info, region_config.scene_config);
     scene.start();
 
-    // --- Grid service registration (stub) ---
-    match region_config.grid_service_url {
+    // --- Grid service registration ---
+    let grid_reg = match region_config.grid_service_url {
         Some(ref url) => {
-            info!(
-                url = %url,
-                region = %scene.region_info.region_name,
-                "Grid service registration would happen here (not yet implemented)"
+            let caps_port = region_config.internal_port.wrapping_add(1);
+            let server_uri = format!(
+                "http://{}:{}/",
+                region_config.external_host_name, caps_port
             );
+            let zero_uuid = "00000000-0000-0000-0000-000000000000";
+            let loc_x = (region_config.region_loc_x * 256) as i32;
+            let loc_y = (region_config.region_loc_y * 256) as i32;
+            let region_row = opensim_data::grid::RegionRow {
+                uuid: scene.region_info.region_id.to_string(),
+                region_handle: (i64::from(loc_x) << 32) | i64::from(loc_y),
+                region_name: region_config.region_name.clone(),
+                region_secret: String::new(),
+                server_ip: region_config.external_host_name.clone(),
+                server_port: Some(region_config.internal_port as i32),
+                server_uri,
+                loc_x,
+                loc_y,
+                loc_z: 0,
+                region_map_texture: zero_uuid.to_string(),
+                server_http_port: Some(caps_port as i32),
+                owner_uuid: zero_uuid.to_string(),
+                access: 1,
+                scope_id: zero_uuid.to_string(),
+                size_x: 256,
+                size_y: 256,
+                flags: 9,
+                last_seen: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs() as i32)
+                    .unwrap_or(0),
+                principal_id: zero_uuid.to_string(),
+                token: Uuid::new_v4().to_string(),
+                parcel_map_texture: zero_uuid.to_string(),
+            };
+
+            let connector = Arc::new(
+                opensim_services::remote::grid::RemoteGridConnector::new(url),
+            );
+            let registration = opensim_services::registration::GridRegistration::new(
+                connector,
+                region_row,
+                reqwest::Client::new(),
+            );
+            match registration.startup().await {
+                Ok(()) => info!(region = %scene.region_info.region_name, "Registered with grid"),
+                Err(e) => warn!(error = %e, "Failed to register region with grid"),
+            }
+            Some(registration)
         }
         None => {
             warn!("No GridService URL configured; skipping grid registration");
+            None
         }
-    }
+    };
 
     // --- Cancellation token for coordinated shutdown ---
     let cancel = CancellationToken::new();
@@ -251,6 +296,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let _ = udp_handle.await;
     let _ = process_handle.await;
     let _ = caps_handle.await;
+
+    if let Some(ref reg) = grid_reg {
+        if let Err(e) = reg.shutdown().await {
+            warn!(error = %e, "Failed to deregister from grid");
+        }
+    }
 
     scene.shutdown();
     info!("Region simulator shut down");
