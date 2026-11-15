@@ -11,6 +11,7 @@
 - [Script engine](scripting.md)
 - [OSSL function reference](ossl.md)
 - [Extension modules](extensions.md)
+- [Module development guide](module-development.md)
 - [RealmWalker bot SDK](realmwalker.md)
 - [Decision log](decisions.md)
 
@@ -58,6 +59,8 @@
 
 # Operator documentation
 
+- [Quick start](quick-start.md)
+- [Configuration reference](configuration.md)
 - [ROBUST grid services server](robust-server.md)
 - [Test grid deployment](test-grid-deployment.md)
 - [Container deployment](container-guide.md)
