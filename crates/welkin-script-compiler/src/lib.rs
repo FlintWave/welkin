@@ -3,6 +3,10 @@
 //!
 //! This crate defines the LSL type system used by both the compiler and runtime.
 
+pub mod ast;
+pub mod lexer;
+pub mod parser;
+
 use std::fmt;
 
 /// The primitive types available in LSL (Linden Scripting Language).
