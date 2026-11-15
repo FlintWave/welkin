@@ -58,7 +58,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     config.apply_env_overrides();
     config.resolve_substitutions()?;
 
-    let conn_str = config.get_string_or("DatabaseService", "ConnectionString", "sqlite:robust.db");
+    let conn_str = config.get_string_or("DatabaseService", "RobustConnectionString",
+        &config.get_string_or("DatabaseService", "ConnectionString", "sqlite:robust.db"));
     info!(url = %redact_connection_string(&conn_str), "Connecting to database");
     let pool = DataPool::connect(&conn_str).await?;
     info!("Database connection established");

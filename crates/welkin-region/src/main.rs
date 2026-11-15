@@ -85,7 +85,8 @@ impl RegionConfig {
         let internal_port = config.get_i64_or("Network", "InternalPort", 9000) as u16;
 
         let database_url =
-            config.get_string_or("DatabaseService", "ConnectionString", "sqlite:region.db");
+            config.get_string_or("DatabaseService", "RegionConnectionString",
+                &config.get_string_or("DatabaseService", "ConnectionString", "sqlite:region.db"));
 
         let grid_service_url = config
             .get_string("GridService", "GridServerURI")
