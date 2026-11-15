@@ -13,17 +13,17 @@
 
 ## Phase 2: Semantic Analysis + Transpiler (P0)
 
-- [ ] Implement scope resolution — global scope (variables + functions), per-function/event local scope, block scoping for for-loop variables, no nested function definitions in LSL
-- [ ] Implement type checking — verify operand types for all operators, check function call argument counts and types, verify event parameter signatures match LSL spec, check assignment type compatibility
-- [ ] Implement implicit cast insertion — insert conversion nodes in AST per LSL cast rules (integer→float, string↔key, all types→string in string context)
-- [ ] Implement constant folding — evaluate constant integer/float expressions at compile time, fold constant string concatenation, resolve constant vector/rotation literals
-- [ ] Implement Luau code generator — emit state dispatch table, emit event handler functions, emit global variables with default initializers, emit global function definitions
-- [ ] Generate type coercion runtime helpers — __int2float, __float2int, __vec2str, __rot2str, __str2key, __key2str, __vec_add, __vec_sub, __vec_mul, __vec_cross, __rot_mul, __vec_rot (vector * rotation), register all in Luau environment
-- [ ] Generate vector/rotation operations — vector +, -, *, /, %, ==, != with component-wise semantics; rotation *, == between rotations; vector * rotation for rotation application; vector . (dot product via __vec_dot); vector % (cross product via __vec_cross)
-- [ ] Generate list operations — list + list (concatenation), list + value (append), list == list (length comparison per LSL spec), llList2Integer/Float/String/Key/Vector/Rotation as builtins, llListSort, llListFindList, llList2ListStrided
-- [ ] Generate string operations — string + with type coercion (integer/float/vector/rotation auto-convert), comparison operators on strings (lexicographic)
-- [ ] Generate control flow — if/else, for/while/do-while as Luau equivalents, jump/label as goto (Luau supports goto), state change as current_state assignment + state_exit + state_entry firing
-- [ ] Add transpiler tests — compile LSL corpus from OpenSim test scripts, verify generated Luau executes correctly, test all implicit cast paths, test state transitions
+- [x] Implement scope resolution — global scope (variables + functions), per-function/event local scope, block scoping for for-loop variables, no nested function definitions in LSL
+- [x] Implement type checking — verify operand types for all operators, check function call argument counts and types, verify event parameter signatures match LSL spec, check assignment type compatibility
+- [x] Implement implicit cast insertion — insert conversion nodes in AST per LSL cast rules (integer→float, string↔key, all types→string in string context)
+- [x] Implement constant folding — evaluate constant integer/float expressions at compile time, fold constant string concatenation, resolve constant vector/rotation literals
+- [x] Implement Luau code generator — emit state dispatch table, emit event handler functions, emit global variables with default initializers, emit global function definitions
+- [x] Generate type coercion runtime helpers — __int2float, __float2int, __vec2str, __rot2str, __str2key, __key2str, __vec_add, __vec_sub, __vec_mul, __vec_cross, __rot_mul, __vec_rot (vector * rotation), register all in Luau environment
+- [x] Generate vector/rotation operations — vector +, -, *, /, %, ==, != with component-wise semantics; rotation *, == between rotations; vector * rotation for rotation application; vector . (dot product via __vec_dot); vector % (cross product via __vec_cross)
+- [x] Generate list operations — list + list (concatenation), list + value (append), list == list (length comparison per LSL spec), llList2Integer/Float/String/Key/Vector/Rotation as builtins, llListSort, llListFindList, llList2ListStrided
+- [x] Generate string operations — string + with type coercion (integer/float/vector/rotation auto-convert), comparison operators on strings (lexicographic)
+- [x] Generate control flow — if/else, for/while/do-while as Luau equivalents, jump/label as goto (Luau supports goto), state change as current_state assignment + state_exit + state_entry firing
+- [x] Add transpiler tests — compile LSL corpus from OpenSim test scripts, verify generated Luau executes correctly, test all implicit cast paths, test state transitions
 
 ## Phase 3: Region Integration (P0)
 

@@ -3,9 +3,12 @@
 //!
 //! This crate defines the LSL type system used by both the compiler and runtime.
 
+pub mod analyzer;
 pub mod ast;
+pub mod codegen;
 pub mod lexer;
 pub mod parser;
+pub mod runtime;
 
 use std::fmt;
 
@@ -141,7 +144,6 @@ mod tests {
     #[test]
     fn value_type_round_trip() {
         assert_eq!(LslValue::Integer(42).lsl_type(), LslType::Integer);
-        #[allow(clippy::approx_constant)]
         assert_eq!(LslValue::Float(3.14).lsl_type(), LslType::Float);
         assert_eq!(LslValue::String("hello".into()).lsl_type(), LslType::String);
         assert_eq!(
