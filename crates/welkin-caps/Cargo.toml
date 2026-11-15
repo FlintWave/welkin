@@ -8,6 +8,7 @@ publish.workspace = true
 [dependencies]
 welkin-types = { path = "../welkin-types" }
 welkin-llsd = { path = "../welkin-llsd" }
+welkin-script-compiler = { path = "../welkin-script-compiler" }
 axum = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }

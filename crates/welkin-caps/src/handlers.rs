@@ -228,11 +228,50 @@ pub async fn update_notecard_agent_inventory(body: Bytes) -> Response {
 
 pub async fn update_script_agent(body: Bytes) -> Response {
     log_upload_body("UpdateScriptAgent", &body);
-    let new_asset = Uuid::new_v4().to_string();
-    let mut map = Map::new();
-    map.insert("state".into(), Llsd::String("complete".into()));
-    map.insert("new_asset".into(), Llsd::String(new_asset));
-    llsd_response(Llsd::Map(map))
+
+    // The viewer first POSTs LLSD metadata, then the raw script source in a
+    // second request to the uploader URL.  The current single-endpoint stub
+    // receives the LLSD metadata.  If the body is valid LLSD, treat it as the
+    // metadata step and return an uploader (ourselves for now).  If it looks
+    // like raw text, attempt LSL compilation.
+    let is_llsd = from_xml(&body).is_ok();
+    if is_llsd {
+        // Metadata step — return "complete" with a new asset id.
+        // Full uploader URL routing is deferred; the viewer retries here.
+        let new_asset = Uuid::new_v4().to_string();
+        let mut map = Map::new();
+        map.insert("state".into(), Llsd::String("complete".into()));
+        map.insert("new_asset".into(), Llsd::String(new_asset));
+        return llsd_response(Llsd::Map(map));
+    }
+
+    // Raw source upload — compile LSL → Luau
+    let source = String::from_utf8_lossy(&body);
+    match welkin_script_compiler::compile_lsl(&source) {
+        Ok(luau) => {
+            let new_asset = Uuid::new_v4().to_string();
+            tracing::info!(
+                asset = %new_asset,
+                luau_len = luau.len(),
+                "UpdateScriptAgent: compiled successfully"
+            );
+            let mut map = Map::new();
+            map.insert("state".into(), Llsd::String("complete".into()));
+            map.insert("new_asset".into(), Llsd::String(new_asset));
+            llsd_response(Llsd::Map(map))
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "UpdateScriptAgent: compilation failed");
+            let new_asset = Uuid::new_v4().to_string();
+            let mut map = Map::new();
+            map.insert("state".into(), Llsd::String("complete".into()));
+            map.insert("new_asset".into(), Llsd::String(new_asset));
+            map.insert("errors".into(), Llsd::Array(vec![
+                Llsd::String(e.to_string()),
+            ]));
+            llsd_response(Llsd::Map(map))
+        }
+    }
 }
 
 #[derive(Debug, Default)]

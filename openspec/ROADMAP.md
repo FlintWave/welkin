@@ -112,6 +112,7 @@ when its phase starts, so later rows are placeholders until then.
 | 3.1 | Object editing packets (~15 handlers): MultipleObjectUpdate, Select, rez/derez | `object-interaction` | proposal |
 | 3.2 | Instant messaging, ViewerEffect relay, UUID lookups, sitting | `viewer-messaging` | proposal |
 | 3.3 | Load and wire ~30 existing but unregistered region modules | `module-activation` | proposal |
+| 4.1 | LSL parser, LSL→Luau transpiler, region integration, builtin completion | `lsl-compiler` | in progress |
 | — | Viewer session validation (Aurora + Firestorm) | `firestorm-session` | in progress (round 2) |
 
 ## Order and dependencies

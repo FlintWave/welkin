@@ -15,6 +15,8 @@ welkin-physics-rapier = { path = "../welkin-physics-rapier" }
 welkin-modules = { path = "../welkin-modules" }
 welkin-data = { path = "../welkin-data" }
 welkin-prim = { path = "../welkin-prim" }
+welkin-script-vm = { path = "../welkin-script-vm" }
+welkin-script-compiler = { path = "../welkin-script-compiler" }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -26,6 +28,8 @@ uuid = { workspace = true }
 glam = { workspace = true }
 welkin-llsd = { path = "../welkin-llsd" }
 welkin-services = { path = "../welkin-services" }
+parking_lot = { workspace = true }
+serde_json = { workspace = true }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 
 [dev-dependencies]

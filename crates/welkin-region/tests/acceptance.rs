@@ -15,7 +15,12 @@ use tokio::net::UdpSocket;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
-use welkin_caps::handlers::cap_routes;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use welkin_caps::handlers::{
+    AssetServiceState, BakeUploadState, InventoryProxyState, cap_routes,
+};
 use welkin_caps::server::CapabilityServer;
 use welkin_msg::{Msg, build_packet};
 use welkin_net::server::LLUDPServer;
@@ -83,6 +88,20 @@ async fn udp_use_circuit_code_round_trip() {
     let _ = run_handle.await;
 }
 
+fn test_cap_state() -> (AssetServiceState, InventoryProxyState, BakeUploadState) {
+    let client = reqwest::Client::new();
+    (
+        AssetServiceState { client: client.clone(), asset_url: "http://localhost:99999".into() },
+        InventoryProxyState { client: client.clone(), inventory_url: "http://localhost:99999".into() },
+        BakeUploadState {
+            client,
+            asset_url: "http://localhost:99999".into(),
+            caps_url: "http://localhost:99999".into(),
+            pending: Arc::new(RwLock::new(HashMap::new())),
+        },
+    )
+}
+
 // ---------------------------------------------------------------------------
 // 2. Caps HTTP — SimulatorFeatures & friends over a real TCP listener
 // ---------------------------------------------------------------------------
@@ -94,7 +113,8 @@ async fn caps_http_simulator_features() {
     // Build the same router the region binary uses.
     let cap_server = CapabilityServer::new();
     let mut router: Router = cap_server.into_router();
-    for (name, method_router) in cap_routes() {
+    let (a, i, b) = test_cap_state();
+    for (name, method_router) in cap_routes(a, i, b) {
         router = router.route(&format!("/{name}"), method_router);
     }
 
@@ -206,7 +226,8 @@ async fn shutdown_coordination() {
     // -- HTTP server --
     let cap_server = CapabilityServer::new();
     let mut caps_router: Router = cap_server.into_router();
-    for (name, method_router) in cap_routes() {
+    let (a, i, b) = test_cap_state();
+    for (name, method_router) in cap_routes(a, i, b) {
         caps_router = caps_router.route(&format!("/{name}"), method_router);
     }
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

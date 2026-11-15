@@ -27,20 +27,20 @@
 
 ## Phase 3: Region Integration (P0)
 
-- [ ] Wire ScriptScheduler.tick() into region main loop — call per frame with instruction budget, respect scripts_enabled config flag
-- [ ] Implement script compile on rez — when RezObject places object with script inventory items, fetch script asset, compile LSL→Luau→bytecode, create ScriptInstance, register with scheduler
-- [ ] Implement script compile on edit — UpdateScriptAgent cap receives new source, compile, hot-swap ScriptInstance in scheduler
-- [ ] Wire touch events — ObjectGrab→touch_start, ObjectGrabUpdate→touch, ObjectDeGrab→touch_end with detected face/position/key
-- [ ] Wire chat events — ChatFromViewer→listen event dispatch via channel matching (llListen registrations), implement llListen/llListenRemove/llListenControl
-- [ ] Wire collision events — physics engine collision callbacks → collision_start/collision/collision_end with detected key/name/position
-- [ ] Wire timer events — llSetTimerEvent registers with ScriptScheduler timer heap (already exists), fire timer() event
-- [ ] Wire changed events — inventory change, region change, link change, owner change → changed() event with change flags
-- [ ] Wire money event — MoneyModule.OnObjectPaid → money() event on target object's scripts
-- [ ] Wire link_message — llMessageLinked → link_message() event dispatch to target prims in link set
-- [ ] Wire sensor events — llSensor/llSensorRepeat → sensor()/no_sensor() with detected object list, implement llDetectedName/Key/Pos/Rot/Vel/Type/Owner/Group
-- [ ] Wire HTTP events — llHTTPRequest → http_response() event with status/body, implement HTTP request cap for inbound http_request() events
-- [ ] Implement script state persistence — serialize ScriptInstance state (globals + current_state + listen registrations + timers) for derez/region-crossing, restore on rez
-- [ ] Implement script reset — llResetScript and llResetOtherScript clear state and fire state_entry, viewer "Reset Scripts" button triggers reset for all scripts in object
+- [x] Wire ScriptScheduler.tick() into region main loop — call per frame with instruction budget, respect scripts_enabled config flag
+- [x] Implement script compile on rez — when RezObject places object with script inventory items, fetch script asset, compile LSL→Luau→bytecode, create ScriptInstance, register with scheduler
+- [x] Implement script compile on edit — UpdateScriptAgent cap receives new source, compile, hot-swap ScriptInstance in scheduler
+- [x] Wire touch events — ObjectGrab→touch_start, ObjectGrabUpdate→touch, ObjectDeGrab→touch_end with detected face/position/key
+- [x] Wire chat events — ChatFromViewer→listen event dispatch via channel matching (llListen registrations), implement llListen/llListenRemove/llListenControl
+- [x] Wire collision events — physics engine collision callbacks → collision_start/collision/collision_end with detected key/name/position
+- [x] Wire timer events — llSetTimerEvent registers with ScriptScheduler timer heap (already exists), fire timer() event
+- [x] Wire changed events — inventory change, region change, link change, owner change → changed() event with change flags
+- [x] Wire money event — MoneyModule.OnObjectPaid → money() event on target object's scripts
+- [x] Wire link_message — llMessageLinked → link_message() event dispatch to target prims in link set
+- [x] Wire sensor events — llSensor/llSensorRepeat → sensor()/no_sensor() with detected object list, implement llDetectedName/Key/Pos/Rot/Vel/Type/Owner/Group
+- [x] Wire HTTP events — llHTTPRequest → http_response() event with status/body, implement HTTP request cap for inbound http_request() events
+- [x] Implement script state persistence — serialize ScriptInstance state (globals + current_state + listen registrations + timers) for derez/region-crossing, restore on rez
+- [x] Implement script reset — llResetScript and llResetOtherScript clear state and fire state_entry, viewer "Reset Scripts" button triggers reset for all scripts in object
 
 ## Phase 4: Builtin Completion (P1)
 

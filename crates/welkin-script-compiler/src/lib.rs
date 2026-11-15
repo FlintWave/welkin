@@ -12,6 +12,38 @@ pub mod runtime;
 
 use std::fmt;
 
+/// Compile LSL source to Luau source in one step (lex → parse → analyze → codegen).
+pub fn compile_lsl(source: &str) -> Result<String, CompileError> {
+    let tokens = lexer::lex(source).map_err(|e| CompileError::Lex(e.to_string()))?;
+    let mut script =
+        parser::Parser::new(tokens)
+            .parse()
+            .map_err(|errs| CompileError::Parse(errs.iter().map(|e| e.to_string()).collect()))?;
+    analyzer::Analyzer::new()
+        .analyze(&mut script)
+        .map_err(|errs| CompileError::Analysis(errs.iter().map(|e| e.to_string()).collect()))?;
+    Ok(codegen::CodeGen::generate(&script))
+}
+
+#[derive(Debug, Clone)]
+pub enum CompileError {
+    Lex(String),
+    Parse(Vec<String>),
+    Analysis(Vec<String>),
+}
+
+impl fmt::Display for CompileError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Lex(e) => write!(f, "lex error: {e}"),
+            Self::Parse(errs) => write!(f, "parse errors: {}", errs.join("; ")),
+            Self::Analysis(errs) => write!(f, "analysis errors: {}", errs.join("; ")),
+        }
+    }
+}
+
+impl std::error::Error for CompileError {}
+
 /// The primitive types available in LSL (Linden Scripting Language).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LslType {

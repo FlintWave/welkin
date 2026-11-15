@@ -33,6 +33,8 @@ pub struct ScriptContext {
     pub position: [f64; 3],
     pub rotation: [f64; 4],
     pub scale: [f64; 3],
+    pub link_num: i32,
+    pub event_sender: Option<std::sync::mpsc::Sender<(Uuid, crate::ScriptEvent)>>,
 }
 
 impl Default for ScriptContext {
@@ -46,6 +48,8 @@ impl Default for ScriptContext {
             position: [0.0; 3],
             rotation: [0.0, 0.0, 0.0, 1.0],
             scale: [1.0, 1.0, 1.0],
+            link_num: 0,
+            event_sender: None,
         }
     }
 }
@@ -80,6 +84,8 @@ mod tests {
             position: [128.0, 128.0, 25.0],
             rotation: [0.0, 0.0, 0.0, 1.0],
             scale: [1.0, 1.0, 1.0],
+            link_num: 0,
+            event_sender: None,
         }));
         register_all(&lua, &ctx).expect("register_all should succeed");
         (lua, ctx)

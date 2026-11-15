@@ -46,6 +46,7 @@ use welkin_scene::part::SceneObjectPart;
 use welkin_scene::presence::{PresenceType, ScenePresence};
 use welkin_scene::scene::{RegionInfo, Scene, SceneConfig};
 use welkin_msg::welkin_types::PermissionMask;
+use welkin_script_vm::{ScriptEvent, ScriptScheduler};
 
 /// OpenSimulator Region Simulator
 #[derive(Parser, Debug)]
@@ -290,6 +291,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         info!(count = registry.module_count(), "modules initialised");
     }
 
+    // --- Script scheduler ---
+    let script_scheduler = Arc::new(parking_lot::Mutex::new(ScriptScheduler::new(10_000)));
+    let scripts_enabled = scene.config.scripts_enabled;
+    info!(scripts_enabled, "script scheduler initialised");
+
+    // Event subscriber tasks are spawned below, after the CancellationToken.
+
     // --- Grid service registration ---
     let grid_reg = match region_config.grid_service_url {
         Some(ref url) => {
@@ -380,6 +388,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let process_clients = udp_clients.clone();
     let process_eqs = event_queues.clone();
     let process_caps_base = caps_base.clone();
+    let process_scheduler = Arc::clone(&script_scheduler);
     let process_handle = tokio::spawn(async move {
         process_messages(
             msg_rx,
@@ -390,6 +399,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             process_eqs,
             process_caps_base,
             process_cancel,
+            process_scheduler,
+            scripts_enabled,
         )
         .await;
     });
@@ -449,9 +460,93 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             .ok();
     });
 
+    // --- Script event subscribers ---
+    // Money events → LSL money() handler
+    {
+        let sched = Arc::clone(&script_scheduler);
+        let mut money_rx = scene_ref.events.on_money_received.subscribe();
+        let money_cancel = cancel.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = money_cancel.cancelled() => break,
+                    Ok(evt) = money_rx.recv() => {
+                        sched.lock().post_event_to_prim(
+                            evt.object_id,
+                            ScriptEvent::Money { agent_id: evt.agent_id, amount: evt.amount },
+                        );
+                    }
+                }
+            }
+        });
+    }
+    // Changed events: object added → CHANGED_REGION (0x100) to scripts on that object
+    {
+        let sched = Arc::clone(&script_scheduler);
+        let mut added_rx = scene_ref.events.on_object_added.subscribe();
+        let added_cancel = cancel.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = added_cancel.cancelled() => break,
+                    Ok(evt) = added_rx.recv() => {
+                        sched.lock().post_event_to_prim(
+                            evt.object_id,
+                            ScriptEvent::Changed { change: 0x100 },
+                        );
+                    }
+                }
+            }
+        });
+    }
+    // Land change → CHANGED_REGION to all scripts
+    {
+        let sched = Arc::clone(&script_scheduler);
+        let mut land_rx = scene_ref.events.on_land_change.subscribe();
+        let land_cancel = cancel.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = land_cancel.cancelled() => break,
+                    Ok(_evt) = land_rx.recv() => {
+                        sched.lock().broadcast_event(
+                            ScriptEvent::Changed { change: 0x100 },
+                        );
+                    }
+                }
+            }
+        });
+    }
+    // Object removal → clean up scripts
+    {
+        let sched = Arc::clone(&script_scheduler);
+        let mut removed_rx = scene_ref.events.on_object_removed.subscribe();
+        let removed_cancel = cancel.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = removed_cancel.cancelled() => break,
+                    Ok(evt) = removed_rx.recv() => {
+                        let mut s = sched.lock();
+                        let to_remove = s.scripts_on_prim(&evt.object_id);
+                        for sid in to_remove {
+                            s.remove_script(sid);
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // --- Link message channel for builtin → scheduler event routing ---
+    let (link_msg_tx, link_msg_rx) =
+        std::sync::mpsc::channel::<(Uuid, ScriptEvent)>();
+    let _link_msg_tx = Arc::new(link_msg_tx);
+
     // --- Heartbeat loop ---
     let heartbeat_cancel = cancel.clone();
     let heartbeat_scene = Arc::clone(&scene);
+    let heartbeat_scheduler = Arc::clone(&script_scheduler);
     let frame_time_ms = (frame_time * 1000.0) as u64;
     let heartbeat_handle = tokio::spawn(async move {
         let mut interval =
@@ -461,6 +556,29 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 _ = heartbeat_cancel.cancelled() => break,
                 _ = interval.tick() => {
                     let _stats = heartbeat_scene.tick();
+                    if scripts_enabled {
+                        // Drain any link_message events from builtins
+                        while let Ok((target_prim, event)) = link_msg_rx.try_recv() {
+                            heartbeat_scheduler.lock().post_event_to_prim(target_prim, event);
+                        }
+                        let errors = heartbeat_scheduler.lock().tick();
+                        for (script_id, err) in errors {
+                            tracing::warn!(script = %script_id, error = %err, "script execution error");
+                        }
+                        // Post collision events for physics actors that collided this frame
+                        let colliders = heartbeat_scene.get_top_colliders();
+                        if !colliders.is_empty() {
+                            let mut sched = heartbeat_scheduler.lock();
+                            for (local_id, _score) in colliders {
+                                if let Some(obj_uuid) = heartbeat_scene.get_object_by_local_id(local_id) {
+                                    sched.post_event_to_prim(
+                                        obj_uuid,
+                                        ScriptEvent::Collision { num_detected: 1 },
+                                    );
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -623,6 +741,8 @@ async fn process_messages(
     event_queues: EventQueueMap,
     caps_base: String,
     cancel: CancellationToken,
+    script_scheduler: Arc<parking_lot::Mutex<ScriptScheduler>>,
+    scripts_enabled: bool,
 ) {
     let mut last_agent_update: HashMap<Uuid, Instant> = HashMap::new();
     let mut last_anim: HashMap<Uuid, &'static str> = HashMap::new();
@@ -1436,7 +1556,7 @@ async fn process_messages(
                 .get_presence(&agent_id)
                 .map(|p| p.position)
                 .unwrap_or(glam::Vec3::ZERO);
-            let mut name_bytes = sender_name.into_bytes();
+            let mut name_bytes = sender_name.clone().into_bytes();
             name_bytes.push(0);
             let relay = ChatFromSimulator {
                 chat_data: chat_from_simulator::ChatData {
@@ -1455,6 +1575,17 @@ async fn process_messages(
                 let mut peer = peer_client.lock().await;
                 let (pkt_bytes, _) = peer.circuit.send_msg(&relay, true);
                 let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+            }
+
+            // Dispatch listen events to scripts on this channel
+            if scripts_enabled {
+                let channel = chat.chat_data.channel;
+                script_scheduler.lock().broadcast_event(ScriptEvent::Listen {
+                    channel,
+                    name: sender_name,
+                    id: agent_id,
+                    message: text,
+                });
             }
         }
 
@@ -1802,6 +1933,12 @@ async fn process_messages(
                     surface_count,
                     "ObjectGrab: touch_start"
                 );
+                if scripts_enabled {
+                    script_scheduler.lock().post_event_to_prim(
+                        uuid,
+                        ScriptEvent::Touch { agent_id },
+                    );
+                }
             } else {
                 warn!(local_id, "ObjectGrab: unknown local_id");
             }
@@ -1820,6 +1957,12 @@ async fn process_messages(
                 surface_count,
                 "ObjectGrabUpdate: touch"
             );
+            if scripts_enabled {
+                script_scheduler.lock().post_event_to_prim(
+                    object_id,
+                    ScriptEvent::TouchUpdate { agent_id },
+                );
+            }
         }
 
         // ---- ObjectDeGrab handler (touch_end) ----
@@ -1835,6 +1978,12 @@ async fn process_messages(
                     surface_count,
                     "ObjectDeGrab: touch_end"
                 );
+                if scripts_enabled {
+                    script_scheduler.lock().post_event_to_prim(
+                        uuid,
+                        ScriptEvent::TouchEnd { agent_id },
+                    );
+                }
             } else {
                 warn!(local_id, "ObjectDeGrab: unknown local_id");
             }
@@ -2097,6 +2246,12 @@ async fn process_messages(
             if let Some(obj) = scene.get_object(&obj_uuid) {
                 broadcast_full_object_update(&obj, scene.region_info.region_handle, &socket, &clients).await;
             }
+            if scripts_enabled {
+                script_scheduler.lock().post_event_to_prim(
+                    obj_uuid,
+                    ScriptEvent::OnRez { start_param: 0 },
+                );
+            }
             info!(
                 agent = %msg.agent_data.agent_id,
                 object = %obj_uuid,
@@ -2122,6 +2277,22 @@ async fn process_messages(
                         continue;
                     }
                 };
+                // Save script state before removal (for inventory persistence)
+                if scripts_enabled && destination != 1 {
+                    let sched = script_scheduler.lock();
+                    for sid in sched.scripts_on_prim(&uuid) {
+                        if let Some(inst) = sched.get_script(&sid) {
+                            match inst.save_state() {
+                                Ok(_state) => {
+                                    tracing::debug!(script = %sid, object = %uuid, "saved script state before derez");
+                                }
+                                Err(e) => {
+                                    tracing::warn!(script = %sid, error = %e, "failed to save script state before derez");
+                                }
+                            }
+                        }
+                    }
+                }
                 match destination {
                     1 => {
                         // TakeCopy: copy to inventory, leave in scene

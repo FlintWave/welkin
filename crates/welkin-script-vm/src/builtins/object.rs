@@ -197,6 +197,7 @@ mod tests {
             position: [10.0, 20.0, 30.0],
             rotation: [0.0, 0.0, 0.0, 1.0],
             scale: [1.0, 2.0, 3.0],
+            ..Default::default()
         }))
     }
 

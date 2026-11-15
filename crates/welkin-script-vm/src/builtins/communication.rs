@@ -131,6 +131,27 @@ pub fn register_communication(
         lua.globals().set("llListenControl", f)?;
     }
 
+    // llMessageLinked(link_num, num, str, id)
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(
+            move |_, (_link_num, num, str_val, id): (i32, i32, String, String)| {
+                let ctx = ctx.read();
+                if let Some(ref tx) = ctx.event_sender {
+                    let event = crate::ScriptEvent::LinkMessage {
+                        sender_num: ctx.link_num,
+                        num,
+                        str_val,
+                        id,
+                    };
+                    let _ = tx.send((ctx.prim_id, event));
+                }
+                Ok(())
+            },
+        )?;
+        lua.globals().set("llMessageLinked", f)?;
+    }
+
     Ok(())
 }
 
@@ -149,6 +170,8 @@ mod tests {
             position: [128.0, 128.0, 25.0],
             rotation: [0.0, 0.0, 0.0, 1.0],
             scale: [1.0, 1.0, 1.0],
+            link_num: 0,
+            event_sender: None,
         }))
     }
 

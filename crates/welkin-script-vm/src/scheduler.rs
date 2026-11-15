@@ -149,11 +149,48 @@ impl ScriptScheduler {
         }
     }
 
+    /// Post an event to every script attached to a given prim.
+    pub fn post_event_to_prim(&mut self, prim_id: Uuid, event: ScriptEvent) {
+        for inst in self.scripts.values_mut() {
+            if inst.prim_id == prim_id {
+                inst.post_event(event.clone());
+            }
+        }
+    }
+
     /// Post an event to every managed script.
     pub fn broadcast_event(&mut self, event: ScriptEvent) {
         for inst in self.scripts.values_mut() {
             inst.post_event(event.clone());
         }
+    }
+
+    pub fn scripts_on_prim(&self, prim_id: &Uuid) -> Vec<Uuid> {
+        self.scripts
+            .iter()
+            .filter(|(_, inst)| &inst.prim_id == prim_id)
+            .map(|(id, _)| *id)
+            .collect()
+    }
+
+    pub fn reset_script(&mut self, script_id: &Uuid) -> Result<(), VmError> {
+        if let Some(instance) = self.scripts.get_mut(script_id) {
+            instance.reset()?;
+        }
+        Ok(())
+    }
+
+    pub fn reset_prim_scripts(&mut self, prim_id: &Uuid) -> Vec<VmError> {
+        let ids: Vec<Uuid> = self.scripts_on_prim(prim_id);
+        let mut errors = Vec::new();
+        for id in ids {
+            if let Some(inst) = self.scripts.get_mut(&id)
+                && let Err(e) = inst.reset()
+            {
+                errors.push(e);
+            }
+        }
+        errors
     }
 
     /// Advance the scheduler by one tick:
@@ -382,6 +419,81 @@ mod tests {
         // The script should be in error state.
         let inst = sched.get_script(&id).unwrap();
         assert!(matches!(inst.state, ScriptInstanceState::Error(_)));
+
+        Ok(())
+    }
+
+    #[test]
+    fn post_event_to_prim_targets_prim() -> Result<(), VmError> {
+        let mut sched = ScriptScheduler::new(10_000);
+
+        let prim_a = Uuid::new_v4();
+        let prim_b = Uuid::new_v4();
+
+        let id1 = Uuid::new_v4();
+        let inst1 = ScriptInstance::new(id1, prim_a, TOUCH_SCRIPT, 0)?;
+        sched.add_script(inst1);
+
+        let id2 = Uuid::new_v4();
+        let inst2 = ScriptInstance::new(id2, prim_a, TIMER_SCRIPT, 0)?;
+        sched.add_script(inst2);
+
+        let id3 = Uuid::new_v4();
+        let inst3 = ScriptInstance::new(id3, prim_b, TOUCH_SCRIPT, 0)?;
+        sched.add_script(inst3);
+
+        sched.post_event_to_prim(prim_a, ScriptEvent::Touch { agent_id: Uuid::new_v4() });
+
+        assert!(sched.get_script(&id1).unwrap().has_pending_events());
+        assert!(sched.get_script(&id2).unwrap().has_pending_events());
+        assert!(!sched.get_script(&id3).unwrap().has_pending_events());
+
+        Ok(())
+    }
+
+    #[test]
+    fn scripts_on_prim_returns_correct_ids() -> Result<(), VmError> {
+        let mut sched = ScriptScheduler::new(10_000);
+        let prim = Uuid::new_v4();
+
+        let id1 = Uuid::new_v4();
+        sched.add_script(ScriptInstance::new(id1, prim, TIMER_SCRIPT, 0)?);
+
+        let id2 = Uuid::new_v4();
+        sched.add_script(ScriptInstance::new(id2, prim, TOUCH_SCRIPT, 0)?);
+
+        let id3 = Uuid::new_v4();
+        sched.add_script(ScriptInstance::new(id3, Uuid::new_v4(), TIMER_SCRIPT, 0)?);
+
+        let mut ids = sched.scripts_on_prim(&prim);
+        ids.sort();
+        let mut expected = vec![id1, id2];
+        expected.sort();
+        assert_eq!(ids, expected);
+
+        Ok(())
+    }
+
+    #[test]
+    fn reset_script_clears_and_fires_entry() -> Result<(), VmError> {
+        let source = r#"
+            _count = 0
+            function timer() _count = _count + 1 end
+            function state_entry() end
+        "#;
+
+        let mut sched = ScriptScheduler::new(10_000);
+        let id = Uuid::new_v4();
+        let inst = ScriptInstance::new(id, Uuid::new_v4(), source, 0)?;
+        sched.add_script(inst);
+
+        sched.post_event(id, ScriptEvent::Timer);
+        sched.tick();
+
+        sched.reset_script(&id)?;
+
+        // Reset posts state_entry
+        assert!(sched.get_script(&id).unwrap().has_pending_events());
 
         Ok(())
     }

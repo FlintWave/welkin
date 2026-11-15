@@ -80,6 +80,12 @@ pub struct ScriptState {
     pub globals_json: String,
 }
 
+/// Compile LSL source to Luau source code via the full pipeline:
+/// lex → parse → analyze → codegen.
+pub fn compile_lsl(source: &str) -> Result<String, String> {
+    welkin_script_compiler::compile_lsl(source).map_err(|e| e.to_string())
+}
+
 /// Compile source to Luau bytecode.
 pub fn compile_source(source: &str) -> Result<Vec<u8>, VmError> {
     let compiler = Compiler::new();
@@ -701,6 +707,52 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    // ---------------------------------------------------------------
+    // Compile LSL → Luau pipeline
+    // ---------------------------------------------------------------
+    #[test]
+    fn compile_lsl_produces_runnable_luau() {
+        let lsl_source = r#"
+integer g_count = 0;
+default {
+    state_entry() {
+        g_count = 1;
+    }
+    touch_start(integer num_detected) {
+        g_count = g_count + num_detected;
+    }
+}
+"#;
+        let luau = compile_lsl(lsl_source).expect("LSL compilation failed");
+        assert!(luau.contains("__dispatch"), "output should contain __dispatch");
+        assert!(luau.contains("__states"), "output should contain __states");
+        assert!(luau.contains("__current_state"), "output should contain __current_state");
+
+        // Verify the generated Luau actually compiles and runs in the VM
+        let bytecode = compile_source(&luau).expect("Luau compilation failed");
+        let lua = Lua::new();
+        lua.load(&bytecode).exec().expect("Luau execution failed");
+
+        // __dispatch should be a function
+        let dispatch: mlua::Function = lua
+            .globals()
+            .get("__dispatch")
+            .expect("__dispatch not found");
+        dispatch
+            .call::<()>(("state_entry",))
+            .expect("dispatch state_entry failed");
+        dispatch
+            .call::<()>(("touch_start", 1))
+            .expect("dispatch touch_start failed");
+    }
+
+    #[test]
+    fn compile_lsl_rejects_invalid_source() {
+        let bad = "this is not valid LSL {{{";
+        let result = compile_lsl(bad);
+        assert!(result.is_err());
     }
 
     // ---------------------------------------------------------------

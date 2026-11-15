@@ -4522,6 +4522,7 @@ dependencies = [
  "tracing",
  "uuid",
  "welkin-llsd",
+ "welkin-script-compiler",
  "welkin-types",
 ]
 
@@ -4731,7 +4732,9 @@ dependencies = [
  "axum",
  "clap",
  "glam 0.34.3",
+ "parking_lot 0.12.5",
  "reqwest 0.12.28",
+ "serde_json",
  "tokio",
  "tokio-util",
  "tracing",
@@ -4748,6 +4751,8 @@ dependencies = [
  "welkin-prim",
  "welkin-runtime",
  "welkin-scene",
+ "welkin-script-compiler",
+ "welkin-script-vm",
  "welkin-services",
 ]
 

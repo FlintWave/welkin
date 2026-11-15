@@ -341,6 +341,16 @@ impl Scene {
         self.physics.lock().unwrap().is_some()
     }
 
+    pub fn get_top_colliders(&self) -> Vec<(u32, f32)> {
+        if let Ok(guard) = self.physics.lock()
+            && let Some(ref physics) = *guard
+        {
+            physics.get_top_colliders()
+        } else {
+            Vec::new()
+        }
+    }
+
     // ---- Scene loop ----
 
     pub fn frame_number(&self) -> u64 {

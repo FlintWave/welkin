@@ -18,26 +18,40 @@ use crate::{ScriptState, VmError, compile_source, restore_script_state, serializ
 /// An event that can be delivered to a script instance.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ScriptEvent {
-    /// A touch event (touch_start handler).
     Touch { agent_id: Uuid },
-    /// Timer tick.
+    TouchEnd { agent_id: Uuid },
+    TouchUpdate { agent_id: Uuid },
     Timer,
-    /// Listen event from llListen.
     Listen {
         channel: i32,
         name: String,
         id: Uuid,
         message: String,
     },
-    /// Entry into current state (state_entry handler).
     StateEntry,
-    /// Object rezzed (on_rez handler).
     OnRez { start_param: i32 },
-    /// Something changed (changed handler).
     Changed { change: u32 },
-    /// Collision event.
     Collision { num_detected: i32 },
-    /// Catch-all for events not yet given first-class variants.
+    LinkMessage {
+        sender_num: i32,
+        num: i32,
+        str_val: String,
+        id: String,
+    },
+    Sensor { num_detected: i32 },
+    NoSensor,
+    HttpResponse {
+        request_id: String,
+        status: i32,
+        metadata: Vec<String>,
+        body: String,
+    },
+    HttpRequest {
+        request_id: String,
+        method: String,
+        body: String,
+    },
+    Money { agent_id: Uuid, amount: i32 },
     Custom {
         name: String,
         args: Vec<serde_json::Value>,
@@ -45,16 +59,23 @@ pub enum ScriptEvent {
 }
 
 impl ScriptEvent {
-    /// Returns the Luau handler function name for this event.
     pub fn handler_name(&self) -> &str {
         match self {
             ScriptEvent::Touch { .. } => "touch_start",
+            ScriptEvent::TouchEnd { .. } => "touch_end",
+            ScriptEvent::TouchUpdate { .. } => "touch",
             ScriptEvent::Timer => "timer",
             ScriptEvent::Listen { .. } => "listen",
             ScriptEvent::StateEntry => "state_entry",
             ScriptEvent::OnRez { .. } => "on_rez",
             ScriptEvent::Changed { .. } => "changed",
             ScriptEvent::Collision { .. } => "collision",
+            ScriptEvent::LinkMessage { .. } => "link_message",
+            ScriptEvent::Sensor { .. } => "sensor",
+            ScriptEvent::NoSensor => "no_sensor",
+            ScriptEvent::HttpResponse { .. } => "http_response",
+            ScriptEvent::HttpRequest { .. } => "http_request",
+            ScriptEvent::Money { .. } => "money",
             ScriptEvent::Custom { name, .. } => name.as_str(),
         }
     }
@@ -202,59 +223,106 @@ impl ScriptInstance {
         result
     }
 
-    /// Internal: call the Luau handler for `event`, passing appropriate args.
+    fn event_args(&self, event: &ScriptEvent) -> Result<Vec<mlua::Value>, VmError> {
+        let mut args: Vec<mlua::Value> = Vec::new();
+        match event {
+            ScriptEvent::Touch { agent_id }
+            | ScriptEvent::TouchEnd { agent_id }
+            | ScriptEvent::TouchUpdate { agent_id } => {
+                args.push(mlua::Value::String(self.vm.create_string(agent_id.to_string())?));
+            }
+            ScriptEvent::Timer | ScriptEvent::StateEntry | ScriptEvent::NoSensor => {}
+            ScriptEvent::Listen { channel, name, id, message } => {
+                args.push(mlua::Value::Integer(i64::from(*channel)));
+                args.push(mlua::Value::String(self.vm.create_string(name.as_bytes())?));
+                args.push(mlua::Value::String(self.vm.create_string(id.to_string())?));
+                args.push(mlua::Value::String(self.vm.create_string(message.as_bytes())?));
+            }
+            ScriptEvent::OnRez { start_param } => {
+                args.push(mlua::Value::Integer(i64::from(*start_param)));
+            }
+            ScriptEvent::Changed { change } => {
+                args.push(mlua::Value::Integer(i64::from(*change)));
+            }
+            ScriptEvent::Collision { num_detected } | ScriptEvent::Sensor { num_detected } => {
+                args.push(mlua::Value::Integer(i64::from(*num_detected)));
+            }
+            ScriptEvent::LinkMessage { sender_num, num, str_val, id } => {
+                args.push(mlua::Value::Integer(i64::from(*sender_num)));
+                args.push(mlua::Value::Integer(i64::from(*num)));
+                args.push(mlua::Value::String(self.vm.create_string(str_val.as_bytes())?));
+                args.push(mlua::Value::String(self.vm.create_string(id.as_bytes())?));
+            }
+            ScriptEvent::HttpResponse { request_id, status, metadata, body } => {
+                args.push(mlua::Value::String(self.vm.create_string(request_id.as_bytes())?));
+                args.push(mlua::Value::Integer(i64::from(*status)));
+                let tbl = self.vm.create_table()?;
+                for (i, m) in metadata.iter().enumerate() {
+                    tbl.set(i + 1, m.as_str())?;
+                }
+                args.push(mlua::Value::Table(tbl));
+                args.push(mlua::Value::String(self.vm.create_string(body.as_bytes())?));
+            }
+            ScriptEvent::HttpRequest { request_id, method, body } => {
+                args.push(mlua::Value::String(self.vm.create_string(request_id.as_bytes())?));
+                args.push(mlua::Value::String(self.vm.create_string(method.as_bytes())?));
+                args.push(mlua::Value::String(self.vm.create_string(body.as_bytes())?));
+            }
+            ScriptEvent::Money { agent_id, amount } => {
+                args.push(mlua::Value::String(self.vm.create_string(agent_id.to_string())?));
+                args.push(mlua::Value::Integer(i64::from(*amount)));
+            }
+            ScriptEvent::Custom { args: json_args, .. } => {
+                use mlua::LuaSerdeExt;
+                for a in json_args {
+                    args.push(self.vm.to_value(a)?);
+                }
+            }
+        }
+        Ok(args)
+    }
+
     fn dispatch_event(&self, event: &ScriptEvent) -> Result<(), VmError> {
         let globals = self.vm.globals();
         let handler_name = event.handler_name();
 
-        // If the handler doesn't exist, silently ignore the event (matches
-        // LSL semantics — scripts without a timer() handler just ignore
-        // timer events).
+        // LSL transpiled scripts define __dispatch for state-aware routing.
+        if let Ok(dispatch_fn) = globals.get::<mlua::Function>("__dispatch") {
+            let mut multi = mlua::MultiValue::new();
+            multi.push_back(mlua::Value::String(
+                self.vm.create_string(handler_name.as_bytes())?,
+            ));
+            for v in self.event_args(event)? {
+                multi.push_back(v);
+            }
+            dispatch_fn.call::<()>(multi)?;
+            return Ok(());
+        }
+
+        // Fallback: direct handler lookup (raw Luau scripts).
         let func: mlua::Function = match globals.get(handler_name) {
             Ok(f) => f,
             Err(mlua::Error::FromLuaConversionError { .. }) => return Ok(()),
             Err(e) => return Err(e.into()),
         };
 
-        match event {
-            ScriptEvent::Touch { agent_id } => {
-                func.call::<()>(agent_id.to_string())?;
-            }
-            ScriptEvent::Timer => {
-                func.call::<()>(())?;
-            }
-            ScriptEvent::Listen {
-                channel,
-                name,
-                id,
-                message,
-            } => {
-                func.call::<()>((*channel, name.as_str(), id.to_string(), message.as_str()))?;
-            }
-            ScriptEvent::StateEntry => {
-                func.call::<()>(())?;
-            }
-            ScriptEvent::OnRez { start_param } => {
-                func.call::<()>(*start_param)?;
-            }
-            ScriptEvent::Changed { change } => {
-                func.call::<()>(*change)?;
-            }
-            ScriptEvent::Collision { num_detected } => {
-                func.call::<()>(*num_detected)?;
-            }
-            ScriptEvent::Custom { args, .. } => {
-                // Convert JSON args to Lua values.
-                use mlua::LuaSerdeExt;
-                let lua_args: Vec<mlua::Value> = args
-                    .iter()
-                    .map(|a| self.vm.to_value(a))
-                    .collect::<Result<_, _>>()?;
-                let multi = mlua::MultiValue::from_iter(lua_args);
-                func.call::<()>(multi)?;
-            }
-        }
+        let args = self.event_args(event)?;
+        let multi = mlua::MultiValue::from_iter(args);
+        func.call::<()>(multi)?;
 
+        Ok(())
+    }
+
+    pub fn reset(&mut self) -> Result<(), VmError> {
+        let vm = Lua::new();
+        if self.memory_limit > 0 {
+            vm.set_memory_limit(self.memory_limit)?;
+        }
+        vm.load(&self.bytecode).exec()?;
+        self.vm = vm;
+        self.state = ScriptInstanceState::Idle;
+        self.event_queue.clear();
+        self.post_event(ScriptEvent::StateEntry);
         Ok(())
     }
 
@@ -490,6 +558,114 @@ mod tests {
 
         inst.run_next_event()?;
         assert_eq!(inst.state, ScriptInstanceState::Idle);
+        Ok(())
+    }
+
+    #[test]
+    fn dispatch_uses_lsl_dispatch_function() -> Result<(), VmError> {
+        let source = r#"
+            _dispatched_event = ""
+            _dispatched_arg = ""
+            function __dispatch(event_name, ...)
+                _dispatched_event = event_name
+                local args = {...}
+                if #args > 0 then
+                    _dispatched_arg = tostring(args[1])
+                end
+            end
+        "#;
+
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), source, 0)?;
+
+        let aid = Uuid::new_v4();
+        inst.post_event(ScriptEvent::Touch { agent_id: aid });
+        inst.run_next_event()?;
+        assert_eq!(inst.state, ScriptInstanceState::Idle);
+
+        let dispatched: String = inst.vm.globals().get("_dispatched_event")?;
+        assert_eq!(dispatched, "touch_start");
+        let arg: String = inst.vm.globals().get("_dispatched_arg")?;
+        assert_eq!(arg, aid.to_string());
+
+        Ok(())
+    }
+
+    #[test]
+    fn new_event_variants_dispatch() -> Result<(), VmError> {
+        let source = r#"
+            _last_event = ""
+            function touch_end(id) _last_event = "touch_end" end
+            function touch(id) _last_event = "touch" end
+            function link_message(s, n, str, id) _last_event = "link_message" end
+            function sensor(n) _last_event = "sensor" end
+            function no_sensor() _last_event = "no_sensor" end
+            function http_response(rid, status, meta, body) _last_event = "http_response" end
+            function http_request(rid, method, body) _last_event = "http_request" end
+            function money(id, amount) _last_event = "money" end
+        "#;
+
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), source, 0)?;
+
+        let events: Vec<ScriptEvent> = vec![
+            ScriptEvent::TouchEnd { agent_id: Uuid::new_v4() },
+            ScriptEvent::TouchUpdate { agent_id: Uuid::new_v4() },
+            ScriptEvent::LinkMessage { sender_num: 1, num: 0, str_val: "hi".into(), id: "k".into() },
+            ScriptEvent::Sensor { num_detected: 3 },
+            ScriptEvent::NoSensor,
+            ScriptEvent::HttpResponse { request_id: "r1".into(), status: 200, metadata: vec![], body: "ok".into() },
+            ScriptEvent::HttpRequest { request_id: "r2".into(), method: "GET".into(), body: "".into() },
+            ScriptEvent::Money { agent_id: Uuid::new_v4(), amount: 100 },
+        ];
+
+        let expected = ["touch_end", "touch", "link_message", "sensor", "no_sensor", "http_response", "http_request", "money"];
+
+        for (ev, name) in events.into_iter().zip(expected.iter()) {
+            inst.post_event(ev);
+            inst.run_next_event()?;
+            let last: String = inst.vm.globals().get("_last_event")?;
+            assert_eq!(&last, name, "event mismatch");
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn reset_clears_state_and_fires_entry() -> Result<(), VmError> {
+        let source = r#"
+            _counter = 0
+            _entered = false
+            function timer()
+                _counter = _counter + 1
+            end
+            function state_entry()
+                _entered = true
+            end
+        "#;
+
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), source, 0)?;
+
+        inst.post_event(ScriptEvent::Timer);
+        inst.post_event(ScriptEvent::Timer);
+        inst.post_event(ScriptEvent::Timer);
+        while inst.has_pending_events() {
+            inst.run_next_event()?;
+        }
+
+        let count: i32 = inst.vm.globals().get("_counter")?;
+        assert_eq!(count, 3);
+
+        inst.reset()?;
+
+        // After reset, counter should be back to 0
+        let count: i32 = inst.vm.globals().get("_counter")?;
+        assert_eq!(count, 0);
+
+        // reset() posts a StateEntry event
+        assert!(inst.has_pending_events());
+        inst.run_next_event()?;
+        let entered: bool = inst.vm.globals().get("_entered")?;
+        assert!(entered);
+
         Ok(())
     }
 }
