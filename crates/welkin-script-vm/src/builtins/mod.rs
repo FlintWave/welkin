@@ -704,6 +704,8 @@ pub struct ScriptContext {
     pub mod_invoke_registry: HashMap<String, ModuleCallback>,
     /// Channel for modSendCommand messages to the region module subsystem.
     pub mod_command_sender: Option<std::sync::mpsc::Sender<ModCommand>>,
+    /// In-memory JSON document stores for the JsonStore API.
+    pub json_stores: HashMap<Uuid, serde_json::Value>,
 }
 
 impl Default for ScriptContext {
@@ -836,6 +838,7 @@ impl Default for ScriptContext {
             windlight_sender: None,
             mod_invoke_registry: HashMap::new(),
             mod_command_sender: None,
+            json_stores: HashMap::new(),
         }
     }
 }
@@ -864,6 +867,7 @@ pub fn register_all(lua: &mlua::Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result
     control::register_control(lua, ctx)?;
     crate::lightshare::register_lightshare(lua, ctx)?;
     crate::mod_api::register_mod_api(lua, ctx)?;
+    crate::jsonstore::register_jsonstore(lua, ctx)?;
     Ok(())
 }
 

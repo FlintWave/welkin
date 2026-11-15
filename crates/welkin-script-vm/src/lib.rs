@@ -10,6 +10,7 @@ pub mod builtins;
 pub mod events;
 pub mod instance;
 pub mod lightshare;
+pub mod jsonstore;
 pub mod mod_api;
 pub mod ossl;
 pub mod scheduler;
