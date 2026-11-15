@@ -422,3 +422,32 @@ impl Default for XferModule {
         Self::new()
     }
 }
+
+impl RegionModule for XferModule {
+    fn name(&self) -> &str {
+        "XferModule"
+    }
+
+    fn module_type(&self) -> ModuleType {
+        ModuleType::NonShared
+    }
+
+    fn initialise(&mut self, _config: &dyn ModuleConfig) -> Result<(), ModuleError> {
+        tracing::info!("XferModule initialised");
+        Ok(())
+    }
+
+    fn add_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "XferModule attached to region");
+        Ok(())
+    }
+
+    fn remove_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
+        tracing::info!(region = %scene.region_name, "XferModule detached from region");
+        Ok(())
+    }
+
+    fn close(&mut self) -> Result<(), ModuleError> {
+        Ok(())
+    }
+}

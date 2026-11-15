@@ -21,9 +21,11 @@ use welkin_config::Config;
 use welkin_data::DataPool;
 use welkin_llsd::{Llsd, Map, from_xml, to_xml_string};
 use welkin_modules::{
-    AttachmentsModule, AvatarFactoryModule, CapsModule, ChatModule, DefaultPermissionsModule,
-    DynAttrsModule, EstateManagementModule, LandManagementModule, ModuleConfig, SceneRef,
-    ServiceThrottleModule,
+    AssetTransactionModule, AttachmentsModule, AvatarFactoryModule, BakedTexturesModule,
+    CapsModule, ChatModule, DefaultPermissionsModule, DialogModule, DynAttrsModule,
+    EstateManagementModule, FriendsModule, InventoryAccessModule, InventoryTransferModule,
+    LandManagementModule, MapImageModule, MapSearchModule, MessageTransferModule, ModuleConfig,
+    SceneRef, ServiceThrottleModule, UserManagementModule, WorldMapModule, XferModule,
 };
 use welkin_msg::Msg;
 use welkin_msg::msgs::*;
@@ -227,6 +229,18 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         registry.register(CapsModule::new());
         registry.register(DynAttrsModule::new());
         registry.register(ServiceThrottleModule::new());
+        registry.register(UserManagementModule::new());
+        registry.register(BakedTexturesModule::new());
+        registry.register(WorldMapModule::new());
+        registry.register(MapImageModule::new());
+        registry.register(MapSearchModule::new());
+        registry.register(FriendsModule::new());
+        registry.register(DialogModule::new());
+        registry.register(InventoryAccessModule::new());
+        registry.register(InventoryTransferModule::new());
+        registry.register(AssetTransactionModule::new());
+        registry.register(XferModule::new());
+        registry.register(MessageTransferModule::new());
         if let Err(e) = registry.initialise_all(&ConfigBridge(&config)) {
             warn!(error = %e, "module initialisation failed");
         }
