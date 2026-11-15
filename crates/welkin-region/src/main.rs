@@ -1249,8 +1249,8 @@ mod tests {
         assert_eq!(info.region_name, "Test Region");
         assert_eq!(info.region_loc_x, 1000);
         assert_eq!(info.region_loc_y, 2000);
-        // Handle = (loc_x << 32) | loc_y
-        let expected_handle = (1000u64 << 32) | 2000u64;
+        // Handle = ((loc_x * 256) << 32) | (loc_y * 256)
+        let expected_handle = ((1000u64 * 256) << 32) | (2000u64 * 256);
         assert_eq!(info.region_handle, expected_handle);
         assert_eq!(info.region_size_x, 256);
         assert_eq!(info.region_size_y, 256);

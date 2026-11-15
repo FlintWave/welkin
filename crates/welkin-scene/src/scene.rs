@@ -28,7 +28,7 @@ pub struct RegionInfo {
 
 impl RegionInfo {
     pub fn new(name: &str, loc_x: u32, loc_y: u32) -> Self {
-        let region_handle = ((loc_x as u64) << 32) | (loc_y as u64);
+        let region_handle = (((loc_x as u64) * 256) << 32) | ((loc_y as u64) * 256);
         Self {
             region_id: Uuid::new_v4(),
             region_name: name.to_string(),

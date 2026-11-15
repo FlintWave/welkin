@@ -379,6 +379,9 @@ impl InventoryStore {
     }
 
     pub async fn create_user_inventory(&self, principal_id: &str) -> Result<(), DataError> {
+        if self.get_user_root_folder(principal_id).await?.is_some() {
+            return Ok(());
+        }
         const SKELETON: &[(&str, i16)] = &[
             ("Animations", 20),
             ("Body Parts", 13),
