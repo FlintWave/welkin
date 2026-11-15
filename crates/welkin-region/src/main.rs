@@ -2490,6 +2490,220 @@ async fn process_messages(
                 }
             }
         }
+
+        if msg_id == ImprovedInstantMessage::ID
+            && let Ok(im) = ImprovedInstantMessage::decode(&pkt.body)
+        {
+            let mb = &im.message_block;
+            let dialog = mb.dialog;
+            let to_agent = mb.to_agent_id;
+            let im_session_id = mb.id;
+            let now_ts = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_secs() as u32)
+                .unwrap_or(0);
+
+            let build_relay = |dlg: u8| -> ImprovedInstantMessage {
+                ImprovedInstantMessage {
+                    agent_data: improved_instant_message::AgentData {
+                        agent_id,
+                        session_id,
+                    },
+                    message_block: improved_instant_message::MessageBlock {
+                        from_group: mb.from_group,
+                        to_agent_id: to_agent,
+                        parent_estate_id: mb.parent_estate_id,
+                        region_id: scene.region_info.region_id,
+                        position: mb.position,
+                        offline: 0,
+                        dialog: dlg,
+                        id: im_session_id,
+                        timestamp: now_ts,
+                        from_agent_name: mb.from_agent_name.clone(),
+                        message: mb.message.clone(),
+                        binary_bucket: mb.binary_bucket.clone(),
+                    },
+                    estate_block: improved_instant_message::EstateBlock::default(),
+                    meta_data: Vec::new(),
+                }
+            };
+
+            match dialog {
+                // 0: MessageFromAgent
+                0 => {
+                    let relay = build_relay(0);
+                    let mut delivered = false;
+                    let clients_map = clients.read().await;
+                    for (peer_addr, peer_client) in clients_map.iter() {
+                        let mut sess = peer_client.lock().await;
+                        if sess.agent_id == to_agent {
+                            let (pkt_bytes, _) = sess.circuit.send_msg(&relay, true);
+                            let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                            delivered = true;
+                            break;
+                        }
+                    }
+                    if delivered {
+                        info!(from = %agent_id, to = %to_agent, "IM: personal message relayed");
+                    } else {
+                        warn!(from = %agent_id, to = %to_agent, "IM: target not online in region, offline storage pending");
+                    }
+                }
+                // 4: InventoryOffered
+                4 => {
+                    let relay = build_relay(4);
+                    let clients_map = clients.read().await;
+                    let mut delivered = false;
+                    for (peer_addr, peer_client) in clients_map.iter() {
+                        let mut sess = peer_client.lock().await;
+                        if sess.agent_id == to_agent {
+                            let (pkt_bytes, _) = sess.circuit.send_msg(&relay, true);
+                            let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                            delivered = true;
+                            break;
+                        }
+                    }
+                    if delivered {
+                        info!(from = %agent_id, to = %to_agent, "IM: inventory offer relayed");
+                    } else {
+                        warn!(from = %agent_id, to = %to_agent, "IM: inventory offer target not online");
+                    }
+                }
+                // 5: InventoryAccepted
+                5 => {
+                    let relay = build_relay(5);
+                    let clients_map = clients.read().await;
+                    for (peer_addr, peer_client) in clients_map.iter() {
+                        let mut sess = peer_client.lock().await;
+                        if sess.agent_id == to_agent {
+                            let (pkt_bytes, _) = sess.circuit.send_msg(&relay, true);
+                            let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                            info!(from = %agent_id, to = %to_agent, "IM: inventory accepted relayed");
+                            break;
+                        }
+                    }
+                }
+                // 6: InventoryDeclined
+                6 => {
+                    let relay = build_relay(6);
+                    let clients_map = clients.read().await;
+                    for (peer_addr, peer_client) in clients_map.iter() {
+                        let mut sess = peer_client.lock().await;
+                        if sess.agent_id == to_agent {
+                            let (pkt_bytes, _) = sess.circuit.send_msg(&relay, true);
+                            let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                            info!(from = %agent_id, to = %to_agent, "IM: inventory declined relayed");
+                            break;
+                        }
+                    }
+                }
+                // 20: BusyAutoResponse
+                20 => {
+                    let relay = build_relay(20);
+                    let clients_map = clients.read().await;
+                    for (peer_addr, peer_client) in clients_map.iter() {
+                        let mut sess = peer_client.lock().await;
+                        if sess.agent_id == to_agent {
+                            let (pkt_bytes, _) = sess.circuit.send_msg(&relay, true);
+                            let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                            info!(from = %agent_id, to = %to_agent, "IM: busy auto-response relayed");
+                            break;
+                        }
+                    }
+                }
+                // 22: RequestTeleport (lure)
+                22 => {
+                    let relay = build_relay(22);
+                    let clients_map = clients.read().await;
+                    for (peer_addr, peer_client) in clients_map.iter() {
+                        let mut sess = peer_client.lock().await;
+                        if sess.agent_id == to_agent {
+                            let (pkt_bytes, _) = sess.circuit.send_msg(&relay, true);
+                            let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                            info!(from = %agent_id, to = %to_agent, "IM: teleport lure relayed");
+                            break;
+                        }
+                    }
+                }
+                // 38: FriendshipOffered
+                38 => {
+                    let relay = build_relay(38);
+                    let clients_map = clients.read().await;
+                    let mut delivered = false;
+                    for (peer_addr, peer_client) in clients_map.iter() {
+                        let mut sess = peer_client.lock().await;
+                        if sess.agent_id == to_agent {
+                            let (pkt_bytes, _) = sess.circuit.send_msg(&relay, true);
+                            let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                            delivered = true;
+                            break;
+                        }
+                    }
+                    if delivered {
+                        info!(from = %agent_id, to = %to_agent, "IM: friendship offer relayed");
+                    } else {
+                        warn!(from = %agent_id, to = %to_agent, "IM: friendship offer target not online");
+                    }
+                }
+                // 39: FriendshipAccepted
+                39 => {
+                    let relay = build_relay(39);
+                    let clients_map = clients.read().await;
+                    for (peer_addr, peer_client) in clients_map.iter() {
+                        let mut sess = peer_client.lock().await;
+                        if sess.agent_id == to_agent {
+                            let (pkt_bytes, _) = sess.circuit.send_msg(&relay, true);
+                            let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                            info!(from = %agent_id, to = %to_agent, "IM: friendship accepted relayed");
+                            break;
+                        }
+                    }
+                }
+                // 40: FriendshipDeclined
+                40 => {
+                    let relay = build_relay(40);
+                    let clients_map = clients.read().await;
+                    for (peer_addr, peer_client) in clients_map.iter() {
+                        let mut sess = peer_client.lock().await;
+                        if sess.agent_id == to_agent {
+                            let (pkt_bytes, _) = sess.circuit.send_msg(&relay, true);
+                            let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                            info!(from = %agent_id, to = %to_agent, "IM: friendship declined relayed");
+                            break;
+                        }
+                    }
+                }
+                // 41: StartTyping
+                41 => {
+                    let relay = build_relay(41);
+                    let clients_map = clients.read().await;
+                    for (peer_addr, peer_client) in clients_map.iter() {
+                        let mut sess = peer_client.lock().await;
+                        if sess.agent_id == to_agent {
+                            let (pkt_bytes, _) = sess.circuit.send_msg(&relay, false);
+                            let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                            break;
+                        }
+                    }
+                }
+                // 42: StopTyping
+                42 => {
+                    let relay = build_relay(42);
+                    let clients_map = clients.read().await;
+                    for (peer_addr, peer_client) in clients_map.iter() {
+                        let mut sess = peer_client.lock().await;
+                        if sess.agent_id == to_agent {
+                            let (pkt_bytes, _) = sess.circuit.send_msg(&relay, false);
+                            let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                            break;
+                        }
+                    }
+                }
+                other => {
+                    warn!(from = %agent_id, dialog = other, "IM: unhandled dialog type");
+                }
+            }
+        }
     }
 }
 

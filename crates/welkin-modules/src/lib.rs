@@ -2492,6 +2492,9 @@ mod tests {
     fn im_dialog_values() {
         assert_eq!(IMDialog::MessageFromAgent as u8, 0);
         assert_eq!(IMDialog::MessageFromObject as u8, 19);
+        assert_eq!(IMDialog::SessionGroupStart as u8, 17);
+        assert_eq!(IMDialog::SessionCardlessStart as u8, 18);
+        assert_eq!(IMDialog::SessionSend as u8, 20);
         assert_eq!(IMDialog::FriendshipOffered as u8, 38);
         assert_eq!(IMDialog::FriendshipAccepted as u8, 39);
         assert_eq!(IMDialog::FriendshipDeclined as u8, 40);
@@ -2501,6 +2504,14 @@ mod tests {
         assert_eq!(IMDialog::InventoryDeclined as u8, 6);
         assert_eq!(IMDialog::StartTyping as u8, 41);
         assert_eq!(IMDialog::StopTyping as u8, 42);
+        assert_eq!(IMDialog::RequestTeleport as u8, 22);
+        assert_eq!(IMDialog::GroupNotice as u8, 32);
+        assert_eq!(IMDialog::GroupNoticeRequested as u8, 37);
+        assert_eq!(IMDialog::BUSY_AUTO_RESPONSE, 20);
+        assert!(IMDialog::from_u8(0).is_some());
+        assert!(IMDialog::from_u8(2).is_none());
+        assert!(IMDialog::from_u8(17).is_some());
+        assert!(IMDialog::from_u8(255).is_none());
     }
 
     // -- 141. MuteType enum values match C# -----------------------------------
@@ -5000,6 +5011,11 @@ mod tests {
         assert_eq!(IMDialog::InventoryOffered as u8, 4);
         assert_eq!(IMDialog::RequestTeleport as u8, 22);
         assert_eq!(IMDialog::GroupNotice as u8, 32);
+        assert_eq!(IMDialog::SessionGroupStart as u8, 17);
+        assert_eq!(IMDialog::SessionCardlessStart as u8, 18);
+        assert_eq!(IMDialog::SessionSend as u8, 20);
+        assert_eq!(IMDialog::BUSY_AUTO_RESPONSE, 20);
+        assert_eq!(IMDialog::from_u8(38), Some(IMDialog::FriendshipOffered));
 
         // Create GridInstantMessage with all fields.
         let from = Uuid::new_v4();

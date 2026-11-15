@@ -36,8 +36,10 @@ pub enum IMDialog {
     NewUserDefault = 11,
     SessionAdd = 13,
     SessionDrop = 14,
+    SessionGroupStart = 17,
+    SessionCardlessStart = 18,
     MessageFromObject = 19,
-    BusyAutoResponse = 20,
+    SessionSend = 20,
     ConsoleAndChatHistory = 21,
     RequestTeleport = 22,
     AcceptTeleport = 23,
@@ -59,6 +61,54 @@ pub enum IMDialog {
     FriendshipDeclined = 40,
     StartTyping = 41,
     StopTyping = 42,
+}
+
+impl IMDialog {
+    pub const BUSY_AUTO_RESPONSE: u8 = 20;
+
+    pub fn from_u8(v: u8) -> Option<Self> {
+        match v {
+            0 => Some(Self::MessageFromAgent),
+            1 => Some(Self::MessageBox),
+            3 => Some(Self::GroupInvitation),
+            4 => Some(Self::InventoryOffered),
+            5 => Some(Self::InventoryAccepted),
+            6 => Some(Self::InventoryDeclined),
+            7 => Some(Self::TaskInventoryOffered),
+            8 => Some(Self::GroupVote),
+            9 => Some(Self::TaskInventoryAccepted),
+            10 => Some(Self::TaskInventoryDeclined),
+            11 => Some(Self::NewUserDefault),
+            13 => Some(Self::SessionAdd),
+            14 => Some(Self::SessionDrop),
+            17 => Some(Self::SessionGroupStart),
+            18 => Some(Self::SessionCardlessStart),
+            19 => Some(Self::MessageFromObject),
+            20 => Some(Self::SessionSend),
+            21 => Some(Self::ConsoleAndChatHistory),
+            22 => Some(Self::RequestTeleport),
+            23 => Some(Self::AcceptTeleport),
+            24 => Some(Self::DenyTeleport),
+            25 => Some(Self::GodLikeRequestTeleport),
+            26 => Some(Self::RequestLure),
+            28 => Some(Self::GotoUrl),
+            29 => Some(Self::Session911Start),
+            30 => Some(Self::Lure911),
+            31 => Some(Self::FromTaskAsAlert),
+            32 => Some(Self::GroupNotice),
+            33 => Some(Self::GroupNoticeInventoryAccepted),
+            34 => Some(Self::GroupNoticeInventoryDeclined),
+            35 => Some(Self::GroupInvitationAccept),
+            36 => Some(Self::GroupInvitationDecline),
+            37 => Some(Self::GroupNoticeRequested),
+            38 => Some(Self::FriendshipOffered),
+            39 => Some(Self::FriendshipAccepted),
+            40 => Some(Self::FriendshipDeclined),
+            41 => Some(Self::StartTyping),
+            42 => Some(Self::StopTyping),
+            _ => None,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

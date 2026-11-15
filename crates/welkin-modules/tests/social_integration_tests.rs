@@ -662,7 +662,7 @@ fn offline_im_dialog_type_filtering() {
             .handle_undelivered(&sample_im(
                 Uuid::new_v4(),
                 recipient,
-                IMDialog::BusyAutoResponse,
+                IMDialog::SessionSend,
                 "test"
             ))
             .unwrap()
