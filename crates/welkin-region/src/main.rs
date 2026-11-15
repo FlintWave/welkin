@@ -2,6 +2,7 @@
 
 mod persist;
 mod script_persist;
+mod sim_stats;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
