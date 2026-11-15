@@ -18,7 +18,6 @@ pub fn register_core_handlers(dispatcher: &mut PacketDispatcher) {
     register_use_circuit_code(dispatcher);
     register_complete_agent_movement(dispatcher);
     register_agent_update(dispatcher);
-    register_chat_from_viewer(dispatcher);
 
     // Task 2.5: Object handlers
     register_object_add(dispatcher);
@@ -83,20 +82,6 @@ fn register_agent_update(d: &mut PacketDispatcher) {
             agent = %ctx.agent_id,
             flags = msg.agent_data.control_flags,
             "AgentUpdate",
-        );
-        Ok(())
-    });
-}
-
-fn register_chat_from_viewer(d: &mut PacketDispatcher) {
-    d.register::<ChatFromViewer, _>(|ctx, msg| {
-        let text = field_str(&msg.chat_data.message);
-        tracing::debug!(
-            agent = %ctx.agent_id,
-            channel = msg.chat_data.channel,
-            chat_type = msg.chat_data.type_,
-            message = %text,
-            "ChatFromViewer",
         );
         Ok(())
     });

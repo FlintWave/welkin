@@ -716,6 +716,42 @@ async fn process_messages(
             }
         }
 
+        if msg_id == MapBlockRequest::ID {
+            if let Ok(req) = MapBlockRequest::decode(&pkt.body) {
+                let ri = &scene.region_info;
+                let gx = ri.region_loc_x as u16;
+                let gy = ri.region_loc_y as u16;
+                let pd = &req.position_data;
+                if gx >= pd.min_x && gx <= pd.max_x && gy >= pd.min_y && gy <= pd.max_y {
+                    let reply = MapBlockReply {
+                        agent_data: map_block_reply::AgentData {
+                            agent_id,
+                            flags: req.agent_data.flags,
+                        },
+                        data: vec![map_block_reply::Data {
+                            x: gx,
+                            y: gy,
+                            name: ri.region_name.clone().into_bytes(),
+                            access: 21,
+                            region_flags: 0,
+                            water_height: 20,
+                            agents: 0,
+                            map_image_id: Uuid::nil(),
+                        }],
+                        size: vec![map_block_reply::Size {
+                            size_x: ri.region_size_x as u16,
+                            size_y: ri.region_size_y as u16,
+                        }],
+                    };
+                    if let Some(client) = &client {
+                        let mut session = client.lock().await;
+                        let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                        let _ = socket.send_to(&pkt_bytes, src).await;
+                    }
+                }
+            }
+        }
+
         if msg_id == ChatFromViewer::ID {
             if let Ok(chat) = ChatFromViewer::decode(&pkt.body) {
                 let text = String::from_utf8_lossy(&chat.chat_data.message).to_string();
@@ -736,9 +772,11 @@ async fn process_messages(
                 let sender_pos = scene.get_presence(&agent_id)
                     .map(|p| p.position)
                     .unwrap_or(glam::Vec3::ZERO);
+                let mut name_bytes = sender_name.into_bytes();
+                name_bytes.push(0);
                 let relay = ChatFromSimulator {
                     chat_data: chat_from_simulator::ChatData {
-                        from_name: sender_name.into_bytes(),
+                        from_name: name_bytes,
                         source_id: agent_id,
                         owner_id: agent_id,
                         source_type: 1,
@@ -751,7 +789,6 @@ async fn process_messages(
                 let clients_map = clients.read().await;
                 for (peer_addr, peer_client) in clients_map.iter() {
                     let mut peer = peer_client.lock().await;
-                    if peer.agent_id == agent_id { continue; }
                     let (pkt_bytes, _) = peer.circuit.send_msg(&relay, true);
                     let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
                 }
