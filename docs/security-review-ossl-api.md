@@ -29,31 +29,18 @@ must be fixed before production use.
 
 ## Findings
 
-### [S1]: PBKDF2 uses HMAC-SHA256 instead of HMAC-SHA1 (HIGH)
+### [S1]: PBKDF2 uses HMAC-SHA256 instead of HMAC-SHA1 (HIGH) -- RESOLVED
 
 **File:** `crypto.rs:66-82`
 
-**Description:** The `derive_key_iv()` function uses `Hmac<Sha256>` as the PRF
-for PBKDF2 key derivation:
+**Description:** The `derive_key_iv()` function originally used `Hmac<Sha256>`
+as the PRF for PBKDF2 key derivation, which did not match the C#
+`Rfc2898DeriveBytes` default of HMAC-SHA1.
 
-```rust
-pbkdf2::pbkdf2::<Hmac<Sha256>>(passphrase.as_bytes(), salt, PBKDF2_ITERATIONS, &mut buf)
-```
-
-The C# `Rfc2898DeriveBytes` class in .NET Framework (which OpenSimulator
-targets) defaults to **HMAC-SHA1**, not HMAC-SHA256.  The code comment on
-line 55 ("matches C# Rfc2898DeriveBytes") is incorrect.  The iteration count
-(1000) and salt (`b"OpenSimulator OSSL"`) do match the C# defaults, but the
-hash function mismatch means:
-
-- Data encrypted by C# OpenSimulator **cannot** be decrypted by this Rust
-  implementation (and vice versa).
-- `osAESEncrypt`/`osAESDecrypt` will silently produce different ciphertexts
-  than the C# version for the same passphrase+plaintext.
-
-**Recommendation:** Change to `Hmac<Sha1>` using the `sha1` crate, or
-`Hmac<hmac::digest::core_api::CoreWrapper<sha1::Sha1Core>>`.  Add a
-cross-implementation test vector generated from the C# code.
+**Status:** Fixed in commit `074b1af`. The PRF is now `Hmac<Sha1>` (sha1 crate
+added to `welkin-script-vm/Cargo.toml`), matching .NET Framework defaults. The
+code comment correctly states "PBKDF2-HMAC-SHA1". A C#-generated test vector is
+still needed to prove interoperability end-to-end.
 
 ---
 
@@ -93,23 +80,17 @@ actual caller's `OsslRole` at invocation time.
 
 ---
 
-### [S3]: `expect()` panics in crypto primitives (MEDIUM)
+### [S3]: `expect()` panics in crypto primitives (MEDIUM) -- RESOLVED
 
-**File:** `crypto.rs:78` and `crypto.rs:119`
+**File:** `crypto.rs`
 
-**Description:** Two `.expect()` calls can panic the server:
+**Description:** Two `.expect()` calls could panic the server on malformed
+input.
 
-1. Line 78: `pbkdf2::pbkdf2::<Hmac<Sha256>>(...).expect("PBKDF2 should not fail")`
-2. Line 119: `cipher.encrypt_padded_mut::<NoPadding>(...).expect("encrypt: padded data should be block-aligned")`
-
-While these should not trigger under normal operation (PBKDF2 does not fail
-with valid params; the data is explicitly padded before encrypt), a panic in a
-production server thread is unacceptable.  If a future refactor introduces a
-path where padding is incorrect, the server crashes instead of returning an
-error to the script.
-
-**Recommendation:** Convert both to `map_err` returning `mlua::Error::RuntimeError`,
-consistent with the error handling in the decrypt path.
+**Status:** Both were replaced with `.map_err()` returning
+`mlua::Error::RuntimeError`, consistent with the error handling elsewhere in
+the module. The PBKDF2 call (line 79) and the AES encrypt call (line 124) now
+propagate errors instead of panicking.
 
 ---
 
@@ -283,9 +264,9 @@ provide their own IV, which partially mitigates this for callers who use them.
 | `time.rs` | 6 | Time functions (None) |
 | `sim_info.rs` | 16 | Engine identity, grid info (None/Moderate) |
 | `stubs.rs` | 23 | Original stubs (mixed levels) |
-| `npc_stubs.rs` | 19 | NPC functions (High) |
+| `npc_stubs.rs` | 24 | NPC functions (High) |
 | `agent_stubs.rs` | 20 | Agent/teleport (mixed) |
 | `terrain_stubs.rs` | 19 | Terrain/environment/parcel (mixed) |
-| `inventory_stubs.rs` | 48 | Inventory/attachment/sound/link (mixed) |
-| `misc_stubs.rs` | 26 | Remaining stubs (mixed) |
-| **Total** | **226** | |
+| `inventory_stubs.rs` | 51 | Inventory/attachment/sound/link (mixed) |
+| `misc_stubs.rs` | 28 | Remaining stubs (mixed) |
+| **Total** | **236** | |

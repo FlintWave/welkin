@@ -167,21 +167,26 @@ None.
 
 ### INFO (observations)
 
-**I1. All communication functions are stubs - no network access**
+**I1. Communication functions use in-process channels, not network sockets**
 
 Communication builtins (`llSay`, `llShout`, `llWhisper`, `llRegionSay`,
 `llRegionSayTo`, `llOwnerSay`, `llInstantMessage`, `llListen`,
-`llListenRemove`, `llListenControl`) are all stubs that only call
-`tracing::debug!`. No HTTP client, TCP socket, or UDP send is present.
-The `Cargo.toml` contains no networking dependencies. **No network
-escape is possible from scripts.**
+`llListenRemove`, `llListenControl`) now have real implementations that
+dispatch structured `ChatMessage` values through `ScriptContext::chat_sender`
+(a `tokio::sync::mpsc` channel) to the region chat subsystem. No HTTP client,
+TCP socket, or UDP send is present. The `Cargo.toml` contains no networking
+dependencies. **No network escape is possible from scripts.** Messages stay
+within the simulator process; delivery to viewers is handled by the region
+module layer.
 
-**I2. All OSSL functions are stubs - no inventory or file I/O**
+**I2. No file-system or raw I/O access from scripts**
 
-OSSL notecard functions (`osGetNotecard`, `osGetNotecardLine`,
-`osMakeNotecard`) are stubs that return empty values. No `std::fs` or
-file-system access exists in any registered function. **No filesystem
-escape is possible from scripts.**
+About 90 of 236 registered OSSL functions now have real implementations
+(NPC, terrain, teleport, sim info, draw, crypto, string, math, time).
+The remaining ~17 are stubs that return neutral defaults. Notecard
+functions (`osGetNotecard`, `osGetNotecardLine`, `osMakeNotecard`) still
+return empty values. No `std::fs` or file-system access exists in any
+registered function. **No filesystem escape is possible from scripts.**
 
 **I3. Luau inherently lacks dangerous standard libraries**
 
