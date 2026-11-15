@@ -78,6 +78,24 @@ pub enum ScriptEvent {
         message: String,
         num_remaining: i32,
     },
+    Control { id: Uuid, level: u32, edge: u32 },
+    LandCollisionStart { position: [f64; 3] },
+    LandCollision { position: [f64; 3] },
+    LandCollisionEnd { position: [f64; 3] },
+    Attach { id: Uuid },
+    ObjectRez { id: Uuid },
+    MovingStart,
+    MovingEnd,
+    PathUpdate { update_type: i32, reserved: Vec<String> },
+    RemoteData {
+        event_type: i32,
+        channel: Uuid,
+        message_id: Uuid,
+        sender: String,
+        idata: i32,
+        sdata: String,
+    },
+    TransactionResult { id: Uuid, success: i32, data: String },
     Custom {
         name: String,
         args: Vec<serde_json::Value>,
@@ -111,6 +129,17 @@ impl ScriptEvent {
             ScriptEvent::AtRotTarget { .. } => "at_rot_target",
             ScriptEvent::NotAtRotTarget => "not_at_rot_target",
             ScriptEvent::Email { .. } => "email",
+            ScriptEvent::Control { .. } => "control",
+            ScriptEvent::LandCollisionStart { .. } => "land_collision_start",
+            ScriptEvent::LandCollision { .. } => "land_collision",
+            ScriptEvent::LandCollisionEnd { .. } => "land_collision_end",
+            ScriptEvent::Attach { .. } => "attach",
+            ScriptEvent::ObjectRez { .. } => "object_rez",
+            ScriptEvent::MovingStart => "moving_start",
+            ScriptEvent::MovingEnd => "moving_end",
+            ScriptEvent::PathUpdate { .. } => "path_update",
+            ScriptEvent::RemoteData { .. } => "remote_data",
+            ScriptEvent::TransactionResult { .. } => "transaction_result",
             ScriptEvent::Custom { name, .. } => name.as_str(),
         }
     }
@@ -353,6 +382,45 @@ impl ScriptInstance {
                 args.push(mlua::Value::String(self.vm.create_string(subject.as_bytes())?));
                 args.push(mlua::Value::String(self.vm.create_string(message.as_bytes())?));
                 args.push(mlua::Value::Integer(i64::from(*num_remaining)));
+            }
+            ScriptEvent::Control { id, level, edge } => {
+                args.push(mlua::Value::String(self.vm.create_string(id.to_string())?));
+                args.push(mlua::Value::Integer(i64::from(*level)));
+                args.push(mlua::Value::Integer(i64::from(*edge)));
+            }
+            ScriptEvent::LandCollisionStart { position }
+            | ScriptEvent::LandCollision { position }
+            | ScriptEvent::LandCollisionEnd { position } => {
+                let tbl = self.vm.create_table()?;
+                tbl.set("x", position[0])?;
+                tbl.set("y", position[1])?;
+                tbl.set("z", position[2])?;
+                args.push(mlua::Value::Table(tbl));
+            }
+            ScriptEvent::Attach { id } | ScriptEvent::ObjectRez { id } => {
+                args.push(mlua::Value::String(self.vm.create_string(id.to_string())?));
+            }
+            ScriptEvent::MovingStart | ScriptEvent::MovingEnd => {}
+            ScriptEvent::PathUpdate { update_type, reserved } => {
+                args.push(mlua::Value::Integer(i64::from(*update_type)));
+                let tbl = self.vm.create_table()?;
+                for (i, item) in reserved.iter().enumerate() {
+                    tbl.set(i + 1, item.as_str())?;
+                }
+                args.push(mlua::Value::Table(tbl));
+            }
+            ScriptEvent::RemoteData { event_type, channel, message_id, sender, idata, sdata } => {
+                args.push(mlua::Value::Integer(i64::from(*event_type)));
+                args.push(mlua::Value::String(self.vm.create_string(channel.to_string())?));
+                args.push(mlua::Value::String(self.vm.create_string(message_id.to_string())?));
+                args.push(mlua::Value::String(self.vm.create_string(sender.as_bytes())?));
+                args.push(mlua::Value::Integer(i64::from(*idata)));
+                args.push(mlua::Value::String(self.vm.create_string(sdata.as_bytes())?));
+            }
+            ScriptEvent::TransactionResult { id, success, data } => {
+                args.push(mlua::Value::String(self.vm.create_string(id.to_string())?));
+                args.push(mlua::Value::Integer(i64::from(*success)));
+                args.push(mlua::Value::String(self.vm.create_string(data.as_bytes())?));
             }
             ScriptEvent::Custom { args: json_args, .. } => {
                 use mlua::LuaSerdeExt;
@@ -748,6 +816,261 @@ mod tests {
         let entered: bool = inst.vm.globals().get("_entered")?;
         assert!(entered);
 
+        Ok(())
+    }
+
+    #[test]
+    fn event_control() -> Result<(), VmError> {
+        let source = r#"
+            _ctrl_id = ""
+            _ctrl_level = 0
+            _ctrl_edge = 0
+            function control(id, level, edge)
+                _ctrl_id = id
+                _ctrl_level = level
+                _ctrl_edge = edge
+            end
+        "#;
+
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), source, 0)?;
+        let agent = Uuid::new_v4();
+        inst.post_event(ScriptEvent::Control { id: agent, level: 5, edge: 3 });
+        inst.run_next_event()?;
+
+        let got_id: String = inst.vm.globals().get("_ctrl_id")?;
+        assert_eq!(got_id, agent.to_string());
+        let got_level: i64 = inst.vm.globals().get("_ctrl_level")?;
+        assert_eq!(got_level, 5);
+        let got_edge: i64 = inst.vm.globals().get("_ctrl_edge")?;
+        assert_eq!(got_edge, 3);
+        Ok(())
+    }
+
+    #[test]
+    fn event_land_collision_start() -> Result<(), VmError> {
+        let source = r#"
+            _pos_x = 0
+            _pos_y = 0
+            _pos_z = 0
+            function land_collision_start(pos)
+                _pos_x = pos.x
+                _pos_y = pos.y
+                _pos_z = pos.z
+            end
+        "#;
+
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), source, 0)?;
+        inst.post_event(ScriptEvent::LandCollisionStart { position: [1.0, 2.5, 3.75] });
+        inst.run_next_event()?;
+
+        let x: f64 = inst.vm.globals().get("_pos_x")?;
+        let y: f64 = inst.vm.globals().get("_pos_y")?;
+        let z: f64 = inst.vm.globals().get("_pos_z")?;
+        assert!((x - 1.0).abs() < f64::EPSILON);
+        assert!((y - 2.5).abs() < f64::EPSILON);
+        assert!((z - 3.75).abs() < f64::EPSILON);
+        Ok(())
+    }
+
+    #[test]
+    fn event_land_collision() -> Result<(), VmError> {
+        let source = r#"
+            _pos_x = 0
+            function land_collision(pos)
+                _pos_x = pos.x
+            end
+        "#;
+
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), source, 0)?;
+        inst.post_event(ScriptEvent::LandCollision { position: [10.0, 0.0, 0.0] });
+        inst.run_next_event()?;
+
+        let x: f64 = inst.vm.globals().get("_pos_x")?;
+        assert!((x - 10.0).abs() < f64::EPSILON);
+        Ok(())
+    }
+
+    #[test]
+    fn event_land_collision_end() -> Result<(), VmError> {
+        let source = r#"
+            _pos_z = 0
+            function land_collision_end(pos)
+                _pos_z = pos.z
+            end
+        "#;
+
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), source, 0)?;
+        inst.post_event(ScriptEvent::LandCollisionEnd { position: [0.0, 0.0, 55.5] });
+        inst.run_next_event()?;
+
+        let z: f64 = inst.vm.globals().get("_pos_z")?;
+        assert!((z - 55.5).abs() < f64::EPSILON);
+        Ok(())
+    }
+
+    #[test]
+    fn event_attach() -> Result<(), VmError> {
+        let source = r#"
+            _attach_id = ""
+            function attach(id)
+                _attach_id = id
+            end
+        "#;
+
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), source, 0)?;
+        let avatar = Uuid::new_v4();
+        inst.post_event(ScriptEvent::Attach { id: avatar });
+        inst.run_next_event()?;
+
+        let got: String = inst.vm.globals().get("_attach_id")?;
+        assert_eq!(got, avatar.to_string());
+        Ok(())
+    }
+
+    #[test]
+    fn event_object_rez() -> Result<(), VmError> {
+        let source = r#"
+            _rez_id = ""
+            function object_rez(id)
+                _rez_id = id
+            end
+        "#;
+
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), source, 0)?;
+        let obj = Uuid::new_v4();
+        inst.post_event(ScriptEvent::ObjectRez { id: obj });
+        inst.run_next_event()?;
+
+        let got: String = inst.vm.globals().get("_rez_id")?;
+        assert_eq!(got, obj.to_string());
+        Ok(())
+    }
+
+    #[test]
+    fn event_moving_start_and_end() -> Result<(), VmError> {
+        let source = r#"
+            _moving = false
+            function moving_start()
+                _moving = true
+            end
+            function moving_end()
+                _moving = false
+            end
+        "#;
+
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), source, 0)?;
+        inst.post_event(ScriptEvent::MovingStart);
+        inst.run_next_event()?;
+        let moving: bool = inst.vm.globals().get("_moving")?;
+        assert!(moving);
+
+        inst.post_event(ScriptEvent::MovingEnd);
+        inst.run_next_event()?;
+        let moving: bool = inst.vm.globals().get("_moving")?;
+        assert!(!moving);
+        Ok(())
+    }
+
+    #[test]
+    fn event_path_update() -> Result<(), VmError> {
+        let source = r#"
+            _ptype = 0
+            _reserved_len = 0
+            function path_update(update_type, reserved)
+                _ptype = update_type
+                _reserved_len = #reserved
+            end
+        "#;
+
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), source, 0)?;
+        inst.post_event(ScriptEvent::PathUpdate {
+            update_type: 2,
+            reserved: vec!["a".into(), "b".into()],
+        });
+        inst.run_next_event()?;
+
+        let ptype: i64 = inst.vm.globals().get("_ptype")?;
+        assert_eq!(ptype, 2);
+        let rlen: i64 = inst.vm.globals().get("_reserved_len")?;
+        assert_eq!(rlen, 2);
+        Ok(())
+    }
+
+    #[test]
+    fn event_remote_data() -> Result<(), VmError> {
+        let source = r#"
+            _rd_etype = 0
+            _rd_channel = ""
+            _rd_msgid = ""
+            _rd_sender = ""
+            _rd_idata = 0
+            _rd_sdata = ""
+            function remote_data(event_type, channel, message_id, sender, idata, sdata)
+                _rd_etype = event_type
+                _rd_channel = channel
+                _rd_msgid = message_id
+                _rd_sender = sender
+                _rd_idata = idata
+                _rd_sdata = sdata
+            end
+        "#;
+
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), source, 0)?;
+        let ch = Uuid::new_v4();
+        let mid = Uuid::new_v4();
+        inst.post_event(ScriptEvent::RemoteData {
+            event_type: 1,
+            channel: ch,
+            message_id: mid,
+            sender: "agent".into(),
+            idata: 42,
+            sdata: "payload".into(),
+        });
+        inst.run_next_event()?;
+
+        let etype: i64 = inst.vm.globals().get("_rd_etype")?;
+        assert_eq!(etype, 1);
+        let got_ch: String = inst.vm.globals().get("_rd_channel")?;
+        assert_eq!(got_ch, ch.to_string());
+        let got_mid: String = inst.vm.globals().get("_rd_msgid")?;
+        assert_eq!(got_mid, mid.to_string());
+        let got_sender: String = inst.vm.globals().get("_rd_sender")?;
+        assert_eq!(got_sender, "agent");
+        let got_idata: i64 = inst.vm.globals().get("_rd_idata")?;
+        assert_eq!(got_idata, 42);
+        let got_sdata: String = inst.vm.globals().get("_rd_sdata")?;
+        assert_eq!(got_sdata, "payload");
+        Ok(())
+    }
+
+    #[test]
+    fn event_transaction_result() -> Result<(), VmError> {
+        let source = r#"
+            _tr_id = ""
+            _tr_success = 0
+            _tr_data = ""
+            function transaction_result(id, success, data)
+                _tr_id = id
+                _tr_success = success
+                _tr_data = data
+            end
+        "#;
+
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), source, 0)?;
+        let tid = Uuid::new_v4();
+        inst.post_event(ScriptEvent::TransactionResult {
+            id: tid,
+            success: 1,
+            data: "done".into(),
+        });
+        inst.run_next_event()?;
+
+        let got_id: String = inst.vm.globals().get("_tr_id")?;
+        assert_eq!(got_id, tid.to_string());
+        let got_success: i64 = inst.vm.globals().get("_tr_success")?;
+        assert_eq!(got_success, 1);
+        let got_data: String = inst.vm.globals().get("_tr_data")?;
+        assert_eq!(got_data, "done");
         Ok(())
     }
 }
