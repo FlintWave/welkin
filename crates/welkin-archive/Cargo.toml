@@ -1,0 +1,23 @@
+[package]
+name = "welkin-archive"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+welkin-types = { path = "../welkin-types" }
+welkin-prim = { path = "../welkin-prim" }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+quick-xml = "0.37"
+uuid = { workspace = true }
+base64 = { workspace = true }
+md5 = "0.7"
+tar = "0.4"
+flate2 = "1"
+tokio = { workspace = true }
+chrono = { workspace = true }
+
+[lints]
+workspace = true

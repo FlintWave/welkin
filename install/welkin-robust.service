@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+[Unit]
+Description=OpenSimulator Grid Services
+After=network.target
+
+[Service]
+Type=simple
+User=opensim
+Group=opensim
+ExecStart=/usr/local/bin/welkin-robust --config /etc/opensim/robust.ini
+WorkingDirectory=/var/lib/opensim
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

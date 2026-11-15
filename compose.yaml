@@ -29,7 +29,7 @@ services:
     build:
       context: .
       dockerfile: Containerfile
-    command: ["opensim-robust"]
+    command: ["welkin-robust"]
     depends_on:
       db:
         condition: service_healthy
@@ -44,7 +44,7 @@ services:
     build:
       context: .
       dockerfile: Containerfile
-    command: ["opensim-region"]
+    command: ["welkin-region"]
     depends_on:
       db:
         condition: service_healthy

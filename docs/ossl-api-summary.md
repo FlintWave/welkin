@@ -3,7 +3,7 @@
 [← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#o1) · Previous: [Script engine](script-engine-summary.md) · Next: [Region modules](region-modules-summary.md)
 
 Change: `openspec/changes/ossl-api` (18/18 tasks, accepted as CONDITIONAL PASS).
-Code: `crates/opensim-script-vm/src/ossl/` (13 files, about 5,900 lines).
+Code: `crates/welkin-script-vm/src/ossl/` (13 files, about 5,900 lines).
 Review: [security-review-ossl-api.md](security-review-ossl-api.md).
 
 ## What was built
@@ -55,7 +55,7 @@ The first implementation used `Hmac<Sha256>` in `derive_key_iv()` with a comment
 claiming C# parity. .NET Framework `Rfc2898DeriveBytes` uses HMAC-SHA1, so
 ciphertext from either implementation could not be decrypted by the other. The
 fix swaps the PRF to `Hmac<Sha1>` (`sha1` crate added to
-`opensim-script-vm/Cargo.toml`). At the time of this summary the change to
+`welkin-script-vm/Cargo.toml`). At the time of this summary the change to
 `crypto.rs` was in the working tree and not yet committed; a C#-generated test
 vector is still needed to prove interoperability.
 

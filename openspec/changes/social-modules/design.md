@@ -46,7 +46,7 @@ connector is dropped).
 ## Crates
 
 - `irc` (crates.io, MPL-2.0): IRC client for the bridge module.
-- Reuse existing `opensim-services`, `opensim-region`, `sqlx`.
+- Reuse existing `welkin-services`, `welkin-region`, `sqlx`.
 
 ## Design
 

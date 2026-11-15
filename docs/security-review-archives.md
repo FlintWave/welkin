@@ -1,4 +1,4 @@
-# Security Review: opensim-archive crate
+# Security Review: welkin-archive crate
 
 Date: 2026-11-14
 Reviewer: Claude Opus (adversarial review)
@@ -6,7 +6,7 @@ Verdict: CONDITIONAL PASS
 
 ## Summary
 
-The `opensim-archive` crate handles untrusted OAR/IAR archive files from users and other grids. The crate demonstrates good security awareness: path traversal validation is present on both OAR and IAR read paths, size limits are enforced, item IDs are reassigned on import to prevent collisions, and OSPA resolution is read-only (never creates user mappings). However, several defense-in-depth gaps exist that should be addressed before production use, most notably around decompression bombs, `from_utf8_lossy` path bypasses, unbounded collection growth, and the `Vec::with_capacity` trust of tar headers.
+The `welkin-archive` crate handles untrusted OAR/IAR archive files from users and other grids. The crate demonstrates good security awareness: path traversal validation is present on both OAR and IAR read paths, size limits are enforced, item IDs are reassigned on import to prevent collisions, and OSPA resolution is read-only (never creates user mappings). However, several defense-in-depth gaps exist that should be addressed before production use, most notably around decompression bombs, `from_utf8_lossy` path bypasses, unbounded collection growth, and the `Vec::with_capacity` trust of tar headers.
 
 ## Findings
 

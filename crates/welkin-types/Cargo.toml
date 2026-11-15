@@ -1,0 +1,19 @@
+[package]
+name = "welkin-types"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+aurora-llsd = { workspace = true }
+aurora-msg = { workspace = true }
+aurora-prim = { workspace = true }
+glam = { workspace = true }
+uuid = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+bitflags = { workspace = true }
+
+[lints]
+workspace = true

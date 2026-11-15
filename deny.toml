@@ -1,4 +1,4 @@
-# cargo-deny configuration for opensim-rust
+# cargo-deny configuration for welkin
 # Project licence: GPL-3.0-or-later
 # Run: cargo deny check
 
@@ -10,8 +10,8 @@ no-default-features = false
 ignore = [
     { id = "RUSTSEC-2023-0071", reason = "rsa 0.9 timing side-channel; in sqlx-mysql dep chain, awaiting sqlx update to rsa 0.10" },
     { id = "RUSTSEC-2026-0459", reason = "libsqlite3-sys CVE-2026-119375; sqlx 0.8 pins 0.30.x, fix needs sqlx upgrade to rusqlite 0.41" },
-    { id = "RUSTSEC-2026-0194", reason = "quick-xml <0.41.0; upgrade blocked by opensim-scene pinning 0.37.x" },
-    { id = "RUSTSEC-2026-0195", reason = "quick-xml <0.41.0; upgrade blocked by opensim-scene pinning 0.37.x" },
+    { id = "RUSTSEC-2026-0194", reason = "quick-xml <0.41.0; upgrade blocked by welkin-scene pinning 0.37.x" },
+    { id = "RUSTSEC-2026-0195", reason = "quick-xml <0.41.0; upgrade blocked by welkin-scene pinning 0.37.x" },
 ]
 
 [licenses]

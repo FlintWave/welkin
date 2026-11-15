@@ -15,7 +15,7 @@ complex shapes and mesh asset decoding for mesh objects.
 
 ## What Changes
 
-### Prim-to-collider pipeline (`opensim-prim`)
+### Prim-to-collider pipeline (`welkin-prim`)
 
 - Given a `SceneObjectPart`'s VolumeParams and physics shape type, produce
   a `SharedShape` (Rapier collider geometry) using aurora-prim for vertex
@@ -39,7 +39,7 @@ complex shapes and mesh asset decoding for mesh objects.
   is provided.
 - Produce a triangle mesh or convex hull collider from the decoded data.
 - This may use `aurora-assets` if its mesh decoder covers the format;
-  otherwise a standalone decoder in `opensim-prim`.
+  otherwise a standalone decoder in `welkin-prim`.
 
 ### Convex decomposition
 
@@ -60,8 +60,8 @@ complex shapes and mesh asset decoding for mesh objects.
 
 ## Impact
 
-- Modifies: `opensim-prim` (new meshing module), `opensim-physics` (shape
-  integration), `opensim-physics-rapier` (real colliders replace placeholders).
+- Modifies: `welkin-prim` (new meshing module), `welkin-physics` (shape
+  integration), `welkin-physics-rapier` (real colliders replace placeholders).
 - New dependency: `image` crate for sculpt texture decoding (if not using
   aurora-assets). `parry3d` is already present via rapier3d.
 - Risk: MEDIUM. Incorrect colliders cause objects to fall through floors

@@ -2268,413 +2268,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "opensim-archive"
-version = "0.1.0"
-dependencies = [
- "base64 0.23.1",
- "chrono",
- "flate2",
- "md5 0.7.0",
- "opensim-prim",
- "opensim-types",
- "quick-xml",
- "tar",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "opensim-capacity"
-version = "0.1.0"
-dependencies = [
- "nix",
- "serde",
- "serde_json",
- "sysinfo",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "opensim-caps"
-version = "0.1.0"
-dependencies = [
- "axum",
- "base64 0.23.1",
- "http-body-util",
- "opensim-llsd",
- "opensim-types",
- "quick-xml",
- "reqwest 0.12.28",
- "serde",
- "thiserror 2.0.21",
- "tokio",
- "tower",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "opensim-config"
-version = "0.1.0"
-dependencies = [
- "configparser",
- "serde",
- "tempfile",
- "thiserror 2.0.21",
- "toml 0.8.2",
- "tracing",
-]
-
-[[package]]
-name = "opensim-conformance"
-version = "0.1.0"
-dependencies = [
- "aurora-llsd",
- "aurora-msg",
- "aurora-net",
- "axum",
- "base64 0.23.1",
- "bytes",
- "clap",
- "glam 0.34.3",
- "http-body-util",
- "hyper",
- "hyper-util",
- "md5 0.7.0",
- "opensim-data",
- "opensim-llsd",
- "opensim-services",
- "quick-xml",
- "rapier3d",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "tower",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "opensim-data"
-version = "0.1.0"
-dependencies = [
- "bitflags 2.13.2",
- "chrono",
- "opensim-types",
- "serde",
- "sqlx",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "opensim-llsd"
-version = "0.1.0"
-dependencies = [
- "aurora-llsd",
- "base64 0.23.1",
- "serde",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "opensim-migration"
-version = "0.1.0"
-dependencies = [
- "argon2",
- "base64 0.23.1",
- "clap",
- "md5 0.7.0",
- "rand_core 0.6.4",
- "regex",
- "serde",
- "serde_json",
- "tokio",
- "toml 0.8.2",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "opensim-modules"
-version = "0.1.0"
-dependencies = [
- "axum",
- "bitflags 2.13.2",
- "http-body-util",
- "irc",
- "opensim-data",
- "opensim-scene",
- "opensim-services",
- "opensim-types",
- "parking_lot 0.12.5",
- "serde",
- "serde_json",
- "sqlx",
- "thiserror 2.0.21",
- "tiny-skia",
- "tokio",
- "tower",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "opensim-msg"
-version = "0.1.0"
-dependencies = [
- "aurora-msg",
- "aurora-net",
- "glam 0.34.3",
- "opensim-types",
- "thiserror 2.0.21",
- "uuid",
-]
-
-[[package]]
-name = "opensim-net"
-version = "0.1.0"
-dependencies = [
- "opensim-llsd",
- "opensim-msg",
- "opensim-types",
- "thiserror 2.0.21",
- "tokio",
- "tokio-util",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "opensim-physics"
-version = "0.1.0"
-dependencies = [
- "glam 0.34.3",
- "opensim-types",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "opensim-physics-rapier"
-version = "0.1.0"
-dependencies = [
- "aurora-prim",
- "glam 0.34.3",
- "nalgebra",
- "opensim-physics",
- "opensim-types",
- "rapier3d",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tracing",
-]
-
-[[package]]
-name = "opensim-portal"
-version = "0.1.0"
-dependencies = [
- "argon2",
- "axum",
- "opensim-data",
- "rand 0.9.5",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "time",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "opensim-prim"
-version = "0.1.0"
-dependencies = [
- "aurora-prim",
- "flate2",
- "glam 0.34.3",
- "opensim-llsd",
- "opensim-physics",
- "opensim-physics-rapier",
- "opensim-types",
- "rapier3d",
- "thiserror 2.0.21",
- "uuid",
-]
-
-[[package]]
-name = "opensim-region"
-version = "0.1.0"
-dependencies = [
- "axum",
- "clap",
- "glam 0.34.3",
- "opensim-caps",
- "opensim-config",
- "opensim-data",
- "opensim-llsd",
- "opensim-modules",
- "opensim-msg",
- "opensim-net",
- "opensim-physics-rapier",
- "opensim-runtime",
- "opensim-scene",
- "opensim-services",
- "reqwest 0.12.28",
- "tokio",
- "tokio-util",
- "tracing",
- "tracing-subscriber",
- "uuid",
-]
-
-[[package]]
-name = "opensim-robust"
-version = "0.1.0"
-dependencies = [
- "axum",
- "clap",
- "opensim-config",
- "opensim-data",
- "opensim-runtime",
- "opensim-services",
- "sqlx",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "opensim-runtime"
-version = "0.1.0"
-dependencies = [
- "axum",
- "metrics",
- "metrics-exporter-prometheus",
- "serde",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "opensim-scene"
-version = "0.1.0"
-dependencies = [
- "base64 0.23.1",
- "bitflags 2.13.2",
- "glam 0.34.3",
- "opensim-physics",
- "opensim-prim",
- "opensim-types",
- "quick-xml",
- "serde",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "opensim-script-api"
-version = "0.1.0"
-dependencies = [
- "opensim-scene",
- "opensim-script-compiler",
- "opensim-script-vm",
- "opensim-types",
- "thiserror 2.0.21",
- "tracing",
-]
-
-[[package]]
-name = "opensim-script-compiler"
-version = "0.1.0"
-dependencies = [
- "thiserror 2.0.21",
- "tracing",
-]
-
-[[package]]
-name = "opensim-script-vm"
-version = "0.1.0"
-dependencies = [
- "aes",
- "base64 0.23.1",
- "cbc",
- "chrono",
- "hmac",
- "md-5",
- "mlua",
- "opensim-script-compiler",
- "opensim-types",
- "parking_lot 0.12.5",
- "pbkdf2",
- "regex",
- "serde",
- "serde_json",
- "sha1",
- "sha1_smol",
- "sha2",
- "thiserror 2.0.21",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "opensim-services"
-version = "0.1.0"
-dependencies = [
- "axum",
- "base64 0.23.1",
- "chrono",
- "crc32fast",
- "http-body-util",
- "md5 0.7.0",
- "opensim-caps",
- "opensim-data",
- "opensim-llsd",
- "opensim-types",
- "quick-xml",
- "regex",
- "reqwest 0.12.28",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "opensim-types"
-version = "0.1.0"
-dependencies = [
- "aurora-llsd",
- "aurora-msg",
- "aurora-prim",
- "bitflags 2.13.2",
- "glam 0.34.3",
- "serde",
- "thiserror 2.0.21",
- "uuid",
-]
-
-[[package]]
 name = "openssl"
 version = "0.10.82"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4880,6 +4473,413 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7265c9301c16a8711c992c2d8da90ee77ef54b1ed51482d6dfeb00dc756b1297"
 dependencies = [
  "rustls-pki-types",
+]
+
+[[package]]
+name = "welkin-archive"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "chrono",
+ "flate2",
+ "md5 0.7.0",
+ "quick-xml",
+ "tar",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "uuid",
+ "welkin-prim",
+ "welkin-types",
+]
+
+[[package]]
+name = "welkin-capacity"
+version = "0.1.0"
+dependencies = [
+ "nix",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "welkin-caps"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.23.1",
+ "http-body-util",
+ "quick-xml",
+ "reqwest 0.12.28",
+ "serde",
+ "thiserror 2.0.21",
+ "tokio",
+ "tower",
+ "tracing",
+ "uuid",
+ "welkin-llsd",
+ "welkin-types",
+]
+
+[[package]]
+name = "welkin-config"
+version = "0.1.0"
+dependencies = [
+ "configparser",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.21",
+ "toml 0.8.2",
+ "tracing",
+]
+
+[[package]]
+name = "welkin-conformance"
+version = "0.1.0"
+dependencies = [
+ "aurora-llsd",
+ "aurora-msg",
+ "aurora-net",
+ "axum",
+ "base64 0.23.1",
+ "bytes",
+ "clap",
+ "glam 0.34.3",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "md5 0.7.0",
+ "quick-xml",
+ "rapier3d",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tower",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "welkin-data",
+ "welkin-llsd",
+ "welkin-services",
+]
+
+[[package]]
+name = "welkin-data"
+version = "0.1.0"
+dependencies = [
+ "bitflags 2.13.2",
+ "chrono",
+ "serde",
+ "sqlx",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "uuid",
+ "welkin-types",
+]
+
+[[package]]
+name = "welkin-llsd"
+version = "0.1.0"
+dependencies = [
+ "aurora-llsd",
+ "base64 0.23.1",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "welkin-migration"
+version = "0.1.0"
+dependencies = [
+ "argon2",
+ "base64 0.23.1",
+ "clap",
+ "md5 0.7.0",
+ "rand_core 0.6.4",
+ "regex",
+ "serde",
+ "serde_json",
+ "tokio",
+ "toml 0.8.2",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "welkin-modules"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "bitflags 2.13.2",
+ "http-body-util",
+ "irc",
+ "parking_lot 0.12.5",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.21",
+ "tiny-skia",
+ "tokio",
+ "tower",
+ "tracing",
+ "uuid",
+ "welkin-data",
+ "welkin-scene",
+ "welkin-services",
+ "welkin-types",
+]
+
+[[package]]
+name = "welkin-msg"
+version = "0.1.0"
+dependencies = [
+ "aurora-msg",
+ "aurora-net",
+ "glam 0.34.3",
+ "thiserror 2.0.21",
+ "uuid",
+ "welkin-types",
+]
+
+[[package]]
+name = "welkin-net"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+ "welkin-llsd",
+ "welkin-msg",
+ "welkin-types",
+]
+
+[[package]]
+name = "welkin-physics"
+version = "0.1.0"
+dependencies = [
+ "glam 0.34.3",
+ "thiserror 2.0.21",
+ "welkin-types",
+]
+
+[[package]]
+name = "welkin-physics-rapier"
+version = "0.1.0"
+dependencies = [
+ "aurora-prim",
+ "glam 0.34.3",
+ "nalgebra",
+ "rapier3d",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tracing",
+ "welkin-physics",
+ "welkin-types",
+]
+
+[[package]]
+name = "welkin-portal"
+version = "0.1.0"
+dependencies = [
+ "argon2",
+ "axum",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "uuid",
+ "welkin-data",
+]
+
+[[package]]
+name = "welkin-prim"
+version = "0.1.0"
+dependencies = [
+ "aurora-prim",
+ "flate2",
+ "glam 0.34.3",
+ "rapier3d",
+ "thiserror 2.0.21",
+ "uuid",
+ "welkin-llsd",
+ "welkin-physics",
+ "welkin-physics-rapier",
+ "welkin-types",
+]
+
+[[package]]
+name = "welkin-region"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "clap",
+ "glam 0.34.3",
+ "reqwest 0.12.28",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "welkin-caps",
+ "welkin-config",
+ "welkin-data",
+ "welkin-llsd",
+ "welkin-modules",
+ "welkin-msg",
+ "welkin-net",
+ "welkin-physics-rapier",
+ "welkin-runtime",
+ "welkin-scene",
+ "welkin-services",
+]
+
+[[package]]
+name = "welkin-robust"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "clap",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "welkin-config",
+ "welkin-data",
+ "welkin-runtime",
+ "welkin-services",
+]
+
+[[package]]
+name = "welkin-runtime"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "metrics",
+ "metrics-exporter-prometheus",
+ "serde",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "welkin-scene"
+version = "0.1.0"
+dependencies = [
+ "base64 0.23.1",
+ "bitflags 2.13.2",
+ "glam 0.34.3",
+ "quick-xml",
+ "serde",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "uuid",
+ "welkin-physics",
+ "welkin-prim",
+ "welkin-types",
+]
+
+[[package]]
+name = "welkin-script-api"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.21",
+ "tracing",
+ "welkin-scene",
+ "welkin-script-compiler",
+ "welkin-script-vm",
+ "welkin-types",
+]
+
+[[package]]
+name = "welkin-script-compiler"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.21",
+ "tracing",
+]
+
+[[package]]
+name = "welkin-script-vm"
+version = "0.1.0"
+dependencies = [
+ "aes",
+ "base64 0.23.1",
+ "cbc",
+ "chrono",
+ "hmac",
+ "md-5",
+ "mlua",
+ "parking_lot 0.12.5",
+ "pbkdf2",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha1",
+ "sha1_smol",
+ "sha2",
+ "thiserror 2.0.21",
+ "tracing",
+ "uuid",
+ "welkin-script-compiler",
+ "welkin-types",
+]
+
+[[package]]
+name = "welkin-services"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.23.1",
+ "chrono",
+ "crc32fast",
+ "http-body-util",
+ "md5 0.7.0",
+ "quick-xml",
+ "regex",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "uuid",
+ "welkin-caps",
+ "welkin-data",
+ "welkin-llsd",
+ "welkin-types",
+]
+
+[[package]]
+name = "welkin-types"
+version = "0.1.0"
+dependencies = [
+ "aurora-llsd",
+ "aurora-msg",
+ "aurora-prim",
+ "bitflags 2.13.2",
+ "glam 0.34.3",
+ "serde",
+ "thiserror 2.0.21",
+ "uuid",
 ]
 
 [[package]]

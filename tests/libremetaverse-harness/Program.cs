@@ -1,5 +1,5 @@
 ﻿// SPDX-License-Identifier: GPL-3.0-or-later
-// Automated test harness for opensim-rust using LibreMetaverse 3.3.0
+// Automated test harness for welkin using LibreMetaverse 3.3.0
 
 using System;
 using System.Collections.Generic;

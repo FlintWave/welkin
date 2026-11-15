@@ -19,8 +19,8 @@ containers, a way to prove equivalence, and a clean provenance record.
 
 ## Runtime base (port-foundation 2)
 
-`opensim-config`: TOML with environment overrides, plus an importer for
-`OpenSim.ini`, `Robust.ini` and `Regions/*.ini`. `opensim-runtime`:
+`welkin-config`: TOML with environment overrides, plus an importer for
+`OpenSim.ini`, `Robust.ini` and `Regions/*.ini`. `welkin-runtime`:
 `tracing` logs, Prometheus metrics endpoint, health endpoint, graceful
 shutdown (commit `efdde1e`).
 
@@ -33,10 +33,10 @@ published UDP port must equal the advertised one.
 
 ## Conformance harness (port-foundation 4)
 
-`opensim-conformance`: HTTP and XML-RPC recorder (`7d9b2fc`), LLUDP
+`welkin-conformance`: HTTP and XML-RPC recorder (`7d9b2fc`), LLUDP
 recorder/replayer in `src/lludp.rs` and a `pCampBot` wrapper with pass/fail
 output in `src/pcampbot.rs` (`c779319`). A recorded C# session is stored at
-`crates/opensim-conformance/test-data/lludp_session.jsonl`.
+`crates/welkin-conformance/test-data/lludp_session.jsonl`.
 
 ## Licence audit (open-source-audit)
 

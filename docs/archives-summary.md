@@ -10,7 +10,7 @@ verdict: CONDITIONAL PASS. Change: `openspec/changes/archives/`.
 The OAR (OpenSim Archive) and IAR (Inventory Archive) systems from
 `OpenSim/Region/CoreModules/World/Archiver/` (15 files, ~4,800 lines) and
 `OpenSim/Region/CoreModules/Avatar/Inventory/Archiver/` (8 files, ~3,400
-lines), in one crate: `opensim-archive` (9,555 lines, 205 tests).
+lines), in one crate: `welkin-archive` (9,555 lines, 205 tests).
 
 | Section | Area | Tasks |
 |---|---|---|

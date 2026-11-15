@@ -9,7 +9,7 @@ Status: accepted (Phase 3). All 7 task groups in
 ## What was built
 
 The region simulator: scene graph, LLUDP client stack, HTTP capabilities,
-terrain, persistence and the `opensim-region` binary. It hosts one or more
+terrain, persistence and the `welkin-region` binary. It hosts one or more
 regions per process, accepts viewer connections, serves terrain and objects,
 and saves state to a C#-compatible region database.
 
@@ -19,21 +19,21 @@ management, archiver, scripting hooks, other CoreModules.
 ## Architecture
 
 ```text
-viewer --UDP--> opensim-net (server, client, dispatch, handlers)
-viewer --HTTP-> opensim-caps (seed cap, event queue, cap handlers)
+viewer --UDP--> welkin-net (server, client, dispatch, handlers)
+viewer --HTTP-> welkin-caps (seed cap, event queue, cap handlers)
                     |
                     v
-             opensim-scene (Scene -> groups -> parts, presences, terrain)
+             welkin-scene (Scene -> groups -> parts, presences, terrain)
                     |                    |
                     v                    v
-         opensim-physics (trait)   opensim-data (SimulationDataStore, sqlx)
+         welkin-physics (trait)   welkin-data (SimulationDataStore, sqlx)
                     ^
-         opensim-region (binary: config, regions, listeners, shutdown)
+         welkin-region (binary: config, regions, listeners, shutdown)
 ```
 
 - One `Scene` per region. `RegionManager` runs several in one process.
 - LLUDP dispatch is a table keyed on message id, calling typed handler
-  functions. Wire codecs come from `opensim-msg`.
+  functions. Wire codecs come from `welkin-msg`.
 - Persistence stores objects as XML2 and uses the existing `regionstore`
   tables, so a C#-created database loads without migration.
 
@@ -41,7 +41,7 @@ viewer --HTTP-> opensim-caps (seed cap, event queue, cap handlers)
 
 | Crate | Module | Role |
 |---|---|---|
-| `opensim-scene` | `scene.rs` | Region heartbeat, entity maps, update dispatch, spatial queries (position, owner, name), dirty tracking and periodic backup |
+| `welkin-scene` | `scene.rs` | Region heartbeat, entity maps, update dispatch, spatial queries (position, owner, name), dirty tracking and periodic backup |
 | | `group.rs` | `SceneObjectGroup`: linked prim set, root part, link/unlink, bounding box |
 | | `part.rs` | `SceneObjectPart`: shape, texture entry, extra params, properties, flags, inventory stub |
 | | `presence.rs` | `ScenePresence`: position, rotation, velocity, controls, animation, sit, appearance |
@@ -51,16 +51,16 @@ viewer --HTTP-> opensim-caps (seed cap, event queue, cap handlers)
 | | `terrain_brush.rs` | Raise, lower, flatten, smooth, noise, revert |
 | | `terrain_compress.rs` | LayerData patch compression for the viewer |
 | | `region_manager.rs`, `shutdown.rs` | Multi-region host, graceful persist/deregister/close |
-| `opensim-net` | `server.rs` | UDP listener, accept, per-client routing |
+| `welkin-net` | `server.rs` | UDP listener, accept, per-client routing |
 | | `client.rs` | Per-viewer state: acks, resend queue, sequence numbers, lifecycle |
 | | `dispatch.rs` | Handler table keyed on message id |
 | | `handlers.rs` | Viewer handlers (UseCircuitCode, CompleteAgentMovement, AgentUpdate, object and avatar messages) |
 | | `circuit.rs`, `throttle.rs` | Phase 1 circuit and throttle, reused |
-| `opensim-caps` | `server.rs` | Per-session seed cap and cap URL dispatch via axum |
+| `welkin-caps` | `server.rs` | Per-session seed cap and cap URL dispatch via axum |
 | | `event_queue.rs` | LLSD long-poll event queue, enqueue and poll/ack cycle |
 | | `handlers.rs` | Texture/mesh fetch, region info, agent preferences, upload caps |
-| `opensim-data` | `simulation.rs` | `SimulationDataStore` trait and sqlx implementation (objects, terrain, region settings, spawn points) |
-| `opensim-region` | `main.rs` | Config, database init, scenes, LLUDP and caps startup, grid registration, shutdown |
+| `welkin-data` | `simulation.rs` | `SimulationDataStore` trait and sqlx implementation (objects, terrain, region settings, spawn points) |
+| `welkin-region` | `main.rs` | Config, database init, scenes, LLUDP and caps startup, grid registration, shutdown |
 
 ## Tests
 
@@ -68,11 +68,11 @@ Counted from `#[test]` and `#[tokio::test]` attributes:
 
 | Crate | Unit and inline | Integration files |
 |---|---|---|
-| `opensim-scene` | 137 | `scene_proof.rs`, `xml2_proof.rs` |
-| `opensim-net` | 30 | `lludp_roundtrip.rs` (conformance) |
-| `opensim-caps` | 16 | none |
-| `opensim-data` | 18 | `simulation_roundtrip.rs`, `csharp_compat.rs` |
-| `opensim-region` | 11 | `acceptance.rs` |
+| `welkin-scene` | 137 | `scene_proof.rs`, `xml2_proof.rs` |
+| `welkin-net` | 30 | `lludp_roundtrip.rs` (conformance) |
+| `welkin-caps` | 16 | none |
+| `welkin-data` | 18 | `simulation_roundtrip.rs`, `csharp_compat.rs` |
+| `welkin-region` | 11 | `acceptance.rs` |
 
 Totals shown include integration test files under each crate's `tests/`
 directory where present. Proof coverage: scene graph operations, XML2
@@ -105,5 +105,5 @@ network. Persistence code had no HIGH findings.
   land and chat are absent by scope.
 - Capacity assessor benchmark/model/live modules are still stubs; they can
   now be built on this simulator (see decision C1).
-- Test counts for `opensim-net` and `opensim-caps` are modest relative to the
+- Test counts for `welkin-net` and `welkin-caps` are modest relative to the
   protocol surface; fuzzing of the new handlers is not yet set up.

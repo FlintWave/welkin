@@ -3,7 +3,7 @@
 **Date:** 2026-11-14
 **Reviewer:** Claude Opus 4.6 (automated, end-to-end)
 **Scope:** All 18 phases, 333 tasks (task 333 of 333)
-**Codebase:** 26 workspace crates across opensim-rust
+**Codebase:** 26 workspace crates across welkin
 **Method:** Source files read directly for each of the 12 subsystems below;
 `cargo test --workspace` run to verify compilation and test counts
 
@@ -11,7 +11,7 @@
 
 **PASS**
 
-The opensim-rust project has successfully ported all major subsystems of
+The welkin project has successfully ported all major subsystems of
 OpenSimulator 0.9.3.0 from C#/.NET to Rust. Every workspace crate compiles and
 all 1,844 tests pass with zero failures. The architecture is clean,
 well-documented, and follows idiomatic Rust patterns throughout. Security
@@ -26,7 +26,7 @@ standards.
 
 - **Status:** PASS
 - **Files reviewed:**
-  - `crates/opensim-services/src/login.rs` (636 lines)
+  - `crates/welkin-services/src/login.rs` (636 lines)
 - **Tests:** 0 unit tests (login handler is an async HTTP handler tested via service conformance)
 - **Findings:**
   - Full XMLRPC `login_to_simulator` handler with axum + quick_xml
@@ -43,10 +43,10 @@ standards.
 
 - **Status:** PASS
 - **Files reviewed:**
-  - `crates/opensim-modules/src/chat/mod.rs` (254 lines)
-  - `crates/opensim-modules/src/messaging/mod.rs` (452 lines)
-  - `crates/opensim-services/src/offline_im.rs` (service handler)
-  - `crates/opensim-modules/src/offline_im.rs` (region module)
+  - `crates/welkin-modules/src/chat/mod.rs` (254 lines)
+  - `crates/welkin-modules/src/messaging/mod.rs` (452 lines)
+  - `crates/welkin-services/src/offline_im.rs` (service handler)
+  - `crates/welkin-modules/src/offline_im.rs` (region module)
 - **Tests:** 3+ tests in offline IM service
 - **Findings:**
   - ChatModule: whisper (10m), say (20m), shout (100m) with squared-distance filtering, plus region/owner/direct/broadcast/debug types. UTF-8-safe truncation at 1000 chars. Debug channel routing (channel 2147483647). Configurable distances and admin prefix.
@@ -57,8 +57,8 @@ standards.
 
 - **Status:** PASS
 - **Files reviewed:**
-  - `crates/opensim-modules/src/transfer/mod.rs` (465 lines)
-  - `crates/opensim-modules/src/hg/entity_transfer.rs` (HG teleport)
+  - `crates/welkin-modules/src/transfer/mod.rs` (465 lines)
+  - `crates/welkin-modules/src/hg/entity_transfer.rs` (HG teleport)
 - **Tests:** 9 in HG entity transfer
 - **Findings:**
   - `EntityTransferStateMachine`: full FSM with 6 states (Preparing, Transferring, ReceivedAtDestination, CleaningUp, Cancelling, Aborting) and validated transitions matching C#. Terminal state enforcement.
@@ -70,9 +70,9 @@ standards.
 
 - **Status:** PASS
 - **Files reviewed:**
-  - `crates/opensim-services/src/inventory.rs` (XInventory service handler)
-  - `crates/opensim-modules/src/inventory/mod.rs` (region module)
-  - `crates/opensim-services/src/hg_inventory.rs` (HG suitcase)
+  - `crates/welkin-services/src/inventory.rs` (XInventory service handler)
+  - `crates/welkin-modules/src/inventory/mod.rs` (region module)
+  - `crates/welkin-services/src/hg_inventory.rs` (HG suitcase)
 - **Tests:** 12 in HG inventory
 - **Findings:**
   - XInventory service: full HTTP handler with 21 operations -- GETROOTFOLDER, GETFOLDER, GETFOLDERFORTYPE, GETINVENTORYSKELETON, GETFOLDERCONTENT, GETFOLDERITEMS, GETMULTIPLEFOLDERSCONTENT, GETITEM, GETMULTIPLEITEMS, GETACTIVEGESTURES, GETASSETPERMISSIONS, ADDITEM, UPDATEITEM, ADDFOLDER, UPDATEFOLDER, MOVEFOLDER, MOVEITEMS, DELETEFOLDERS, DELETEITEMS, PURGEFOLDER, CREATEUSERINVENTORY. Proper XML serialization with escaping. URL-decoded form parsing.
@@ -83,10 +83,10 @@ standards.
 
 - **Status:** PASS
 - **Files reviewed:**
-  - `crates/opensim-modules/src/groups/mod.rs` (1,497 lines)
-  - `crates/opensim-modules/src/groups/messaging.rs`
-  - `crates/opensim-modules/src/groups/hg_connector.rs`
-  - `crates/opensim-services/src/groups.rs`
+  - `crates/welkin-modules/src/groups/mod.rs` (1,497 lines)
+  - `crates/welkin-modules/src/groups/messaging.rs`
+  - `crates/welkin-modules/src/groups/hg_connector.rs`
+  - `crates/welkin-services/src/groups.rs`
 - **Tests:** 64 (20 mod + 16 messaging + 20 hg_connector + 8 service)
 - **Findings:**
   - `IGroupsServicesConnector` trait with full API: create, join, leave, eject, invite, roles (add/remove/update), memberships, notices (add/get/list), group-active management.
@@ -94,18 +94,18 @@ standards.
   - `GroupsMessagingModule`: group IM routing with session management.
   - `HGGroupsServiceConnector`: cross-grid groups with foreign agent mapping and authorization tokens.
   - Rich data types: `GroupRecord`, `GroupMembershipData`, `GroupMembersData`, `GroupRolesData`, `GroupTitleData`, `GroupNoticeData`.
-  - `GroupPowers` bitflags from opensim-data.
+  - `GroupPowers` bitflags from welkin-data.
 
 ### 6. Voice
 
 - **Status:** PASS
 - **Files reviewed:**
-  - `crates/opensim-modules/src/voice/mod.rs` (663 lines)
-  - `crates/opensim-modules/src/voice/capabilities.rs`
-  - `crates/opensim-modules/src/voice/wolfvoice_client.rs`
-  - `crates/opensim-modules/src/voice/docker.rs`
-  - `crates/opensim-modules/src/voice/ossl_integration.rs`
-  - `crates/opensim-modules/src/voice/portal_integration.rs`
+  - `crates/welkin-modules/src/voice/mod.rs` (663 lines)
+  - `crates/welkin-modules/src/voice/capabilities.rs`
+  - `crates/welkin-modules/src/voice/wolfvoice_client.rs`
+  - `crates/welkin-modules/src/voice/docker.rs`
+  - `crates/welkin-modules/src/voice/ossl_integration.rs`
+  - `crates/welkin-modules/src/voice/portal_integration.rs`
 - **Tests:** 59 (12 mod + 15 capabilities + 11 wolfvoice + 6 docker + 8 ossl + 7 portal)
 - **Findings:**
   - `WebRtcVoiceModule`: full channel lifecycle (create/destroy/get per parcel), viewer count tracking, SIP address overrides, `IVoiceModule` trait.
@@ -120,21 +120,21 @@ standards.
 
 - **Status:** PASS
 - **Files reviewed:**
-  - `crates/opensim-modules/src/hg/mod.rs` (230 lines, UUI parser)
-  - `crates/opensim-modules/src/hg/entity_transfer.rs`
-  - `crates/opensim-modules/src/hg/inventory_access.rs`
-  - `crates/opensim-modules/src/hg/friends.rs`
-  - `crates/opensim-modules/src/hg/messaging.rs`
-  - `crates/opensim-modules/src/hg/user_management.rs`
-  - `crates/opensim-modules/src/hg/connector_in.rs`
-  - `crates/opensim-modules/src/hg/lure.rs`
-  - `crates/opensim-modules/src/hg/world_map.rs`
-  - `crates/opensim-services/src/gatekeeper.rs`
-  - `crates/opensim-services/src/user_agent.rs`
-  - `crates/opensim-services/src/hg_assets.rs`
-  - `crates/opensim-services/src/hg_friends.rs`
-  - `crates/opensim-services/src/hg_inventory.rs`
-  - `crates/opensim-services/src/hg_linker.rs`
+  - `crates/welkin-modules/src/hg/mod.rs` (230 lines, UUI parser)
+  - `crates/welkin-modules/src/hg/entity_transfer.rs`
+  - `crates/welkin-modules/src/hg/inventory_access.rs`
+  - `crates/welkin-modules/src/hg/friends.rs`
+  - `crates/welkin-modules/src/hg/messaging.rs`
+  - `crates/welkin-modules/src/hg/user_management.rs`
+  - `crates/welkin-modules/src/hg/connector_in.rs`
+  - `crates/welkin-modules/src/hg/lure.rs`
+  - `crates/welkin-modules/src/hg/world_map.rs`
+  - `crates/welkin-services/src/gatekeeper.rs`
+  - `crates/welkin-services/src/user_agent.rs`
+  - `crates/welkin-services/src/hg_assets.rs`
+  - `crates/welkin-services/src/hg_friends.rs`
+  - `crates/welkin-services/src/hg_inventory.rs`
+  - `crates/welkin-services/src/hg_linker.rs`
 - **Tests:** 145 total across all HG modules and services
 - **Findings:**
   - **Core types**: `UniversalUserIdentifier` (UUI) with parse/format, grid URI normalization.
@@ -155,7 +155,7 @@ standards.
 
 - **Status:** PASS
 - **Files reviewed:**
-  - `crates/opensim-archive/src/` (14 files, 8,101 lines total)
+  - `crates/welkin-archive/src/` (14 files, 8,101 lines total)
 - **Tests:** 174 (36 archiver_module + 21 oar_read + 7 oar_write + 11 iar_read + 18 iar_write + 17 external_representation + 12 osp_resolver + 5 control_file + 4 land_data + 4 region_settings + 9 constants + 7 assets_request + 23 inventory_archiver_module)
 - **Findings:**
   - OAR read: gz+tar extraction via `flate2`+`tar` crates, control file parsing, terrain/settings/land/object/asset loading. `OarLoadOptions`: merge, displacement, rotation, bounding box, default user, skip_assets, no_objects, incoming region size. `SceneImporter` trait for backend abstraction.
@@ -170,8 +170,8 @@ standards.
 
 - **Status:** PASS
 - **Files reviewed:**
-  - `crates/opensim-modules/src/estate/mod.rs` (390 lines)
-  - `crates/opensim-services/src/estate.rs`
+  - `crates/welkin-modules/src/estate/mod.rs` (390 lines)
+  - `crates/welkin-services/src/estate.rs`
 - **Tests:** 0 in the estate module file itself; estate tests exist in parent module integration tests
 - **Findings:**
   - `EstateSettings`: comprehensive data model -- 25+ fields including estate_id, name, owner, abuse_email, all access control flags (deny_anonymous, deny_identified, allow_voice, allow_direct_teleport, deny_transacted, deny_age_unverified, deny_minors), economy (price_per_meter), redirect grid coordinates, sun/time (use_global_time, fixed_sun, sun_position), covenant (UUID + timestamp), terrain textures (4), elevation bounds (4 pairs), water height.
@@ -185,11 +185,11 @@ standards.
 
 - **Status:** PASS
 - **Files reviewed:**
-  - `crates/opensim-migration/src/db_validator.rs` (863 lines)
-  - `crates/opensim-migration/src/password_upgrade.rs` (460 lines)
-  - `crates/opensim-migration/src/config_converter.rs` (519 lines)
-  - `crates/opensim-migration/src/main.rs` (145 lines)
-  - `crates/opensim-migration/src/lib.rs`
+  - `crates/welkin-migration/src/db_validator.rs` (863 lines)
+  - `crates/welkin-migration/src/password_upgrade.rs` (460 lines)
+  - `crates/welkin-migration/src/config_converter.rs` (519 lines)
+  - `crates/welkin-migration/src/main.rs` (145 lines)
+  - `crates/welkin-migration/src/lib.rs`
 - **Tests:** 39 (15 db_validator + 12 password_upgrade + 12 config_converter)
 - **Findings:**
   - **CLI**: clap-based `osim-migrate` with ValidateDb, UpgradePasswords, ConvertConfig subcommands.
@@ -206,7 +206,7 @@ standards.
   - `docker-compose.prod.yml` (254 lines)
 - **Tests:** N/A (infrastructure files)
 - **Findings:**
-  - **Dockerfile**: 4-stage build (chef -> planner -> builder -> runtime). `cargo-chef` for dependency caching. Builds 4 binaries (opensim-robust, opensim-region, opensim-portal, osim-migrate). Debug symbols stripped. Native deps: cmake, g++, pkg-config, libssl-dev.
+  - **Dockerfile**: 4-stage build (chef -> planner -> builder -> runtime). `cargo-chef` for dependency caching. Builds 4 binaries (welkin-robust, welkin-region, welkin-portal, osim-migrate). Debug symbols stripped. Native deps: cmake, g++, pkg-config, libssl-dev.
   - **Runtime**: `gcr.io/distroless/cc-debian12:nonroot` -- no shell, no package manager, minimal CVE surface. Runs as UID 65534. Binaries owned by nonroot. WORKDIR `/home/nonroot`. `RUST_LOG=info` default.
   - **Health endpoints**: HTTP GET `/health` -> 200 "ok" (documented for orchestrator probing since distroless has no shell for HEALTHCHECK). `/metrics` endpoint for Prometheus.
   - **Dockerfile.region**: Dedicated single-binary build with identical hardening. Exec-form ENTRYPOINT.
@@ -217,7 +217,7 @@ standards.
 
 - **Status:** PASS
 - **Files reviewed:**
-  - `crates/opensim-conformance/src/` (11 files)
+  - `crates/welkin-conformance/src/` (11 files)
 - **Tests:** 88 (17 pcampbot + 10 bot_scripting + 16 protocol_replay + 13 service_conformance + 15 load_test + 17 mixed_grid)
 - **Findings:**
   - CLI tool (`osim-conform`) with subcommands: Record, Replay, LludpRecord, LludpReplay, Bot, BotScript, ServiceConformance, PhysicsSpike.
@@ -246,28 +246,28 @@ Per-crate breakdown (from `cargo test --workspace`):
 
 | Crate | Unit | Integration | Total |
 |---|---|---|---|
-| opensim-modules | 535 | 146 | 681 |
-| opensim-script-vm | 205 | 72 | 277 |
-| opensim-archive | 174 | 31 | 205 |
-| opensim-scene | 74 | 63 | 137 |
-| opensim-conformance | 88 | 44 | 132 |
-| opensim-services | 122 | 0 | 122 |
-| opensim-prim | 38 | 8 | 46 |
-| opensim-migration | 39 | 0 | 39 |
-| opensim-data | 21 | 10 | 31 |
-| opensim-net | 30 | 0 | 30 |
-| opensim-types | 22 | 0 | 22 |
-| opensim-physics | 15 | 5 | 20 |
-| opensim-caps | 16 | 0 | 16 |
-| opensim-config | 16 | 0 | 16 |
-| opensim-portal | 11 | 1 | 12 |
-| opensim-script-api | 12 | 0 | 12 |
-| opensim-physics-rapier | 0 | 11 | 11 |
-| opensim-region | 8 | 3 | 11 |
-| opensim-llsd | 9 | 0 | 9 |
-| opensim-msg | 6 | 0 | 6 |
-| opensim-capacity | 5 | 0 | 5 |
-| opensim-script-compiler | 4 | 0 | 4 |
+| welkin-modules | 535 | 146 | 681 |
+| welkin-script-vm | 205 | 72 | 277 |
+| welkin-archive | 174 | 31 | 205 |
+| welkin-scene | 74 | 63 | 137 |
+| welkin-conformance | 88 | 44 | 132 |
+| welkin-services | 122 | 0 | 122 |
+| welkin-prim | 38 | 8 | 46 |
+| welkin-migration | 39 | 0 | 39 |
+| welkin-data | 21 | 10 | 31 |
+| welkin-net | 30 | 0 | 30 |
+| welkin-types | 22 | 0 | 22 |
+| welkin-physics | 15 | 5 | 20 |
+| welkin-caps | 16 | 0 | 16 |
+| welkin-config | 16 | 0 | 16 |
+| welkin-portal | 11 | 1 | 12 |
+| welkin-script-api | 12 | 0 | 12 |
+| welkin-physics-rapier | 0 | 11 | 11 |
+| welkin-region | 8 | 3 | 11 |
+| welkin-llsd | 9 | 0 | 9 |
+| welkin-msg | 6 | 0 | 6 |
+| welkin-capacity | 5 | 0 | 5 |
+| welkin-script-compiler | 4 | 0 | 4 |
 
 ### Security reviews
 
@@ -344,7 +344,7 @@ These are tracked for post-acceptance work, not blockers:
 
 **PASS -- Accept for completion.**
 
-The opensim-rust project has achieved its goal: a complete, compiling, tested
+The welkin project has achieved its goal: a complete, compiling, tested
 port of OpenSimulator 0.9.3.0 from C#/.NET to idiomatic Rust across 26
 workspace crates. All 333 tasks across 18 phases are reflected in the codebase.
 1,844 tests pass with zero failures. Security reviews cover all high-risk

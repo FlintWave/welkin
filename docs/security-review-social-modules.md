@@ -43,8 +43,8 @@ production deployment.
 
 **Severity:** HIGH
 **Affected files:**
-- `crates/opensim-modules/src/irc_bridge.rs:205-207` (`format_nick`)
-- `crates/opensim-modules/src/irc_bridge.rs:213-229` (`on_chat_from_world`)
+- `crates/welkin-modules/src/irc_bridge.rs:205-207` (`format_nick`)
+- `crates/welkin-modules/src/irc_bridge.rs:213-229` (`on_chat_from_world`)
 
 **Description:** The `format_nick` method inserts avatar names into the nick
 format string without any sanitization. The `on_chat_from_world` method
@@ -79,9 +79,9 @@ Apply it in `format_nick` and in `on_chat_from_world` before formatting.
 
 **Severity:** HIGH
 **Affected files:**
-- `crates/opensim-modules/src/groups/mod.rs:719` (config read but not used)
-- `crates/opensim-modules/src/groups/mod.rs:779-807` (`handle_create_group_request`)
-- `crates/opensim-services/src/groups.rs:455-528` (`handle_put_group` ADD)
+- `crates/welkin-modules/src/groups/mod.rs:719` (config read but not used)
+- `crates/welkin-modules/src/groups/mod.rs:779-807` (`handle_create_group_request`)
+- `crates/welkin-services/src/groups.rs:455-528` (`handle_put_group` ADD)
 
 **Description:** The `GroupsModule` reads `LevelGroupCreate` from config
 (stored in `self.level_group_create`) but never checks it. The
@@ -113,7 +113,7 @@ through the scene reference or a permission-checking callback.
 ### H-3: Group Owner Can Be Ejected From Their Own Group
 
 **Severity:** HIGH
-**Affected file:** `crates/opensim-services/src/groups.rs:623-657`
+**Affected file:** `crates/welkin-services/src/groups.rs:623-657`
 
 **Description:** `handle_remove_agent_from_group` checks
 `GroupPowers::EJECT` when the requester differs from the target, but does
@@ -144,7 +144,7 @@ if let Ok(Some(group)) = store.retrieve_group_by_id(group_id).await {
 ### M-1: ADDAGENTTOGROUP Service Handler Has No Authorization Check
 
 **Severity:** MEDIUM
-**Affected file:** `crates/opensim-services/src/groups.rs:598-621`
+**Affected file:** `crates/welkin-services/src/groups.rs:598-621`
 
 **Description:** The `handle_add_agent_to_group` handler adds any agent to any
 group/role without checking whether the requesting agent has permission, whether
@@ -163,7 +163,7 @@ authentication for service-to-service calls.
 ### M-2: SQL LIKE Wildcards Not Escaped in Group Search
 
 **Severity:** MEDIUM
-**Affected file:** `crates/opensim-data/src/groups.rs:325-333`
+**Affected file:** `crates/welkin-data/src/groups.rs:325-333`
 
 **Description:** The `retrieve_groups` method wraps the user-supplied search
 pattern with `%` for a SQL LIKE query, but does not escape special LIKE
@@ -185,8 +185,8 @@ let like = format!("%{escaped}%");
 
 **Severity:** MEDIUM
 **Affected files:**
-- `crates/opensim-data/src/profiles.rs` (all store methods)
-- `crates/opensim-services/src/profiles.rs` (all update handlers)
+- `crates/welkin-data/src/profiles.rs` (all store methods)
+- `crates/welkin-services/src/profiles.rs` (all update handlers)
 
 **Description:** Profile fields (`profile_about_text`, `profile_first_text`,
 `profile_want_to_text`, `profile_skills_text`), classified descriptions, pick
@@ -206,8 +206,8 @@ in the service handlers before storing.
 
 **Severity:** MEDIUM
 **Affected files:**
-- `crates/opensim-services/src/profiles.rs` (all update handlers)
-- `crates/opensim-services/src/groups.rs:1116-1169` (notice text)
+- `crates/welkin-services/src/profiles.rs` (all update handlers)
+- `crates/welkin-services/src/groups.rs:1116-1169` (notice text)
 
 **Description:** Profile text, picks, classifieds, notes, and group notice
 content are stored and returned as-is without any HTML or script sanitization.
@@ -225,8 +225,8 @@ limited formatting is desired.
 
 **Severity:** MEDIUM
 **Affected files:**
-- `crates/opensim-data/src/offline_im.rs:66-88` (`store_message`)
-- `crates/opensim-services/src/offline_im.rs:136-167` (`handle_store`)
+- `crates/welkin-data/src/offline_im.rs:66-88` (`store_message`)
+- `crates/welkin-services/src/offline_im.rs:136-167` (`handle_store`)
 
 **Description:** The offline IM `Message` field (which contains an
 XML-serialized `GridInstantMessage`) has no size limit. The count limit
@@ -243,7 +243,7 @@ the data store and the service handler.
 ### M-6: HG Groups Cache Has No Maximum Size Bound
 
 **Severity:** MEDIUM
-**Affected file:** `crates/opensim-modules/src/groups/hg_connector.rs:166-420`
+**Affected file:** `crates/welkin-modules/src/groups/hg_connector.rs:166-420`
 
 **Description:** The `RemoteConnectorCacheWrapper` uses `HashMap` for all
 caches with no maximum entry count. While entries expire after the configured
@@ -260,7 +260,7 @@ oldest. Consider using an LRU cache implementation.
 ### M-7: NPC Control Operations Do Not Validate Caller Ownership
 
 **Severity:** MEDIUM (upgraded to HIGH in adversarial review — see H-3 note)
-**Affected file:** `crates/opensim-modules/src/npc/mod.rs:221-283`
+**Affected file:** `crates/welkin-modules/src/npc/mod.rs:221-283`
 
 **Description:** The `move_to`, `say`, `sit`, `stand`, `rotate`, and `touch`
 trait methods on `INPCModule` do not take a `caller_id` parameter and do not
@@ -291,7 +291,7 @@ fn touch(&self, npc_id: Uuid, caller_id: Uuid, target: Uuid) -> Result<(), Modul
 ### M-8: Group Chat Session Join Does Not Verify Group Membership
 
 **Severity:** MEDIUM
-**Affected file:** `crates/opensim-modules/src/groups/messaging.rs:183-197`
+**Affected file:** `crates/welkin-modules/src/groups/messaging.rs:183-197`
 
 **Description:** `handle_session_group_start` adds any `agent_id` to a group
 chat session by calling `self.sessions.invite_agent(group_id, agent_id)` without
@@ -311,7 +311,7 @@ adding if not a member.
 ### M-9: handle_update_membership Lacks Authorization Check
 
 **Severity:** MEDIUM
-**Affected file:** `crates/opensim-services/src/groups.rs:1014-1046`
+**Affected file:** `crates/welkin-services/src/groups.rs:1014-1046`
 
 **Description:** The `UPDATEMEMBERSHIP` handler accepts `RequestingAgentID` and
 `AgentID` but does not verify that the requester is the same as the target agent
@@ -331,7 +331,7 @@ an appropriate group power.
 ### M-10: Offline IM Sender UUID Not Validated
 
 **Severity:** MEDIUM
-**Affected file:** `crates/opensim-services/src/offline_im.rs:136-167`
+**Affected file:** `crates/welkin-services/src/offline_im.rs:136-167`
 
 **Description:** The `handle_store` handler accepts the `FromID` field without
 validation. If the service endpoint is accessible to untrusted callers, a
@@ -349,7 +349,7 @@ caller authentication.
 ### L-1: NPC Names Not Sanitized
 
 **Severity:** LOW
-**Affected file:** `crates/opensim-modules/src/npc/mod.rs:165-218`
+**Affected file:** `crates/welkin-modules/src/npc/mod.rs:165-218`
 
 **Description:** NPC first and last names are accepted without validation for
 control characters, excessive length, or empty strings. Names containing null
@@ -364,7 +364,7 @@ length (63 bytes), and strip control characters (U+0000-U+001F, U+007F-U+009F).
 ### L-2: UUI Home URI Not Validated for Proper URI Format
 
 **Severity:** LOW
-**Affected file:** `crates/opensim-modules/src/groups/hg_connector.rs:57-64`
+**Affected file:** `crates/welkin-modules/src/groups/hg_connector.rs:57-64`
 
 **Description:** `ForeignImporter::parse_home_uri` extracts the home URI from
 a UUI string but does not validate it is a well-formed HTTP(S) URL. If the URI
@@ -379,7 +379,7 @@ schemes (http/https) and reject URIs targeting private/loopback addresses.
 ### L-3: IRC Reconnect Has No Maximum Retry Count
 
 **Severity:** LOW
-**Affected file:** `crates/opensim-modules/src/irc_bridge.rs:108-143`
+**Affected file:** `crates/welkin-modules/src/irc_bridge.rs:108-143`
 
 **Description:** The `ReconnectBackoff` caps delay at 300 seconds but has no
 maximum failure count. If the IRC server is permanently unreachable, the bridge
@@ -395,7 +395,7 @@ re-enabled or the module is restarted.
 ### L-4: Classified/Pick Updates Do Not Verify Ownership at Service Level
 
 **Severity:** LOW
-**Affected file:** `crates/opensim-services/src/profiles.rs:232-256, 329-361`
+**Affected file:** `crates/welkin-services/src/profiles.rs:232-256, 329-361`
 
 **Description:** The `classified_update` and `picks_update` JSON-RPC handlers
 do not verify that the requesting agent owns the classified or pick being
@@ -411,7 +411,7 @@ the region module level.
 ### L-5: Missing ROLE_PROPERTIES Power Check on Role Update
 
 **Severity:** LOW
-**Affected file:** `crates/opensim-services/src/groups.rs:788-789`
+**Affected file:** `crates/welkin-services/src/groups.rs:788-789`
 
 **Description:** The `handle_put_role` UPDATE operation checks for
 `CHANGE_ACTIONS` power but not `ROLE_PROPERTIES`. In C#, modifying role
@@ -426,7 +426,7 @@ properties (name, title, description, powers) also requires the
 ### L-6: HG Cache Key Collision on Group Name
 
 **Severity:** LOW
-**Affected file:** `crates/opensim-modules/src/groups/hg_connector.rs:214-221`
+**Affected file:** `crates/welkin-modules/src/groups/hg_connector.rs:214-221`
 
 **Description:** The `cache_group` method caches by both group ID and group
 name. If two groups on different grids share the same name, the name-based

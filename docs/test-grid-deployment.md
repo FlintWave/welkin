@@ -32,7 +32,7 @@ it first or remap the Rust ports in `compose.yaml`.
 
 ```sh
 # Clone and build
-cd opensim-rust
+cd welkin
 podman-compose up -d          # or: docker compose up -d
 
 # Watch startup
@@ -68,7 +68,7 @@ Load a pre-existing OAR archive into the test region:
 podman cp MyRegion.oar region:/home/opensim/
 
 # Run the OAR load (via the region binary's console command interface)
-podman exec region opensim-region load-oar /home/opensim/MyRegion.oar
+podman exec region welkin-region load-oar /home/opensim/MyRegion.oar
 ```
 
 Multi-region OARs are supported. The loader creates missing regions
@@ -152,7 +152,7 @@ If the grid has a public IP and ports 8003/9000 are reachable:
 
 ## Monitoring
 
-Both `opensim-robust` and `opensim-region` expose Prometheus-compatible
+Both `welkin-robust` and `welkin-region` expose Prometheus-compatible
 endpoints:
 
 | Endpoint | URL |
@@ -187,13 +187,13 @@ podman-compose down -v
 ## Known limitations
 
 - **osim-robust is a skeleton binary.** The grid services are implemented in
-  the `opensim-services` crate and the axum routers are functional, but the
+  the `welkin-services` crate and the axum routers are functional, but the
   `main.rs` wiring is minimal. Production hardening is a cutover task.
 - **All security reviews carry a CONDITIONAL PASS.** The tracked findings
   must be resolved before any deployment that faces untrusted users or grids.
 - **Pathfinding is not implemented.** Decision R9 deferred it.
 - **LSL transpiler is a skeleton.** Scripts written directly in Luau work;
-  the LSL-to-Luau transpiler (`opensim-script-compiler`) is not yet
+  the LSL-to-Luau transpiler (`welkin-script-compiler`) is not yet
   functional. Hand-written Luau scripts can be used for testing.
 - **osim-conform live attach is deferred.** Conformance replay from recorded
   fixtures works; live-attach to a running C# server is a Phase 7 task.

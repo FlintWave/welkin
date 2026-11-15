@@ -6,19 +6,19 @@
 # Multi-stage build producing a minimal, hardened container image for the
 # OpenSim Rust grid stack.  Builds all production binaries:
 #
-#   - opensim-robust   Grid services server (login, asset, inventory, etc.)
-#   - opensim-region   Region simulator (scene, physics, scripting)
-#   - opensim-portal   Web administration portal
+#   - welkin-robust   Grid services server (login, asset, inventory, etc.)
+#   - welkin-region   Region simulator (scene, physics, scripting)
+#   - welkin-portal   Web administration portal
 #   - osim-migrate     Database migration and configuration tool
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Usage:
-#   docker build -t opensim-rust:latest .
-#   docker run --rm opensim-rust:latest                    # → robust
-#   docker run --rm opensim-rust:latest opensim-region     # → region
-#   docker run --rm opensim-rust:latest opensim-portal     # → portal
-#   docker run --rm opensim-rust:latest osim-migrate       # → migration
+#   docker build -t welkin:latest .
+#   docker run --rm welkin:latest                    # → robust
+#   docker run --rm welkin:latest welkin-region     # → region
+#   docker run --rm welkin:latest welkin-portal     # → portal
+#   docker run --rm welkin:latest osim-migrate       # → migration
 #
 # ============================================================================
 
@@ -107,17 +107,17 @@ COPY crates crates
 # compilation artifacts across crates (they share a large common dependency
 # tree: tokio, axum, sqlx, serde, etc.).
 RUN cargo build --release \
-        --bin opensim-robust \
-        --bin opensim-region \
-        --bin opensim-portal \
+        --bin welkin-robust \
+        --bin welkin-region \
+        --bin welkin-portal \
         --bin osim-migrate
 
 # Strip debug symbols to reduce binary size (~60-80% smaller).
 # The binaries are statically known here; no glob needed.
 RUN strip \
-        target/release/opensim-robust \
-        target/release/opensim-region \
-        target/release/opensim-portal \
+        target/release/welkin-robust \
+        target/release/welkin-region \
+        target/release/welkin-portal \
         target/release/osim-migrate
 
 # ============================================================================
@@ -157,7 +157,7 @@ ARG VERSION=0.1.0
 # OCI / Docker labels
 # ---------------------------------------------------------------------------
 LABEL maintainer="OpenSim Rust Contributors" \
-      org.opencontainers.image.title="opensim-rust" \
+      org.opencontainers.image.title="welkin" \
       org.opencontainers.image.description="OpenSim virtual world server (Rust implementation)" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.licenses="GPL-3.0-or-later" \
@@ -172,16 +172,16 @@ LABEL maintainer="OpenSim Rust Contributors" \
 # although the binaries are read-only in practice.
 # ---------------------------------------------------------------------------
 COPY --from=builder --chown=65534:65534 \
-    /src/target/release/opensim-robust \
-    /usr/local/bin/opensim-robust
+    /src/target/release/welkin-robust \
+    /usr/local/bin/welkin-robust
 
 COPY --from=builder --chown=65534:65534 \
-    /src/target/release/opensim-region \
-    /usr/local/bin/opensim-region
+    /src/target/release/welkin-region \
+    /usr/local/bin/welkin-region
 
 COPY --from=builder --chown=65534:65534 \
-    /src/target/release/opensim-portal \
-    /usr/local/bin/opensim-portal
+    /src/target/release/welkin-portal \
+    /usr/local/bin/welkin-portal
 
 COPY --from=builder --chown=65534:65534 \
     /src/target/release/osim-migrate \
@@ -209,7 +209,7 @@ WORKDIR /home/nonroot
 # RUST_LOG controls tracing-subscriber's EnvFilter.  Examples:
 #   RUST_LOG=info                      (default — recommended for production)
 #   RUST_LOG=debug                     (verbose, all crates)
-#   RUST_LOG=opensim_robust=debug      (verbose for one crate only)
+#   RUST_LOG=welkin_robust=debug      (verbose for one crate only)
 #   RUST_LOG=warn                      (quiet — errors and warnings only)
 # ---------------------------------------------------------------------------
 ENV RUST_LOG=info
@@ -243,9 +243,9 @@ ENV RUST_LOG=info
 # exposing all ports from a single container.  Use the CMD override to select
 # which binary to run:
 #
-#   docker run opensim-rust:latest opensim-robust   # port 8002
-#   docker run opensim-rust:latest opensim-region   # port 9000
-#   docker run opensim-rust:latest opensim-portal   # port 8080
+#   docker run welkin:latest welkin-robust   # port 8002
+#   docker run welkin:latest welkin-region   # port 9000
+#   docker run welkin:latest welkin-portal   # port 8080
 # ---------------------------------------------------------------------------
 EXPOSE 8002/tcp
 EXPOSE 9000/tcp
@@ -255,7 +255,7 @@ EXPOSE 8080/tcp
 # ---------------------------------------------------------------------------
 # Graceful shutdown
 # ---------------------------------------------------------------------------
-# The Rust runtime (opensim-runtime crate) installs a SIGTERM handler via
+# The Rust runtime (welkin-runtime crate) installs a SIGTERM handler via
 # tokio::signal.  When Docker sends SIGTERM (on `docker stop`), the server:
 #
 #   1. Stops accepting new connections
@@ -276,12 +276,12 @@ STOPSIGNAL SIGTERM
 # Entrypoint and default command
 # ---------------------------------------------------------------------------
 # ENTRYPOINT is empty so CMD can specify any of the four binaries.
-# Default is opensim-robust (grid services), the most common deployment.
+# Default is welkin-robust (grid services), the most common deployment.
 #
 # Override examples:
-#   docker run opensim-rust:latest opensim-region
-#   docker run opensim-rust:latest opensim-portal
-#   docker run opensim-rust:latest osim-migrate --help
+#   docker run welkin:latest welkin-region
+#   docker run welkin:latest welkin-portal
+#   docker run welkin:latest osim-migrate --help
 # ---------------------------------------------------------------------------
 ENTRYPOINT []
-CMD ["opensim-robust"]
+CMD ["welkin-robust"]

@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["crates/*"]
-exclude = ["crates/opensim-companion"]
+exclude = ["crates/welkin-companion"]
 
 [workspace.package]
 version = "0.1.0"

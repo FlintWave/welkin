@@ -1,0 +1,26 @@
+[package]
+name = "welkin-scene"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+welkin-types = { path = "../welkin-types" }
+welkin-prim = { path = "../welkin-prim" }
+welkin-physics = { path = "../welkin-physics" }
+tokio = { workspace = true }
+glam = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+serde = { workspace = true }
+quick-xml = "0.37"
+bitflags = { workspace = true }
+base64 = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "macros"] }
+
+[lints]
+workspace = true

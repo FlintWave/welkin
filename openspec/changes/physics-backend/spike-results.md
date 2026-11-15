@@ -8,7 +8,7 @@
 
 1. **Rapier feature coverage (1.1):** Heightfield, triangle mesh, convex hull, compound colliders, CCD, shape casts, and snapshot serialization round-trips all work in rapier3d 0.36.1 with enhanced-determinism and serde-serialize features.
 
-2. **Trajectory recording infrastructure (1.2):** Built `TrajectoryRecorder.cs` for C# OpenSim ubODE that records per-step physics state (position, velocity, orientation, angular velocity) as line-delimited JSON. Corresponding Rust reader in `opensim-conformance`. Actual recording of scenes deferred to when C# toolchain is available.
+2. **Trajectory recording infrastructure (1.2):** Built `TrajectoryRecorder.cs` for C# OpenSim ubODE that records per-step physics state (position, velocity, orientation, angular velocity) as line-delimited JSON. Corresponding Rust reader in `welkin-conformance`. Actual recording of scenes deferred to when C# toolchain is available.
 
 3. **Headless replay harness (1.3):** Built `osim-conform physics-spike` command that loads trajectory recordings, sets up equivalent Rapier scenes (ground plane, dynamic bodies), steps the simulation, and compares positions. Validated with synthetic box-drop (142 frames, max error 0.20m) and box-rest (10 frames, ~0 error) test data.
 
@@ -31,8 +31,8 @@
 
 ## Artifacts
 
-- `crates/opensim-conformance/src/trajectory.rs` — Trajectory reader
-- `crates/opensim-conformance/src/spike.rs` — Rapier replay harness
-- `crates/opensim-conformance/test-data/` — Synthetic test trajectories
-- `crates/opensim-physics-rapier/tests/spike_aurora_colliders.rs` — Aurora geometry tests
+- `crates/welkin-conformance/src/trajectory.rs` — Trajectory reader
+- `crates/welkin-conformance/src/spike.rs` — Rapier replay harness
+- `crates/welkin-conformance/test-data/` — Synthetic test trajectories
+- `crates/welkin-physics-rapier/tests/spike_aurora_colliders.rs` — Aurora geometry tests
 - `OpenSim/Region/PhysicsModules/SharedBase/TrajectoryRecorder.cs` — C# recorder (in opensim-0.9.3.0-source)

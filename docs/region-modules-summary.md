@@ -8,8 +8,8 @@ verdict: CONDITIONAL PASS. Change: `openspec/changes/region-modules/`.
 ## What was built
 
 The region modules from `OpenSim/Region/CoreModules/` that are neither terrain,
-archiver nor scripting, in one crate: `crates/opensim-modules` (the design
-document calls it `opensim-region-modules`; the crate kept the shorter name).
+archiver nor scripting, in one crate: `crates/welkin-modules` (the design
+document calls it `welkin-region-modules`; the crate kept the shorter name).
 It sits on `region-simulator-core` and `grid-services` and does not depend on
 the script VM.
 
@@ -109,7 +109,7 @@ for S5.
 
 ## Tests
 
-278 tests, all in `crates/opensim-modules/src/lib.rs`. They include the
+278 tests, all in `crates/welkin-modules/src/lib.rs`. They include the
 framework tests, 21 land tests, a 40-case permission truth table (owner,
 group, estate manager, god, stranger, bypass on and off), 27 chat, 21
 environment, 15 map image, 30 avatar factory and 29 entity-transfer tests,

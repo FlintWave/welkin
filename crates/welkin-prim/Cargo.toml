@@ -1,0 +1,23 @@
+[package]
+name = "welkin-prim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+aurora-prim = { workspace = true }
+flate2 = "1"
+glam = { workspace = true }
+welkin-llsd = { path = "../welkin-llsd" }
+welkin-types = { path = "../welkin-types" }
+rapier3d = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+welkin-physics = { path = "../welkin-physics" }
+welkin-physics-rapier = { path = "../welkin-physics-rapier" }
+
+[lints]
+workspace = true

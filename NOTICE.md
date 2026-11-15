@@ -1,6 +1,6 @@
 # NOTICE
 
-## opensim-rust
+## welkin
 
 Copyright (c) [Copyright holders TBD]
 

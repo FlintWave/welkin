@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1
-# Multi-stage build for opensim-rust binaries.
+# Multi-stage build for welkin binaries.
 # Produces static musl-linked binaries in a minimal runtime image.
 #
-# Build:  podman build -t opensim-rust .
-# Run:    podman run --rm opensim-rust robust
-#         podman run --rm opensim-rust region
+# Build:  podman build -t welkin .
+# Run:    podman run --rm welkin robust
+#         podman run --rm welkin region
 
 # ── Stage 1: chef (dependency cache layer) ──────────────────────────
 FROM docker.io/library/rust:1.87-bookworm AS chef
@@ -44,10 +44,10 @@ RUN cargo chef cook --release --target x86_64-unknown-linux-musl --recipe-path r
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
 RUN cargo build --release --target x86_64-unknown-linux-musl \
-        --bin opensim-robust \
-        --bin opensim-region \
-    && strip target/x86_64-unknown-linux-musl/release/opensim-robust \
-    && strip target/x86_64-unknown-linux-musl/release/opensim-region
+        --bin welkin-robust \
+        --bin welkin-region \
+    && strip target/x86_64-unknown-linux-musl/release/welkin-robust \
+    && strip target/x86_64-unknown-linux-musl/release/welkin-region
 
 # ── Stage 4: runtime (minimal image, non-root) ─────────────────────
 FROM docker.io/library/alpine:3.21 AS runtime
@@ -55,11 +55,11 @@ FROM docker.io/library/alpine:3.21 AS runtime
 RUN addgroup -S opensim && adduser -S opensim -G opensim
 
 COPY --from=builder --chown=opensim:opensim \
-    /src/target/x86_64-unknown-linux-musl/release/opensim-robust \
-    /usr/local/bin/opensim-robust
+    /src/target/x86_64-unknown-linux-musl/release/welkin-robust \
+    /usr/local/bin/welkin-robust
 COPY --from=builder --chown=opensim:opensim \
-    /src/target/x86_64-unknown-linux-musl/release/opensim-region \
-    /usr/local/bin/opensim-region
+    /src/target/x86_64-unknown-linux-musl/release/welkin-region \
+    /usr/local/bin/welkin-region
 
 USER opensim
 WORKDIR /home/opensim
@@ -73,4 +73,4 @@ EXPOSE 9000/tcp
 EXPOSE 9000/udp
 
 ENTRYPOINT []
-CMD ["opensim-robust"]
+CMD ["welkin-robust"]

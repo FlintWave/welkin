@@ -61,10 +61,10 @@ All required modules are already ported:
 
 - `tar` (crates.io, MIT/Apache-2.0): tar archive read/write.
 - `flate2` (already in workspace): gzip compression/decompression.
-- Reuse existing `opensim-types`, `opensim-services`, `opensim-region` crates.
+- Reuse existing `welkin-types`, `welkin-services`, `welkin-region` crates.
 
 New module: `opensim-archives` crate, or a `archives` module within
-`opensim-region` depending on size.
+`welkin-region` depending on size.
 
 ## Design
 

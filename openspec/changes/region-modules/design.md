@@ -103,10 +103,10 @@ script VM itself.
 
 ### Crate structure
 
-A single new crate: `opensim-region-modules`.
+A single new crate: `welkin-region-modules`.
 
 ```
-crates/opensim-region-modules/
+crates/welkin-region-modules/
   src/
     lib.rs              -- ModuleRegistry, RegionModule trait
     land/               -- LandManagementModule, LandObject, PrimCountModule
@@ -117,7 +117,7 @@ crates/opensim-region-modules/
     media/              -- MoapModule
     sound/              -- SoundModule
     objects/            -- ObjectCommands, BuySellModule, AccessModule
-    serialiser/         -- SceneSerialiser (adapts XML2 from opensim-types)
+    serialiser/         -- SceneSerialiser (adapts XML2 from welkin-types)
     vegetation/         -- VegetationModule
     region/             -- RegionReadyModule, RestartModule
     inventory/          -- InventoryTransferModule
@@ -150,8 +150,8 @@ crates/opensim-region-modules/
     library/            -- LibraryModule
 ```
 
-Dependencies: `opensim-types`, `opensim-region-core` (scene graph, client
-view), `opensim-services` (grid-services client), `opensim-protocol` (messages,
+Dependencies: `welkin-types`, `welkin-region-core` (scene graph, client
+view), `welkin-services` (grid-services client), `opensim-protocol` (messages,
 LLSD), `sqlx`, `tokio`, `tiny-skia` (map tiles), `tracing`.
 
 ### Module trait pattern

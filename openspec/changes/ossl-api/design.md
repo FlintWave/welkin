@@ -2,7 +2,7 @@
 
 ## Summary
 
-Expand the OSSL extension library in `opensim-script-vm` from 27 stubs to
+Expand the OSSL extension library in `welkin-script-vm` from 27 stubs to
 the full 258 unique `os*` functions defined in OpenSimulator 0.9.3.0. Port
 the threat-level configuration system from INI files, implement every
 function whose dependencies are already available, and stub the rest with
@@ -59,7 +59,7 @@ These stubs all follow the same pattern as the existing 27: log via
 
 ### Module structure
 
-The existing `crates/opensim-script-vm/src/ossl.rs` stays as the single
+The existing `crates/welkin-script-vm/src/ossl.rs` stays as the single
 module. It grows from ~700 lines to approximately 4,000-5,000 lines. If
 that becomes unwieldy during implementation, the registration functions
 split into sub-modules by area (e.g., `ossl/draw.rs`, `ossl/npc.rs`,
@@ -67,7 +67,7 @@ split into sub-modules by area (e.g., `ossl/draw.rs`, `ossl/npc.rs`,
 `OsslConfig`, `register_ossl()`, and `function_catalog()` stay in the root.
 
 ```
-crates/opensim-script-vm/src/
+crates/welkin-script-vm/src/
   ossl.rs              -- OsslThreatLevel, OsslConfig, register_ossl(), catalog
   ossl/
     config.rs          -- INI parsing, per-function allow-lists, role macros
@@ -265,7 +265,7 @@ returns stub).
 | Function | Threat | Status | Notes |
 |----------|--------|--------|-------|
 | osGetSimulatorVersion | High | EXISTS | Implemented |
-| osGetScriptEngineName | High | NEW | Returns "opensim-rust-luau" |
+| osGetScriptEngineName | High | NEW | Returns "welkin-luau" |
 | osCheckODE | None | NEW | Returns 0 (Rapier, not ODE) |
 | osGetPhysicsEngineType | High | NEW | Returns "Rapier" |
 | osGetPhysicsEngineName | High | NEW | Returns "Rapier" |
@@ -596,7 +596,7 @@ pattern already established in the existing 27 functions.
 
 ### Already available
 
-- `opensim-script-vm` crate with `ScriptContext`, `mlua`, `parking_lot`,
+- `welkin-script-vm` crate with `ScriptContext`, `mlua`, `parking_lot`,
   `uuid`
 - `tracing` for debug logging
 - INI configuration parsing (region config system)

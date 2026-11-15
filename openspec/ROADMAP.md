@@ -194,8 +194,8 @@ New features that are mostly connectors:
 - D1: resolved, GPL-3.0-or-later with Aurora crates reused.
 - OSgrid: whether it accepts regions run on third-party software. Its FAQ
   refused automated access; the administrators must be asked.
-- D2: resolved. Repository is `opensim-rust` at
-  `/var/home/erik/Projects/opensim-rust/`, local git only, no remote
+- D2: resolved. Repository is `welkin` at
+  `/var/home/erik/Projects/welkin/`, local git only, no remote
   (operator decision, 2026-11-13). The C# reference tree stays at
   `/var/home/erik/Projects/opensim-0.9.3.0-source/`.
 - Provenance of `bin/openmetaverse_data`, the `bin/assets` library and the

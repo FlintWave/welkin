@@ -3,7 +3,7 @@
 [← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#c1) · Previous: [Grid services](grid-services-summary.md) · Next: [Grid portal](grid-portal-summary.md)
 
 Change: `openspec/changes/capacity-assessor` (proposal only, no `design.md`).
-Crate: `crates/opensim-capacity`. Status: sections 1 and 2 implemented;
+Crate: `crates/welkin-capacity`. Status: sections 1 and 2 implemented;
 sections 3 to 5 are stubs waiting for `region-simulator-core` (Phase 3).
 
 ## Purpose

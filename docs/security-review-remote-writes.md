@@ -11,7 +11,7 @@ grid's services (assets, inventory, grid registration, neighbour notification).
 
 ### CRITICAL-1: SSRF via neighbour `server_uri`
 
-**File:** `crates/opensim-services/src/registration.rs`, lines 96-103
+**File:** `crates/welkin-services/src/registration.rs`, lines 96-103
 **Severity:** CRITICAL
 
 The `notify_neighbours()` method constructs URLs from `server_uri` values
@@ -46,7 +46,7 @@ This is a textbook Server-Side Request Forgery (SSRF).
 
 ### HIGH-1: XML injection in `asset_exists`
 
-**File:** `crates/opensim-services/src/remote/asset.rs`, lines 94-101
+**File:** `crates/welkin-services/src/remote/asset.rs`, lines 94-101
 **Severity:** HIGH
 
 The `asset_exists` method interpolates the `id` parameter directly into an
@@ -73,7 +73,7 @@ interpolation, consistent with how `write_asset_xml` already escapes fields.
 
 ### HIGH-2: Path traversal in asset cache filenames
 
-**File:** `crates/opensim-services/src/cache.rs`, lines 73, 139, 160, 186
+**File:** `crates/welkin-services/src/cache.rs`, lines 73, 139, 160, 186
 **Severity:** HIGH
 
 Cache file paths are constructed by appending the asset ID directly:
@@ -100,10 +100,10 @@ measure.
 ### HIGH-3: No HTTP request timeouts on any remote connector
 
 **Files:**
-- `crates/opensim-services/src/remote/asset.rs`, line 31 (`reqwest::Client::new()`)
-- `crates/opensim-services/src/remote/inventory.rs`, line 25 (`reqwest::Client::new()`)
-- `crates/opensim-services/src/remote/grid.rs`, line 25 (`reqwest::Client::new()`)
-- `crates/opensim-services/src/registration.rs`, line 103
+- `crates/welkin-services/src/remote/asset.rs`, line 31 (`reqwest::Client::new()`)
+- `crates/welkin-services/src/remote/inventory.rs`, line 25 (`reqwest::Client::new()`)
+- `crates/welkin-services/src/remote/grid.rs`, line 25 (`reqwest::Client::new()`)
+- `crates/welkin-services/src/registration.rs`, line 103
 
 **Severity:** HIGH
 
@@ -131,9 +131,9 @@ Consider also setting `pool_max_idle_per_host` and
 ### HIGH-4: No response body size limit
 
 **Files:**
-- `crates/opensim-services/src/remote/asset.rs`, lines 46, 81, 110
-- `crates/opensim-services/src/remote/inventory.rs`, lines 41, 59, 78
-- `crates/opensim-services/src/remote/grid.rs`, lines 57, 81, 110, 133
+- `crates/welkin-services/src/remote/asset.rs`, lines 46, 81, 110
+- `crates/welkin-services/src/remote/inventory.rs`, lines 41, 59, 78
+- `crates/welkin-services/src/remote/grid.rs`, lines 57, 81, 110, 133
 
 **Severity:** HIGH
 
@@ -153,7 +153,7 @@ size.
 
 ### MEDIUM-1: `regionSecret` and `Token` transmitted without TLS enforcement
 
-**File:** `crates/opensim-services/src/remote/grid.rs`, lines 32-53
+**File:** `crates/welkin-services/src/remote/grid.rs`, lines 32-53
 **Severity:** MEDIUM
 
 `register_region` sends `regionSecret` and `Token` as plain-text
@@ -169,7 +169,7 @@ HTTP endpoint.
 
 ### MEDIUM-2: Sensitive data in error messages
 
-**File:** `crates/opensim-services/src/remote/asset.rs`, lines 85-88
+**File:** `crates/welkin-services/src/remote/asset.rs`, lines 85-88
 **Severity:** MEDIUM
 
 The `store_asset` error path includes the full server response body:
@@ -196,10 +196,10 @@ paths.
 ### MEDIUM-3: No UUID validation on outgoing requests
 
 **Files:**
-- `crates/opensim-services/src/remote/asset.rs`, lines 38-39 (get_asset: id in URL path)
-- `crates/opensim-services/src/remote/asset.rs`, line 82 (store_asset: verifying response)
-- `crates/opensim-services/src/remote/grid.rs`, lines 33, 75 (register/deregister)
-- `crates/opensim-services/src/remote/inventory.rs`, lines 35, 54, 73
+- `crates/welkin-services/src/remote/asset.rs`, lines 38-39 (get_asset: id in URL path)
+- `crates/welkin-services/src/remote/asset.rs`, line 82 (store_asset: verifying response)
+- `crates/welkin-services/src/remote/grid.rs`, lines 33, 75 (register/deregister)
+- `crates/welkin-services/src/remote/inventory.rs`, lines 35, 54, 73
 
 **Severity:** MEDIUM
 
@@ -225,7 +225,7 @@ Reject any ID that does not match the UUID format
 
 ### MEDIUM-4: Cache poisoning from malicious grid responses
 
-**File:** `crates/opensim-services/src/cache.rs`
+**File:** `crates/welkin-services/src/cache.rs`
 **Severity:** MEDIUM
 
 The asset cache stores whatever the remote grid returns, keyed by the
@@ -248,7 +248,7 @@ connected through this region.
 
 ### MEDIUM-5: `register_region` does not check HTTP status code
 
-**File:** `crates/opensim-services/src/remote/grid.rs`, lines 54-61
+**File:** `crates/welkin-services/src/remote/grid.rs`, lines 54-61
 **Severity:** MEDIUM
 
 Unlike `store_asset` (which calls `.error_for_status()?`),
@@ -304,7 +304,7 @@ redirects.
 
 ### LOW-1: Y2038 timestamp overflow in `now_secs()`
 
-**File:** `crates/opensim-services/src/remote/asset.rs`, lines 19-24
+**File:** `crates/welkin-services/src/remote/asset.rs`, lines 19-24
 **Severity:** LOW
 
 ```rust
@@ -327,7 +327,7 @@ writing to the schema, with a log warning.
 
 ### LOW-2: `get_neighbours` / `deregister_region` skip `error_for_status()`
 
-**File:** `crates/opensim-services/src/remote/grid.rs`, lines 76-92, 95-115
+**File:** `crates/welkin-services/src/remote/grid.rs`, lines 76-92, 95-115
 **Severity:** LOW
 
 Same pattern as MEDIUM-5 but for read-type operations. The
@@ -341,7 +341,7 @@ silently misinterpreted.
 
 ### LOW-3: Inventory connector only implements read paths (incomplete write coverage)
 
-**File:** `crates/opensim-services/src/remote/inventory.rs`
+**File:** `crates/welkin-services/src/remote/inventory.rs`
 **Severity:** LOW (informational for future development)
 
 The `RemoteInventoryConnector` only has `get_root_folder`,
@@ -361,7 +361,7 @@ writes, apply all findings from this review as pre-conditions.
 
 ### INFO-1: Hypergrid service traits are well-designed for security
 
-**File:** `crates/opensim-services/src/hypergrid.rs`
+**File:** `crates/welkin-services/src/hypergrid.rs`
 **Severity:** INFO (positive)
 
 The trait definitions encode good security patterns in their API design:

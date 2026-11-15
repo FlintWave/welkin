@@ -11,7 +11,7 @@ NC='\033[0m'
 INSTALL_DIR="${1:-/opt/opensim}"
 DATA_DIR="/var/lib/opensim"
 CONFIG_DIR="/etc/opensim"
-SERVICE="opensim-robust.service"
+SERVICE="welkin-robust.service"
 SERVICE_FILE="/etc/systemd/system/$SERVICE"
 PORTAL_PORT=8002
 
@@ -52,7 +52,7 @@ create_user() {
 extract_archive() {
     mkdir -p "$INSTALL_DIR"
     tar -xzf "$ARCHIVE" -C "$INSTALL_DIR" --strip-components=1
-    chmod 755 "$INSTALL_DIR/bin/opensim-robust"
+    chmod 755 "$INSTALL_DIR/bin/welkin-robust"
     ok "Extracted to: $INSTALL_DIR"
 }
 
@@ -130,7 +130,7 @@ After=network.target
 Type=simple
 User=opensim
 Group=opensim
-ExecStart=$INSTALL_DIR/bin/opensim-robust --config $CONFIG_DIR/robust.ini
+ExecStart=$INSTALL_DIR/bin/welkin-robust --config $CONFIG_DIR/robust.ini
 WorkingDirectory=$DATA_DIR
 Restart=on-failure
 RestartSec=5

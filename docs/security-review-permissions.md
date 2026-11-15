@@ -2,7 +2,7 @@
 
 **Reviewer**: Claude Opus (adversarial)
 **Date**: 2026-11-13
-**Scope**: `crates/opensim-modules/src/permissions/mod.rs`, `crates/opensim-modules/src/permissions/checks.rs`
+**Scope**: `crates/welkin-modules/src/permissions/mod.rs`, `crates/welkin-modules/src/permissions/checks.rs`
 **Verdict**: CONDITIONAL PASS
 
 The module is structurally sound and follows the C# `DefaultPermissionsModule` pattern.

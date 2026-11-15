@@ -4,14 +4,14 @@
 
 Status: accepted (all tracked tasks checked in `openspec/changes/script-engine/tasks.md`).
 Commits `cdb1913` through `b57c2db`. Second review verdict: CONDITIONAL PASS.
-Tests: 172 in `opensim-script-vm`.
+Tests: 172 in `welkin-script-vm`.
 
 ## What was built
 
 Scripts run on Luau through mlua 0.12 (`luau` feature, upstream Luau 740), one
 VM per script. LSL reaches the VM by transpiling to Luau (see go/no-go below).
-All code lives in `crates/opensim-script-vm`; `opensim-script-api` and
-`opensim-script-compiler` are still skeletons.
+All code lives in `crates/welkin-script-vm`; `welkin-script-api` and
+`welkin-script-compiler` are still skeletons.
 
 ### Spike (`cdb1913`, `3fb1cbd`, `d413580`)
 
@@ -81,7 +81,7 @@ functions registered.
   others). Roughly 370 of the 454 C# `ll*` functions are not bound yet.
 - A coroutine stack cannot be serialised; mid-event state is lost on transfer
   unless the script uses the checkpoint pattern.
-- The LSL-to-Luau transpiler (`opensim-script-compiler`) is not written.
-- No scene integration: `ScriptContext` is not yet wired to `opensim-scene`.
+- The LSL-to-Luau transpiler (`welkin-script-compiler`) is not written.
+- No scene integration: `ScriptContext` is not yet wired to `welkin-scene`.
 - Both HIGH findings must be fixed before production use.
 - YEngine script state cannot be read; scripts restart once at migration.

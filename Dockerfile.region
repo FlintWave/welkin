@@ -1,15 +1,15 @@
 # Dockerfile.region — Region simulator container image
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Minimal multi-stage build that produces only the opensim-region binary.
+# Minimal multi-stage build that produces only the welkin-region binary.
 # Uses cargo-chef for dependency caching and Google's distroless base for
 # a hardened, shell-free runtime image.
 #
 # Build:
-#   docker build -f Dockerfile.region -t opensim-region .
+#   docker build -f Dockerfile.region -t welkin-region .
 #
 # Run:
-#   docker run --rm -p 9000:9000/tcp -p 9000:9000/udp opensim-region
+#   docker run --rm -p 9000:9000/tcp -p 9000:9000/udp welkin-region
 #
 # Health checking:
 #   Distroless images contain no shell, so HEALTHCHECK cannot be used here.
@@ -17,7 +17,7 @@
 #     HTTP GET http://<host>:9000/health
 #   The endpoint returns "ok" with status 200 when the region is ready.
 #
-# Copyright (C) 2024-2026 opensim-rust contributors
+# Copyright (C) 2024-2026 welkin contributors
 # This program is free software: you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
 # Free Software Foundation, either version 3 of the License, or (at your
@@ -54,7 +54,7 @@ COPY crates crates
 RUN cargo chef prepare --recipe-path recipe.json
 
 # ===================================================================
-# Stage 3: builder — compile opensim-region in release mode
+# Stage 3: builder — compile welkin-region in release mode
 # ===================================================================
 FROM chef AS builder
 
@@ -83,10 +83,10 @@ COPY crates crates
 
 # Build only the region binary — no other binaries are compiled, keeping
 # this stage as lean as possible.
-RUN cargo build --release --bin opensim-region
+RUN cargo build --release --bin welkin-region
 
 # Strip debug symbols to shrink the binary (typically 50-70% smaller).
-RUN strip target/release/opensim-region
+RUN strip target/release/welkin-region
 
 # ===================================================================
 # Stage 4: runtime — minimal distroless image
@@ -106,8 +106,8 @@ ARG VERSION=0.1.0
 # ---------------------------------------------------------------------------
 # OCI / Docker labels
 # ---------------------------------------------------------------------------
-LABEL maintainer="opensim-rust contributors" \
-      org.opencontainers.image.title="opensim-region" \
+LABEL maintainer="welkin contributors" \
+      org.opencontainers.image.title="welkin-region" \
       org.opencontainers.image.description="OpenSim Region Simulator" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.licenses="GPL-3.0-or-later" \
@@ -118,7 +118,7 @@ LABEL maintainer="opensim-rust contributors" \
 # ---------------------------------------------------------------------------
 
 # Copy the stripped binary from the builder stage.
-COPY --from=builder /src/target/release/opensim-region /usr/local/bin/opensim-region
+COPY --from=builder /src/target/release/welkin-region /usr/local/bin/welkin-region
 
 # ---------------------------------------------------------------------------
 # Runtime configuration
@@ -129,7 +129,7 @@ COPY --from=builder /src/target/release/opensim-region /usr/local/bin/opensim-re
 USER 65534:65534
 
 # Default log level — override with -e RUST_LOG=debug at runtime.
-# Supports env_filter syntax: RUST_LOG=opensim_region=debug,opensim_net=trace
+# Supports env_filter syntax: RUST_LOG=welkin_region=debug,welkin_net=trace
 ENV RUST_LOG=info
 
 # ---------------------------------------------------------------------------
@@ -147,11 +147,11 @@ EXPOSE 9000/udp
 # Entrypoint
 # ---------------------------------------------------------------------------
 
-# Exec form ensures opensim-region is PID 1 and receives signals directly.
+# Exec form ensures welkin-region is PID 1 and receives signals directly.
 # SIGTERM triggers graceful shutdown via tokio's signal handler.
 #
 # Override configuration with environment variables:
 #   docker run -e OPENSIM__Network__http_listener_port=9000 \
 #              -e OPENSIM__GridService__GridServerURI=http://robust:8003 \
-#              opensim-region
-ENTRYPOINT ["opensim-region"]
+#              welkin-region
+ENTRYPOINT ["welkin-region"]

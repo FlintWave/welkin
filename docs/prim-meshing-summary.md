@@ -4,8 +4,8 @@
 
 Change `prim-meshing` (Phase 3): 15 of 15 tasks accepted. It turns prim
 parameters, sculpt maps and mesh assets into Rapier colliders. Commits
-`759e3c6` through `129d401`; main code in `crates/opensim-prim/src/meshing.rs`
-(1,261 lines) and `crates/opensim-prim/src/mesh_asset.rs` (464 lines).
+`759e3c6` through `129d401`; main code in `crates/welkin-prim/src/meshing.rs`
+(1,261 lines) and `crates/welkin-prim/src/mesh_asset.rs` (464 lines).
 
 ## What was built
 
@@ -19,7 +19,7 @@ parameters, sculpt maps and mesh assets into Rapier colliders. Commits
 | Mesh asset decoder | `mesh_asset.rs`: LLSD header parse, per-LOD zlib block extraction, submesh decode, `get_physics_mesh` (falls back to visual LOD), `mesh_to_shape` |
 | Convex decomposition | `decompose_convex` runs parry3d V-HACD with `ConvexDecompParams` (32 hulls, 100,000 voxel budget mapped to grid 16 to 256, concavity 0.0025); results cached in `DecompCache` |
 | Linkset colliders | `create_linkset_shape` builds one compound collider from per-part shapes with relative transforms |
-| Shape type switching | `PhysicsShapeType` (Prim, Convex, None, Mesh); `create_physics_shape` and `create_physics_shape_with_sculpt` are the entry points used by `add_prim` in `opensim-physics-rapier`, replacing the Phase 1 placeholders |
+| Shape type switching | `PhysicsShapeType` (Prim, Convex, None, Mesh); `create_physics_shape` and `create_physics_shape_with_sculpt` are the entry points used by `add_prim` in `welkin-physics-rapier`, replacing the Phase 1 placeholders |
 
 ## Performance
 
@@ -30,9 +30,9 @@ is why `DecompCache` exists.
 
 ## Tests
 
-- `opensim-prim`: 46 tests (29 in `meshing.rs`, 9 in `mesh_asset.rs`, 8 in
+- `welkin-prim`: 46 tests (29 in `meshing.rs`, 9 in `mesh_asset.rs`, 8 in
   `tests/collider_proof.rs`).
-- `opensim-physics-rapier`: 4 in `tests/add_prim_with_shape.rs`, 4 in
+- `welkin-physics-rapier`: 4 in `tests/add_prim_with_shape.rs`, 4 in
   `tests/shape_switching.rs`, 3 in the spike test.
 - Proof tests cover reference prims (box, cylinder, torus, sculpt, mesh),
   drop tests on terrain and other objects, and the performance budget.

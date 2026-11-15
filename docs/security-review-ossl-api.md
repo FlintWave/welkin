@@ -4,7 +4,7 @@
 **Date:** 2026-11-13
 **Reviewer:** Claude Opus 4.6 (automated security review)
 **Risk Level:** HIGH
-**Files reviewed:** All 13 files under `crates/opensim-script-vm/src/ossl/`
+**Files reviewed:** All 13 files under `crates/welkin-script-vm/src/ossl/`
 
 ## Executive summary
 

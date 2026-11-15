@@ -18,8 +18,8 @@ Requirements: Rust 1.87+, a C toolchain (for native dependencies: openjpeg-sys,
 Luau), cmake, and pkg-config.
 
 ```sh
-git clone <repo-url> opensim-rust
-cd opensim-rust
+git clone <repo-url> welkin
+cd welkin
 cargo build --release
 ```
 
@@ -27,8 +27,8 @@ Binaries are written to `target/release/`:
 
 | Binary | Purpose |
 |---|---|
-| `opensim-robust` | Grid services (login, asset, inventory, grid, presence, etc.) |
-| `opensim-region` | Region simulator |
+| `welkin-robust` | Grid services (login, asset, inventory, grid, presence, etc.) |
+| `welkin-region` | Region simulator |
 | `opensim-migrate` | Migration toolkit (DB validator, password upgrade, config converter) |
 | `opensim-conform` | Conformance testing and load testing |
 
@@ -38,11 +38,11 @@ The multi-stage `Containerfile` produces static musl-linked binaries in an
 Alpine-based runtime image:
 
 ```sh
-podman build -t opensim-rust .
-# or: docker build -t opensim-rust .
+podman build -t welkin .
+# or: docker build -t welkin .
 ```
 
-The image contains `opensim-robust` and `opensim-region` in `/usr/local/bin/`.
+The image contains `welkin-robust` and `welkin-region` in `/usr/local/bin/`.
 It runs as a non-root `opensim` user.
 
 ### From binary release
@@ -50,13 +50,13 @@ It runs as a non-root `opensim` user.
 Download the release archive for your platform and extract it:
 
 ```sh
-tar xzf opensim-rust-x86_64-linux.tar.gz
-cd opensim-rust
+tar xzf welkin-x86_64-linux.tar.gz
+cd welkin
 ./install/install-archive.sh
 ```
 
 The archive installer places binaries, creates a systemd unit
-(`opensim-robust.service`), and writes a starter configuration.
+(`welkin-robust.service`), and writes a starter configuration.
 
 ### One-command installer
 
@@ -110,7 +110,7 @@ OPENSIM__GridProfile__Name="own-grid"
 ```
 
 Custom profiles are TOML files in the `profiles/` directory. See
-`opensim-config/src/profile.rs` for the format. The
+`welkin-config/src/profile.rs` for the format. The
 `osim-migrate convert-config` command can generate a custom profile from a
 C# `GridCommon.ini`.
 
@@ -182,8 +182,8 @@ Logging is controlled by the `RUST_LOG` environment variable using the
 ```sh
 RUST_LOG=info                        # default
 RUST_LOG=debug                       # verbose
-RUST_LOG=opensim_net=trace,info      # trace LLUDP, info elsewhere
-RUST_LOG=opensim_services=debug      # debug grid service handlers
+RUST_LOG=welkin_net=trace,info      # trace LLUDP, info elsewhere
+RUST_LOG=welkin_services=debug      # debug grid service handlers
 ```
 
 Set `OPENSIM__Logging__json=true` to switch to structured JSON log output.
@@ -261,7 +261,7 @@ All services run in one process:
 ```sh
 OPENSIM__GridProfile__Name=standalone \
 OPENSIM__Database__ConnectionString="<connection>" \
-  opensim-region
+  welkin-region
 ```
 
 ### Grid mode (Robust + Region)
@@ -272,19 +272,19 @@ Run Robust (grid services) and the region simulator as separate processes:
 # Terminal 1: grid services
 OPENSIM__Database__ConnectionString="<connection>" \
 OPENSIM__Network__http_listener_port=8003 \
-  opensim-robust
+  welkin-robust
 
 # Terminal 2: region simulator
 OPENSIM__GridProfile__Name=own-grid \
 OPENSIM__Database__ConnectionString="<connection>" \
 OPENSIM__Network__http_listener_port=9000 \
 OPENSIM__GridService__GridServerURI=http://localhost:8003 \
-  opensim-region
+  welkin-region
 ```
 
 ### Multi-region
 
-A single `opensim-region` process can host multiple regions. Each region needs
+A single `welkin-region` process can host multiple regions. Each region needs
 a unique UDP port for LLUDP traffic. Configure additional regions through the
 portal or configuration.
 
@@ -296,12 +296,12 @@ guide.
 
 ### systemd
 
-The installer creates `opensim-robust.service`:
+The installer creates `welkin-robust.service`:
 
 ```sh
-sudo systemctl enable --now opensim-robust
-sudo systemctl status opensim-robust
-journalctl -u opensim-robust -f
+sudo systemctl enable --now welkin-robust
+sudo systemctl status welkin-robust
+journalctl -u welkin-robust -f
 ```
 
 ---
@@ -313,13 +313,13 @@ journalctl -u opensim-robust -f
 Save a region's terrain, objects, and scripts to an OAR archive:
 
 ```sh
-opensim-region save-oar /backups/MyRegion-$(date +%Y%m%d).oar
+welkin-region save-oar /backups/MyRegion-$(date +%Y%m%d).oar
 ```
 
 Restore from an OAR:
 
 ```sh
-opensim-region load-oar /backups/MyRegion-20261114.oar
+welkin-region load-oar /backups/MyRegion-20261114.oar
 ```
 
 Multi-region OARs are supported. Missing regions are created automatically
@@ -330,13 +330,13 @@ during load.
 Export a user's inventory to an IAR archive:
 
 ```sh
-opensim-region save-iar "FirstName" "LastName" "/*" /backups/inventory.iar
+welkin-region save-iar "FirstName" "LastName" "/*" /backups/inventory.iar
 ```
 
 Import:
 
 ```sh
-opensim-region load-iar "FirstName" "LastName" "/" /backups/inventory.iar
+welkin-region load-iar "FirstName" "LastName" "/" /backups/inventory.iar
 ```
 
 ### Database dumps
@@ -469,7 +469,7 @@ Either stop the conflicting process or change the port in configuration.
 
 **Symptom:** Script does not run, `Script error` in chat.
 
-- Check `RUST_LOG=opensim_script_vm=debug` for detailed error output
+- Check `RUST_LOG=welkin_script_vm=debug` for detailed error output
 - Verify `[Scripts] Enabled = true`
 - Check the OSSL threat level if the script uses `os*` functions
 - Memory limit: increase `MemoryLimitBytes` if scripts hit the ceiling

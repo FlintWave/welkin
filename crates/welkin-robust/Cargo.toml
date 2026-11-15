@@ -1,0 +1,21 @@
+[package]
+name = "welkin-robust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+welkin-config = { path = "../welkin-config" }
+welkin-runtime = { path = "../welkin-runtime" }
+welkin-services = { path = "../welkin-services" }
+welkin-data = { path = "../welkin-data" }
+axum = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+clap = { workspace = true }
+
+[lints]
+workspace = true

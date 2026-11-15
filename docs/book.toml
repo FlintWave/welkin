@@ -1,7 +1,7 @@
 [book]
 title = "OpenSim Rust"
 description = "Rust port of OpenSimulator 0.9.3.0"
-authors = ["opensim-rust contributors"]
+authors = ["welkin contributors"]
 language = "en"
 src = "."
 

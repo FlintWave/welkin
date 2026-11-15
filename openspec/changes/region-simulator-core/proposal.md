@@ -8,13 +8,13 @@ API with no world behind it.
 
 The C# implementation spans 96,127 lines across Region/Framework (65,204)
 and Region/ClientStack (30,923). The Rust workspace already has crate stubs
-(`opensim-scene`, `opensim-region`, `opensim-caps`) and working foundations
-from Phase 1 (`opensim-net` circuit/throttle, `opensim-msg` message codec,
-`opensim-physics` trait and Rapier backend).
+(`welkin-scene`, `welkin-region`, `welkin-caps`) and working foundations
+from Phase 1 (`welkin-net` circuit/throttle, `welkin-msg` message codec,
+`welkin-physics` trait and Rapier backend).
 
 ## What Changes
 
-### Scene graph (`opensim-scene`)
+### Scene graph (`welkin-scene`)
 
 - `Scene`: the region heartbeat, entity container, update dispatch, backup
   timer, module host. One `Scene` per region; multiple regions per process.
@@ -28,7 +28,7 @@ from Phase 1 (`opensim-net` circuit/throttle, `opensim-msg` message codec,
 - Scene serialization: XML2 object format (the internal persistence and
   OAR/IAR interchange format). Must round-trip with C# OpenSim.
 
-### Client stack (`opensim-net`, `opensim-caps`)
+### Client stack (`welkin-net`, `welkin-caps`)
 
 - `LLUDPServer`: accept viewer UDP connections, dispatch incoming packets
   to their `LLUDPClient`. Uses `aurora-msg` for encode/decode.
@@ -53,13 +53,13 @@ from Phase 1 (`opensim-net` circuit/throttle, `opensim-msg` message codec,
 
 ### Persistence
 
-- `ISimulationDataStore` trait in `opensim-data`: store and load objects,
+- `ISimulationDataStore` trait in `welkin-data`: store and load objects,
   terrain, region settings, parcels, region environment, spawn points.
 - `sqlx` implementation over the existing `regionstore` tables so that a
   database written by C# OpenSim can be loaded by the Rust simulator
   without migration.
 
-### Region binary (`opensim-region`)
+### Region binary (`welkin-region`)
 
 - Process entry point: load config, open databases, create Scene(s),
   start the LLUDP listener(s), register with the grid service, enter
@@ -69,8 +69,8 @@ from Phase 1 (`opensim-net` circuit/throttle, `opensim-msg` message codec,
 
 ## Impact
 
-- Modifies: `opensim-scene`, `opensim-region`, `opensim-net`, `opensim-caps`,
-  `opensim-data` (new simulation-data store trait and sqlx impl).
+- Modifies: `welkin-scene`, `welkin-region`, `welkin-net`, `welkin-caps`,
+  `welkin-data` (new simulation-data store trait and sqlx impl).
 - New files in existing crates; no new crates.
 - New dependencies: none beyond what the workspace already has.
 - Risk: HIGH for persistence (data loss on save/load bugs) and for the

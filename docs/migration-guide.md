@@ -74,7 +74,7 @@ Before starting, verify and record:
 
 ## Step 1: Deploy Rust Robust alongside C# Robust
 
-Run the Rust `opensim-robust` on a different port from the C# Robust. This
+Run the Rust `welkin-robust` on a different port from the C# Robust. This
 lets you validate grid services without disrupting the live grid.
 
 ```sh
@@ -83,7 +83,7 @@ lets you validate grid services without disrupting the live grid.
 OPENSIM__Database__ConnectionString="<same-connection-as-csharp>" \
 OPENSIM__Network__http_listener_port=8013 \
 RUST_LOG=info \
-  opensim-robust
+  welkin-robust
 ```
 
 Verify it starts and the health endpoint responds:
@@ -96,7 +96,7 @@ curl http://localhost:8013/health
 The Rust Robust reads the same database as the C# Robust (read-only at this
 point -- no writes until you point regions at it).
 
-**Rollback:** stop `opensim-robust`. The C# grid is unaffected.
+**Rollback:** stop `welkin-robust`. The C# grid is unaffected.
 
 ---
 
@@ -185,7 +185,7 @@ OPENSIM__Database__ConnectionString="<connection>" \
 OPENSIM__Network__http_listener_port=9010 \
 OPENSIM__GridService__GridServerURI=http://localhost:8013 \
 RUST_LOG=info \
-  opensim-region
+  welkin-region
 ```
 
 Log in with Aurora Viewer to the test region and verify:
@@ -272,7 +272,7 @@ the production port:
 OPENSIM__Database__ConnectionString="<connection>" \
 OPENSIM__Network__http_listener_port=8003 \
 RUST_LOG=info \
-  opensim-robust
+  welkin-robust
 ```
 
 At this point, all C# regions talk to Rust Robust. This is the mixed-grid
@@ -288,7 +288,7 @@ reconnect automatically.
 Migrate regions from C# to Rust one at a time. For each region:
 
 1. Stop the C# region process (or just that region if multi-region)
-2. Start a Rust `opensim-region` for that region, pointed at Rust Robust
+2. Start a Rust `welkin-region` for that region, pointed at Rust Robust
 3. Verify the region loads, objects appear, and login works
 4. Proceed to the next region
 
@@ -298,7 +298,7 @@ OPENSIM__Database__ConnectionString="<connection>" \
 OPENSIM__Network__http_listener_port=9000 \
 OPENSIM__GridService__GridServerURI=http://localhost:8003 \
 RUST_LOG=info \
-  opensim-region
+  welkin-region
 ```
 
 The Rust region reads the same `regionstore` tables as the C# region. Objects,
@@ -315,7 +315,7 @@ If any content failed to load from the database (rare, but possible with
 heavily customised regions), re-load it from OAR:
 
 ```sh
-opensim-region load-oar /backups/MyRegion.oar
+welkin-region load-oar /backups/MyRegion.oar
 ```
 
 OAR archives from C# OpenSimulator 0.9.x load without modification.
@@ -442,7 +442,7 @@ C# OpenSimulator 0.9.x load without modification.
 
 **Q: What about my LSL scripts?**
 
-A: LSL scripts need to be transpiled to Luau. The `opensim-script-compiler`
+A: LSL scripts need to be transpiled to Luau. The `welkin-script-compiler`
 crate handles this, though it is still a skeleton. Hand-written Luau scripts
 work now. Scripts compiled for XEngine/YEngine do not transfer directly.
 

@@ -11,7 +11,7 @@ NC='\033[0m'
 DATA_DIR="/var/lib/opensim"
 CONFIG_DIR="/etc/opensim"
 BIN_DIR="/usr/local/bin"
-SERVICE_FILE="/etc/systemd/system/opensim-robust.service"
+SERVICE_FILE="/etc/systemd/system/welkin-robust.service"
 PORTAL_PORT=8002
 GRID_PORT=8003
 
@@ -154,11 +154,11 @@ setup_database() {
     touch "$db_file"
     chown opensim:opensim "$db_file"
 
-    if command -v "$BIN_DIR/opensim-robust" &>/dev/null; then
+    if command -v "$BIN_DIR/welkin-robust" &>/dev/null; then
         info "Running database migrations..."
-        sudo -u opensim "$BIN_DIR/opensim-robust" --config "$CONFIG_DIR/robust.ini" --migrate || true
+        sudo -u opensim "$BIN_DIR/welkin-robust" --config "$CONFIG_DIR/robust.ini" --migrate || true
     else
-        warn "opensim-robust binary not found; migrations will run on first start"
+        warn "welkin-robust binary not found; migrations will run on first start"
     fi
     ok "Database ready: $db_file"
 }
@@ -166,7 +166,7 @@ setup_database() {
 install_service() {
     local script_dir
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local source_service="$script_dir/opensim-robust.service"
+    local source_service="$script_dir/welkin-robust.service"
 
     if [[ -f "$source_service" ]]; then
         cp "$source_service" "$SERVICE_FILE"
@@ -180,7 +180,7 @@ After=network.target
 Type=simple
 User=opensim
 Group=opensim
-ExecStart=/usr/local/bin/opensim-robust --config /etc/opensim/robust.ini
+ExecStart=/usr/local/bin/welkin-robust --config /etc/opensim/robust.ini
 WorkingDirectory=/var/lib/opensim
 Restart=on-failure
 RestartSec=5
@@ -194,23 +194,23 @@ UNIT
     fi
 
     systemctl daemon-reload
-    systemctl enable opensim-robust.service
+    systemctl enable welkin-robust.service
     ok "Systemd service installed and enabled"
 }
 
 start_service() {
-    if systemctl is-active --quiet opensim-robust.service; then
+    if systemctl is-active --quiet welkin-robust.service; then
         info "Service already running; restarting..."
-        systemctl restart opensim-robust.service
+        systemctl restart welkin-robust.service
     else
-        systemctl start opensim-robust.service
+        systemctl start welkin-robust.service
     fi
 
     sleep 2
-    if systemctl is-active --quiet opensim-robust.service; then
+    if systemctl is-active --quiet welkin-robust.service; then
         ok "Service started"
     else
-        warn "Service may not have started; check: journalctl -u opensim-robust"
+        warn "Service may not have started; check: journalctl -u welkin-robust"
     fi
 }
 
@@ -228,7 +228,7 @@ print_summary() {
     info "Grid services: http://${ip}:${GRID_PORT}/"
     info "Config:       $CONFIG_DIR/robust.ini"
     info "Data:         $DATA_DIR/"
-    info "Logs:         journalctl -u opensim-robust"
+    info "Logs:         journalctl -u welkin-robust"
     info "Admin token:  $CONFIG_DIR/admin-token"
     echo ""
 }

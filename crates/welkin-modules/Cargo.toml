@@ -1,0 +1,35 @@
+[package]
+name = "welkin-modules"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+welkin-types = { path = "../welkin-types" }
+welkin-scene = { path = "../welkin-scene" }
+welkin-services = { path = "../welkin-services" }
+welkin-data = { path = "../welkin-data" }
+bitflags = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+parking_lot = { workspace = true }
+tiny-skia = { workspace = true }
+irc = "1"
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "macros", "rt-multi-thread"] }
+welkin-data = { path = "../welkin-data" }
+welkin-services = { path = "../welkin-services" }
+axum = { workspace = true }
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+sqlx = { workspace = true }
+uuid = { workspace = true }
+
+[lints]
+workspace = true

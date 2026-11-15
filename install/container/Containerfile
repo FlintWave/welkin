@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/li
 
 WORKDIR /build
 COPY . .
-RUN cargo build --release --bin opensim-robust
+RUN cargo build --release --bin welkin-robust
 
 FROM docker.io/library/debian:bookworm-slim
 
@@ -17,11 +17,11 @@ RUN apt-get update && \
     mkdir -p /var/lib/opensim/{data,logs,backups} /etc/opensim && \
     chown -R opensim:opensim /var/lib/opensim /etc/opensim
 
-COPY --from=builder /build/target/release/opensim-robust /usr/local/bin/opensim-robust
+COPY --from=builder /build/target/release/welkin-robust /usr/local/bin/welkin-robust
 
 USER opensim
 WORKDIR /var/lib/opensim
 
 EXPOSE 8002 8003
 
-ENTRYPOINT ["opensim-robust", "--config", "/etc/opensim/robust.ini"]
+ENTRYPOINT ["welkin-robust", "--config", "/etc/opensim/robust.ini"]

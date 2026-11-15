@@ -12,7 +12,7 @@ CONDITIONAL PASS.
 A region can join a grid somebody else runs. Which grid is configuration, not
 code.
 
-### Grid profiles (`opensim-config/src/profile.rs`, `8f35477`)
+### Grid profiles (`welkin-config/src/profile.rs`, `8f35477`)
 
 - `GridProfile` enum: `Standalone` (all services on localhost), `OwnGrid`
   (the Rust `robust`, configurable URLs) and `Custom(name)` (any grid, loaded
@@ -27,7 +27,7 @@ code.
   profile. The OSgrid profile is generated this way from OSgrid's published
   build, so addresses are never typed from memory.
 
-### Remote connectors (`opensim-services`, `5ec6dce`)
+### Remote connectors (`welkin-services`, `5ec6dce`)
 
 - `remote/asset.rs`, `remote/grid.rs`, `remote/inventory.rs`: HTTP/XML
   clients for the grid's asset, grid and inventory services.
@@ -35,7 +35,7 @@ code.
 - `registration.rs`: region register (protocol version 1), deregister on
   shutdown, and neighbour notification, as the C# connector does it.
 
-### Hypergrid traits (`opensim-services/src/hypergrid.rs`, `91a1147`)
+### Hypergrid traits (`welkin-services/src/hypergrid.rs`, `91a1147`)
 
 Six async traits with stub implementations and 4 tests: `GatekeeperService`,
 `UserAgentService`, `HypergridAssetService`, `HypergridInventoryService`,
@@ -53,7 +53,7 @@ document carries an operator checklist of questions to ask. The setup rules
 avatar, per-region TCP and UDP ports, public external host name) are encoded
 as wizard checks.
 
-### Wizard checks (`opensim-services/src/wizard.rs`, 13 tests)
+### Wizard checks (`welkin-services/src/wizard.rs`, 13 tests)
 
 `check_region_name`, `check_coordinates`, `check_estate_owner`, `check_ports`
 and `run_all_checks`, returning a `WizardReport`. Checks work against

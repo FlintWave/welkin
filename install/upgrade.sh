@@ -11,7 +11,7 @@ NC='\033[0m'
 BIN_DIR="/usr/local/bin"
 CONFIG_DIR="/etc/opensim"
 DATA_DIR="/var/lib/opensim"
-SERVICE="opensim-robust.service"
+SERVICE="welkin-robust.service"
 
 info()  { printf "${BLUE}[INFO]${NC}  %s\n" "$*"; }
 ok()    { printf "${GREEN}[OK]${NC}    %s\n" "$*"; }
@@ -26,8 +26,8 @@ check_root() {
 }
 
 check_existing() {
-    if [[ ! -f "$BIN_DIR/opensim-robust" ]]; then
-        err "opensim-robust not found at $BIN_DIR/opensim-robust"
+    if [[ ! -f "$BIN_DIR/welkin-robust" ]]; then
+        err "welkin-robust not found at $BIN_DIR/welkin-robust"
         err "Run install.sh first"
         exit 1
     fi
@@ -62,14 +62,14 @@ replace_binary() {
         exit 1
     fi
 
-    cp "$new_binary" "$BIN_DIR/opensim-robust"
-    chmod 755 "$BIN_DIR/opensim-robust"
+    cp "$new_binary" "$BIN_DIR/welkin-robust"
+    chmod 755 "$BIN_DIR/welkin-robust"
     ok "Binary replaced"
 }
 
 run_migrations() {
     info "Running database migrations..."
-    sudo -u opensim "$BIN_DIR/opensim-robust" --config "$CONFIG_DIR/robust.ini" --migrate || {
+    sudo -u opensim "$BIN_DIR/welkin-robust" --config "$CONFIG_DIR/robust.ini" --migrate || {
         warn "Migration returned non-zero; check logs"
     }
     ok "Migrations complete"

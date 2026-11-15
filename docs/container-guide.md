@@ -11,10 +11,10 @@ produces a minimal distroless runtime image.
 
 ```bash
 # Full image (robust, region, portal, osim-migrate)
-docker build -f Dockerfile -t opensim-rust:latest .
+docker build -f Dockerfile -t welkin:latest .
 
 # Region-only image (smaller, single binary)
-docker build -f Dockerfile.region -t opensim-region:latest .
+docker build -f Dockerfile.region -t welkin-region:latest .
 ```
 
 Builds use `cargo-chef` for dependency caching. The first build downloads and
@@ -83,11 +83,11 @@ docker compose -f docker-compose.prod.yml exec db \
 
 ```bash
 # Back up the persistent database volume
-docker run --rm -v opensim-rust_db-data:/data -v $(pwd):/backup \
+docker run --rm -v welkin_db-data:/data -v $(pwd):/backup \
   alpine tar czf /backup/db-data-$(date +%F).tar.gz -C /data .
 
 # Back up region data
-docker run --rm -v opensim-rust_region-data:/data -v $(pwd):/backup \
+docker run --rm -v welkin_region-data:/data -v $(pwd):/backup \
   alpine tar czf /backup/region-data-$(date +%F).tar.gz -C /data .
 ```
 
@@ -111,13 +111,13 @@ Configure Prometheus scrape targets:
 
 ```yaml
 scrape_configs:
-  - job_name: opensim-robust
+  - job_name: welkin-robust
     static_configs:
       - targets: ['robust:8002']
-  - job_name: opensim-region
+  - job_name: welkin-region
     static_configs:
       - targets: ['region:9000']
-  - job_name: opensim-portal
+  - job_name: welkin-portal
     static_configs:
       - targets: ['portal:8080']
 ```
@@ -134,7 +134,7 @@ docker compose -f docker-compose.prod.yml logs -f
 docker compose -f docker-compose.prod.yml logs --tail=100 robust
 
 # Enable debug logging for a single crate
-# Set in .env: RUST_LOG=opensim_robust=debug,info
+# Set in .env: RUST_LOG=welkin_robust=debug,info
 docker compose -f docker-compose.prod.yml up -d robust
 ```
 

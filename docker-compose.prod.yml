@@ -1,4 +1,4 @@
-# docker-compose.prod.yml — Production stack for opensim-rust
+# docker-compose.prod.yml — Production stack for welkin
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Full production deployment with grid services (Robust), region simulator,
@@ -10,8 +10,8 @@
 #
 # Prerequisites:
 #   - Build images first:
-#       docker build -t opensim-rust:latest -f Dockerfile .
-#       docker build -t opensim-rust-region:latest -f Dockerfile.region .
+#       docker build -t welkin:latest -f Dockerfile .
+#       docker build -t welkin-region:latest -f Dockerfile.region .
 #   - Or use pre-built images by setting IMAGE_TAG in .env
 #
 # Architecture:
@@ -48,14 +48,14 @@ services:
   # =========================================================================
   # Stores all grid data: users, inventory, assets, region state.
   # Not exposed to the host network in production — only reachable by other
-  # services on the opensim-net bridge.
+  # services on the welkin-net bridge.
   # =========================================================================
   db:
     image: docker.io/library/mysql:8.0
     <<: *default-restart
     logging: *default-logging
     networks:
-      - opensim-net
+      - welkin-net
     volumes:
       - db-data:/var/lib/mysql
     environment:
@@ -83,18 +83,18 @@ services:
   # no wget).  Compose healthchecks that exec into the container cannot work.
   # Instead, use an external probe against http://<host>:8002/health, or
   # deploy behind a load balancer that checks the endpoint.  The binary
-  # itself handles SIGTERM gracefully (see opensim-runtime::shutdown_signal).
+  # itself handles SIGTERM gracefully (see welkin-runtime::shutdown_signal).
   #
   # Prometheus metrics are available at http://<host>:8002/metrics from the
   # same listener — no separate metrics port needed.
   # =========================================================================
   robust:
-    image: opensim-rust:${IMAGE_TAG:-latest}
-    command: ["opensim-robust"]
+    image: welkin:${IMAGE_TAG:-latest}
+    command: ["welkin-robust"]
     <<: *default-restart
     logging: *default-logging
     networks:
-      - opensim-net
+      - welkin-net
     env_file: .env
     depends_on:
       db:
@@ -119,12 +119,12 @@ services:
   # mounted into /data/regions.
   # =========================================================================
   region:
-    image: opensim-rust-region:${IMAGE_TAG:-latest}
-    command: ["opensim-region"]
+    image: welkin-region:${IMAGE_TAG:-latest}
+    command: ["welkin-region"]
     <<: *default-restart
     logging: *default-logging
     networks:
-      - opensim-net
+      - welkin-net
     env_file: .env
     depends_on:
       db:
@@ -155,12 +155,12 @@ services:
   # estates, and grid configuration.
   # =========================================================================
   portal:
-    image: opensim-rust:${IMAGE_TAG:-latest}
-    command: ["opensim-portal"]
+    image: welkin:${IMAGE_TAG:-latest}
+    command: ["welkin-portal"]
     <<: *default-restart
     logging: *default-logging
     networks:
-      - opensim-net
+      - welkin-net
     env_file: .env
     depends_on:
       robust:
@@ -188,7 +188,7 @@ services:
     <<: *default-restart
     logging: *default-logging
     networks:
-      - opensim-net
+      - welkin-net
     depends_on:
       robust:
         condition: service_started
@@ -210,7 +210,7 @@ services:
   #   restart: unless-stopped
   #   logging: *default-logging
   #   networks:
-  #     - opensim-net
+  #     - welkin-net
   #   depends_on:
   #     region:
   #       condition: service_started
@@ -249,5 +249,5 @@ volumes:
 # (Robust, Region, Portal, Voice) are published.
 # =============================================================================
 networks:
-  opensim-net:
+  welkin-net:
     driver: bridge

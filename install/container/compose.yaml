@@ -1,19 +1,19 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 services:
-  opensim-robust:
+  welkin-robust:
     build:
       context: ../..
       dockerfile: install/container/Containerfile
-    container_name: opensim-robust
+    container_name: welkin-robust
     ports:
       - "8002:8002"
       - "8003:8003"
     volumes:
-      - opensim-data:/var/lib/opensim/data
-      - opensim-logs:/var/lib/opensim/logs
-      - opensim-backups:/var/lib/opensim/backups
-      - opensim-config:/etc/opensim
+      - welkin-data:/var/lib/opensim/data
+      - welkin-logs:/var/lib/opensim/logs
+      - welkin-backups:/var/lib/opensim/backups
+      - welkin-config:/etc/opensim
     restart: unless-stopped
 
   # Uncomment for MySQL backend:
@@ -46,9 +46,9 @@ services:
   #   restart: unless-stopped
 
 volumes:
-  opensim-data:
-  opensim-logs:
-  opensim-backups:
-  opensim-config:
+  welkin-data:
+  welkin-logs:
+  welkin-backups:
+  welkin-config:
   # mysql-data:
   # postgres-data:

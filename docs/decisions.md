@@ -22,7 +22,7 @@ where none is given.
 | R6 | Voice: WebRTC only, via `wolfvoice` sidecar | Vivox is proprietary; Aurora supports WebRTC only; FreeSWITCH not ported | 2026-11-13 |
 | R7 / D1 | Licence GPL-3.0-or-later, reuse Aurora crates | Lets Aurora's GPL crates be linked; "or later" matches Aurora's manifest; BSD notices of ported code are preserved; AGPL not adopted because GPLv3 does not oblige network-only operators to publish and that was judged sufficient | 2026-11-13 |
 | R8 | Workforce: `beam:cloud` workers code and first-review; Claude writes proposals and signs off | Cost and review discipline | 2026-11-13 |
-| D2 | Repository `opensim-rust`, local git only, no remote | Operator decision | 2026-11-13 |
+| D2 | Repository `welkin`, local git only, no remote | Operator decision | 2026-11-13 |
 | R9 | Pathfinding not planned | Operator decision | 2026-11-13 |
 | A1 | Aurora crates are pinned git dependencies at `3d523b1` and always wrapped | Unpublished, version 0.1.0, change daily; wrapping confines API churn to one crate | 2026-11-13 |
 | A2 | `aurora-net` used for the test bot only | It is the viewer side of the protocol | 2026-11-13 |
@@ -51,7 +51,7 @@ where none is given.
 | M3 | Sculpt textures come through a `SculptTextureSource` trait; JPEG 2000 decoding deferred | Keeps meshing testable and leaves the `aurora-assets` versus pure Rust question open | 2026-11-13 |
 | M4 | Mesh asset decoding is treated as untrusted: indices validated, zlib output capped at 32 MiB, cache mutexes recover from poisoning (`1812e45`) | Security review CRITICAL-1, HIGH-1, MEDIUM-3 | 2026-11-13 |
 | N1 | Scene objects persist and interchange as XML2, round-tripped against C# output | R2; lets a C# region database and OAR content load unchanged | 2026-11-13 |
-| N2 | `SimulationDataStore` trait in `opensim-data` with one `sqlx` implementation over the existing `regionstore` tables | R5; no migration for C#-created region databases | 2026-11-13 |
+| N2 | `SimulationDataStore` trait in `welkin-data` with one `sqlx` implementation over the existing `regionstore` tables | R5; no migration for C#-created region databases | 2026-11-13 |
 | N3 | LLUDP viewer messages dispatch through a table keyed on message id to typed handler functions, not a large class | Replaces the 13k-line `LLClientView`; handlers are testable alone | 2026-11-13 |
 | N4 | Several `Scene`s per process via `RegionManager`; caps HTTP server runs beside the LLUDP listener | Matches C# multi-region hosting | 2026-11-13 |
 | N5 | Terrain modification brushes ship with the scene crate, not a later module | Heightfield belongs to the scene graph and OAR load needs it | 2026-11-13 |
@@ -74,7 +74,7 @@ where none is given.
 | O4 | Functions whose subsystem is absent are registered as stubs that log and return a default; 233 registered, catalog test fixed | Scripts compile and run; each stub is replaced by the change that adds its module (same approach as V5) | 2026-11-13 |
 | O5 | AES key and IV derive by PBKDF2-HMAC-SHA1, 1000 iterations, salt `OpenSimulator OSSL`, not SHA256 (review S1) | .NET `Rfc2898DeriveBytes` uses SHA1; SHA256 broke ciphertext interchange with C# regions | 2026-11-13 |
 | O6 | OSSL accepted as CONDITIONAL PASS: commit the S1 fix, enforce role checks at call time (S2) and remove `expect()` from crypto (S3) before production | Second review; same arrangement as S5 and G4 | 2026-11-13 |
-| RM1 | Region modules live in one crate, `opensim-modules`, split by module directory | Single dependency for the region binary; shorter than the `opensim-region-modules` name in the design | 2026-11-13 |
+| RM1 | Region modules live in one crate, `welkin-modules`, split by module directory | Single dependency for the region binary; shorter than the `welkin-region-modules` name in the design | 2026-11-13 |
 | RM2 | Modules implement a `RegionModule` trait with `Shared`/`NonShared` types and a four-step lifecycle | Maps C# `IRegionModuleBase`, `ISharedRegionModule` and `INonSharedRegionModule` one to one | 2026-11-13 |
 | RM3 | Interfaces are found through a `TypeId`-keyed registry, not reflection or globals | Rust has no runtime type discovery; explicit registration is checkable | 2026-11-13 |
 | RM4 | Module-to-module notifications use a typed `tokio::sync::broadcast` event bus (`SceneEvents`) | Subscribers are independent; replaces C# scene event delegates | 2026-11-13 |

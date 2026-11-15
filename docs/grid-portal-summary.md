@@ -9,14 +9,14 @@ companion, so a grid can be installed with one command and run from a browser.
 ## What was built
 
 The first feature commit (`ddba6d0`) added 2,974 lines in 21 files: the
-`opensim-portal` crate (2,084 lines of Rust over 12 source files) and the
+`welkin-portal` crate (2,084 lines of Rust over 12 source files) and the
 installer (890 lines of shell, systemd, container and compose files). The
 desktop companion and the end-to-end test followed in `e8ddfd8`, and the fixes
 for the security review in `59eea64`. `c2706d1` marked 26 of 26 tasks complete.
 
 | Commit | Content |
 |---|---|
-| `ddba6d0` | `opensim-portal` crate and installer (sections 1 to 6) |
+| `ddba6d0` | `welkin-portal` crate and installer (sections 1 to 6) |
 | `63cf86a` | Task list at 20 of 26 |
 | `59eea64` | Security fixes H1 to H3 |
 | `e8ddfd8` | Desktop companion, end-to-end test, security review (sections 7 and 8) |
@@ -25,7 +25,7 @@ for the security review in `59eea64`. `c2706d1` marked 26 of 26 tasks complete.
 
 The portal follows GridGate's page set (BSD) as its model. The proposal says
 the portal is served by the `robust` binary; the crate exposes axum routers
-that `opensim-robust` mounts, and `opensim-robust` is still a skeleton.
+that `welkin-robust` mounts, and `welkin-robust` is still a skeleton.
 
 ## 1. Installer
 
@@ -37,7 +37,7 @@ Files are in `install/`:
 - `upgrade.sh` and `uninstall.sh`: both leave world data in place.
 - `install-archive.sh`: the second path, from a release archive with no
   containers.
-- `opensim-robust.service`: the systemd unit.
+- `welkin-robust.service`: the systemd unit.
 - `container/Containerfile`: multi-stage image build.
 - `container/compose.yaml`: database, `robust` and a region.
 
@@ -78,7 +78,7 @@ never kept as plaintext (fix H3). All staff account handlers call
 placement, content, finish. The state is `NotStarted`, `InProgress { step }` or
 `Completed`; the portal opens on the wizard until it is completed. Modes are
 standalone, own grid and join a grid. The capacity step is meant to call the
-`opensim-capacity` estimate. The network check carries a result structure; the
+`welkin-capacity` estimate. The network check carries a result structure; the
 outside probe depends on a reachable external service.
 
 ## 6. Content
@@ -88,14 +88,14 @@ outside probe depends on a reachable external service.
 - A catalogue where each entry records a licence (`LicenceInfo`). No content
   is bundled.
 - OAR import with the loader options (`ImportOptions`) and a status record
-  (`ImportStatus`). The actual load depends on `opensim-archive`, which is
+  (`ImportStatus`). The actual load depends on `welkin-archive`, which is
   still a skeleton.
 - Terrain presets: flat, island, archipelago, mountain and valley.
 - Backup scheduling per region: interval in hours and a retention count.
 
 ## 7. Desktop companion
 
-`crates/opensim-companion` is a Tauri 2 application (decision G1). It has a
+`crates/welkin-companion` is a Tauri 2 application (decision G1). It has a
 tray icon with a status menu (`tray.rs`), status polling, service start and
 stop through `systemctl`, a log viewer through `journalctl`, desktop
 notifications and a remote grid connect (`commands.rs`). It ships a `.desktop`
@@ -105,7 +105,7 @@ needs an extension; the control window is the guaranteed path.
 
 ## 8. Proof
 
-`crates/opensim-portal/tests/e2e_portal_flow.rs` is one test with 14 stages
+`crates/welkin-portal/tests/e2e_portal_flow.rs` is one test with 14 stages
 covering the wizard, authentication, region lifecycle, map, people, content
 and access control. The module tests plus the end-to-end test passed with the
 full workspace green.
@@ -142,6 +142,6 @@ the session scratchpad.
 
 ## Known gaps
 
-- `opensim-robust` does not yet mount the portal.
+- `welkin-robust` does not yet mount the portal.
 - TOTP, captcha, persistent audit storage and rate limiting are stubs or absent.
 - Region control talks to C# regions until the Rust simulator exists.

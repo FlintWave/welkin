@@ -9,10 +9,10 @@ Change: `openspec/changes/physics-backend`. Status: complete and accepted
 
 A physics engine for the region simulator, split in two crates:
 
-- `opensim-physics` defines the `PhysicsScene` and `PhysicsActor` traits and
+- `welkin-physics` defines the `PhysicsScene` and `PhysicsActor` traits and
   holds all behaviour that does not depend on a solver. No engine types appear
   in the trait signatures.
-- `opensim-physics-rapier` implements the traits on Rapier 0.36.1
+- `welkin-physics-rapier` implements the traits on Rapier 0.36.1
   (`rapier3d`, Apache-2.0, pure Rust). It takes collision geometry from
   `aurora-prim`.
 
@@ -48,13 +48,13 @@ Jolt stays the documented fallback behind the same trait; it was not needed.
 
 ### Trait abstraction and null backend
 
-`PhysicsScene` and `PhysicsActor` live in `crates/opensim-physics/src/lib.rs`.
+`PhysicsScene` and `PhysicsActor` live in `crates/welkin-physics/src/lib.rs`.
 `null.rs` is a backend that stores state and does no simulation, used for
 tests of code above the trait (`e41e8ec`).
 
 ### Rapier backend
 
-`crates/opensim-physics-rapier/src/lib.rs` (`2e1f10b2`). Changes to actors are
+`crates/welkin-physics-rapier/src/lib.rs` (`2e1f10b2`). Changes to actors are
 marked dirty and pushed to Rapier in `flush_dirty` before each step.
 
 - Prims and linksets: a linkset is one compound body; shape types are prim,
@@ -71,7 +71,7 @@ marked dirty and pushed to Rapier in `flush_dirty` before each step.
 
 ### Engine-independent behaviour
 
-These modules sit in `opensim-physics`, above the trait, so a change of
+These modules sit in `welkin-physics`, above the trait, so a change of
 solver does not touch them.
 
 - `vehicle.rs`: the LSL vehicle model ported from `ODEDynamics.cs`. Vehicles
@@ -91,7 +91,7 @@ solver does not touch them.
 - `terse_update.rs`: the change thresholds and rate limits from
   `SceneObjectPart` and `ScenePresence`, so a Rust region sends
   `ImprovedTerseObjectUpdate` under the same conditions as C# (`a3d2c24`).
-  The object update encoders themselves are in `opensim-msg` (`7241c49`).
+  The object update encoders themselves are in `welkin-msg` (`7241c49`).
 - `tests/smoothness_check.rs`: checks that walking, flying, vehicle and
   falling-object update streams do not produce snapping jumps when
   extrapolated (`fb8a150`). This is a test-level check; no live Aurora
@@ -99,14 +99,14 @@ solver does not touch them.
 
 ## Test coverage
 
-23 tests pass in the two crates (`cargo test -p opensim-physics
--p opensim-physics-rapier`), not the 20 first reported:
+23 tests pass in the two crates (`cargo test -p welkin-physics
+-p welkin-physics-rapier`), not the 20 first reported:
 
 | File | Tests |
 |---|---|
-| `crates/opensim-physics/src/terse_update.rs` | 15 |
-| `crates/opensim-physics/tests/smoothness_check.rs` | 5 |
-| `crates/opensim-physics-rapier/tests/spike_aurora_colliders.rs` | 3 |
+| `crates/welkin-physics/src/terse_update.rs` | 15 |
+| `crates/welkin-physics/tests/smoothness_check.rs` | 5 |
+| `crates/welkin-physics-rapier/tests/spike_aurora_colliders.rs` | 3 |
 
 The Rapier backend, vehicle, avatar, behaviour and keyframe modules have no
 unit tests of their own; they are covered only indirectly. This is the main

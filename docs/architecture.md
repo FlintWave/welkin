@@ -22,29 +22,29 @@ crates are prefixed `opensim-`.
 
 | Crate | Role | State |
 |---|---|---|
-| `opensim-types` | SL protocol enums and bitfields: asset, inventory, folder and wearable types, attachment points, `PermissionMask` | implemented |
-| `opensim-llsd` | Wrapper over `aurora-llsd`, plus server-side XML-RPC codec (`src/xmlrpc.rs`) for login and legacy calls | implemented |
-| `opensim-msg` | Wrapper over `aurora-msg` (framing, zero-coding, typed messages). `src/objects.rs` adds server-direction object update encoders | implemented |
-| `opensim-prim` | Re-exports from `aurora-prim`, plus physics meshing: analytic box/sphere, volume and sculpt trimeshes, LOD selection, mesh asset decoder (`mesh_asset.rs`), V-HACD convex decomposition, shape and decomposition caches, linkset compound colliders (`meshing.rs`). See `docs/prim-meshing-summary.md` | implemented |
-| `opensim-net` | Server-side LLUDP: `circuit.rs`, `throttle.rs`, plus `server.rs` (listener), `client.rs` (per-viewer state), `dispatch.rs` (message-id table), `handlers.rs` (viewer handlers) | implemented |
-| `opensim-config` | TOML configuration with env overrides; `OpenSim.ini` / `Robust.ini` importer | implemented |
-| `opensim-runtime` | Logging (`tracing`), Prometheus metrics, health endpoint, graceful shutdown | implemented |
-| `opensim-conformance` | Recorder/replayer (HTTP, XML-RPC, LLUDP), `pCampBot` wrapper, test bot (`tests/test_bot.rs`) | implemented |
-| `opensim-physics` | `PhysicsScene`/`PhysicsActor` traits, null backend, and solver-independent behaviour: vehicles (`vehicle.rs`), avatar controller (`avatar.rs`), move-to-target/hover/look-at (`behaviors.rs`), keyframed motion (`keyframe.rs`), terse-update thresholds (`terse_update.rs`) | implemented |
-| `opensim-physics-rapier` | Rapier 0.36.1 backend: prims and linksets, terrain heightfield, collisions, probes, materials, snapshot/restore; consumes `aurora-prim` geometry | implemented |
-| `opensim-caps` | HTTP capabilities: per-session seed cap, LLSD event queue long-poll, fetch, region info and upload cap handlers | implemented (thin handlers) |
-| `opensim-capacity` | Host scan (CPU, memory with cgroup limits, disk, container), network stub, `HostReport`, 12 sourced coefficients, estimate engine with quiet/typical/busy profiles. `benchmark`, `model` and `live` modules are stubs pending the region simulator | partial |
-| `opensim-data` | `sqlx` data layer: 13 stores over MariaDB, PostgreSQL and SQLite, plus a migration runner with 53 embedded C# schema files | implemented |
-| `opensim-services` | 14 Robust grid service handlers behind axum: asset, inventory, grid, presence, griduser, accounts, auth, authorization, friends, avatar, mute, profiles, map, estate, agent preferences, simulation (501 stub) and XML-RPC login | implemented |
-| `opensim-scene` | Scene, object groups and parts, presences, XML2 serializer, terrain (channel, file I/O, brushes, compression), region manager, shutdown | implemented |
-| `opensim-modules` | Region modules (land, permissions, chat, groups, profiles, NPCs, IM, IRC, concierge) | implemented |
-| `opensim-archive` | OAR/IAR archives: OAR single/multi-region save/load, IAR save/load, OspResolver, ExternalRepresentationUtils, console commands (9,555 lines, 205 tests) | implemented |
-| `opensim-script-vm` | Luau VM via mlua: `ScriptInstance`, `ScriptScheduler`, `RegionTransferBundle`, `ScriptState` save/restore, 82 `ll*` (49 implemented), 27 `os*` with threat levels, events and detected parameters. See `docs/script-engine-summary.md` | implemented (172 tests) |
-| `opensim-script-compiler`, `-api` | LSL-to-Luau transpiler; scene-bound script API | skeleton |
-| `opensim-portal` | Grid portal: staff auth (argon2), sessions, RBAC roles, audit log, region control, pages, grid map, people/sign-up, first-run wizard, content/catalogue | implemented |
-| `opensim-companion` | Tauri 2 desktop app: tray icon, service start/stop, log viewer, notifications, remote grid connect. **Standalone**: excluded from workspace (`Cargo.toml` exclude) | implemented |
-| `opensim-robust` | Binary: grid services | skeleton (`main.rs`) |
-| `opensim-region` | Binary: region simulator (config, multi-region, LLUDP and caps startup, graceful shutdown) | implemented |
+| `welkin-types` | SL protocol enums and bitfields: asset, inventory, folder and wearable types, attachment points, `PermissionMask` | implemented |
+| `welkin-llsd` | Wrapper over `aurora-llsd`, plus server-side XML-RPC codec (`src/xmlrpc.rs`) for login and legacy calls | implemented |
+| `welkin-msg` | Wrapper over `aurora-msg` (framing, zero-coding, typed messages). `src/objects.rs` adds server-direction object update encoders | implemented |
+| `welkin-prim` | Re-exports from `aurora-prim`, plus physics meshing: analytic box/sphere, volume and sculpt trimeshes, LOD selection, mesh asset decoder (`mesh_asset.rs`), V-HACD convex decomposition, shape and decomposition caches, linkset compound colliders (`meshing.rs`). See `docs/prim-meshing-summary.md` | implemented |
+| `welkin-net` | Server-side LLUDP: `circuit.rs`, `throttle.rs`, plus `server.rs` (listener), `client.rs` (per-viewer state), `dispatch.rs` (message-id table), `handlers.rs` (viewer handlers) | implemented |
+| `welkin-config` | TOML configuration with env overrides; `OpenSim.ini` / `Robust.ini` importer | implemented |
+| `welkin-runtime` | Logging (`tracing`), Prometheus metrics, health endpoint, graceful shutdown | implemented |
+| `welkin-conformance` | Recorder/replayer (HTTP, XML-RPC, LLUDP), `pCampBot` wrapper, test bot (`tests/test_bot.rs`) | implemented |
+| `welkin-physics` | `PhysicsScene`/`PhysicsActor` traits, null backend, and solver-independent behaviour: vehicles (`vehicle.rs`), avatar controller (`avatar.rs`), move-to-target/hover/look-at (`behaviors.rs`), keyframed motion (`keyframe.rs`), terse-update thresholds (`terse_update.rs`) | implemented |
+| `welkin-physics-rapier` | Rapier 0.36.1 backend: prims and linksets, terrain heightfield, collisions, probes, materials, snapshot/restore; consumes `aurora-prim` geometry | implemented |
+| `welkin-caps` | HTTP capabilities: per-session seed cap, LLSD event queue long-poll, fetch, region info and upload cap handlers | implemented (thin handlers) |
+| `welkin-capacity` | Host scan (CPU, memory with cgroup limits, disk, container), network stub, `HostReport`, 12 sourced coefficients, estimate engine with quiet/typical/busy profiles. `benchmark`, `model` and `live` modules are stubs pending the region simulator | partial |
+| `welkin-data` | `sqlx` data layer: 13 stores over MariaDB, PostgreSQL and SQLite, plus a migration runner with 53 embedded C# schema files | implemented |
+| `welkin-services` | 14 Robust grid service handlers behind axum: asset, inventory, grid, presence, griduser, accounts, auth, authorization, friends, avatar, mute, profiles, map, estate, agent preferences, simulation (501 stub) and XML-RPC login | implemented |
+| `welkin-scene` | Scene, object groups and parts, presences, XML2 serializer, terrain (channel, file I/O, brushes, compression), region manager, shutdown | implemented |
+| `welkin-modules` | Region modules (land, permissions, chat, groups, profiles, NPCs, IM, IRC, concierge) | implemented |
+| `welkin-archive` | OAR/IAR archives: OAR single/multi-region save/load, IAR save/load, OspResolver, ExternalRepresentationUtils, console commands (9,555 lines, 205 tests) | implemented |
+| `welkin-script-vm` | Luau VM via mlua: `ScriptInstance`, `ScriptScheduler`, `RegionTransferBundle`, `ScriptState` save/restore, 82 `ll*` (49 implemented), 27 `os*` with threat levels, events and detected parameters. See `docs/script-engine-summary.md` | implemented (172 tests) |
+| `welkin-script-compiler`, `-api` | LSL-to-Luau transpiler; scene-bound script API | skeleton |
+| `welkin-portal` | Grid portal: staff auth (argon2), sessions, RBAC roles, audit log, region control, pages, grid map, people/sign-up, first-run wizard, content/catalogue | implemented |
+| `welkin-companion` | Tauri 2 desktop app: tray icon, service start/stop, log viewer, notifications, remote grid connect. **Standalone**: excluded from workspace (`Cargo.toml` exclude) | implemented |
+| `welkin-robust` | Binary: grid services | skeleton (`main.rs`) |
+| `welkin-region` | Binary: region simulator (config, multi-region, LLUDP and caps startup, graceful shutdown) | implemented |
 
 
 </details>
@@ -61,42 +61,42 @@ graph TD
     end
 
     subgraph Core["Core crates"]
-        TYPES[opensim-types]
-        LLSD[opensim-llsd]
-        MSG[opensim-msg]
-        NET[opensim-net]
-        CONFIG[opensim-config]
-        RUNTIME[opensim-runtime]
+        TYPES[welkin-types]
+        LLSD[welkin-llsd]
+        MSG[welkin-msg]
+        NET[welkin-net]
+        CONFIG[welkin-config]
+        RUNTIME[welkin-runtime]
     end
 
     subgraph Services["Services layer"]
-        DATA[opensim-data]
-        CAPS[opensim-caps]
-        SERVICES[opensim-services]
-        PORTAL[opensim-portal]
-        CAPACITY[opensim-capacity]
+        DATA[welkin-data]
+        CAPS[welkin-caps]
+        SERVICES[welkin-services]
+        PORTAL[welkin-portal]
+        CAPACITY[welkin-capacity]
     end
 
     subgraph Simulation["Simulation layer"]
-        SCENE[opensim-scene]
-        MODULES[opensim-modules]
-        PHYSICS[opensim-physics]
-        RAPIER[opensim-physics-rapier]
-        PRIM[opensim-prim]
-        ARCHIVE[opensim-archive]
+        SCENE[welkin-scene]
+        MODULES[welkin-modules]
+        PHYSICS[welkin-physics]
+        RAPIER[welkin-physics-rapier]
+        PRIM[welkin-prim]
+        ARCHIVE[welkin-archive]
     end
 
     subgraph Scripts["Script engine"]
-        VM[opensim-script-vm]
-        COMPILER[opensim-script-compiler]
-        API[opensim-script-api]
+        VM[welkin-script-vm]
+        COMPILER[welkin-script-compiler]
+        API[welkin-script-api]
     end
 
     subgraph Binaries["Binaries"]
-        ROBUST[opensim-robust]
-        REGION[opensim-region]
-        COMPANION[opensim-companion]
-        CONFORM[opensim-conformance]
+        ROBUST[welkin-robust]
+        REGION[welkin-region]
+        COMPANION[welkin-companion]
+        CONFORM[welkin-conformance]
     end
 
     A_LLSD --> LLSD
@@ -131,26 +131,26 @@ graph TD
 <summary>Text version (for terminals)</summary>
 
 ```text
-aurora-llsd -> opensim-llsd -------------------+
-aurora-msg  -> opensim-msg --------------------+--> opensim-net
-aurora-prim -> opensim-prim, opensim-physics-rapier
-opensim-physics -> opensim-physics-rapier (rapier3d 0.36.1)
-opensim-types <- llsd, msg, net, caps, data, scene, physics, archive, scripts
+aurora-llsd -> welkin-llsd -------------------+
+aurora-msg  -> welkin-msg --------------------+--> welkin-net
+aurora-prim -> welkin-prim, welkin-physics-rapier
+welkin-physics -> welkin-physics-rapier (rapier3d 0.36.1)
+welkin-types <- llsd, msg, net, caps, data, scene, physics, archive, scripts
 
-opensim-config, opensim-runtime -> opensim-robust
-opensim-data, opensim-caps -> opensim-services -> opensim-robust
-opensim-scene, opensim-services -> opensim-modules
-opensim-capacity -> opensim-portal -> opensim-robust (portal router)
-opensim-companion (standalone, Tauri 2) --HTTP--> opensim-portal control interface
-opensim-script-compiler -> opensim-script-vm -> opensim-script-api
-aurora-net (test bot only) -> opensim-conformance, dev-dep of opensim-msg
+welkin-config, welkin-runtime -> welkin-robust
+welkin-data, welkin-caps -> welkin-services -> welkin-robust
+welkin-scene, welkin-services -> welkin-modules
+welkin-capacity -> welkin-portal -> welkin-robust (portal router)
+welkin-companion (standalone, Tauri 2) --HTTP--> welkin-portal control interface
+welkin-script-compiler -> welkin-script-vm -> welkin-script-api
+aurora-net (test bot only) -> welkin-conformance, dev-dep of welkin-msg
 ```
 
 </details>
 
 Layering rule: nothing outside a wrapper crate imports an `aurora-*` crate
-directly (the one exception is `opensim-types`, which re-exports shared
-definitions, and `opensim-conformance`, which needs `aurora-net` as a client).
+directly (the one exception is `welkin-types`, which re-exports shared
+definitions, and `welkin-conformance`, which needs `aurora-net` as a client).
 
 ## Aurora crates reused
 
@@ -169,14 +169,14 @@ gated by the replay tests.
 | `aurora-net` | Viewer-side client protocol | Test bot only; never linked into the server |
 
 Aurora is a viewer, so some paths exist in one direction only. Gaps found in
-the inventory (protocol-core 1.2) are filled in `opensim-msg` (object update
+the inventory (protocol-core 1.2) are filled in `welkin-msg` (object update
 encoders) and offered upstream.
 
 ## Other key dependencies
 
 `tokio` and `axum` (async runtime and HTTP), `sqlx` (MariaDB, PostgreSQL,
 SQLite over the existing schema), `rapier3d` 0.36.1 (physics backend, behind
-the `opensim-physics` trait), `glam` (vectors, as in Aurora), `tracing`,
+the `welkin-physics` trait), `glam` (vectors, as in Aurora), `tracing`,
 `metrics` with `metrics-exporter-prometheus`, `serde`/`toml`.
 
 ## Build and deployment
@@ -193,11 +193,11 @@ the `opensim-physics` trait), `glam` (vectors, as in Aurora), `tracing`,
 ## Verification
 
 1. Unit tests ported with the code.
-2. Recorded C# request/reply pairs replayed (`opensim-conformance`,
+2. Recorded C# request/reply pairs replayed (`welkin-conformance`,
    `test-data/lludp_session.jsonl`).
 3. Test bot on `aurora-net` logs in against a simulator.
-4. Fuzz targets in `crates/opensim-msg/fuzz/`.
-5. Grid services: 14 replay tests and 4 multi-step wire-traffic tests (`opensim-conformance/tests`).
+4. Fuzz targets in `crates/welkin-msg/fuzz/`.
+5. Grid services: 14 replay tests and 4 multi-step wire-traffic tests (`welkin-conformance/tests`).
 6. Later: live `pCampBot`, physics trajectory comparison against recorded C# runs, Aurora Viewer sessions.
 
 Physics details: `docs/physics-backend-summary.md`. Grid services details: `docs/grid-services-summary.md`. Region simulator details: `docs/region-simulator-core-summary.md`. Capacity assessor details: `docs/capacity-assessor-summary.md`. Grid portal details: `docs/grid-portal-summary.md`.
@@ -206,15 +206,15 @@ Physics details: `docs/physics-backend-summary.md`. Grid services details: `docs
 
 Details in `docs/region-simulator-core-summary.md`.
 
-- `opensim-region` loads config, opens databases, builds one `Scene` per
+- `welkin-region` loads config, opens databases, builds one `Scene` per
   region (`RegionManager` for several), starts the LLUDP listener and the caps
   HTTP server, and registers with the grid.
-- `opensim-net` receives UDP, routes to a per-viewer `LLUDPClient`, and
+- `welkin-net` receives UDP, routes to a per-viewer `LLUDPClient`, and
   dispatches by message id to typed handlers that mutate the `Scene`.
-- `opensim-caps` serves per-session capabilities and the LLSD event queue.
-- `opensim-scene` holds groups, parts, presences and the terrain channel;
+- `welkin-caps` serves per-session capabilities and the LLSD event queue.
+- `welkin-scene` holds groups, parts, presences and the terrain channel;
   `xml2.rs` is the C#-compatible object format.
-- `opensim-data::simulation` persists objects (XML2), terrain, settings and
+- `welkin-data::simulation` persists objects (XML2), terrain, settings and
   spawn points over the C# `regionstore` tables. The scene loop saves dirty
   objects on a timer and on shutdown.
 - Open before production: bounded client map, bounded channels, stale session
@@ -225,7 +225,7 @@ Details in `docs/region-simulator-core-summary.md`.
 The portal is served by the `robust` binary via `axum`, with GridGate's page set
 as the model. It is the single management interface for the grid.
 
-### opensim-portal crate (2,084 lines, 12 source files)
+### welkin-portal crate (2,084 lines, 12 source files)
 
 | Module | Responsibility |
 |---|---|
@@ -246,10 +246,10 @@ as the model. It is the single management interface for the grid.
 - **Authorization:** RBAC: Admin (full access), Operator (region management), Viewer (read-only). People/account management requires Admin. Region management requires Operator or above.
 - **Security review findings:** 3 HIGHs fixed (TOTP stub locked, role enforcement on people endpoints, password hashed at sign-up). 5 MEDIUMs noted for deployment hardening (rate limiting, cookie CSRF flags, bot protection, audit persistence, body size limit). Full report: `scratchpad/security_review_portal.md`.
 
-### opensim-companion crate (standalone Tauri 2 app)
+### welkin-companion crate (standalone Tauri 2 app)
 
 Not part of the workspace; has its own `Cargo.toml` with Tauri 2 dependencies.
-Excluded via `exclude = ["crates/opensim-companion"]` in workspace `Cargo.toml`.
+Excluded via `exclude = ["crates/welkin-companion"]` in workspace `Cargo.toml`.
 
 - WebView pointing at the local portal (`http://localhost:8002/`)
 - System tray: status indicator, start/stop service, open portal, show window, quit
@@ -265,13 +265,13 @@ Excluded via `exclude = ["crates/opensim-companion"]` in workspace `Cargo.toml`.
 | `upgrade.sh` | Backup config, stop service, replace binary, run migrations, restart |
 | `uninstall.sh` | Stop, disable, remove binary/service; preserves data |
 | `install-archive.sh` | Release tarball install to `/opt/opensim/` (non-container path) |
-| `opensim-robust.service` | Systemd unit file |
+| `welkin-robust.service` | Systemd unit file |
 | `container/Containerfile` | Multi-stage Rust build → Debian slim runtime |
 | `container/compose.yaml` | Compose with optional MySQL/PostgreSQL |
 
 ### E2E test
 
-`crates/opensim-portal/tests/e2e_portal_flow.rs`: 14-stage integration test
+`crates/welkin-portal/tests/e2e_portal_flow.rs`: 14-stage integration test
 via `tower::ServiceExt::oneshot()` covering: portal page, status, wizard (7
 steps), login, region lifecycle, map placement, people sign-up/approval,
 authenticated pages, content, access control, logout.
@@ -297,12 +297,12 @@ Grid profiles let a region join a grid it does not run. See
 
 | Component | Location | Role |
 |---|---|---|
-| Grid profiles | `opensim-config/src/profile.rs` | `Standalone`, `OwnGrid`, `Custom(name)`; TOML loader, override chain, importer for C# `GridCommon.ini` (generates the `osgrid` profile) |
-| Remote connectors | `opensim-services/src/remote/` | Asset, grid and inventory clients (inventory read-only) |
-| Asset cache | `opensim-services/src/cache.rs` | Local cache with expiry |
-| Registration | `opensim-services/src/registration.rs` | Register, deregister, neighbour notification |
-| Hypergrid traits | `opensim-services/src/hypergrid.rs` | Gatekeeper, UserAgent, asset, inventory, friends, IM traits with stubs |
-| Wizard checks | `opensim-services/src/wizard.rs` | Region name, coordinates, estate owner, ports |
+| Grid profiles | `welkin-config/src/profile.rs` | `Standalone`, `OwnGrid`, `Custom(name)`; TOML loader, override chain, importer for C# `GridCommon.ini` (generates the `osgrid` profile) |
+| Remote connectors | `welkin-services/src/remote/` | Asset, grid and inventory clients (inventory read-only) |
+| Asset cache | `welkin-services/src/cache.rs` | Local cache with expiry |
+| Registration | `welkin-services/src/registration.rs` | Register, deregister, neighbour notification |
+| Hypergrid traits | `welkin-services/src/hypergrid.rs` | Gatekeeper, UserAgent, asset, inventory, friends, IM traits with stubs |
+| Wizard checks | `welkin-services/src/wizard.rs` | Region name, coordinates, estate owner, ports |
 
 The remote grid is treated as hostile. Review `docs/security-review-remote-writes.md`
 found 1 CRITICAL (SSRF) and 4 HIGH issues that block use against an untrusted grid.
@@ -314,7 +314,7 @@ Scripts run on Luau through mlua 0.12, one VM per script. See
 
 | Component | Location | Role |
 |---|---|---|
-| Instance | `opensim-script-vm/src/instance.rs` | One VM, memory limit, event queue, dispatch |
+| Instance | `welkin-script-vm/src/instance.rs` | One VM, memory limit, event queue, dispatch |
 | Scheduler | `scheduler.rs` | Round-robin by instruction limit, timers, event broadcast |
 | Transfer | `transfer.rs` | `RegionTransferBundle` for region crossing |
 | State | `lib.rs` | `ScriptState` (bytecode and globals JSON), `new_vm_with_memory_limit` |
@@ -327,7 +327,7 @@ that block production use. See `docs/security-review-script-sandboxing.md`.
 
 ## OSSL API
 
-The `os*` layer lives in `opensim-script-vm/src/ossl/` (13 files). See
+The `os*` layer lives in `welkin-script-vm/src/ossl/` (13 files). See
 `docs/ossl-api-summary.md`.
 
 | Component | Role |
@@ -345,7 +345,7 @@ registration, `expect()` in crypto); see `docs/security-review-ossl-api.md`.
 
 ## Region modules
 
-`opensim-modules` holds the region modules (land, permissions, estate,
+`welkin-modules` holds the region modules (land, permissions, estate,
 inventory, attachments, chat, IM, world map, environment, avatar, entity
 transfer, framework). See `docs/region-modules-summary.md`.
 
@@ -363,7 +363,7 @@ gating, bypass default); see `docs/security-review-permissions.md`.
 
 ## Archives
 
-`opensim-archive` handles OAR (region) and IAR (inventory) archives. See
+`welkin-archive` handles OAR (region) and IAR (inventory) archives. See
 `docs/archives-summary.md`.
 
 | Component | Role |

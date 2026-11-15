@@ -7,7 +7,7 @@ Robust grid services with axum handlers over a `sqlx` data layer. The change
 has no `design.md`; the rationale comes from `proposal.md` and the commit
 messages.
 
-## 1. Data layer (`opensim-data`)
+## 1. Data layer (`welkin-data`)
 
 - `sqlx` stores (`e3f9c79`): 13 stores covering accounts, agent preferences,
   assets, auth, avatar, estate, friends, grid, grid user, inventory, mute,
@@ -18,7 +18,7 @@ messages.
   taken from the C# tree. A database created by C# OpenSim opens unchanged,
   which is the compatibility contract in decision R2.
 
-## 2. Service handlers (`opensim-services`)
+## 2. Service handlers (`welkin-services`)
 
 Fourteen handlers, each in its own module, served by axum. Wire format
 follows C# Robust, as recorded by the conformance recorder.
@@ -37,10 +37,10 @@ follows C# Robust, as recorded by the conformance recorder.
 
 - Fixtures (`c7229de`): synthetic request/reply fixtures for all 14
   handlers, since no live C# traffic was recorded in this phase.
-- Replay (`9593604`, `opensim-conformance/tests/replay_grid_services.rs`):
+- Replay (`9593604`, `welkin-conformance/tests/replay_grid_services.rs`):
   14 replay tests, one per handler, all passing.
 - Wire-traffic tests (`b4e1791`,
-  `opensim-conformance/tests/interop_wire_traffic.rs`): 4 multi-step
+  `welkin-conformance/tests/interop_wire_traffic.rs`): 4 multi-step
   integration tests. They cover the `pCampBot` login, rez and teleport
   sequence (task 3.2) and the Aurora Viewer login sequence (task 3.3) as
   wire traffic against the Rust handlers. They do not drive a running C#
@@ -54,7 +54,7 @@ asset writes.
 - No critical findings.
 - M1: MD5 password hashes were compared with `==`, which leaks timing.
   Fixed in `840f769` with an OR-accumulate constant-time comparison in
-  `opensim-services/src/lib.rs`, used by `auth.rs` and `login.rs`.
+  `welkin-services/src/lib.rs`, used by `auth.rs` and `login.rs`.
 - Some admin-style endpoints are not gated in the handlers. This is left to
   deployment configuration (network placement or a reverse proxy) and is
   noted here so operators do not expose them. `set_login_level` in the
@@ -65,4 +65,4 @@ asset writes.
 - Simulation service is a stub that returns 501.
 - Tasks 3.2 and 3.3 were met with replayed wire traffic. A run against a
   live C# simulator and the Aurora Viewer binary is still worth doing when
-  `opensim-robust` has a real `main.rs`.
+  `welkin-robust` has a real `main.rs`.

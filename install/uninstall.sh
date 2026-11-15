@@ -11,7 +11,7 @@ NC='\033[0m'
 BIN_DIR="/usr/local/bin"
 CONFIG_DIR="/etc/opensim"
 DATA_DIR="/var/lib/opensim"
-SERVICE="opensim-robust.service"
+SERVICE="welkin-robust.service"
 SERVICE_FILE="/etc/systemd/system/$SERVICE"
 
 info()  { printf "${BLUE}[INFO]${NC}  %s\n" "$*"; }
@@ -45,8 +45,8 @@ remove_service() {
 }
 
 remove_binary() {
-    if [[ -f "$BIN_DIR/opensim-robust" ]]; then
-        rm "$BIN_DIR/opensim-robust"
+    if [[ -f "$BIN_DIR/welkin-robust" ]]; then
+        rm "$BIN_DIR/welkin-robust"
         ok "Binary removed"
     fi
 }

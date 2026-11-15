@@ -15,7 +15,7 @@ boundary validation between the simulator and the wolfvoice sidecar.
 
 ### [HIGH] No authentication on wolfvoice JSON-RPC connection
 
-- **File**: `crates/opensim-modules/src/voice/wolfvoice_client.rs`
+- **File**: `crates/welkin-modules/src/voice/wolfvoice_client.rs`
 - **Lines**: 110-117, 121-145
 - **Risk**: The `WolfvoiceClient` sends JSON-RPC requests to the wolfvoice
   sidecar over plain HTTP with no authentication token, API key, or mutual TLS.
@@ -37,7 +37,7 @@ boundary validation between the simulator and the wolfvoice sidecar.
 
 ### [HIGH] No rate limiting on voice provisioning endpoints
 
-- **File**: `crates/opensim-modules/src/voice/capabilities.rs`
+- **File**: `crates/welkin-modules/src/voice/capabilities.rs`
 - **Lines**: 126-138 (`handle_provision_voice_account`)
 - **Risk**: The `ProvisionVoiceAccountRequest` capability handler has no rate
   limiting, throttling, or per-agent cooldown. A malicious or compromised
@@ -57,7 +57,7 @@ boundary validation between the simulator and the wolfvoice sidecar.
 
 ### [MEDIUM] Credential isolation depends entirely on the wolfvoice sidecar
 
-- **File**: `crates/opensim-modules/src/voice/capabilities.rs`
+- **File**: `crates/welkin-modules/src/voice/capabilities.rs`
 - **Lines**: 126-138
 - **Risk**: The `handle_provision_voice_account` handler passes the requesting
   agent's UUID and name to the wolfvoice sidecar, then returns whatever
@@ -78,7 +78,7 @@ boundary validation between the simulator and the wolfvoice sidecar.
 
 ### [MEDIUM] Wolfvoice trust boundary: response data not validated
 
-- **File**: `crates/opensim-modules/src/voice/wolfvoice_client.rs`
+- **File**: `crates/welkin-modules/src/voice/wolfvoice_client.rs`
 - **Lines**: 147-165 (`provision_account`), 168-185 (`create_channel`)
 - **Risk**: The `WolfvoiceClient` deserialises JSON-RPC responses directly into
   `VoiceCredentials` and `ChannelInfo` structs with no field-level validation.
@@ -102,7 +102,7 @@ boundary validation between the simulator and the wolfvoice sidecar.
 
 ### [MEDIUM] Docker Compose secret_key written in plain text to YAML
 
-- **File**: `crates/opensim-modules/src/voice/docker.rs`
+- **File**: `crates/welkin-modules/src/voice/docker.rs`
 - **Lines**: 48 (`SECRET_KEY={}`)
 - **Risk**: The `generate_compose_service` function writes the `secret_key`
   directly into the Docker Compose YAML as a plain-text environment variable.
@@ -117,7 +117,7 @@ boundary validation between the simulator and the wolfvoice sidecar.
 
 ### [LOW] SIP address validation is minimal
 
-- **File**: `crates/opensim-modules/src/voice/ossl_integration.rs`
+- **File**: `crates/welkin-modules/src/voice/ossl_integration.rs`
 - **Lines**: 51-59 (`validate_sip_address`)
 - **Risk**: The `validate_sip_address` function rejects only empty strings and
   strings containing control characters. It does not validate SIP URI format
@@ -133,7 +133,7 @@ boundary validation between the simulator and the wolfvoice sidecar.
 
 ### [LOW] No TLS enforcement on wolfvoice endpoint
 
-- **File**: `crates/opensim-modules/src/voice/mod.rs`
+- **File**: `crates/welkin-modules/src/voice/mod.rs`
 - **Lines**: 59 (default `http://localhost:8090`)
 - **Risk**: The default endpoint uses `http://` (unencrypted). While localhost
   traffic is typically safe, in deployments where the sidecar runs on a
@@ -147,7 +147,7 @@ boundary validation between the simulator and the wolfvoice sidecar.
 
 ### [LOW] TURN credentials stored in module config without protection
 
-- **File**: `crates/opensim-modules/src/voice/mod.rs`
+- **File**: `crates/welkin-modules/src/voice/mod.rs`
 - **Lines**: 46-47 (`turn_username`, `turn_credential`)
 - **Risk**: TURN server credentials are stored as plain `String` fields in
   `WebRtcVoiceConfig` and loaded from the INI configuration. These credentials
