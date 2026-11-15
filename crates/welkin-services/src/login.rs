@@ -477,9 +477,9 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>)
     members.push_str(&xml_str(
         "map-server-url",
         &format!(
-            "http://{}:{}/",
+            "http://{}:{}/map/",
             region.server_ip,
-            region.server_http_port.unwrap_or(8003)
+            region.server_http_port.unwrap_or(8002)
         ),
     ));
     members.push_str(&login_flags_member);

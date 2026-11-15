@@ -3,7 +3,8 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::collections::HashMap;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use clap::Parser;
 use tokio::net::UdpSocket;
@@ -565,6 +566,7 @@ async fn process_messages(
     caps_base: String,
     cancel: CancellationToken,
 ) {
+    let mut last_agent_update: HashMap<Uuid, Instant> = HashMap::new();
     loop {
         let (src, pkt) = tokio::select! {
             _ = cancel.cancelled() => break,
@@ -652,15 +654,25 @@ async fn process_messages(
 
         if msg_id == AgentCachedTexture::ID
             && let Some(client) = &client
+            && let Ok(cached) = AgentCachedTexture::decode(&pkt.body)
         {
             let mut session = client.lock().await;
+            let wearable_data = cached
+                .wearable_data
+                .iter()
+                .map(|entry| agent_cached_texture_response::WearableData {
+                    texture_id: Uuid::nil(),
+                    texture_index: entry.texture_index,
+                    host_name: Vec::new(),
+                })
+                .collect();
             let reply = AgentCachedTextureResponse {
                 agent_data: agent_cached_texture_response::AgentData {
                     agent_id: session.agent_id,
                     session_id: session.session_id,
-                    serial_num: 0,
+                    serial_num: cached.agent_data.serial_num,
                 },
-                wearable_data: Vec::new(),
+                wearable_data,
             };
             let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
             let _ = socket.send_to(&pkt_bytes, src).await;
@@ -753,7 +765,7 @@ async fn process_messages(
 
             // Speed constants matching OpenSim: walk 2.4576, run 4.096, fly 16.384
             let base_speed = if flying {
-                if fast { 16.384f32 } else { 16.384f32 }
+                if fast { 16.384f32 } else { 9.8304f32 }
             } else if fast {
                 4.096f32
             } else {
@@ -791,7 +803,12 @@ async fn process_messages(
                 .as_ref()
                 .map(|p| p.local_id)
                 .unwrap_or(1);
-            let dt = 0.1f32;
+            let now = Instant::now();
+            let dt = last_agent_update.get(&update.agent_data.agent_id)
+                .map(|t| now.duration_since(*t).as_secs_f32())
+                .unwrap_or(1.0 / 30.0)
+                .min(0.5);
+            last_agent_update.insert(update.agent_data.agent_id, now);
             let mut new_pos = prev_pos + vel * dt;
             new_pos.x = new_pos.x.clamp(0.0, 256.0);
             new_pos.y = new_pos.y.clamp(0.0, 256.0);
@@ -1136,14 +1153,14 @@ async fn send_movement_complete(
             water_height: 20.0,
             billable_factor: 0.0,
             cache_id: Uuid::new_v4(),
-            terrain_base0: Uuid::parse_str("b8d3965a-ad78-bf43-699b-bff8eca6c975").unwrap(),
-            terrain_base1: Uuid::parse_str("abb783e6-3e93-26c0-248a-247666855da3").unwrap(),
-            terrain_base2: Uuid::parse_str("179cdabd-398a-9b6b-1391-4dc333ba321f").unwrap(),
-            terrain_base3: Uuid::parse_str("beb169c7-11ea-fff2-efe5-0f24dc881df2").unwrap(),
-            terrain_detail0: Uuid::parse_str("b8d3965a-ad78-bf43-699b-bff8eca6c975").unwrap(),
-            terrain_detail1: Uuid::parse_str("abb783e6-3e93-26c0-248a-247666855da3").unwrap(),
-            terrain_detail2: Uuid::parse_str("179cdabd-398a-9b6b-1391-4dc333ba321f").unwrap(),
-            terrain_detail3: Uuid::parse_str("beb169c7-11ea-fff2-efe5-0f24dc881df2").unwrap(),
+            terrain_base0: Uuid::parse_str("0bc58228-74a0-7e83-89bc-5c23464bcec5").unwrap(),
+            terrain_base1: Uuid::parse_str("63338ede-0037-c4fd-855b-015d77112fc8").unwrap(),
+            terrain_base2: Uuid::parse_str("303cd381-8560-7579-23f1-f0a880799740").unwrap(),
+            terrain_base3: Uuid::parse_str("beb169c7-11ea-fff2-eed5-3f368ce60d3d").unwrap(),
+            terrain_detail0: Uuid::parse_str("0bc58228-74a0-7e83-89bc-5c23464bcec5").unwrap(),
+            terrain_detail1: Uuid::parse_str("63338ede-0037-c4fd-855b-015d77112fc8").unwrap(),
+            terrain_detail2: Uuid::parse_str("303cd381-8560-7579-23f1-f0a880799740").unwrap(),
+            terrain_detail3: Uuid::parse_str("beb169c7-11ea-fff2-eed5-3f368ce60d3d").unwrap(),
             terrain_start_height00: 10.0,
             terrain_start_height01: 10.0,
             terrain_start_height10: 10.0,
@@ -1411,9 +1428,9 @@ fn build_flat_terrain_data(height: f32, patches: &[(u32, u32)]) -> Vec<u8> {
     for &(px, py) in patches {
         let patch_id = (px << 5) | (py & 0x1F);
         // Patch header: quant_wbits(8), dc_offset(32), range(16), patch_ids(10)
-        push(&mut bits, 0x11, 8);
-        push(&mut bits, height.to_bits(), 32);
-        push(&mut bits, 0, 16);
+        push(&mut bits, 0, 8);
+        push(&mut bits, (height - 0.5f32).to_bits(), 32);
+        push(&mut bits, 1, 16);
         push(&mut bits, patch_id, 10);
         // Immediate EOB (1=present, 0=end_of_block)
         bits.push(1);
