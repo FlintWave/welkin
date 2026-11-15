@@ -1239,12 +1239,15 @@ async fn process_messages(
                             p.rotation,
                             p.first_name.clone(),
                             p.last_name.clone(),
+                            p.texture_entry.clone(),
+                            p.visual_params.clone(),
                         ));
                     }
                 });
                 if !existing_presences.is_empty() {
                     let mut session = client.lock().await;
-                    for (ex_id, ex_local_id, ex_pos, ex_rot, ex_first, ex_last) in &existing_presences {
+                    for (ex_id, ex_local_id, ex_pos, ex_rot, ex_first, ex_last, ex_te, ex_vp) in &existing_presences {
+                        let te = if ex_te.is_empty() { build_default_avatar_te() } else { ex_te.clone() };
                         let ex_obj = FullObjectUpdate {
                             local_id: *ex_local_id,
                             full_id: *ex_id,
@@ -1280,7 +1283,7 @@ async fn process_messages(
                             profile_begin: 0,
                             profile_end: 0,
                             profile_hollow: 0,
-                            texture_entry: build_default_avatar_te(),
+                            texture_entry: te,
                             texture_anim: Vec::new(),
                             name_value: format!(
                                 "FirstName STRING RW SV {}\nLastName STRING RW SV {}\n",
@@ -1305,16 +1308,19 @@ async fn process_messages(
                             },
                             object_data: vec![ex_obj.to_object_data()],
                         };
-                        let visual_params: Vec<avatar_appearance::VisualParam> = (0..253)
-                            .map(|_| avatar_appearance::VisualParam { param_value: 128 })
-                            .collect();
+                        let visual_params: Vec<avatar_appearance::VisualParam> = if ex_vp.is_empty() {
+                            (0..253).map(|_| avatar_appearance::VisualParam { param_value: 128 }).collect()
+                        } else {
+                            ex_vp.iter().map(|&v| avatar_appearance::VisualParam { param_value: v }).collect()
+                        };
+                        let appearance_te = if ex_te.is_empty() { build_default_avatar_te() } else { ex_te.clone() };
                         let appearance_msg = AvatarAppearance {
                             sender: avatar_appearance::Sender {
                                 id: *ex_id,
                                 is_trial: false,
                             },
                             object_data: avatar_appearance::ObjectData {
-                                texture_entry: build_default_avatar_te(),
+                                texture_entry: appearance_te,
                             },
                             visual_param: visual_params,
                             appearance_data: vec![avatar_appearance::AppearanceData {
@@ -3146,6 +3152,68 @@ async fn process_messages(
                 let mut peer = peer_client.lock().await;
                 let (pkt_bytes, _) = peer.circuit.send_msg(&broadcast, true);
                 let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+            }
+
+            // Send updated ObjectUpdate with real baked texture_entry so
+            // the viewer replaces the initial default-gray textures.
+            if let Some(presence) = scene.get_presence(&agent_id) {
+                let avatar_obj = FullObjectUpdate {
+                    local_id: presence.local_id,
+                    full_id: presence.uuid,
+                    parent_id: 0,
+                    pcode: 47,
+                    state: 0,
+                    crc: 0,
+                    material: 0,
+                    click_action: 0,
+                    scale: glam::Vec3::new(0.45, 0.6, 1.75),
+                    position: presence.position,
+                    velocity: glam::Vec3::ZERO,
+                    acceleration: glam::Vec3::ZERO,
+                    rotation: presence.rotation,
+                    angular_velocity: glam::Vec3::ZERO,
+                    update_flags: 0x2000_0001,
+                    owner_id: presence.uuid,
+                    path_curve: 0, profile_curve: 0,
+                    path_begin: 0, path_end: 0,
+                    path_scale_x: 0, path_scale_y: 0,
+                    path_shear_x: 0, path_shear_y: 0,
+                    path_twist: 0, path_twist_begin: 0,
+                    path_radius_offset: 0,
+                    path_taper_x: 0, path_taper_y: 0,
+                    path_revolutions: 0, path_skew: 0,
+                    profile_begin: 0, profile_end: 0, profile_hollow: 0,
+                    texture_entry: presence.texture_entry.clone(),
+                    texture_anim: Vec::new(),
+                    name_value: format!(
+                        "FirstName STRING RW SV {}\nLastName STRING RW SV {}\n",
+                        presence.first_name, presence.last_name
+                    ).into_bytes(),
+                    data: Vec::new(),
+                    text: String::new(),
+                    text_color: [0, 0, 0, 0],
+                    media_url: String::new(),
+                    ps_block: Vec::new(),
+                    extra_params: Vec::new(),
+                    sound_id: Uuid::nil(),
+                    sound_gain: 0.0,
+                    sound_flags: 0,
+                    sound_radius: 0.0,
+                    foot_plane: Some(glam::Vec4::new(0.0, 0.0, 1.0, 0.0)),
+                };
+                let obj_msg = ObjectUpdate {
+                    region_data: object_update::RegionData {
+                        region_handle: scene.region_info.region_handle,
+                        time_dilation: 65535,
+                    },
+                    object_data: vec![avatar_obj.to_object_data()],
+                };
+                let clients_map2 = clients.read().await;
+                for (peer_addr, peer_client) in clients_map2.iter() {
+                    let mut peer = peer_client.lock().await;
+                    let (pkt_bytes, _) = peer.circuit.send_msg(&obj_msg, true);
+                    let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                }
             }
         }
 
