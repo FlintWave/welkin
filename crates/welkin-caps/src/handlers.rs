@@ -33,6 +33,32 @@ pub struct MeshQuery {
 #[derive(Debug, serde::Deserialize)]
 pub struct AssetQuery {
     pub asset_id: Option<String>,
+    pub texture_id: Option<String>,
+    pub mesh_id: Option<String>,
+    pub bodypart_id: Option<String>,
+    pub clothing_id: Option<String>,
+    pub sound_id: Option<String>,
+    pub animation_id: Option<String>,
+    pub gesture_id: Option<String>,
+    pub notecard_id: Option<String>,
+    pub script_id: Option<String>,
+    pub object_id: Option<String>,
+}
+
+impl AssetQuery {
+    pub fn effective_id(&self) -> Option<&str> {
+        self.asset_id.as_deref()
+            .or(self.texture_id.as_deref())
+            .or(self.mesh_id.as_deref())
+            .or(self.bodypart_id.as_deref())
+            .or(self.clothing_id.as_deref())
+            .or(self.sound_id.as_deref())
+            .or(self.animation_id.as_deref())
+            .or(self.gesture_id.as_deref())
+            .or(self.notecard_id.as_deref())
+            .or(self.script_id.as_deref())
+            .or(self.object_id.as_deref())
+    }
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -92,7 +118,7 @@ pub struct BakeUploadState {
 }
 
 async fn fetch_asset(state: &AssetServiceState, asset_id: &str) -> Result<Vec<u8>, StatusCode> {
-    let url = format!("{}/assets/{asset_id}", state.asset_url);
+    let url = format!("{}/assets/{asset_id}/data", state.asset_url);
     let resp = state.client.get(&url).send().await.map_err(|e| {
         tracing::warn!(error = %e, "asset service request failed");
         StatusCode::SERVICE_UNAVAILABLE
@@ -679,7 +705,7 @@ pub async fn viewer_asset(
     State(state): State<AssetServiceState>,
     Query(q): Query<AssetQuery>,
 ) -> Response {
-    let Some(asset_id) = q.asset_id.as_deref() else {
+    let Some(asset_id) = q.effective_id() else {
         return (StatusCode::BAD_REQUEST, "missing asset_id").into_response();
     };
     tracing::debug!(asset_id, "ViewerAsset");
