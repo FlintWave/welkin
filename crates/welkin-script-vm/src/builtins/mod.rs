@@ -50,7 +50,68 @@ pub struct InventoryItem {
     pub name: String,
     pub item_type: i32,
     pub asset_id: Uuid,
+    /// The inventory item's own UUID (distinct from the asset UUID).
+    pub item_id: Uuid,
+    pub description: String,
+    /// UUID of the previous owner before the current one.
+    pub last_owner_id: Uuid,
+    /// UUID of the item's creator.
+    pub creator_id: Uuid,
+    /// Permission masks: base, owner, group, everyone, next-owner.
+    pub permissions_base: u32,
+    pub permissions_owner: u32,
+    pub permissions_group: u32,
+    pub permissions_everyone: u32,
+    pub permissions_next: u32,
 }
+
+impl Default for InventoryItem {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            item_type: 0,
+            asset_id: Uuid::nil(),
+            item_id: Uuid::nil(),
+            description: String::new(),
+            last_owner_id: Uuid::nil(),
+            creator_id: Uuid::nil(),
+            permissions_base: 0,
+            permissions_owner: 0,
+            permissions_group: 0,
+            permissions_everyone: 0,
+            permissions_next: 0,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Permission-mask category indices (OpenSim ScriptBaseClass)
+// ---------------------------------------------------------------------------
+
+pub const MASK_BASE: i32 = 0;
+pub const MASK_OWNER: i32 = 1;
+pub const MASK_GROUP: i32 = 2;
+pub const MASK_EVERYONE: i32 = 3;
+pub const MASK_NEXT: i32 = 4;
+
+/// OpenSim `PermissionMask` flag bits.
+pub const PERM_TRANSFER: u32 = 0x2000;
+pub const PERM_MODIFY: u32 = 0x4000;
+pub const PERM_COPY: u32 = 0x8000;
+pub const PERM_MOVE: u32 = 0x0008_0000;
+
+/// Attachment-message option constants (OpenSim ScriptBaseClass).
+pub const OS_ATTACH_MSG_ALL: i32 = -1;
+pub const OS_ATTACH_MSG_INVERT_POINTS: i32 = 0x01;
+
+/// Content-type constants for `osSetContentType` (OpenSim).
+pub const OS_CONTENT_TYPE_TEXT: i32 = 0;
+pub const OS_CONTENT_TYPE_HTML: i32 = 1;
+pub const OS_CONTENT_TYPE_XML: i32 = 2;
+pub const OS_CONTENT_TYPE_XHTML: i32 = 3;
+pub const OS_CONTENT_TYPE_ATOM: i32 = 4;
+pub const OS_CONTENT_TYPE_JSON: i32 = 5;
+pub const OS_CONTENT_TYPE_RSS: i32 = 6;
 
 #[derive(Debug, Clone)]
 pub struct ListenFilter {
@@ -60,6 +121,8 @@ pub struct ListenFilter {
     pub id: String,
     pub msg: String,
     pub active: bool,
+    /// Bitmask: OS_LISTEN_REGEX_NAME (0x1) and/or OS_LISTEN_REGEX_MESSAGE (0x2).
+    pub regex_bitfield: i32,
 }
 
 #[derive(Debug, Clone)]
@@ -167,6 +230,14 @@ pub enum DynamicTextureCommand {
     },
 }
 
+/// Command sent from osRegionRestart to the region subsystem.
+#[derive(Debug, Clone)]
+pub struct RegionRestartCommand {
+    pub delay_seconds: f64,
+    pub message: String,
+    pub requester_id: Uuid,
+}
+
 /// Teleport request sent from os* teleport functions.
 #[derive(Debug, Clone)]
 pub struct TeleportRequest {
@@ -185,6 +256,8 @@ pub struct PresenceInfo {
     pub last_name: String,
     pub position: [f64; 3],
     pub is_npc: bool,
+    /// The agent's IP address (for osGetAgentIP).
+    pub ip_address: String,
     /// Visual appearance parameters (bake-layer byte array).
     pub visual_params: Vec<u8>,
 }
@@ -220,6 +293,142 @@ pub enum AgentCommand {
 pub enum AnimationCommand {
     Play { agent_id: Uuid, animation: String },
     Stop { agent_id: Uuid, animation: String },
+}
+
+/// Commands sent from OSSL inventory functions to the region inventory subsystem.
+#[derive(Debug, Clone)]
+pub enum InventoryCommand {
+    Give {
+        destination: Uuid,
+        item_name: String,
+        item_id: Uuid,
+        asset_id: Uuid,
+        item_type: i32,
+    },
+    GiveList {
+        destination: Uuid,
+        category: String,
+        items: Vec<(String, Uuid, Uuid)>,
+    },
+    TakeObject {
+        object_id: Uuid,
+        owner_id: Uuid,
+    },
+}
+
+/// Commands sent from OSSL sound functions to the region sound subsystem.
+#[derive(Debug, Clone)]
+pub enum SoundCommand {
+    PlaySound { prim_id: Uuid, sound_id: Uuid, volume: f64 },
+    LoopSound { prim_id: Uuid, sound_id: Uuid, volume: f64, master: bool, slave: bool },
+    StopSound { prim_id: Uuid },
+    PreloadSound { prim_id: Uuid, sound_id: Uuid },
+    AdjustVolume { prim_id: Uuid, volume: f64 },
+    TriggerSound { prim_id: Uuid, sound_id: Uuid, volume: f64 },
+    TriggerSoundLimited {
+        prim_id: Uuid,
+        sound_id: Uuid,
+        volume: f64,
+        top_ne: [f64; 3],
+        bottom_sw: [f64; 3],
+    },
+    SetRadius { prim_id: Uuid, radius: f64 },
+}
+
+/// Commands sent from OSSL link functions to the region link subsystem.
+#[derive(Debug, Clone)]
+pub enum LinkCommand {
+    CreateLink { target_id: Uuid, parent: bool },
+    BreakLink { link_num: i32 },
+    BreakAllLinks,
+}
+
+/// Commands sent from OSSL object functions to the region object subsystem.
+#[derive(Debug, Clone)]
+pub enum ObjectCommand {
+    Die { object_id: Uuid },
+    MessageObject { object_id: Uuid, source_id: Uuid, message: String },
+    SetContentType { request_id: Uuid, content_type: String },
+    VolumeDetect { prim_id: Uuid, enable: bool },
+    SetProjectionParams {
+        prim_id: Uuid,
+        enabled: bool,
+        texture: Uuid,
+        fov: f64,
+        focus: f64,
+        ambience: f64,
+    },
+}
+
+/// Info about a prim in a linkset, for link-number lookups.
+#[derive(Debug, Clone)]
+pub struct LinkPartInfo {
+    pub link_num: i32,
+    pub name: String,
+    pub prim_id: Uuid,
+}
+
+/// Custom inertia override for a prim/linkset.
+#[derive(Debug, Clone)]
+pub struct InertiaData {
+    pub mass: f64,
+    pub center_of_mass: [f64; 3],
+    /// Principal moments of inertia divided by mass: Ixx/m, Iyy/m, Izz/m.
+    pub principal_inertia: [f64; 3],
+    /// Off-diagonal inertia terms divided by mass: Ixy/m, Ixz/m, Iyz/m.
+    pub aux: [f64; 3],
+    /// Rotation of the inertia frame relative to the local axis.
+    pub rotation: [f64; 4],
+}
+
+/// Commands sent from misc OSSL functions to the region subsystem.
+#[derive(Debug, Clone)]
+pub enum MiscCommand {
+    SaveAppearance {
+        agent_id: Uuid,
+        notecard_name: String,
+        notecard_id: Uuid,
+    },
+    SetInertia {
+        prim_id: Uuid,
+        data: Option<InertiaData>,
+    },
+    SitOnLink {
+        agent_id: Uuid,
+        link_num: i32,
+        offset: [f64; 3],
+        rotation: [f64; 4],
+    },
+    ClearObjectAnimations {
+        prim_id: Uuid,
+    },
+    ResetAllScripts {
+        prim_id: Uuid,
+        caller_script_id: Uuid,
+    },
+    SetParticleSystem {
+        prim_id: Uuid,
+        link_num: i32,
+        rules: Vec<String>,
+    },
+    InviteToGroup {
+        group_id: Uuid,
+        agent_id: Uuid,
+        inviter_id: Uuid,
+    },
+    EjectFromGroup {
+        group_id: Uuid,
+        agent_id: Uuid,
+        ejector_id: Uuid,
+    },
+    ConsoleCommand {
+        command: String,
+        owner_id: Uuid,
+    },
+    SetEntityRotation {
+        target_id: Uuid,
+        rotation: [f64; 4],
+    },
 }
 
 /// Shared context available to every ll* function closure.
@@ -322,6 +531,70 @@ pub struct ScriptContext {
     pub agent_sender: Option<std::sync::mpsc::Sender<AgentCommand>>,
     /// Sender for animation commands (play/stop on a specific avatar).
     pub animation_sender: Option<std::sync::mpsc::Sender<AnimationCommand>>,
+    /// Sender for miscellaneous OSSL commands (appearance, inertia, etc.).
+    pub misc_sender: Option<std::sync::mpsc::Sender<MiscCommand>>,
+    /// Region OAR creation date string (from RegionSettings.LoadedCreationDate).
+    pub region_loaded_creation_date: String,
+    /// Region OAR creation time string (from RegionSettings.LoadedCreationTime).
+    pub region_loaded_creation_time: String,
+    /// Region OAR creation ID (UUID string from RegionSettings.LoadedCreationID).
+    pub region_loaded_creation_id: String,
+    /// The map texture UUID for the current region.
+    pub region_map_texture: Uuid,
+    /// The group UUID that the host prim is assigned to.
+    pub group_id: Uuid,
+    /// Custom inertia override (None = automatic physics calculation).
+    pub inertia: Option<InertiaData>,
+    /// Active object-level animations on the host prim.
+    pub object_animations: Vec<Uuid>,
+    /// The grid's home URI (returned by osGetAvatarHomeURI when no user-specific URI).
+    pub grid_home_uri: String,
+    /// Short nickname of the grid (e.g. "welkin").
+    pub grid_nick: String,
+    /// Human-readable name of the grid.
+    pub grid_name: String,
+    /// The grid's login URI.
+    pub grid_login_uri: String,
+    /// The grid's gatekeeper URI (for hypergrid).
+    pub grid_gatekeeper_uri: String,
+    /// Arbitrary grid-custom key/value pairs.
+    pub grid_custom: HashMap<String, String>,
+    /// Sender for region restart commands from osRegionRestart.
+    pub restart_sender: Option<std::sync::mpsc::Sender<RegionRestartCommand>>,
+    /// Current simulator frames per second.
+    pub sim_fps: f64,
+    /// Current physics frames per second.
+    pub physics_fps: f64,
+    /// Time dilation (1.0 = normal, <1.0 = lagging).
+    pub time_dilation: f64,
+    /// Total prim count in the region.
+    pub total_prims: i32,
+    /// Number of active scripts in the region.
+    pub active_scripts: i32,
+    /// Script lines per second.
+    pub script_lps: f64,
+    /// Per-link-number color (link_num -> color), populated by the hosting system.
+    pub link_colors: HashMap<i32, [f64; 3]>,
+    /// UUID of the object that rezzed this object (for `osGetRezzingObject`).
+    pub rezzing_object_id: Uuid,
+    /// Key from the last `changed` event (for `osGetLastChangedEventKey`).
+    pub last_changed_event_key: Option<Uuid>,
+    /// Sender for inventory commands (give, take).
+    pub inventory_command_sender: Option<std::sync::mpsc::Sender<InventoryCommand>>,
+    /// Sender for sound commands.
+    pub sound_sender: Option<std::sync::mpsc::Sender<SoundCommand>>,
+    /// Sender for link commands (create link, break link).
+    pub link_command_sender: Option<std::sync::mpsc::Sender<LinkCommand>>,
+    /// Sender for object commands (die, message, etc.).
+    pub object_command_sender: Option<std::sync::mpsc::Sender<ObjectCommand>>,
+    /// Whether this prim is currently worn as an attachment.
+    pub is_attachment: bool,
+    /// UUIDs of avatars currently sitting on this linkset.
+    pub sitting_avatars: Vec<Uuid>,
+    /// Link-number and name info for every prim in this linkset.
+    pub link_parts: Vec<LinkPartInfo>,
+    /// Total prim count for the host object's linkset.
+    pub prim_count: i32,
 }
 
 impl Default for ScriptContext {
@@ -417,6 +690,38 @@ impl Default for ScriptContext {
             agent_heal_rate: HashMap::new(),
             agent_sender: None,
             animation_sender: None,
+            misc_sender: None,
+            region_loaded_creation_date: String::new(),
+            region_loaded_creation_time: String::new(),
+            region_loaded_creation_id: String::new(),
+            region_map_texture: Uuid::nil(),
+            group_id: Uuid::nil(),
+            inertia: None,
+            object_animations: Vec::new(),
+            grid_home_uri: String::new(),
+            grid_nick: String::new(),
+            grid_name: String::new(),
+            grid_login_uri: String::new(),
+            grid_gatekeeper_uri: String::new(),
+            grid_custom: HashMap::new(),
+            restart_sender: None,
+            sim_fps: 0.0,
+            physics_fps: 0.0,
+            time_dilation: 1.0,
+            total_prims: 0,
+            active_scripts: 0,
+            script_lps: 0.0,
+            link_colors: HashMap::new(),
+            rezzing_object_id: Uuid::nil(),
+            last_changed_event_key: None,
+            inventory_command_sender: None,
+            sound_sender: None,
+            link_command_sender: None,
+            object_command_sender: None,
+            is_attachment: false,
+            sitting_avatars: Vec::new(),
+            link_parts: Vec::new(),
+            prim_count: 1,
         }
     }
 }

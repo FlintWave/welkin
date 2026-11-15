@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use mlua::prelude::*;
 use parking_lot::RwLock;
-use uuid::Uuid;
 
 use super::{OsslFunc, OsslThreatLevel};
 use crate::builtins::ScriptContext;
@@ -225,56 +224,107 @@ fn register_os_temperature_to_srgb(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>)
 // Grid info stubs
 // ---------------------------------------------------------------------------
 
-fn register_os_get_grid_nick(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
-    let f = lua.create_function(|_, ()| Ok("welkin".to_string()))?;
+fn register_os_get_grid_nick(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+    let ctx = ctx.clone();
+    let f = lua.create_function(move |_, ()| {
+        let c = ctx.read();
+        Ok(c.grid_nick.clone())
+    })?;
     lua.globals().set("osGetGridNick", f)
 }
 
-fn register_os_get_grid_name(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
-    let f = lua.create_function(|_, ()| Ok("OpenSim Rust Grid".to_string()))?;
+fn register_os_get_grid_name(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+    let ctx = ctx.clone();
+    let f = lua.create_function(move |_, ()| {
+        let c = ctx.read();
+        Ok(c.grid_name.clone())
+    })?;
     lua.globals().set("osGetGridName", f)
 }
 
-fn register_os_get_grid_login_uri(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
-    let f = lua.create_function(|_, ()| Ok(String::new()))?;
+fn register_os_get_grid_login_uri(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+    let ctx = ctx.clone();
+    let f = lua.create_function(move |_, ()| {
+        let c = ctx.read();
+        Ok(c.grid_login_uri.clone())
+    })?;
     lua.globals().set("osGetGridLoginURI", f)
 }
 
-fn register_os_get_grid_home_uri(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
-    let f = lua.create_function(|_, ()| Ok(String::new()))?;
+fn register_os_get_grid_home_uri(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+    let ctx = ctx.clone();
+    let f = lua.create_function(move |_, ()| {
+        let c = ctx.read();
+        Ok(c.grid_home_uri.clone())
+    })?;
     lua.globals().set("osGetGridHomeURI", f)
 }
 
 fn register_os_get_grid_gatekeeper_uri(
     lua: &Lua,
-    _ctx: &Arc<RwLock<ScriptContext>>,
+    ctx: &Arc<RwLock<ScriptContext>>,
 ) -> LuaResult<()> {
-    let f = lua.create_function(|_, ()| Ok(String::new()))?;
+    let ctx = ctx.clone();
+    let f = lua.create_function(move |_, ()| {
+        let c = ctx.read();
+        Ok(c.grid_gatekeeper_uri.clone())
+    })?;
     lua.globals().set("osGetGridGatekeeperURI", f)
 }
 
-fn register_os_get_grid_custom(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
-    let f = lua.create_function(|_, _key: String| Ok(String::new()))?;
+fn register_os_get_grid_custom(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+    let ctx = ctx.clone();
+    let f = lua.create_function(move |_, key: String| {
+        let c = ctx.read();
+        Ok(c.grid_custom.get(&key).cloned().unwrap_or_default())
+    })?;
     lua.globals().set("osGetGridCustom", f)
 }
 
 // ---------------------------------------------------------------------------
-// Region stats / map texture stubs
+// Region stats / map texture
 // ---------------------------------------------------------------------------
 
-fn register_os_get_region_stats(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
-    let f = lua.create_function(|_, ()| {
-        tracing::debug!("osGetRegionStats (stub)");
-        Ok(String::new())
+fn register_os_get_region_stats(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+    let ctx = ctx.clone();
+    let f = lua.create_function(move |_, ()| {
+        let c = ctx.read();
+        // Return stats in the same order as OpenSim: TimeDilation, SimFPS, PhysFPS,
+        // AgentUpdates, RootAgents, ChildAgents, TotalPrim, ActivePrim, ...
+        let stats: Vec<f64> = vec![
+            c.time_dilation,
+            c.sim_fps,
+            c.physics_fps,
+            0.0, // agent updates per sec
+            c.presence_list.iter().filter(|p| !p.is_npc).count() as f64, // root agents
+            0.0, // child agents
+            c.total_prims as f64,
+            c.total_prims as f64, // active prims (same as total for now)
+            0.0, // frame time ms
+            0.0, // net time ms
+            0.0, // physics time ms
+            0.0, // simulation time ms
+            0.0, // agent time ms
+            0.0, // image time ms
+            0.0, // other time ms
+            c.active_scripts as f64,
+            c.script_lps,
+            0.0, // packets in
+            0.0, // packets out
+            0.0, // pending downloads
+            0.0, // pending uploads
+            0.0, // unacked bytes
+        ];
+        Ok(stats)
     })?;
     lua.globals().set("osGetRegionStats", f)
 }
 
-fn register_os_get_map_texture(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
-    let f = lua.create_function(|_, ()| {
-        tracing::debug!("osGetMapTexture (stub)");
-        // Return null UUID key
-        Ok(Uuid::nil().to_string())
+fn register_os_get_map_texture(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
+    let ctx = ctx.clone();
+    let f = lua.create_function(move |_, ()| {
+        let c = ctx.read();
+        Ok(c.region_map_texture.to_string())
     })?;
     lua.globals().set("osGetMapTexture", f)
 }
@@ -288,12 +338,24 @@ mod tests {
     use super::*;
     use crate::builtins::ScriptContext;
     use crate::ossl::{OsslConfig, OsslThreatLevel, register_ossl};
+    use uuid::Uuid;
 
     fn make_ctx() -> Arc<RwLock<ScriptContext>> {
         Arc::new(RwLock::new(ScriptContext {
             script_id: Uuid::new_v4(),
             prim_id: Uuid::new_v4(),
             owner_id: Uuid::new_v4(),
+            grid_nick: "test-grid".to_string(),
+            grid_name: "Test Grid".to_string(),
+            grid_login_uri: "http://localhost:8002".to_string(),
+            grid_home_uri: "http://localhost:8002".to_string(),
+            grid_gatekeeper_uri: "http://localhost:8002".to_string(),
+            sim_fps: 55.0,
+            physics_fps: 55.0,
+            time_dilation: 0.98,
+            total_prims: 1500,
+            active_scripts: 42,
+            script_lps: 100.0,
             ..ScriptContext::default()
         }))
     }
@@ -386,14 +448,35 @@ mod tests {
     fn test_grid_nick() {
         let lua = make_sim_vm();
         let r: String = lua.load("return osGetGridNick()").eval().unwrap();
-        assert_eq!(r, "welkin");
+        assert_eq!(r, "test-grid");
     }
 
     #[test]
     fn test_grid_name() {
         let lua = make_sim_vm();
         let r: String = lua.load("return osGetGridName()").eval().unwrap();
-        assert_eq!(r, "OpenSim Rust Grid");
+        assert_eq!(r, "Test Grid");
+    }
+
+    #[test]
+    fn test_grid_login_uri() {
+        let lua = make_sim_vm();
+        let r: String = lua.load("return osGetGridLoginURI()").eval().unwrap();
+        assert_eq!(r, "http://localhost:8002");
+    }
+
+    #[test]
+    fn test_grid_home_uri() {
+        let lua = make_sim_vm();
+        let r: String = lua.load("return osGetGridHomeURI()").eval().unwrap();
+        assert_eq!(r, "http://localhost:8002");
+    }
+
+    #[test]
+    fn test_grid_gatekeeper_uri() {
+        let lua = make_sim_vm();
+        let r: String = lua.load("return osGetGridGatekeeperURI()").eval().unwrap();
+        assert_eq!(r, "http://localhost:8002");
     }
 
     #[test]
@@ -404,6 +487,45 @@ mod tests {
             .eval()
             .unwrap();
         assert_eq!(r, "");
+    }
+
+    #[test]
+    fn test_grid_custom_returns_value() {
+        let lua = Lua::new();
+        let ctx = make_ctx();
+        {
+            let mut c = ctx.write();
+            c.grid_custom.insert("currency".to_string(), "G$".to_string());
+        }
+        let config = OsslConfig {
+            max_threat_level: OsslThreatLevel::Moderate,
+            ..Default::default()
+        };
+        register_ossl(&lua, &config, &ctx).unwrap();
+        let r: String = lua
+            .load(r#"return osGetGridCustom("currency")"#)
+            .eval()
+            .unwrap();
+        assert_eq!(r, "G$");
+    }
+
+    #[test]
+    fn test_region_stats_returns_vec() {
+        let lua = make_sim_vm();
+        let r: Vec<f64> = lua.load("return osGetRegionStats()").eval().unwrap();
+        assert_eq!(r.len(), 22);
+        // time_dilation
+        assert!((r[0] - 0.98).abs() < 0.01);
+        // sim_fps
+        assert!((r[1] - 55.0).abs() < 0.01);
+        // physics_fps
+        assert!((r[2] - 55.0).abs() < 0.01);
+        // total_prims
+        assert!((r[6] - 1500.0).abs() < 0.01);
+        // active_scripts
+        assert!((r[15] - 42.0).abs() < 0.01);
+        // script_lps
+        assert!((r[16] - 100.0).abs() < 0.01);
     }
 
     #[test]

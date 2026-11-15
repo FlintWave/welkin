@@ -972,6 +972,7 @@ mod tests {
                 last_name: "Resident".into(),
                 position: [128.0, 128.0, 25.0],
                 is_npc: false,
+                ip_address: String::new(),
                 visual_params: vec![0], // female
             },
             PresenceInfo {
@@ -980,6 +981,7 @@ mod tests {
                 last_name: "Smith".into(),
                 position: [64.0, 64.0, 30.0],
                 is_npc: false,
+                ip_address: String::new(),
                 visual_params: vec![200], // male
             },
             PresenceInfo {
@@ -988,6 +990,7 @@ mod tests {
                 last_name: "Jones".into(),
                 position: [100.0, 100.0, 20.0],
                 is_npc: false,
+                ip_address: String::new(),
                 visual_params: vec![50], // female
             },
             PresenceInfo {
@@ -996,6 +999,7 @@ mod tests {
                 last_name: "Bot".into(),
                 position: [128.0, 128.0, 25.0],
                 is_npc: true,
+                ip_address: String::new(),
                 visual_params: vec![],
             },
         ];

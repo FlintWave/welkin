@@ -303,11 +303,23 @@ fn register_os_set_pen_cap(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaR
 }
 
 fn register_os_get_draw_string_size(lua: &Lua, _ctx: &Arc<RwLock<ScriptContext>>) -> LuaResult<()> {
-    // Stub: needs font metrics engine. Returns "0,0".
     let f = lua.create_function(
-        |_, (_font_name, _text, _font_size): (String, String, i32)| {
-            tracing::debug!("osGetDrawStringSize (stub)");
-            Ok("0,0".to_string())
+        |_, (font_name, text, font_size): (String, String, i32)| {
+            let size = font_size.max(1) as f64;
+            // Estimate based on common font metrics:
+            // Average char width ~ 0.6 * font_size for proportional fonts
+            // Monospace ~ 0.602 * font_size
+            let width_factor = if font_name.to_lowercase().contains("mono")
+                || font_name.to_lowercase().contains("courier")
+            {
+                0.602
+            } else {
+                0.58
+            };
+            let char_count = text.chars().count() as f64;
+            let width = (char_count * size * width_factor).ceil();
+            let height = (size * 1.35).ceil();
+            Ok(format!("{},{}", width as i32, height as i32))
         },
     )?;
     lua.globals().set("osGetDrawStringSize", f)
@@ -463,13 +475,46 @@ mod tests {
     }
 
     #[test]
-    fn test_get_draw_string_size_stub() {
+    fn test_get_draw_string_size() {
         let lua = make_draw_vm();
         let r: String = lua
             .load(r#"return osGetDrawStringSize("Arial", "Hello", 12)"#)
             .eval()
             .unwrap();
-        assert_eq!(r, "0,0");
+        // "Hello" is 5 chars at size 12 with factor 0.58 -> 5*12*0.58 = 34.8 -> ceil = 35
+        // height = 12*1.35 = 16.2 -> ceil = 17
+        let parts: Vec<i32> = r.split(',').map(|s| s.parse().unwrap()).collect();
+        assert_eq!(parts.len(), 2);
+        assert!(parts[0] > 0, "width should be non-zero for non-empty text");
+        assert!(parts[1] > 0, "height should be non-zero");
+    }
+
+    #[test]
+    fn test_get_draw_string_size_monospace() {
+        let lua = make_draw_vm();
+        let r: String = lua
+            .load(r#"return osGetDrawStringSize("Courier", "AB", 20)"#)
+            .eval()
+            .unwrap();
+        // "AB" is 2 chars at size 20 with mono factor 0.602 -> 2*20*0.602 = 24.08 -> ceil = 25
+        // height = 20*1.35 = 27
+        let parts: Vec<i32> = r.split(',').map(|s| s.parse().unwrap()).collect();
+        assert_eq!(parts.len(), 2);
+        assert!(parts[0] > 0);
+        assert!(parts[1] > 0);
+    }
+
+    #[test]
+    fn test_get_draw_string_size_empty() {
+        let lua = make_draw_vm();
+        let r: String = lua
+            .load(r#"return osGetDrawStringSize("Arial", "", 12)"#)
+            .eval()
+            .unwrap();
+        // Empty string -> width=0, height still non-zero
+        let parts: Vec<i32> = r.split(',').map(|s| s.parse().unwrap()).collect();
+        assert_eq!(parts[0], 0);
+        assert!(parts[1] > 0);
     }
 
     #[test]

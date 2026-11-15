@@ -250,16 +250,19 @@ mod tests {
                     name: "MyScript".into(),
                     item_type: INVENTORY_SCRIPT,
                     asset_id: Uuid::nil(),
+                    ..Default::default()
                 },
                 InventoryItem {
                     name: "MyTexture".into(),
                     item_type: INVENTORY_TEXTURE,
                     asset_id: Uuid::from_u128(0xabcd),
+                    ..Default::default()
                 },
                 InventoryItem {
                     name: "MyNotecard".into(),
                     item_type: INVENTORY_NOTECARD,
                     asset_id: Uuid::from_u128(0x1234),
+                    ..Default::default()
                 },
             ],
             ..Default::default()
@@ -379,6 +382,7 @@ mod tests {
                     name: "MyNotecard".into(),
                     item_type: INVENTORY_NOTECARD,
                     asset_id: notecard_id,
+                    ..Default::default()
                 },
             ],
             event_sender: Some(tx),

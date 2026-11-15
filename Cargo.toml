@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["crates/*"]
-exclude = ["crates/welkin-companion", "tests/script-testing/scanner"]
+exclude = ["crates/welkin-companion", "tests/script-testing/scanner", "tests/script-testing/runner"]
 
 [workspace.package]
 version = "0.1.0"

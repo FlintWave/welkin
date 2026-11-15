@@ -325,8 +325,15 @@ fn register_os_get_agent_ip(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaR
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, agent_id: String| {
         let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, agent_id = %agent_id, "osGetAgentIP");
-        Ok(String::new())
+        let uuid = Uuid::parse_str(&agent_id).unwrap_or(Uuid::nil());
+        if uuid == Uuid::nil() {
+            return Ok(String::new());
+        }
+        if let Some(presence) = c.presence_list.iter().find(|p| p.uuid == uuid) {
+            Ok(presence.ip_address.clone())
+        } else {
+            Ok(String::new())
+        }
     })?;
     lua.globals().set("osGetAgentIP", f)
 }
@@ -410,8 +417,30 @@ fn register_os_region_restart(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Lu
     let ctx = ctx.clone();
     let f = lua.create_function(move |_, seconds: f64| {
         let c = ctx.read();
-        tracing::debug!(script_id = %c.script_id, delay_s = seconds, "osRegionRestart");
-        Ok(())
+        if let Some(ref sender) = c.restart_sender {
+            if seconds < 15.0 {
+                // Abort restart (like OpenSim)
+                let _ = sender.send(crate::builtins::RegionRestartCommand {
+                    delay_seconds: 0.0,
+                    message: "Region restart has been aborted".to_string(),
+                    requester_id: c.owner_id,
+                });
+                return Ok(1i32);
+            }
+            let _ = sender.send(crate::builtins::RegionRestartCommand {
+                delay_seconds: seconds,
+                message: String::new(),
+                requester_id: c.owner_id,
+            });
+            tracing::info!(
+                script_id = %c.script_id,
+                delay_s = seconds,
+                "osRegionRestart scheduled"
+            );
+            Ok(1i32)
+        } else {
+            Ok(0i32)
+        }
     })?;
     lua.globals().set("osRegionRestart", f)
 }

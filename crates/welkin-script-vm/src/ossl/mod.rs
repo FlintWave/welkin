@@ -1071,7 +1071,8 @@ Allow_osDrawText = true
             .load(r#"return osGetPrimCount("<128,128,0>")"#)
             .eval()
             .unwrap();
-        assert_eq!(prim_count, 0);
+        // Default prim_count is 1 (host object has at least 1 prim).
+        assert_eq!(prim_count, 1);
 
         let sitting: i32 = lua
             .load(r#"return osGetSittingAvatarsCount("prim-key")"#)
@@ -1101,7 +1102,8 @@ Allow_osDrawText = true
         assert_eq!(date, "");
 
         let id: String = lua.load("return osLoadedCreationID()").eval().unwrap();
-        assert_eq!(id, "00000000-0000-0000-0000-000000000000");
+        // Default region_loaded_creation_id is empty.
+        assert_eq!(id, "");
 
         let appearance: String = lua
             .load(r#"return osOwnerSaveAppearance("notecard")"#)
@@ -1125,10 +1127,12 @@ Allow_osDrawText = true
             .load(r#"return osListenRegex(0, "", "", "pattern", 0)"#)
             .eval()
             .unwrap();
-        assert_eq!(listen, -1);
+        // osListenRegex returns a positive handle (next_listen_handle starts at 1).
+        assert!(listen > 0);
 
         let color: String = lua.load("return osGetLinkColor(0, 0)").eval().unwrap();
-        assert_eq!(color, "<0, 0, 0>");
+        // Default color is white <1, 1, 1>.
+        assert_eq!(color, "<1, 1, 1>");
 
         let name: String = lua.load(r#"return osKey2Name("some-key")"#).eval().unwrap();
         assert_eq!(name, "");

@@ -713,6 +713,7 @@ mod tests {
                 name: "MyBox".into(),
                 item_type: super::super::INVENTORY_OBJECT,
                 asset_id: Uuid::from_u128(0x99),
+                ..Default::default()
             }],
             rez_sender: Some(tx),
             ..Default::default()
@@ -750,6 +751,7 @@ mod tests {
                 name: "MyBox".into(),
                 item_type: super::super::INVENTORY_OBJECT,
                 asset_id: Uuid::from_u128(0x99),
+                ..Default::default()
             }],
             rez_sender: Some(tx),
             ..Default::default()

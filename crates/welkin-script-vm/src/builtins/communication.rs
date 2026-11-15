@@ -157,6 +157,7 @@ pub fn register_communication(
                     id,
                     msg,
                     active: true,
+                    regex_bitfield: 0,
                 });
                 Ok(handle as i64)
             },
