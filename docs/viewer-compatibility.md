@@ -80,8 +80,7 @@ described below.
 
 ### Known limitations
 
-- LSL compilation pipeline: Luau VM runs, but no LSL parser or transpiler yet
-- ~387 ll* script functions not yet implemented
+- LSL compilation pipeline runs (lexer, parser, analyzer, Luau codegen) but ~387 ll* functions still need region wiring
 - Physics step integration not yet wired
 - Cross-region teleport
 
