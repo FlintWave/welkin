@@ -22,10 +22,13 @@ use welkin_data::DataPool;
 use welkin_llsd::{Llsd, Map, from_xml, to_xml_string};
 use welkin_modules::{
     AssetTransactionModule, AttachmentsModule, AvatarFactoryModule, BakedTexturesModule,
-    CapsModule, ChatModule, DefaultPermissionsModule, DialogModule, DynAttrsModule,
-    EstateManagementModule, FriendsModule, InventoryAccessModule, InventoryTransferModule,
-    LandManagementModule, MapImageModule, MapSearchModule, MessageTransferModule, ModuleConfig,
-    SceneRef, ServiceThrottleModule, UserManagementModule, WorldMapModule, XferModule,
+    BasicProfileModule, CapsModule, ChatModule, DefaultPermissionsModule, DialogModule,
+    DynAttrsModule, EstateManagementModule, FriendsModule, GesturesModule, GodsModule,
+    GroupsMessagingModule, GroupsModule, InventoryAccessModule, InventoryTransferModule,
+    LandManagementModule, LibraryModule, LureModule, MapImageModule, MapSearchModule,
+    MessageTransferModule, ModuleConfig, MuteListModule, OfflineMessageModule, PresenceModule,
+    SceneRef, SearchModule, ServiceThrottleModule, SoundModule, UserManagementModule,
+    WorldMapModule, XferModule,
 };
 use welkin_msg::Msg;
 use welkin_msg::msgs::*;
@@ -241,6 +244,18 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         registry.register(AssetTransactionModule::new());
         registry.register(XferModule::new());
         registry.register(MessageTransferModule::new());
+        registry.register(OfflineMessageModule::new());
+        registry.register(MuteListModule::new());
+        registry.register(PresenceModule::new());
+        registry.register(SoundModule::new());
+        registry.register(BasicProfileModule::new());
+        registry.register(LibraryModule::new());
+        registry.register(SearchModule::new());
+        registry.register(GesturesModule::new());
+        registry.register(LureModule::new());
+        registry.register(GodsModule::new());
+        registry.register(GroupsModule::new());
+        registry.register(GroupsMessagingModule::new());
         if let Err(e) = registry.initialise_all(&ConfigBridge(&config)) {
             warn!(error = %e, "module initialisation failed");
         }

@@ -17,18 +17,18 @@
 
 ## Phase 2: P1 modules — normal operation
 
-- [ ] Activate GroupsModule — group info, membership, roles
-- [ ] Activate GroupsMessagingModule — group IM distribution
-- [ ] Activate OfflineMessageModule — offline IM storage/retrieval
-- [ ] Activate MuteListModule — mute/block list
-- [ ] Activate PresenceModule — region presence tracking
-- [ ] Activate SoundModule — sound playback commands
-- [ ] Activate BasicProfileModule — avatar profiles
-- [ ] Activate LibraryModule — system library inventory
-- [ ] Activate SearchModule — people/place/event search
-- [ ] Activate GesturesModule — gesture playback
-- [ ] Activate LureModule — teleport lure handling
-- [ ] Activate GodsModule — god mode operations
+- [x] Activate GroupsModule — group info, membership, roles
+- [x] Activate GroupsMessagingModule — group IM distribution
+- [x] Activate OfflineMessageModule — offline IM storage/retrieval
+- [x] Activate MuteListModule — mute/block list
+- [x] Activate PresenceModule — region presence tracking
+- [x] Activate SoundModule — sound playback commands
+- [x] Activate BasicProfileModule — avatar profiles
+- [x] Activate LibraryModule — system library inventory
+- [x] Activate SearchModule — people/place/event search
+- [x] Activate GesturesModule — gesture playback
+- [x] Activate LureModule — teleport lure handling
+- [x] Activate GodsModule — god mode operations
 
 ## Phase 3: P2 modules — full parity
 
