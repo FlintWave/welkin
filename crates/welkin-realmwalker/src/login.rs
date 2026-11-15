@@ -320,12 +320,19 @@ fn parse_uuid(
 }
 
 /// Parse a u32 field.
+///
+/// OpenSim XMLRPC uses `<i4>` (signed 32-bit) for values like `circuit_code`
+/// that are logically unsigned on the wire. Negative values (e.g. `-660431009`)
+/// are valid -- they're the signed representation of the unsigned circuit code.
+/// We try u32 first, then fall back to i32 and reinterpret as u32.
 fn parse_u32(
     fields: &HashMap<String, String>,
     name: &str,
 ) -> Result<u32, RealmWalkerError> {
     let s = get_field(fields, name)?;
-    s.parse::<u32>().map_err(|e| {
+    s.parse::<u32>().or_else(|_| {
+        s.parse::<i32>().map(|v| v as u32)
+    }).map_err(|e| {
         RealmWalkerError::LoginFailed(LoginFailure::XmlParseError(format!(
             "{name}: invalid u32: {e}"
         )))
@@ -465,5 +472,29 @@ mod tests {
         let resp = build_login_response(&fields).expect("build should succeed");
         assert_eq!(resp.circuit_code, 42);
         assert_eq!(resp.sim_port, 9000);
+    }
+
+    #[test]
+    fn parse_negative_circuit_code() {
+        // OpenSim returns circuit_code as signed i4; -660431009 is a valid
+        // signed representation of unsigned 3634536287.
+        let xml = r#"<?xml version="1.0"?>
+<methodResponse><params><param><value><struct>
+<member><name>login</name><value><string>true</string></value></member>
+<member><name>agent_id</name><value><string>00000000-0000-0000-0000-000000000001</string></value></member>
+<member><name>session_id</name><value><string>00000000-0000-0000-0000-000000000002</string></value></member>
+<member><name>secure_session_id</name><value><string>00000000-0000-0000-0000-000000000003</string></value></member>
+<member><name>circuit_code</name><value><i4>-660431009</i4></value></member>
+<member><name>sim_ip</name><value><string>127.0.0.1</string></value></member>
+<member><name>sim_port</name><value><i4>9000</i4></value></member>
+<member><name>seed_capability</name><value><string>http://127.0.0.1:9000/CAPS/seed</string></value></member>
+<member><name>region_x</name><value><i4>256000</i4></value></member>
+<member><name>region_y</name><value><i4>256000</i4></value></member>
+</struct></value></param></params></methodResponse>"#;
+
+        let fields = parse_xmlrpc_response(xml).expect("parse should succeed");
+        let resp = build_login_response(&fields).expect("build should succeed");
+        // -660431009 as u32 = 3634536287
+        assert_eq!(resp.circuit_code, (-660431009_i32) as u32);
     }
 }
