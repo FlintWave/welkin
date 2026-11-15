@@ -16,6 +16,7 @@ use uuid::Uuid;
 use crate::caps;
 use crate::chat;
 use crate::config::GridConfig;
+use crate::objects;
 use crate::error::RealmWalkerError;
 use crate::events::{ChatType, Event, EventBus};
 use crate::login::{self, LoginResponse};
@@ -122,6 +123,11 @@ impl RealmWalker {
                         Ok(pkt) => {
                             chat::try_handle_chat(&pkt, &eb);
                             chat::try_handle_im(&pkt, &eb);
+                            objects::try_handle_object_update(&pkt, &eb);
+                            objects::try_handle_object_update_compressed(&pkt, &eb);
+                            objects::try_handle_terse_object_update(&pkt, &eb);
+                            objects::try_handle_kill_object(&pkt, &eb);
+                            objects::try_handle_object_properties(&pkt, &eb);
                         }
                         Err(broadcast::error::RecvError::Closed) => break,
                         Err(broadcast::error::RecvError::Lagged(n)) => {

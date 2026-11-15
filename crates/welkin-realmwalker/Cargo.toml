@@ -22,6 +22,7 @@ glam = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util", "macros"] }
+glam = { workspace = true }
 
 [features]
 integration = []

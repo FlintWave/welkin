@@ -14,6 +14,24 @@ pub enum Event {
     Disconnected(DisconnectReason),
     /// The avatar has been moved to a different simulator.
     SimChanged(RegionInfo),
+    /// A teleport offer (lure) was received from another avatar.
+    TeleportOffer(TeleportOfferData),
+    /// The server has begun processing a teleport request.
+    TeleportStarted(TeleportStartData),
+    /// Server progress message during an in-flight teleport.
+    TeleportProgress(TeleportProgressData),
+    /// A teleport failed. The reason string describes why.
+    TeleportFailed(TeleportFailedData),
+    /// The agent's health value changed.
+    HealthChanged { health: f32 },
+    /// The agent's L$ balance changed.
+    MoneyBalance { balance: i32, description: String },
+    /// An object was created or updated in the scene.
+    ObjectUpdated(SimObject),
+    /// One or more objects were removed from the scene.
+    ObjectKilled { local_ids: Vec<u32> },
+    /// The server returned detailed properties for an object.
+    ObjectPropertiesReceived(ObjectPropertiesData),
     /// A caps event-queue event that has no dedicated variant yet.
     EventQueueEvent(String, serde_json::Value),
 }
@@ -169,6 +187,126 @@ impl RegionInfo {
     pub fn to_handle(region_x: u32, region_y: u32) -> u64 {
         ((region_y as u64) << 32) | (region_x as u64)
     }
+}
+
+/// A teleport offer (lure) from another avatar.
+#[derive(Debug, Clone)]
+pub struct TeleportOfferData {
+    /// Display name of the avatar who sent the offer.
+    pub from_name: String,
+    /// UUID of the avatar who sent the offer.
+    pub from_id: Uuid,
+    /// Lure session UUID (pass to TeleportLureRequest to accept).
+    pub lure_id: Uuid,
+    /// Message attached to the offer.
+    pub message: String,
+}
+
+/// Data emitted when the server begins processing a teleport.
+#[derive(Debug, Clone)]
+pub struct TeleportStartData {
+    /// Teleport flags indicating the type of teleport being started.
+    pub flags: u32,
+}
+
+/// Server progress update during a teleport.
+#[derive(Debug, Clone)]
+pub struct TeleportProgressData {
+    /// Teleport flags indicating progress stage.
+    pub flags: u32,
+    /// Human-readable progress message.
+    pub message: String,
+}
+
+/// Data emitted when a teleport fails.
+#[derive(Debug, Clone)]
+pub struct TeleportFailedData {
+    /// UUID of the agent whose teleport failed.
+    pub agent_id: uuid::Uuid,
+    /// Server-provided reason for the failure.
+    pub reason: String,
+}
+
+/// A scene object as decoded from an inbound ObjectUpdate or related packet.
+///
+/// Contains the subset of object fields useful to bots: identity, position,
+/// ownership, and hierarchy. Full shape and texture data are omitted.
+#[derive(Debug, Clone)]
+pub struct SimObject {
+    /// Simulator-local object ID (changes across region crossings).
+    pub local_id: u32,
+    /// Globally unique object UUID (stable across regions).
+    pub full_id: Uuid,
+    /// Local ID of the parent object, or 0 if root.
+    pub parent_id: u32,
+    /// Primitive code (47 = prim, 9 = legacy grass, 5 = legacy tree).
+    /// PCode 47 (Prim) is the vast majority. Avatar is 0x2F = 47 as well,
+    /// but avatar updates have pcode == 0x2E (LL_PCODE_LEGACY_AVATAR = 46).
+    pub pcode: u8,
+    /// Object state byte (encodes attachment point).
+    pub state: u8,
+    /// Material type (0=stone, 1=metal, 2=glass, 3=wood, 4=flesh, 5=plastic, 6=rubber, 7=light).
+    pub material: u8,
+    /// Click action (0=touch, 1=sit, 2=buy, 3=pay, 4=open, 5=play, 6=open_media, 7=zoom).
+    pub click_action: u8,
+    /// Scale in meters.
+    pub scale: glam::Vec3,
+    /// World position in the region.
+    pub position: glam::Vec3,
+    /// World rotation.
+    pub rotation: glam::Quat,
+    /// Linear velocity.
+    pub velocity: glam::Vec3,
+    /// Linear acceleration.
+    pub acceleration: glam::Vec3,
+    /// Angular velocity.
+    pub angular_velocity: glam::Vec3,
+    /// Server-side update flags (permissions, physics, etc.).
+    pub update_flags: u32,
+    /// UUID of the object's owner.
+    pub owner_id: Uuid,
+    /// NameValue string (avatars encode FirstName/LastName here).
+    pub name_value: String,
+    /// Hover text above the object.
+    pub text: String,
+    /// RGBA color of the hover text.
+    pub text_color: [u8; 4],
+    /// Whether this object represents an avatar (pcode == 46).
+    pub is_avatar: bool,
+    /// Region handle from the update's RegionData block.
+    pub region_handle: u64,
+}
+
+/// Detailed object properties returned by the server.
+#[derive(Debug, Clone)]
+pub struct ObjectPropertiesData {
+    /// UUID of the object.
+    pub object_id: Uuid,
+    /// UUID of the creator.
+    pub creator_id: Uuid,
+    /// UUID of the current owner.
+    pub owner_id: Uuid,
+    /// UUID of the associated group.
+    pub group_id: Uuid,
+    /// Unix timestamp of creation.
+    pub creation_date: u64,
+    /// Permission masks.
+    pub base_mask: u32,
+    pub owner_mask: u32,
+    pub group_mask: u32,
+    pub everyone_mask: u32,
+    pub next_owner_mask: u32,
+    /// Sale info.
+    pub sale_type: u8,
+    pub sale_price: i32,
+    /// Object name.
+    pub name: String,
+    /// Object description.
+    pub description: String,
+    /// Touch-action text.
+    pub touch_name: String,
+    /// Sit-action text.
+    pub sit_name: String,
 }
 
 /// Broadcast bus for distributing events to subscribers.
