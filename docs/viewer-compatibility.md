@@ -140,6 +140,16 @@ echo, movement, rez prim, script upload, script alive, touch event, logout).
 - Full DCT terrain compression (field-order fix pending)
 - Avatar animations on Aurora Viewer (needs AgentAnimation packet)
 
+### Not yet user-tested
+
+These features are implemented and code-verified but have not been validated
+by a user in a live viewer session:
+
+- Local teleport between regions
+- 10-minute soak test on Firestorm (Aurora soak test passed)
+- Reconnection after viewer restart
+- Full Firestorm re-test after the chat/map/stub fixes
+
 ### Known viewer messages
 
 These are Firestorm-internal warnings that appear with an empty inventory and

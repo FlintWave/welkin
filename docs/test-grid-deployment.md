@@ -21,17 +21,38 @@ Ports used by the test grid:
 
 | Port | Protocol | Service |
 |---|---|---|
-| 8003 | TCP | Robust grid services (HTTP) |
-| 9000 | TCP | Region HTTP (capabilities, health) |
+| 8002 | TCP | ROBUST public (login, grid info, map) |
+| 8003 | TCP | ROBUST private (grid services) |
 | 9000 | UDP | Region LLUDP (viewer traffic) |
+| 9001 | TCP | Region HTTP (capabilities, health) |
 
 If you already have a C# OpenSimulator listening on any of these ports, stop
-it first or remap the Rust ports in `compose.yaml`.
+it first or remap the Welkin ports in your configuration.
 
-## Quick start
+## Quick start (native build)
+
+Build the binaries and run them directly:
 
 ```sh
-# Clone and build
+cd welkin
+cargo build --release
+
+# Start ROBUST (grid services)
+./target/release/welkin-robust &
+
+# Start the region
+./target/release/welkin-region &
+```
+
+ROBUST listens on two ports: 8002 (public, handles login, grid info, and map
+requests) and 8003 (private, handles inter-service calls). The region listens
+on 9000 UDP (LLUDP viewer traffic) and 9001 TCP (capabilities HTTP). Once
+ROBUST logs `Public server listening` on 8002 and the region logs
+`region ready`, the grid is up.
+
+## Quick start (containers)
+
+```sh
 cd welkin
 podman-compose up -d          # or: docker compose up -d
 
@@ -42,9 +63,6 @@ podman-compose logs -f robust region
 The first build compiles static musl-linked binaries inside the container
 (multi-stage `Containerfile`). Subsequent starts reuse cached layers unless
 `Cargo.toml` or `Cargo.lock` changes.
-
-Once `robust` logs `listening on 0.0.0.0:8003` and `region` logs
-`region ready`, the grid is up.
 
 ## Create an account
 
@@ -102,17 +120,18 @@ Work through this checklist after first login:
 
 ### Basic operations
 
-- [ ] Avatar moves, rotates, sits, stands
+- [x] Avatar moves, rotates, sits, stands (Aurora verified, Firestorm code-verified)
 - [ ] Right-click build: create a prim, resize, texture, move, copy, delete
-- [ ] Chat (Say, Shout, Whisper) between two avatars or with an NPC
+- [x] Chat (Say, Shout, Whisper) between two avatars or with an NPC (bot-verified, ChatFromViewer routing fixed in 9d82a90)
 - [ ] Inventory: create folder, upload texture, drag item to/from prim
 - [ ] Terrain: raise, lower, smooth, flatten with the edit tools
+- [x] Map and minimap render region data (MapBlockRequest fixed in 9d82a90)
 
 ### Scripting
 
-- [ ] Create a prim, add a script with `default { state_entry() { llSay(0, "ALIVE"); } touch_start(integer n) { llSay(0, "touched"); } }`
-- [ ] "ALIVE" appears in chat when the script loads (state_entry fires llSay)
-- [ ] Touch the prim; "touched" appears in chat (touch_start fires llSay)
+- [x] Create a prim, upload a script via two-step LLSD protocol (UpdateScriptAgent cap)
+- [x] "ALIVE" appears in chat when the script loads (state_entry fires llSay, bot-verified)
+- [x] Touch the prim; "touched" appears in chat (touch_start fires llSay, bot-verified)
 - [ ] Script state survives region restart (checkpoint/restore)
 
 ### Voice
