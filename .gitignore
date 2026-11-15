@@ -2,3 +2,5 @@
 /recordings/
 docs/book/
 robust.db
+tests/script-testing/corpus/
+tests/script-testing/results/
