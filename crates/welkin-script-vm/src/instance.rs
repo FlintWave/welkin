@@ -53,6 +53,29 @@ pub enum ScriptEvent {
     },
     Money { agent_id: Uuid, amount: i32 },
     RunTimePermissions { permissions: u32 },
+    Dataserver {
+        request_id: String,
+        data: String,
+    },
+    AtTarget {
+        handle: i32,
+        target_pos: [f64; 3],
+        our_pos: [f64; 3],
+    },
+    NotAtTarget,
+    AtRotTarget {
+        handle: i32,
+        target_rot: [f64; 4],
+        our_rot: [f64; 4],
+    },
+    NotAtRotTarget,
+    Email {
+        time: String,
+        address: String,
+        subject: String,
+        message: String,
+        num_remaining: i32,
+    },
     Custom {
         name: String,
         args: Vec<serde_json::Value>,
@@ -78,6 +101,12 @@ impl ScriptEvent {
             ScriptEvent::HttpRequest { .. } => "http_request",
             ScriptEvent::Money { .. } => "money",
             ScriptEvent::RunTimePermissions { .. } => "run_time_permissions",
+            ScriptEvent::Dataserver { .. } => "dataserver",
+            ScriptEvent::AtTarget { .. } => "at_target",
+            ScriptEvent::NotAtTarget => "not_at_target",
+            ScriptEvent::AtRotTarget { .. } => "at_rot_target",
+            ScriptEvent::NotAtRotTarget => "not_at_rot_target",
+            ScriptEvent::Email { .. } => "email",
             ScriptEvent::Custom { name, .. } => name.as_str(),
         }
     }
@@ -276,6 +305,47 @@ impl ScriptInstance {
             }
             ScriptEvent::RunTimePermissions { permissions } => {
                 args.push(mlua::Value::Integer(i64::from(*permissions)));
+            }
+            ScriptEvent::Dataserver { request_id, data } => {
+                args.push(mlua::Value::String(self.vm.create_string(request_id.as_bytes())?));
+                args.push(mlua::Value::String(self.vm.create_string(data.as_bytes())?));
+            }
+            ScriptEvent::AtTarget { handle, target_pos, our_pos } => {
+                args.push(mlua::Value::Integer(i64::from(*handle)));
+                let tp = self.vm.create_table()?;
+                tp.set("x", target_pos[0])?;
+                tp.set("y", target_pos[1])?;
+                tp.set("z", target_pos[2])?;
+                args.push(mlua::Value::Table(tp));
+                let op = self.vm.create_table()?;
+                op.set("x", our_pos[0])?;
+                op.set("y", our_pos[1])?;
+                op.set("z", our_pos[2])?;
+                args.push(mlua::Value::Table(op));
+            }
+            ScriptEvent::NotAtTarget => {}
+            ScriptEvent::AtRotTarget { handle, target_rot, our_rot } => {
+                args.push(mlua::Value::Integer(i64::from(*handle)));
+                let tr = self.vm.create_table()?;
+                tr.set("x", target_rot[0])?;
+                tr.set("y", target_rot[1])?;
+                tr.set("z", target_rot[2])?;
+                tr.set("w", target_rot[3])?;
+                args.push(mlua::Value::Table(tr));
+                let or = self.vm.create_table()?;
+                or.set("x", our_rot[0])?;
+                or.set("y", our_rot[1])?;
+                or.set("z", our_rot[2])?;
+                or.set("w", our_rot[3])?;
+                args.push(mlua::Value::Table(or));
+            }
+            ScriptEvent::NotAtRotTarget => {}
+            ScriptEvent::Email { time, address, subject, message, num_remaining } => {
+                args.push(mlua::Value::String(self.vm.create_string(time.as_bytes())?));
+                args.push(mlua::Value::String(self.vm.create_string(address.as_bytes())?));
+                args.push(mlua::Value::String(self.vm.create_string(subject.as_bytes())?));
+                args.push(mlua::Value::String(self.vm.create_string(message.as_bytes())?));
+                args.push(mlua::Value::Integer(i64::from(*num_remaining)));
             }
             ScriptEvent::Custom { args: json_args, .. } => {
                 use mlua::LuaSerdeExt;

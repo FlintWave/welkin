@@ -10,7 +10,7 @@ use std::sync::Arc;
 use mlua::prelude::*;
 use parking_lot::RwLock;
 
-use super::ScriptContext;
+use super::{ScriptContext, RezRequest, INVENTORY_OBJECT};
 
 /// Extract `[x, y, z]` from a Lua table that has named or positional keys.
 fn get_vec3_from_table(t: &LuaTable) -> LuaResult<[f64; 3]> {
@@ -345,6 +345,64 @@ pub fn register_object(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
         lua.globals().set("llGetObjectDetails", f)?;
     }
 
+    // llRezObject(name, pos, vel, rot, start_param)
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(
+            move |_, (name, pos, vel, rot, param): (String, LuaTable, LuaTable, LuaTable, i64)| {
+                let ctx = ctx.read();
+                let item = ctx.inventory.iter().find(|i| i.name == name && i.item_type == INVENTORY_OBJECT);
+                if item.is_none() {
+                    return Err(LuaError::runtime(format!("llRezObject: item '{}' not found in inventory", name)));
+                }
+                if let Some(ref tx) = ctx.rez_sender {
+                    let req = RezRequest {
+                        source_script_id: ctx.script_id,
+                        source_prim_id: ctx.prim_id,
+                        item_name: name,
+                        position: get_vec3_from_table(&pos)?,
+                        velocity: get_vec3_from_table(&vel)?,
+                        rotation: get_rot4_from_table(&rot)?,
+                        start_param: param as i32,
+                        at_root: false,
+                    };
+                    let _ = tx.send(req);
+                }
+                Ok(())
+            },
+        )?;
+        lua.globals().set("llRezObject", f)?;
+    }
+
+    // llRezAtRoot(name, pos, vel, rot, start_param)
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(
+            move |_, (name, pos, vel, rot, param): (String, LuaTable, LuaTable, LuaTable, i64)| {
+                let ctx = ctx.read();
+                let item = ctx.inventory.iter().find(|i| i.name == name && i.item_type == INVENTORY_OBJECT);
+                if item.is_none() {
+                    return Err(LuaError::runtime(format!("llRezAtRoot: item '{}' not found in inventory", name)));
+                }
+                if let Some(ref tx) = ctx.rez_sender {
+                    let req = RezRequest {
+                        source_script_id: ctx.script_id,
+                        source_prim_id: ctx.prim_id,
+                        item_name: name,
+                        position: get_vec3_from_table(&pos)?,
+                        velocity: get_vec3_from_table(&vel)?,
+                        rotation: get_rot4_from_table(&rot)?,
+                        start_param: param as i32,
+                        at_root: true,
+                    };
+                    let _ = tx.send(req);
+                }
+                Ok(())
+            },
+        )?;
+        lua.globals().set("llRezAtRoot", f)?;
+    }
+
     Ok(())
 }
 
@@ -643,5 +701,66 @@ mod tests {
         "#;
         let count: i64 = lua.load(script).eval().unwrap();
         assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn ll_rez_object_sends_request() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            script_id: Uuid::from_u128(0x1),
+            prim_id: Uuid::from_u128(0x2),
+            inventory: vec![super::super::InventoryItem {
+                name: "MyBox".into(),
+                item_type: super::super::INVENTORY_OBJECT,
+                asset_id: Uuid::from_u128(0x99),
+            }],
+            rez_sender: Some(tx),
+            ..Default::default()
+        }));
+        let lua = Lua::new();
+        register_object(&lua, &ctx).unwrap();
+        lua.load(r#"llRezObject("MyBox", {x=10,y=20,z=30}, {x=0,y=0,z=0}, {x=0,y=0,z=0,w=1}, 42)"#)
+            .exec()
+            .unwrap();
+        let req = rx.try_recv().unwrap();
+        assert_eq!(req.item_name, "MyBox");
+        assert!((req.position[0] - 10.0).abs() < f64::EPSILON);
+        assert_eq!(req.start_param, 42);
+        assert!(!req.at_root);
+    }
+
+    #[test]
+    fn ll_rez_object_errors_on_missing_item() {
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            inventory: Vec::new(),
+            ..Default::default()
+        }));
+        let lua = Lua::new();
+        register_object(&lua, &ctx).unwrap();
+        let result = lua.load(r#"llRezObject("Missing", {x=0,y=0,z=0}, {x=0,y=0,z=0}, {x=0,y=0,z=0,w=1}, 0)"#)
+            .exec();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn ll_rez_at_root_sets_at_root_flag() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            inventory: vec![super::super::InventoryItem {
+                name: "MyBox".into(),
+                item_type: super::super::INVENTORY_OBJECT,
+                asset_id: Uuid::from_u128(0x99),
+            }],
+            rez_sender: Some(tx),
+            ..Default::default()
+        }));
+        let lua = Lua::new();
+        register_object(&lua, &ctx).unwrap();
+        lua.load(r#"llRezAtRoot("MyBox", {x=1,y=2,z=3}, {x=0,y=0,z=0}, {x=0,y=0,z=0,w=1}, 7)"#)
+            .exec()
+            .unwrap();
+        let req = rx.try_recv().unwrap();
+        assert!(req.at_root);
+        assert_eq!(req.start_param, 7);
     }
 }

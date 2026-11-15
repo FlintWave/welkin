@@ -7,15 +7,21 @@
 //! that log via [`tracing`] and return sensible defaults.
 
 pub mod avatar;
+pub mod cap_url;
 pub mod communication;
+pub mod email;
+pub mod http;
 pub mod inventory;
 pub mod land;
 pub mod list;
 pub mod math;
 pub mod object;
 pub mod physics;
+pub mod prim_params;
 pub mod string;
+pub mod vehicle;
 
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
 use parking_lot::RwLock;
@@ -51,6 +57,47 @@ pub struct ListenFilter {
     pub id: String,
     pub msg: String,
     pub active: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct RezRequest {
+    pub source_script_id: Uuid,
+    pub source_prim_id: Uuid,
+    pub item_name: String,
+    pub position: [f64; 3],
+    pub velocity: [f64; 3],
+    pub rotation: [f64; 4],
+    pub start_param: i32,
+    pub at_root: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct AttachRequest {
+    pub script_id: Uuid,
+    pub prim_id: Uuid,
+    pub owner_id: Uuid,
+    pub attach_point: i32,
+    pub is_temp: bool,
+}
+
+#[derive(Debug, Clone)]
+pub enum AttachAction {
+    Attach(AttachRequest),
+    Detach { prim_id: Uuid },
+}
+
+#[derive(Debug, Clone)]
+pub struct PositionTarget {
+    pub handle: i32,
+    pub position: [f64; 3],
+    pub range: f64,
+}
+
+#[derive(Debug, Clone)]
+pub struct RotationTarget {
+    pub handle: i32,
+    pub rotation: [f64; 4],
+    pub range: f64,
 }
 
 /// Shared context available to every ll* function closure.
@@ -90,6 +137,31 @@ pub struct ScriptContext {
     pub velocity: [f64; 3],
     pub angular_velocity: [f64; 3],
     pub acceleration: [f64; 3],
+    pub position_targets: Vec<PositionTarget>,
+    pub rotation_targets: Vec<RotationTarget>,
+    pub next_target_handle: i32,
+    pub notecard_data: HashMap<Uuid, String>,
+    pub vehicle: vehicle::VehicleParams,
+    pub hover_text: String,
+    pub hover_text_color: [f64; 3],
+    pub prim_material: i32,
+    pub is_phantom: bool,
+    pub is_physics: bool,
+    pub is_temp_on_rez: bool,
+    pub fullbright: bool,
+    pub glow: f64,
+    pub physics_shape_type: i32,
+    pub rez_sender: Option<std::sync::mpsc::Sender<RezRequest>>,
+    pub attach_sender: Option<std::sync::mpsc::Sender<AttachAction>>,
+    pub email_queue: VecDeque<email::EmailMessage>,
+    pub email_sender: Option<std::sync::mpsc::Sender<email::EmailOutbound>>,
+    pub last_email_time: Option<std::time::Instant>,
+    pub cap_url_sender: Option<std::sync::mpsc::Sender<cap_url::CapUrlRequest>>,
+    pub active_urls: Vec<String>,
+    pub http_sender: Option<std::sync::mpsc::Sender<http::HttpOutboundRequest>>,
+    pub http_response_sender: Option<std::sync::mpsc::Sender<http::HttpResponse>>,
+    pub http_pending_count: i32,
+    pub http_content_type: String,
 }
 
 impl Default for ScriptContext {
@@ -127,6 +199,31 @@ impl Default for ScriptContext {
             velocity: [0.0; 3],
             angular_velocity: [0.0; 3],
             acceleration: [0.0; 3],
+            position_targets: Vec::new(),
+            rotation_targets: Vec::new(),
+            next_target_handle: 1,
+            notecard_data: HashMap::new(),
+            vehicle: vehicle::VehicleParams::default(),
+            hover_text: String::new(),
+            hover_text_color: [1.0, 1.0, 1.0],
+            prim_material: 0,
+            is_phantom: false,
+            is_physics: false,
+            is_temp_on_rez: false,
+            fullbright: false,
+            glow: 0.0,
+            physics_shape_type: 0,
+            rez_sender: None,
+            attach_sender: None,
+            email_queue: VecDeque::new(),
+            email_sender: None,
+            last_email_time: None,
+            cap_url_sender: None,
+            active_urls: Vec::new(),
+            http_sender: None,
+            http_response_sender: None,
+            http_pending_count: 0,
+            http_content_type: "text/plain".into(),
         }
     }
 }
@@ -145,6 +242,11 @@ pub fn register_all(lua: &mlua::Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result
     avatar::register_avatar(lua, ctx)?;
     inventory::register_inventory(lua, ctx)?;
     land::register_land(lua, ctx)?;
+    vehicle::register_vehicle(lua, ctx)?;
+    prim_params::register_prim_params(lua, ctx)?;
+    email::register_email(lua, ctx)?;
+    cap_url::register_cap_url(lua, ctx)?;
+    http::register_http(lua, ctx)?;
     Ok(())
 }
 

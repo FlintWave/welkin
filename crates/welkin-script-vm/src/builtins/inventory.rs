@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use mlua::prelude::*;
 use parking_lot::RwLock;
+use uuid::Uuid;
 
 use super::{
     ScriptContext, INVENTORY_ALL, INVENTORY_ANIMATION, INVENTORY_BODYPART, INVENTORY_CLOTHING,
@@ -177,6 +178,62 @@ pub fn register_inventory(
         lua.globals().set("llGiveInventoryList", f)?;
     }
 
+    // llGetNotecardLine(notecard_name, line) -> key (request id)
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, (name, line): (String, i64)| {
+            let ctx = ctx.read();
+            let request_id = Uuid::new_v4().to_string();
+            if let Some(item) = ctx.inventory.iter().find(|i| i.name == name && i.item_type == INVENTORY_NOTECARD) {
+                let data = if let Some(content) = ctx.notecard_data.get(&item.asset_id) {
+                    let lines: Vec<&str> = content.lines().collect();
+                    let idx = line as usize;
+                    if idx < lines.len() {
+                        lines[idx].to_string()
+                    } else {
+                        "EOF".to_string()
+                    }
+                } else {
+                    "EOF".to_string()
+                };
+                if let Some(ref tx) = ctx.event_sender {
+                    let event = crate::ScriptEvent::Dataserver {
+                        request_id: request_id.clone(),
+                        data,
+                    };
+                    let _ = tx.send((ctx.prim_id, event));
+                }
+            }
+            Ok(request_id)
+        })?;
+        lua.globals().set("llGetNotecardLine", f)?;
+    }
+
+    // llGetNumberOfNotecardLines(notecard_name) -> key (request id)
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, name: String| {
+            let ctx = ctx.read();
+            let request_id = Uuid::new_v4().to_string();
+            if let Some(item) = ctx.inventory.iter().find(|i| i.name == name && i.item_type == INVENTORY_NOTECARD) {
+                let count = if let Some(content) = ctx.notecard_data.get(&item.asset_id) {
+                    content.lines().count()
+                } else {
+                    0
+                };
+                if let Some(ref tx) = ctx.event_sender {
+                    let event = crate::ScriptEvent::Dataserver {
+                        request_id: request_id.clone(),
+                        data: count.to_string(),
+                    };
+                    let _ = tx.send((ctx.prim_id, event));
+                }
+            }
+            Ok(request_id)
+        })?;
+        lua.globals().set("llGetNumberOfNotecardLines", f)?;
+    }
+
     Ok(())
 }
 
@@ -306,5 +363,91 @@ mod tests {
             .eval()
             .unwrap();
         assert_eq!(n, 2);
+    }
+
+    fn ctx_with_notecard() -> (
+        Arc<RwLock<ScriptContext>>,
+        std::sync::mpsc::Receiver<(Uuid, crate::ScriptEvent)>,
+    ) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let notecard_id = Uuid::from_u128(0x1234);
+        let mut notecard_data = std::collections::HashMap::new();
+        notecard_data.insert(notecard_id, "Line zero\nLine one\nLine two".to_string());
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            inventory: vec![
+                InventoryItem {
+                    name: "MyNotecard".into(),
+                    item_type: INVENTORY_NOTECARD,
+                    asset_id: notecard_id,
+                },
+            ],
+            event_sender: Some(tx),
+            notecard_data,
+            ..Default::default()
+        }));
+        (ctx, rx)
+    }
+
+    #[test]
+    fn get_notecard_line_returns_content() {
+        let (ctx, rx) = ctx_with_notecard();
+        let lua = Lua::new();
+        register_inventory(&lua, &ctx).unwrap();
+
+        let key: String = lua
+            .load(r#"return llGetNotecardLine("MyNotecard", 1)"#)
+            .eval()
+            .unwrap();
+        assert!(!key.is_empty());
+
+        let (_prim_id, event) = rx.try_recv().unwrap();
+        match event {
+            crate::ScriptEvent::Dataserver { request_id, data } => {
+                assert_eq!(request_id, key);
+                assert_eq!(data, "Line one");
+            }
+            _ => panic!("expected Dataserver event"),
+        }
+    }
+
+    #[test]
+    fn get_notecard_line_eof_past_end() {
+        let (ctx, rx) = ctx_with_notecard();
+        let lua = Lua::new();
+        register_inventory(&lua, &ctx).unwrap();
+
+        lua.load(r#"llGetNotecardLine("MyNotecard", 99)"#)
+            .exec()
+            .unwrap();
+
+        let (_prim_id, event) = rx.try_recv().unwrap();
+        match event {
+            crate::ScriptEvent::Dataserver { data, .. } => {
+                assert_eq!(data, "EOF");
+            }
+            _ => panic!("expected Dataserver event"),
+        }
+    }
+
+    #[test]
+    fn get_number_of_notecard_lines() {
+        let (ctx, rx) = ctx_with_notecard();
+        let lua = Lua::new();
+        register_inventory(&lua, &ctx).unwrap();
+
+        let key: String = lua
+            .load(r#"return llGetNumberOfNotecardLines("MyNotecard")"#)
+            .eval()
+            .unwrap();
+        assert!(!key.is_empty());
+
+        let (_prim_id, event) = rx.try_recv().unwrap();
+        match event {
+            crate::ScriptEvent::Dataserver { request_id, data } => {
+                assert_eq!(request_id, key);
+                assert_eq!(data, "3");
+            }
+            _ => panic!("expected Dataserver event"),
+        }
     }
 }

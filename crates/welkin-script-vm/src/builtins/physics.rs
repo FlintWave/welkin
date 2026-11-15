@@ -7,11 +7,15 @@ use std::sync::Arc;
 use mlua::prelude::*;
 use parking_lot::RwLock;
 
-use super::ScriptContext;
+use super::{PositionTarget, RotationTarget, ScriptContext};
 use crate::PhysicsCommand;
 
 fn get_vec3(tbl: &LuaTable) -> LuaResult<[f64; 3]> {
     Ok([tbl.get("x")?, tbl.get("y")?, tbl.get("z")?])
+}
+
+fn get_rot4(tbl: &LuaTable) -> LuaResult<[f64; 4]> {
+    Ok([tbl.get("x")?, tbl.get("y")?, tbl.get("z")?, tbl.get("w")?])
 }
 
 fn make_vec3(lua: &Lua, v: [f64; 3]) -> LuaResult<LuaTable> {
@@ -186,6 +190,56 @@ pub fn register_physics(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<(
             Ok(())
         })?;
         lua.globals().set("llSetHoverHeight", f)?;
+    }
+
+    // llTarget(position, range) -> integer handle
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, (pos_tbl, range): (LuaTable, f64)| {
+            let position = get_vec3(&pos_tbl)?;
+            let mut ctx = ctx.write();
+            let handle = ctx.next_target_handle;
+            ctx.next_target_handle += 1;
+            ctx.position_targets.push(PositionTarget { handle, position, range });
+            Ok(handle as i64)
+        })?;
+        lua.globals().set("llTarget", f)?;
+    }
+
+    // llTargetRemove(handle)
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, handle: i64| {
+            let mut ctx = ctx.write();
+            ctx.position_targets.retain(|t| t.handle != handle as i32);
+            Ok(())
+        })?;
+        lua.globals().set("llTargetRemove", f)?;
+    }
+
+    // llRotTarget(rotation, range) -> integer handle
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, (rot_tbl, range): (LuaTable, f64)| {
+            let rotation = get_rot4(&rot_tbl)?;
+            let mut ctx = ctx.write();
+            let handle = ctx.next_target_handle;
+            ctx.next_target_handle += 1;
+            ctx.rotation_targets.push(RotationTarget { handle, rotation, range });
+            Ok(handle as i64)
+        })?;
+        lua.globals().set("llRotTarget", f)?;
+    }
+
+    // llRotTargetRemove(handle)
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, handle: i64| {
+            let mut ctx = ctx.write();
+            ctx.rotation_targets.retain(|t| t.handle != handle as i32);
+            Ok(())
+        })?;
+        lua.globals().set("llRotTargetRemove", f)?;
     }
 
     Ok(())
@@ -398,5 +452,41 @@ mod tests {
             }
             _ => panic!("expected SetHoverHeight"),
         }
+    }
+
+    #[test]
+    fn ll_target_registers_and_removes() {
+        let ctx = test_ctx();
+        let lua = Lua::new();
+        register_physics(&lua, &ctx).unwrap();
+
+        let h: i64 = lua
+            .load("return llTarget({x=100, y=200, z=50}, 5.0)")
+            .eval()
+            .unwrap();
+        assert!(h >= 1);
+        assert_eq!(ctx.read().position_targets.len(), 1);
+        assert!((ctx.read().position_targets[0].range - 5.0).abs() < f64::EPSILON);
+
+        lua.load(&format!("llTargetRemove({h})")).exec().unwrap();
+        assert_eq!(ctx.read().position_targets.len(), 0);
+    }
+
+    #[test]
+    fn ll_rot_target_registers_and_removes() {
+        let ctx = test_ctx();
+        let lua = Lua::new();
+        register_physics(&lua, &ctx).unwrap();
+
+        let h: i64 = lua
+            .load("return llRotTarget({x=0, y=0, z=0, w=1}, 0.1)")
+            .eval()
+            .unwrap();
+        assert!(h >= 1);
+        assert_eq!(ctx.read().rotation_targets.len(), 1);
+        assert!((ctx.read().rotation_targets[0].range - 0.1).abs() < f64::EPSILON);
+
+        lua.load(&format!("llRotTargetRemove({h})")).exec().unwrap();
+        assert_eq!(ctx.read().rotation_targets.len(), 0);
     }
 }
