@@ -656,6 +656,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let heartbeat_clients = udp_clients.clone();
     let heartbeat_sim_store = Arc::clone(&sim_store);
     let heartbeat_region_id = region_id_str.clone();
+    let frame_metrics = Arc::new(std::sync::Mutex::new(sim_stats::FrameMetrics::new()));
+    let heartbeat_metrics = Arc::clone(&frame_metrics);
     let frame_time_ms = (frame_time * 1000.0) as u64;
     let heartbeat_handle = tokio::spawn(async move {
         let mut interval =
@@ -668,7 +670,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             tokio::select! {
                 _ = heartbeat_cancel.cancelled() => break,
                 _ = interval.tick() => {
-                    let _stats = heartbeat_scene.tick();
+                    let frame_start = std::time::Instant::now();
+                    let frame_stats = heartbeat_scene.tick();
+                    let physics_ms = frame_stats.physics_ms;
+                    let mut script_ms = 0.0f32;
                     if scripts_enabled {
                         // Drain any link_message events from builtins
                         while let Ok((target_prim, event)) = link_msg_rx.try_recv() {
@@ -851,7 +856,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         }
 
+                        let script_start = std::time::Instant::now();
                         let errors = heartbeat_scheduler.lock().tick();
+                        script_ms = script_start.elapsed().as_secs_f32() * 1000.0;
                         for (script_id, err) in errors {
                             tracing::warn!(script = %script_id, error = %err, "script execution error");
                         }
@@ -955,6 +962,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         prev_colliding = cur_colliding;
                     }
 
+                    let frame_ms = frame_start.elapsed().as_secs_f32() * 1000.0;
+                    heartbeat_metrics.lock().unwrap().record(frame_ms, physics_ms, script_ms);
+
                     backup_counter += 1;
                     if backup_counter >= 60 {
                         backup_counter = 0;
@@ -965,6 +975,51 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         ).await;
                         if n > 0 {
                             tracing::info!(count = n, "persisted dirty objects");
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // --- SimStats reporter (1 Hz) ---
+    let sim_stats_handle = tokio::spawn({
+        let scene = scene.clone();
+        let script_scheduler = script_scheduler.clone();
+        let udp_socket = udp_socket.clone();
+        let udp_clients = udp_clients.clone();
+        let cancel = cancel.clone();
+        let frame_metrics = frame_metrics.clone();
+        async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(1));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            interval.tick().await;
+            loop {
+                tokio::select! {
+                    _ = cancel.cancelled() => break,
+                    _ = interval.tick() => {
+                        let averages = frame_metrics.lock().unwrap().take();
+                        let (total_prims, active_prims) = scene.prim_stats();
+                        let input = sim_stats::SimStatsInput {
+                            region_x: scene.region_info.region_loc_x * 256,
+                            region_y: scene.region_info.region_loc_y * 256,
+                            region_flags: 0,
+                            object_capacity: 45000,
+                            root_agents: scene.presence_count() as u32,
+                            child_agents: 0,
+                            total_prims,
+                            active_prims,
+                            active_scripts: script_scheduler.lock().script_count() as u32,
+                            averages,
+                        };
+                        let stats_msg = sim_stats::build_sim_stats(&input);
+                        let clients = udp_clients.read().await;
+                        for (addr, client) in clients.iter() {
+                            let mut client = client.lock().await;
+                            let (bytes, _) = client.circuit.send_msg(&stats_msg, false);
+                            if let Err(e) = udp_socket.send_to(&bytes, addr).await {
+                                tracing::debug!("sim stats send failed: {e}");
+                            }
                         }
                     }
                 }
@@ -1138,6 +1193,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let _ = process_handle.await;
     let _ = caps_handle.await;
     let _ = heartbeat_handle.await;
+    let _ = sim_stats_handle.await;
     let _ = coarse_handle.await;
     let _ = timeout_handle.await;
 

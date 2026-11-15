@@ -84,12 +84,13 @@ impl Default for SceneConfig {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct FrameStats {
     pub frame_number: u64,
     pub objects_updated: u32,
     pub presences_updated: u32,
     pub dirty_objects: u32,
+    pub physics_ms: f32,
 }
 
 pub struct Scene {
@@ -388,14 +389,15 @@ impl Scene {
 
     pub fn tick(&self) -> FrameStats {
         let frame_number = self.frame.fetch_add(1, Ordering::Relaxed) + 1;
-
+        let mut physics_ms = 0.0f32;
         if self.config.physics_enabled
             && let Ok(mut guard) = self.physics.lock()
             && let Some(ref mut physics) = *guard
         {
+            let start = std::time::Instant::now();
             physics.simulate(self.config.frame_time);
+            physics_ms = start.elapsed().as_secs_f32() * 1000.0;
         }
-
         let mut dirty_objects = 0u32;
         {
             let objects = self.objects.read().unwrap();
@@ -405,13 +407,26 @@ impl Scene {
                 }
             }
         }
-
         FrameStats {
             frame_number,
             objects_updated: 0,
             presences_updated: self.presence_count.load(Ordering::Relaxed),
             dirty_objects,
+            physics_ms,
         }
+    }
+
+    pub fn prim_stats(&self) -> (u32, u32) {
+        let objects = self.objects.read().unwrap();
+        let mut total = 0u32;
+        let mut active = 0u32;
+        for group in objects.values() {
+            total += group.part_count() as u32;
+            if group.is_physical() {
+                active += 1;
+            }
+        }
+        (total, active)
     }
 
     // ---- Periodic backup ----
