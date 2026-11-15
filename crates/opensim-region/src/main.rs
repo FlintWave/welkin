@@ -12,8 +12,13 @@ use tracing::{error, info, warn};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+use axum::body::Bytes;
+use axum::extract::State;
+use axum::response::IntoResponse;
+
 use opensim_config::Config;
 use opensim_data::DataPool;
+use opensim_llsd::{from_xml, to_xml_string, Llsd, Map};
 use opensim_msg::msgs::*;
 use opensim_msg::Msg;
 use opensim_net::dispatch::{HandleError, PacketContext, PacketDispatcher};
@@ -258,15 +263,21 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // --- Capability HTTP server ---
     let caps_port = region_config.internal_port.wrapping_add(1);
     let caps_addr = SocketAddr::from(([0, 0, 0, 0], caps_port));
+    let caps_base = format!(
+        "http://{}:{}",
+        region_config.external_host_name, caps_port
+    );
 
     let cap_server = opensim_caps::server::CapabilityServer::new();
 
-    // Build the caps router: merge per-agent seed-cap router with the static
-    // capability handler routes (GetTexture, GetMesh, SimulatorFeatures, etc.).
     let mut caps_router = cap_server.into_router();
     for (name, method_router) in opensim_caps::handlers::cap_routes() {
         caps_router = caps_router.route(&format!("/{name}"), method_router);
     }
+    caps_router = caps_router.route(
+        "/CAPS/{*path}",
+        axum::routing::post(seed_caps_handler).with_state(caps_base),
+    );
 
     let caps_listener = tokio::net::TcpListener::bind(caps_addr).await?;
     info!(addr = %caps_addr, "Capability HTTP server listening");
@@ -447,6 +458,44 @@ async fn send_movement_complete(
         return;
     }
     info!(agent = %session.agent_id, region = %region_info.region_name, "sent RegionHandshake");
+}
+
+const KNOWN_CAPS: &[&str] = &[
+    "GetTexture",
+    "GetMesh",
+    "GetMesh2",
+    "SimulatorFeatures",
+    "RegionInfo",
+    "AgentPreferences",
+    "MapLayer",
+    "NewFileAgentInventory",
+    "UpdateNotecardAgentInventory",
+    "UpdateScriptAgent",
+];
+
+async fn seed_caps_handler(
+    State(base_url): State<String>,
+    body: Bytes,
+) -> impl IntoResponse {
+    let requested = from_xml(&body).unwrap_or(Llsd::Array(Vec::new()));
+    let names: Vec<String> = match &requested {
+        Llsd::Array(arr) => arr.iter().map(|v| v.as_str().to_string()).collect(),
+        _ => Vec::new(),
+    };
+
+    let mut map = Map::new();
+    for name in &names {
+        if KNOWN_CAPS.contains(&name.as_str()) {
+            map.insert(name.clone(), Llsd::String(format!("{}/{}", base_url, name)));
+        }
+    }
+
+    let xml = to_xml_string(&Llsd::Map(map));
+    (
+        axum::http::StatusCode::OK,
+        [("content-type", "application/llsd+xml")],
+        xml,
+    )
 }
 
 /// Redacts credentials from a connection string for safe logging.

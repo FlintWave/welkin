@@ -2521,6 +2521,7 @@ dependencies = [
  "opensim-caps",
  "opensim-config",
  "opensim-data",
+ "opensim-llsd",
  "opensim-modules",
  "opensim-msg",
  "opensim-net",
