@@ -5,6 +5,7 @@
 use crate::circuit::{Circuit, CircuitTick};
 use crate::throttle::ClientThrottle;
 use opensim_msg::{IncomingPacket, Msg, parse_packet};
+use opensim_msg::msgs::PacketAck;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -218,7 +219,14 @@ impl LLUDPServer {
             Some(session) => {
                 let is_new = {
                     let mut s = session.lock().await;
-                    s.on_receive(&pkt)
+                    let is_new = s.on_receive(&pkt);
+                    if pkt.id == PacketAck::ID {
+                        if let Ok(ack_msg) = pkt.decode::<PacketAck>() {
+                            let ack_ids: Vec<u32> = ack_msg.packets.iter().map(|p| p.id).collect();
+                            s.circuit.on_receive(0, 0, &ack_ids);
+                        }
+                    }
+                    is_new
                 };
                 if is_new {
                     let _ = msg_tx.send((src, pkt));
