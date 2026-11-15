@@ -1857,6 +1857,408 @@ async fn process_messages(
             }
         }
 
+        // ---- RezObject handler ----
+        if msg_id == RezObject::ID
+            && let Ok(msg) = RezObject::decode(&pkt.body)
+        {
+            let name = String::from_utf8_lossy(&msg.inventory_data.name).to_string();
+            let item_id = msg.inventory_data.item_id;
+            let position = msg.rez_data.ray_end;
+            let mut root = SceneObjectPart::new(&name, msg.agent_data.agent_id);
+            root.creator_id = msg.inventory_data.creator_id;
+            root.group_position = position;
+            root.group_id = msg.agent_data.group_id;
+            root.base_mask = PermissionMask::from_bits_truncate(msg.inventory_data.base_mask);
+            root.owner_mask = PermissionMask::from_bits_truncate(msg.inventory_data.owner_mask);
+            root.group_mask = PermissionMask::from_bits_truncate(msg.inventory_data.group_mask);
+            root.everyone_mask = PermissionMask::from_bits_truncate(msg.inventory_data.everyone_mask);
+            root.next_owner_mask = PermissionMask::from_bits_truncate(msg.inventory_data.next_owner_mask);
+            let obj_uuid = root.uuid;
+            let group = SceneObjectGroup::new(root);
+            scene.add_object(group);
+            if let Some(obj) = scene.get_object(&obj_uuid) {
+                broadcast_full_object_update(&obj, scene.region_info.region_handle, &socket, &clients).await;
+            }
+            info!(
+                agent = %msg.agent_data.agent_id,
+                object = %obj_uuid,
+                %item_id,
+                ?position,
+                %name,
+                "RezObject: created prim in scene"
+            );
+        }
+
+        // ---- DeRezObject handler ----
+        if msg_id == DeRezObject::ID
+            && let Ok(msg) = DeRezObject::decode(&pkt.body)
+        {
+            let destination = msg.agent_block.destination;
+            let mut kill_ids: Vec<u32> = Vec::new();
+            for entry in &msg.object_data {
+                let local_id = entry.object_local_id;
+                let uuid = match scene.get_object_by_local_id(local_id) {
+                    Some(u) => u,
+                    None => {
+                        warn!(local_id, "DeRezObject: unknown local_id");
+                        continue;
+                    }
+                };
+                match destination {
+                    1 => {
+                        // TakeCopy: copy to inventory, leave in scene
+                        info!(local_id, object = %uuid, "DeRezObject: copied to inventory (TakeCopy)");
+                    }
+                    4 => {
+                        // Take: remove from scene, take to inventory
+                        if let Some(_removed) = scene.remove_object(&uuid) {
+                            kill_ids.push(local_id);
+                            info!(local_id, object = %uuid, "DeRezObject: taken to inventory");
+                        }
+                    }
+                    6 => {
+                        // Delete
+                        if let Some(_removed) = scene.remove_object(&uuid) {
+                            kill_ids.push(local_id);
+                            info!(local_id, object = %uuid, "DeRezObject: deleted");
+                        }
+                    }
+                    9 => {
+                        // ReturnToOwner
+                        if let Some(_removed) = scene.remove_object(&uuid) {
+                            kill_ids.push(local_id);
+                            info!(local_id, object = %uuid, "DeRezObject: returned to owner");
+                        }
+                    }
+                    other => {
+                        if let Some(_removed) = scene.remove_object(&uuid) {
+                            kill_ids.push(local_id);
+                            info!(local_id, object = %uuid, destination = other, "DeRezObject: removed with destination code");
+                        }
+                    }
+                }
+            }
+            if !kill_ids.is_empty() {
+                let kill = KillObject {
+                    object_data: kill_ids.iter().map(|&id| kill_object::ObjectData { id }).collect(),
+                };
+                let all_clients = clients.read().await;
+                for (addr, c) in all_clients.iter() {
+                    let mut sess = c.lock().await;
+                    let (pkt_bytes, _) = sess.circuit.send_msg(&kill, true);
+                    let _ = socket.send_to(&pkt_bytes, *addr).await;
+                }
+            }
+        }
+
+        // ---- ObjectLink handler ----
+        if msg_id == ObjectLink::ID
+            && let Ok(msg) = ObjectLink::decode(&pkt.body)
+        {
+            if msg.object_data.len() >= 2 {
+                // First entry becomes the root group; remaining become children
+                let root_local_id = msg.object_data[0].object_local_id;
+                let root_uuid = match scene.get_object_by_local_id(root_local_id) {
+                    Some(u) => u,
+                    None => {
+                        warn!(root_local_id, "ObjectLink: root local_id not found");
+                        continue;
+                    }
+                };
+                let root_position = match scene.get_object(&root_uuid) {
+                    Some(g) => g.root_part().group_position,
+                    None => {
+                        warn!(root_local_id, "ObjectLink: root group not found");
+                        continue;
+                    }
+                };
+
+                let mut kill_ids: Vec<u32> = Vec::new();
+                let mut parts_to_add: Vec<SceneObjectPart> = Vec::new();
+
+                for entry in &msg.object_data[1..] {
+                    let child_local_id = entry.object_local_id;
+                    let child_uuid = match scene.get_object_by_local_id(child_local_id) {
+                        Some(u) => u,
+                        None => {
+                            warn!(child_local_id, "ObjectLink: child local_id not found");
+                            continue;
+                        }
+                    };
+                    if child_uuid == root_uuid {
+                        continue; // skip if same as root
+                    }
+                    if let Some(child_group) = scene.remove_object(&child_uuid) {
+                        let child_root_local_id = child_group.root_part().local_id;
+                        kill_ids.push(child_root_local_id);
+                        for part in child_group.parts() {
+                            let mut p = part.clone();
+                            // Recalculate offset relative to root position
+                            p.offset_position = p.group_position - root_position;
+                            parts_to_add.push(p);
+                        }
+                    }
+                }
+
+                // Add collected parts to root group
+                scene.with_object_mut(&root_uuid, |group| {
+                    for part in parts_to_add {
+                        group.add_part(part);
+                    }
+                });
+
+                // Broadcast updated root group
+                if let Some(obj) = scene.get_object(&root_uuid) {
+                    broadcast_full_object_update(&obj, scene.region_info.region_handle, &socket, &clients).await;
+                }
+
+                // Send KillObject for removed child groups
+                if !kill_ids.is_empty() {
+                    let kill = KillObject {
+                        object_data: kill_ids.iter().map(|&id| kill_object::ObjectData { id }).collect(),
+                    };
+                    let all_clients = clients.read().await;
+                    for (addr, c) in all_clients.iter() {
+                        let mut sess = c.lock().await;
+                        let (pkt_bytes, _) = sess.circuit.send_msg(&kill, true);
+                        let _ = socket.send_to(&pkt_bytes, *addr).await;
+                    }
+                }
+
+                info!(
+                    root_local_id,
+                    object = %root_uuid,
+                    linked_count = msg.object_data.len() - 1,
+                    "ObjectLink: linked objects"
+                );
+            }
+        }
+
+        // ---- ObjectDelink handler ----
+        if msg_id == ObjectDelink::ID
+            && let Ok(msg) = ObjectDelink::decode(&pkt.body)
+        {
+            let mut updated_groups: Vec<Uuid> = Vec::new();
+            let mut new_group_uuids: Vec<Uuid> = Vec::new();
+
+            for entry in &msg.object_data {
+                let local_id = entry.object_local_id;
+                // Find which group contains this local_id
+                let group_uuid = match scene.get_object_by_local_id(local_id) {
+                    Some(u) => u,
+                    None => {
+                        warn!(local_id, "ObjectDelink: unknown local_id");
+                        continue;
+                    }
+                };
+
+                // Check if this is a child part (not the root)
+                let part_info = scene.with_object_mut(&group_uuid, |group| {
+                    let root_local_id = group.root_part().local_id;
+                    if local_id == root_local_id {
+                        // Cannot delink the root part itself
+                        return None;
+                    }
+                    // Find the child part's uuid by local_id
+                    let part_uuid = group.get_part_by_local_id(local_id)?.uuid;
+                    let root_pos = group.root_part().group_position;
+                    if let Some(mut part) = group.remove_part(&part_uuid) {
+                        // Calculate world position from group position + offset
+                        part.group_position = root_pos + part.offset_position;
+                        part.offset_position = glam::Vec3::ZERO;
+                        Some(part)
+                    } else {
+                        None
+                    }
+                });
+
+                if let Some(Some(part)) = part_info {
+                    // Create new group from the delinked part
+                    let new_group = SceneObjectGroup::new(part);
+                    let new_uuid = scene.add_object(new_group);
+                    new_group_uuids.push(new_uuid);
+                    if !updated_groups.contains(&group_uuid) {
+                        updated_groups.push(group_uuid);
+                    }
+                    info!(local_id, parent = %group_uuid, new_object = %new_uuid, "ObjectDelink: part delinked to new group");
+                } else {
+                    warn!(local_id, "ObjectDelink: cannot delink (root part or not found)");
+                }
+            }
+
+            // Broadcast updates for all affected groups
+            for uuid in &updated_groups {
+                if let Some(obj) = scene.get_object(uuid) {
+                    broadcast_full_object_update(&obj, scene.region_info.region_handle, &socket, &clients).await;
+                }
+            }
+            for uuid in &new_group_uuids {
+                if let Some(obj) = scene.get_object(uuid) {
+                    broadcast_full_object_update(&obj, scene.region_info.region_handle, &socket, &clients).await;
+                }
+            }
+        }
+
+        // ---- ObjectDuplicate handler ----
+        if msg_id == ObjectDuplicate::ID
+            && let Ok(msg) = ObjectDuplicate::decode(&pkt.body)
+        {
+            let offset = msg.shared_data.offset;
+            let copier_id = msg.agent_data.agent_id;
+            for entry in &msg.object_data {
+                let local_id = entry.object_local_id;
+                let original_uuid = match scene.get_object_by_local_id(local_id) {
+                    Some(u) => u,
+                    None => {
+                        warn!(local_id, "ObjectDuplicate: unknown local_id");
+                        continue;
+                    }
+                };
+                let original = match scene.get_object(&original_uuid) {
+                    Some(g) => g,
+                    None => {
+                        warn!(local_id, object = %original_uuid, "ObjectDuplicate: object not found");
+                        continue;
+                    }
+                };
+
+                // Deep copy the root part
+                let orig_root = original.root_part();
+                let mut new_root = SceneObjectPart::new(&orig_root.name, copier_id);
+                new_root.description = orig_root.description.clone();
+                new_root.shape = orig_root.shape.clone();
+                new_root.scale = orig_root.scale;
+                new_root.rotation_offset = orig_root.rotation_offset;
+                new_root.group_position = orig_root.group_position + offset;
+                new_root.material = orig_root.material;
+                new_root.click_action = orig_root.click_action;
+                new_root.base_mask = orig_root.base_mask;
+                new_root.owner_mask = orig_root.owner_mask;
+                new_root.group_mask = orig_root.group_mask;
+                new_root.everyone_mask = orig_root.everyone_mask;
+                new_root.next_owner_mask = orig_root.next_owner_mask;
+                new_root.group_id = msg.agent_data.group_id;
+
+                let mut new_group = SceneObjectGroup::new(new_root);
+
+                // Deep copy child parts
+                let child_parts: Vec<SceneObjectPart> = original.parts()
+                    .skip(1) // skip root
+                    .map(|p| {
+                        let mut cp = SceneObjectPart::new(&p.name, copier_id);
+                        cp.description = p.description.clone();
+                        cp.shape = p.shape.clone();
+                        cp.scale = p.scale;
+                        cp.rotation_offset = p.rotation_offset;
+                        cp.offset_position = p.offset_position;
+                        cp.material = p.material;
+                        cp.click_action = p.click_action;
+                        cp.base_mask = p.base_mask;
+                        cp.owner_mask = p.owner_mask;
+                        cp.group_mask = p.group_mask;
+                        cp.everyone_mask = p.everyone_mask;
+                        cp.next_owner_mask = p.next_owner_mask;
+                        cp
+                    })
+                    .collect();
+                for cp in child_parts {
+                    new_group.add_part(cp);
+                }
+
+                let new_uuid = scene.add_object(new_group);
+                if let Some(obj) = scene.get_object(&new_uuid) {
+                    broadcast_full_object_update(&obj, scene.region_info.region_handle, &socket, &clients).await;
+                }
+                info!(
+                    local_id,
+                    original = %original_uuid,
+                    copy = %new_uuid,
+                    ?offset,
+                    "ObjectDuplicate: duplicated"
+                );
+            }
+        }
+
+        // ---- ObjectDuplicateOnRay handler ----
+        if msg_id == ObjectDuplicateOnRay::ID
+            && let Ok(msg) = ObjectDuplicateOnRay::decode(&pkt.body)
+        {
+            let ray_end = msg.agent_data.ray_end;
+            let copier_id = msg.agent_data.agent_id;
+            for entry in &msg.object_data {
+                let local_id = entry.object_local_id;
+                let original_uuid = match scene.get_object_by_local_id(local_id) {
+                    Some(u) => u,
+                    None => {
+                        warn!(local_id, "ObjectDuplicateOnRay: unknown local_id");
+                        continue;
+                    }
+                };
+                let original = match scene.get_object(&original_uuid) {
+                    Some(g) => g,
+                    None => {
+                        warn!(local_id, object = %original_uuid, "ObjectDuplicateOnRay: object not found");
+                        continue;
+                    }
+                };
+
+                // Deep copy root part, place at ray_end
+                let orig_root = original.root_part();
+                let mut new_root = SceneObjectPart::new(&orig_root.name, copier_id);
+                new_root.description = orig_root.description.clone();
+                new_root.shape = orig_root.shape.clone();
+                new_root.scale = orig_root.scale;
+                new_root.rotation_offset = orig_root.rotation_offset;
+                new_root.group_position = ray_end;
+                new_root.material = orig_root.material;
+                new_root.click_action = orig_root.click_action;
+                new_root.base_mask = orig_root.base_mask;
+                new_root.owner_mask = orig_root.owner_mask;
+                new_root.group_mask = orig_root.group_mask;
+                new_root.everyone_mask = orig_root.everyone_mask;
+                new_root.next_owner_mask = orig_root.next_owner_mask;
+                new_root.group_id = msg.agent_data.group_id;
+
+                let mut new_group = SceneObjectGroup::new(new_root);
+
+                // Deep copy child parts
+                let child_parts: Vec<SceneObjectPart> = original.parts()
+                    .skip(1)
+                    .map(|p| {
+                        let mut cp = SceneObjectPart::new(&p.name, copier_id);
+                        cp.description = p.description.clone();
+                        cp.shape = p.shape.clone();
+                        cp.scale = p.scale;
+                        cp.rotation_offset = p.rotation_offset;
+                        cp.offset_position = p.offset_position;
+                        cp.material = p.material;
+                        cp.click_action = p.click_action;
+                        cp.base_mask = p.base_mask;
+                        cp.owner_mask = p.owner_mask;
+                        cp.group_mask = p.group_mask;
+                        cp.everyone_mask = p.everyone_mask;
+                        cp.next_owner_mask = p.next_owner_mask;
+                        cp
+                    })
+                    .collect();
+                for cp in child_parts {
+                    new_group.add_part(cp);
+                }
+
+                let new_uuid = scene.add_object(new_group);
+                if let Some(obj) = scene.get_object(&new_uuid) {
+                    broadcast_full_object_update(&obj, scene.region_info.region_handle, &socket, &clients).await;
+                }
+                info!(
+                    local_id,
+                    original = %original_uuid,
+                    copy = %new_uuid,
+                    ?ray_end,
+                    "ObjectDuplicateOnRay: duplicated at ray position"
+                );
+            }
+        }
+
         if msg_id == AgentThrottle::ID
             && let Ok(throttle_msg) = AgentThrottle::decode(&pkt.body)
             && let Some(client) = &client
