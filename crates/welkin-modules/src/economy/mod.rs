@@ -69,6 +69,10 @@ pub trait MoneyModule: Send + Sync {
 
     fn upload_charge(&self) -> i32;
     fn group_creation_charge(&self) -> i32;
+
+    fn script_give_money(&self, object_id: Uuid, from: Uuid, to: Uuid, amount: i32) -> Result<(), String>;
+    fn script_transfer_lindens(&self, object_id: Uuid, from: Uuid, to: Uuid, amount: i32) -> Result<Uuid, String>;
+    fn set_pay_price(&self, object_id: Uuid, default_price: i32, buttons: [i32; 4]);
 }
 
 // ---------------------------------------------------------------------------
@@ -154,6 +158,21 @@ impl MoneyModule for SampleMoneyModule {
 
     fn group_creation_charge(&self) -> i32 {
         0
+    }
+
+    fn script_give_money(&self, _object_id: Uuid, _from: Uuid, _to: Uuid, _amount: i32) -> Result<(), String> {
+        tracing::trace!("SampleMoneyModule: script_give_money (no-op, always allowed)");
+        Ok(())
+    }
+
+    fn script_transfer_lindens(&self, _object_id: Uuid, _from: Uuid, _to: Uuid, _amount: i32) -> Result<Uuid, String> {
+        let txn_id = Uuid::new_v4();
+        tracing::trace!(%txn_id, "SampleMoneyModule: script_transfer_lindens (no-op, always allowed)");
+        Ok(txn_id)
+    }
+
+    fn set_pay_price(&self, _object_id: Uuid, _default_price: i32, _buttons: [i32; 4]) {
+        tracing::trace!("SampleMoneyModule: set_pay_price (no-op, not persisted)");
     }
 }
 

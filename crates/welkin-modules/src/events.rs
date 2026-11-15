@@ -71,6 +71,15 @@ pub struct PermissionCheckEvent {
     pub permissions: u32,
 }
 
+/// Money was received by an object (triggers LSL money() event).
+#[derive(Debug, Clone)]
+pub struct MoneyReceivedEvent {
+    pub region_id: Uuid,
+    pub object_id: Uuid,
+    pub agent_id: Uuid,
+    pub amount: i32,
+}
+
 // ---------------------------------------------------------------------------
 // SceneEvents — the event bus
 // ---------------------------------------------------------------------------
@@ -85,6 +94,7 @@ pub struct SceneEvents {
     pub on_chat_message: broadcast::Sender<ChatMessageEvent>,
     pub on_land_change: broadcast::Sender<LandChangeEvent>,
     pub on_permission_check: broadcast::Sender<PermissionCheckEvent>,
+    pub on_money_received: broadcast::Sender<MoneyReceivedEvent>,
 }
 
 impl SceneEvents {
@@ -98,6 +108,7 @@ impl SceneEvents {
             on_chat_message: broadcast::channel(DEFAULT_CAPACITY).0,
             on_land_change: broadcast::channel(DEFAULT_CAPACITY).0,
             on_permission_check: broadcast::channel(DEFAULT_CAPACITY).0,
+            on_money_received: broadcast::channel(DEFAULT_CAPACITY).0,
         }
     }
 }

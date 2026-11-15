@@ -19,10 +19,10 @@
 
 ## Phase 2: LSL integration
 
-- [ ] Implement llGiveMoney (requires PERMISSION_DEBIT grant)
-- [ ] Implement llTransferLindenDollars (returns transaction UUID)
-- [ ] Implement llSetPayPrice (sets pay dialog buttons on object)
-- [ ] Implement money() script event (fired via OnObjectPaid)
+- [x] Implement llGiveMoney (requires PERMISSION_DEBIT grant)
+- [x] Implement llTransferLindenDollars (returns transaction UUID)
+- [x] Implement llSetPayPrice (sets pay dialog buttons on object)
+- [x] Implement money() script event (fired via OnObjectPaid)
 
 ## Phase 3: External system support
 
