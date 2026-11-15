@@ -8,6 +8,7 @@ use std::collections::HashMap;
 
 use crate::LslType;
 use crate::ast::*;
+use crate::builtins;
 use crate::lexer::Span;
 
 #[derive(Debug, Clone)]
@@ -58,9 +59,6 @@ impl Scope {
             .or_else(|| self.globals.get(name).copied())
     }
 
-    fn has_local(&self, name: &str) -> bool {
-        self.locals.contains_key(name)
-    }
 }
 
 struct EventSig {
@@ -81,7 +79,7 @@ const EVENT_SIGS: &[EventSig] = &[
     EventSig { name: "land_collision", params: &[LslType::Vector] },
     EventSig { name: "land_collision_end", params: &[LslType::Vector] },
     EventSig { name: "timer", params: &[] },
-    EventSig { name: "listen", params: &[LslType::Integer, LslType::String, LslType::String, LslType::String] },
+    EventSig { name: "listen", params: &[LslType::Integer, LslType::String, LslType::Key, LslType::String] },
     EventSig { name: "sensor", params: &[LslType::Integer] },
     EventSig { name: "no_sensor", params: &[] },
     EventSig { name: "control", params: &[LslType::Key, LslType::Integer, LslType::Integer] },
@@ -276,9 +274,6 @@ impl Analyzer {
                 init,
                 span,
             } => {
-                if scope.has_local(name) {
-                    self.error(*span, format!("variable '{}' already declared in this scope", name));
-                }
                 scope.define(name.clone(), *ty);
                 if let Some(init_expr) = init {
                     let init_ty = self.check_expr(init_expr, scope);
@@ -362,6 +357,8 @@ impl Analyzer {
                     Some(ty)
                 } else if let Some(ty) = self.global_vars.get(name).copied() {
                     Some(ty)
+                } else if let Some(c) = builtins::find_builtin_const(name) {
+                    Some(c.const_type)
                 } else {
                     self.error(*span, format!("undefined variable '{}'", name));
                     None
@@ -457,11 +454,7 @@ impl Analyzer {
                 for arg in args.iter_mut() {
                     self.check_expr(arg, scope);
                 }
-                if name.starts_with("ll") {
-                    // Builtin — accept any args, return type unknown at analysis time.
-                    // The runtime registers these; we can't fully type-check them yet.
-                    Some(LslType::Void)
-                } else if let Some(sig) = self.global_funcs.get(name.as_str()) {
+                if let Some(sig) = self.global_funcs.get(name.as_str()) {
                     let ret = sig.return_type;
                     let expected_len = sig.params.len();
                     let param_types: Vec<LslType> = sig.params.clone();
@@ -476,6 +469,40 @@ impl Analyzer {
                     } else {
                         for (i, (arg, &expected)) in
                             args.iter_mut().zip(param_types.iter()).enumerate()
+                        {
+                            if let Some(at) = self.check_expr_type(arg, scope) {
+                                if at != expected && can_implicit_cast(at, expected) {
+                                    self.coerce_expr(arg, at, expected);
+                                } else if at != expected {
+                                    self.error(
+                                        arg.span(),
+                                        format!(
+                                            "argument {} of '{}': expected {}, found {}",
+                                            i + 1,
+                                            name,
+                                            expected,
+                                            at
+                                        ),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                    Some(ret)
+                } else if let Some(sig) = builtins::find_builtin_func(name, args.len()) {
+                    let ret = sig.return_type;
+                    let expected_len = sig.params.len();
+                    if args.len() != expected_len {
+                        self.error(
+                            *span,
+                            format!(
+                                "function '{}' expects {} argument(s), found {}",
+                                name, expected_len, args.len()
+                            ),
+                        );
+                    } else {
+                        for (i, (arg, &expected)) in
+                            args.iter_mut().zip(sig.params.iter()).enumerate()
                         {
                             if let Some(at) = self.check_expr_type(arg, scope) {
                                 if at != expected && can_implicit_cast(at, expected) {
@@ -542,7 +569,9 @@ impl Analyzer {
             Expr::IntegerLit(_, _) => Some(LslType::Integer),
             Expr::FloatLit(_, _) => Some(LslType::Float),
             Expr::StringLit(_, _) => Some(LslType::String),
-            Expr::Ident(name, _) => scope.lookup(name).or_else(|| self.global_vars.get(name).copied()),
+            Expr::Ident(name, _) => scope.lookup(name)
+                .or_else(|| self.global_vars.get(name).copied())
+                .or_else(|| builtins::find_builtin_const(name).map(|c| c.const_type)),
             Expr::VectorLit { .. } => Some(LslType::Vector),
             Expr::RotationLit { .. } => Some(LslType::Rotation),
             Expr::ListLit(_, _) => Some(LslType::List),
@@ -637,6 +666,7 @@ impl Analyzer {
                 }
                 (LslType::Vector, LslType::Rotation) => Some(LslType::Vector),
                 (LslType::Rotation, LslType::Rotation) => Some(LslType::Rotation),
+                (LslType::Vector, LslType::Vector) => Some(LslType::Float),
                 _ => {
                     self.error(span, format!("cannot multiply {} by {}", lt, rt));
                     None
@@ -659,6 +689,7 @@ impl Analyzer {
                     Some(LslType::Vector)
                 }
                 (LslType::Vector, LslType::Rotation) => Some(LslType::Vector),
+                (LslType::Rotation, LslType::Rotation) => Some(LslType::Rotation),
                 _ => {
                     self.error(span, format!("cannot divide {} by {}", lt, rt));
                     None
@@ -1123,5 +1154,27 @@ mod tests {
             "float half(integer x) { return x; } default { state_entry() {} }",
         )
         .unwrap();
+    }
+
+    #[test]
+    fn builtin_function_return_type() {
+        let _script = analyze_script(
+            "default { state_entry() { vector v = llGetPos(); } }",
+        ).unwrap();
+    }
+
+    #[test]
+    fn builtin_constant_recognition() {
+        let _script = analyze_script(
+            "default { state_entry() { integer x = TRUE; } }",
+        ).unwrap();
+    }
+
+    #[test]
+    fn builtin_function_arg_check() {
+        let errors = analyze_errors(
+            "default { state_entry() { llSay(\"wrong\"); } }",
+        );
+        assert!(errors.iter().any(|e| e.message.contains("expects 2 argument")));
     }
 }
