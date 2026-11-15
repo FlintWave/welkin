@@ -12,6 +12,9 @@ use axum::{
     routing::{get, post, MethodRouter},
 };
 use opensim_llsd::{from_xml, to_xml_string, Llsd, Map};
+use base64::Engine as _;
+use quick_xml::events::Event;
+use quick_xml::Reader as XmlReader;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -41,6 +44,22 @@ fn llsd_response(llsd: Llsd) -> Response {
 pub struct AssetServiceState {
     pub client: reqwest::Client,
     pub asset_url: String,
+}
+
+#[derive(Clone)]
+pub struct InventoryProxyState {
+    pub client: reqwest::Client,
+    pub inventory_url: String,
+}
+
+pub type PendingBakeUploads = Arc<RwLock<HashMap<String, ()>>>;
+
+#[derive(Clone)]
+pub struct BakeUploadState {
+    pub client: reqwest::Client,
+    pub asset_url: String,
+    pub caps_url: String,
+    pub pending: PendingBakeUploads,
 }
 
 async fn fetch_asset(state: &AssetServiceState, asset_id: &str) -> Result<Vec<u8>, StatusCode> {
@@ -184,7 +203,204 @@ pub async fn update_script_agent(body: Bytes) -> Response {
     llsd_response(Llsd::Map(map))
 }
 
-pub async fn fetch_inventory_descendents2(body: Bytes) -> Response {
+#[derive(Debug, Default)]
+struct XFolder {
+    parent_id: Uuid,
+    folder_type: i32,
+    version: i32,
+    name: String,
+    owner: Uuid,
+    id: Uuid,
+}
+
+#[derive(Debug, Default)]
+struct XItem {
+    asset_id: Uuid,
+    asset_type: i32,
+    base_permissions: i32,
+    creation_date: i32,
+    creator_id: Uuid,
+    current_permissions: i32,
+    description: String,
+    everyone_permissions: i32,
+    flags: i32,
+    folder: Uuid,
+    group_id: Uuid,
+    group_owned: bool,
+    group_permissions: i32,
+    id: Uuid,
+    inv_type: i32,
+    name: String,
+    next_permissions: i32,
+    owner: Uuid,
+    sale_price: i32,
+    sale_type: i32,
+}
+
+#[derive(Debug, Default)]
+struct XInventoryResponse {
+    version: i32,
+    folders: Vec<XFolder>,
+    items: Vec<XItem>,
+}
+
+fn parse_uuid(s: &str) -> Uuid {
+    let id_part = s.split(';').next().unwrap_or(s);
+    Uuid::parse_str(id_part.trim()).unwrap_or(Uuid::nil())
+}
+
+fn parse_perm(s: &str) -> i32 {
+    s.trim().parse::<u32>().unwrap_or(0) as i32
+}
+
+fn parse_xinventory_xml(xml_bytes: &[u8]) -> XInventoryResponse {
+    let s = std::str::from_utf8(xml_bytes).unwrap_or("");
+    let mut reader = XmlReader::from_str(s);
+    let mut resp = XInventoryResponse::default();
+    let mut cur_folder: Option<XFolder> = None;
+    let mut cur_item: Option<XItem> = None;
+    let mut cur_field: Option<String> = None;
+    let mut text_buf = String::new();
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Eof) => break,
+            Ok(Event::Start(ref e)) => {
+                let name_bytes = e.name().as_ref().to_vec();
+                let tag = std::str::from_utf8(&name_bytes).unwrap_or("").to_string();
+                let is_list = e
+                    .attributes()
+                    .filter_map(|a| a.ok())
+                    .any(|a| a.key.as_ref() == b"type" && a.value.as_ref() == b"List");
+
+                if tag.starts_with("folder_") && is_list {
+                    cur_folder = Some(XFolder::default());
+                    cur_field = None;
+                } else if tag.starts_with("item_") && is_list {
+                    cur_item = Some(XItem::default());
+                    cur_field = None;
+                } else if cur_folder.is_some() || cur_item.is_some() {
+                    cur_field = Some(tag.to_string());
+                    text_buf.clear();
+                } else if tag == "VERSION" {
+                    cur_field = Some(tag.to_string());
+                    text_buf.clear();
+                }
+            }
+            Ok(Event::Text(t)) => {
+                if let Ok(unescaped) = t.unescape() {
+                    text_buf.push_str(&unescaped);
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                let name_bytes = e.name().as_ref().to_vec();
+                let tag = std::str::from_utf8(&name_bytes).unwrap_or("").to_string();
+
+                if tag.starts_with("folder_") && cur_folder.is_some() {
+                    if let Some(f) = cur_folder.take() {
+                        resp.folders.push(f);
+                    }
+                    cur_field = None;
+                } else if tag.starts_with("item_") && cur_item.is_some() {
+                    if let Some(it) = cur_item.take() {
+                        resp.items.push(it);
+                    }
+                    cur_field = None;
+                } else if let Some(field) = cur_field.take() {
+                    let val = text_buf.trim();
+
+                    if let Some(f) = cur_folder.as_mut() {
+                        match field.as_str() {
+                            "ParentID" => f.parent_id = parse_uuid(val),
+                            "Type" => f.folder_type = val.parse().unwrap_or(0),
+                            "Version" => f.version = val.parse().unwrap_or(0),
+                            "Name" => f.name = val.to_string(),
+                            "Owner" => f.owner = parse_uuid(val),
+                            "ID" => f.id = parse_uuid(val),
+                            _ => {}
+                        }
+                    } else if let Some(it) = cur_item.as_mut() {
+                        match field.as_str() {
+                            "AssetID" => it.asset_id = parse_uuid(val),
+                            "AssetType" => it.asset_type = val.parse().unwrap_or(0),
+                            "BasePermissions" => it.base_permissions = parse_perm(val),
+                            "CreationDate" => it.creation_date = val.parse().unwrap_or(0),
+                            "CreatorId" => it.creator_id = parse_uuid(val),
+                            "CurrentPermissions" => it.current_permissions = parse_perm(val),
+                            "Description" => it.description = val.to_string(),
+                            "EveryOnePermissions" => it.everyone_permissions = parse_perm(val),
+                            "Flags" => it.flags = parse_perm(val),
+                            "Folder" => it.folder = parse_uuid(val),
+                            "GroupID" => it.group_id = parse_uuid(val),
+                            "GroupOwned" => it.group_owned = val.eq_ignore_ascii_case("true"),
+                            "GroupPermissions" => it.group_permissions = parse_perm(val),
+                            "ID" => it.id = parse_uuid(val),
+                            "InvType" => it.inv_type = val.parse().unwrap_or(0),
+                            "Name" => it.name = val.to_string(),
+                            "NextPermissions" => it.next_permissions = parse_perm(val),
+                            "Owner" => it.owner = parse_uuid(val),
+                            "SalePrice" => it.sale_price = val.parse().unwrap_or(0),
+                            "SaleType" => it.sale_type = val.parse().unwrap_or(0),
+                            _ => {}
+                        }
+                    } else if field == "VERSION" {
+                        resp.version = val.parse().unwrap_or(0);
+                    }
+                    text_buf.clear();
+                }
+            }
+            Err(_) => break,
+            _ => {}
+        }
+    }
+    resp
+}
+
+fn item_to_llsd(it: &XItem) -> Llsd {
+    let mut perms = Map::new();
+    perms.insert("creator_id".into(), Llsd::Uuid(it.creator_id));
+    perms.insert("owner_id".into(), Llsd::Uuid(it.owner));
+    perms.insert("group_id".into(), Llsd::Uuid(it.group_id));
+    perms.insert("base_mask".into(), Llsd::Integer(it.base_permissions));
+    perms.insert("owner_mask".into(), Llsd::Integer(it.current_permissions));
+    perms.insert("group_mask".into(), Llsd::Integer(it.group_permissions));
+    perms.insert("everyone_mask".into(), Llsd::Integer(it.everyone_permissions));
+    perms.insert("next_owner_mask".into(), Llsd::Integer(it.next_permissions));
+    perms.insert("is_owner_group".into(), Llsd::Boolean(it.group_owned));
+
+    let mut sale = Map::new();
+    sale.insert("sale_price".into(), Llsd::Integer(it.sale_price));
+    sale.insert("sale_type".into(), Llsd::Integer(it.sale_type));
+
+    let mut m = Map::new();
+    m.insert("item_id".into(), Llsd::Uuid(it.id));
+    m.insert("parent_id".into(), Llsd::Uuid(it.folder));
+    m.insert("name".into(), Llsd::String(it.name.clone()));
+    m.insert("type".into(), Llsd::Integer(it.asset_type));
+    m.insert("inv_type".into(), Llsd::Integer(it.inv_type));
+    m.insert("permissions".into(), Llsd::Map(perms));
+    m.insert("asset_id".into(), Llsd::Uuid(it.asset_id));
+    m.insert("description".into(), Llsd::String(it.description.clone()));
+    m.insert("sale_info".into(), Llsd::Map(sale));
+    m.insert("flags".into(), Llsd::Integer(it.flags));
+    m.insert("created_at".into(), Llsd::Integer(it.creation_date));
+    Llsd::Map(m)
+}
+
+fn folder_to_category(f: &XFolder) -> Llsd {
+    let mut m = Map::new();
+    m.insert("folder_id".into(), Llsd::Uuid(f.id));
+    m.insert("parent_id".into(), Llsd::Uuid(f.parent_id));
+    m.insert("name".into(), Llsd::String(f.name.clone()));
+    m.insert("type".into(), Llsd::Integer(f.folder_type));
+    m.insert("preferred_type".into(), Llsd::Integer(f.folder_type));
+    Llsd::Map(m)
+}
+
+pub async fn fetch_inventory_descendents2(
+    State(inv): State<InventoryProxyState>,
+    body: Bytes,
+) -> Response {
     let parsed = from_xml(&body).unwrap_or(Llsd::Undef);
     let folders = match parsed.get("folders") {
         Llsd::Array(arr) => arr.as_slice(),
@@ -195,15 +411,49 @@ pub async fn fetch_inventory_descendents2(body: Bytes) -> Response {
     for folder in folders {
         let folder_id = folder.get("folder_id").as_uuid();
         let owner_id = folder.get("owner_id").as_uuid();
+        tracing::debug!(%folder_id, %owner_id, "FetchInventoryDescendents2 request");
 
+        let url = format!("{}/xinventory", inv.inventory_url);
+        let form = format!("METHOD=GETFOLDERCONTENT&FOLDER={folder_id}");
+
+        let mut items_out = Vec::new();
+        let mut cats_out = Vec::new();
+        let mut version = 1i32;
+
+        match inv
+            .client
+            .post(&url)
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(form)
+            .send()
+            .await
+        {
+            Ok(resp) => {
+                if let Ok(bytes) = resp.bytes().await {
+                    let xinv = parse_xinventory_xml(&bytes);
+                    version = xinv.version;
+                    for it in &xinv.items {
+                        items_out.push(item_to_llsd(it));
+                    }
+                    for fc in &xinv.folders {
+                        cats_out.push(folder_to_category(fc));
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, %folder_id, "xinventory GETFOLDERCONTENT failed");
+            }
+        }
+
+        let descendents = (items_out.len() + cats_out.len()) as i32;
         let mut entry = Map::new();
         entry.insert("agent_id".into(), Llsd::Uuid(owner_id));
-        entry.insert("descendents".into(), Llsd::Integer(0));
+        entry.insert("descendents".into(), Llsd::Integer(descendents));
         entry.insert("folder_id".into(), Llsd::Uuid(folder_id));
-        entry.insert("items".into(), Llsd::Array(Vec::new()));
-        entry.insert("categories".into(), Llsd::Array(Vec::new()));
+        entry.insert("items".into(), Llsd::Array(items_out));
+        entry.insert("categories".into(), Llsd::Array(cats_out));
         entry.insert("owner_id".into(), Llsd::Uuid(owner_id));
-        entry.insert("version".into(), Llsd::Integer(1));
+        entry.insert("version".into(), Llsd::Integer(version));
         result_folders.push(Llsd::Map(entry));
     }
 
@@ -212,21 +462,128 @@ pub async fn fetch_inventory_descendents2(body: Bytes) -> Response {
     llsd_response(Llsd::Map(root))
 }
 
-pub async fn fetch_inventory2(body: Bytes) -> Response {
+pub async fn fetch_inventory2(
+    State(inv): State<InventoryProxyState>,
+    body: Bytes,
+) -> Response {
     let parsed = from_xml(&body).unwrap_or(Llsd::Undef);
     let agent_id = parsed.get("agent_id").as_uuid();
 
+    let items_req = match parsed.get("items") {
+        Llsd::Array(arr) => arr.as_slice(),
+        _ => &[],
+    };
+    let ids: Vec<String> = items_req
+        .iter()
+        .map(|r| r.get("item_id").as_uuid().to_string())
+        .collect();
+
+    tracing::debug!(agent = %agent_id, count = ids.len(), "FetchInventory2 request");
+
+    let mut items_out = Vec::new();
+    if !ids.is_empty() {
+        let url = format!("{}/xinventory", inv.inventory_url);
+        let form = format!("METHOD=GETMULTIPLEITEMS&ITEMS={}", ids.join(","));
+
+        match inv
+            .client
+            .post(&url)
+            .header("Content-Type", "application/x-www-form-urlencoded")
+            .body(form)
+            .send()
+            .await
+        {
+            Ok(resp) => {
+                if let Ok(bytes) = resp.bytes().await {
+                    let xinv = parse_xinventory_xml(&bytes);
+                    for it in &xinv.items {
+                        items_out.push(item_to_llsd(it));
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, %agent_id, "xinventory GETMULTIPLEITEMS failed");
+            }
+        }
+    }
+
     let mut root = Map::new();
     root.insert("agent_id".into(), Llsd::Uuid(agent_id));
-    root.insert("items".into(), Llsd::Array(Vec::new()));
+    root.insert("items".into(), Llsd::Array(items_out));
     llsd_response(Llsd::Map(root))
 }
 
-pub async fn upload_baked_texture(body: Bytes) -> Response {
-    let _ = body;
+pub async fn upload_baked_texture(
+    State(bake): State<BakeUploadState>,
+    _body: Bytes,
+) -> Response {
+    let token = Uuid::new_v4().to_string();
+    bake.pending.write().await.insert(token.clone(), ());
+    let uploader_url = format!("{}/bake-upload/{}", bake.caps_url, token);
+    tracing::debug!(%uploader_url, "UploadBakedTexture: created uploader");
+
     let mut root = Map::new();
+    root.insert("uploader".into(), Llsd::String(uploader_url));
+    root.insert("state".into(), Llsd::String("upload".into()));
+    llsd_response(Llsd::Map(root))
+}
+
+pub async fn bake_upload_handler(
+    State(bake): State<BakeUploadState>,
+    axum::extract::Path(token): axum::extract::Path<String>,
+    body: Bytes,
+) -> Response {
+    {
+        let mut pending = bake.pending.write().await;
+        if pending.remove(&token).is_none() {
+            tracing::warn!(%token, "bake upload: unknown or expired token");
+            return StatusCode::NOT_FOUND.into_response();
+        }
+    }
+
+    let new_asset_id = Uuid::new_v4();
+    let b64_data = base64::engine::general_purpose::STANDARD.encode(&body);
+    let asset_xml = format!(
+        "<?xml version=\"1.0\"?>\n\
+        <AssetBase xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" \
+        xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">\n\
+        <Data>{b64_data}</Data>\n\
+        <FullID><Guid>{new_asset_id}</Guid></FullID>\n\
+        <ID>{new_asset_id}</ID>\n\
+        <Name>Baked Texture</Name>\n\
+        <Description>Baked Texture</Description>\n\
+        <Type>0</Type>\n\
+        <Local>false</Local>\n\
+        <Temporary>true</Temporary>\n\
+        <CreatorID>00000000-0000-0000-0000-000000000000</CreatorID>\n\
+        <Flags>Normal</Flags>\n\
+        </AssetBase>"
+    );
+
+    let url = format!("{}/assets", bake.asset_url);
+    match bake
+        .client
+        .post(&url)
+        .header("Content-Type", "text/xml")
+        .body(asset_xml)
+        .send()
+        .await
+    {
+        Ok(resp) if resp.status().is_success() => {
+            tracing::info!(%new_asset_id, bytes = body.len(), "stored baked texture");
+        }
+        Ok(resp) => {
+            tracing::warn!(status = %resp.status(), %new_asset_id, "asset service rejected baked texture");
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, %new_asset_id, "failed to store baked texture");
+        }
+    }
+
+    let mut root = Map::new();
+    root.insert("new_asset".into(), Llsd::Uuid(new_asset_id));
+    root.insert("new_inventory_item".into(), Llsd::Uuid(Uuid::nil()));
     root.insert("state".into(), Llsd::String("complete".into()));
-    root.insert("new_asset".into(), Llsd::String(Uuid::new_v4().to_string()));
     llsd_response(Llsd::Map(root))
 }
 
@@ -291,7 +648,18 @@ pub async fn event_queue_get(
     }
 }
 
-pub fn cap_routes(asset_state: AssetServiceState) -> Vec<(&'static str, MethodRouter)> {
+pub fn bake_upload_route(bake_state: BakeUploadState) -> axum::Router {
+    axum::Router::new().route(
+        "/bake-upload/{token}",
+        post(bake_upload_handler).with_state(bake_state),
+    )
+}
+
+pub fn cap_routes(
+    asset_state: AssetServiceState,
+    inv_state: InventoryProxyState,
+    bake_state: BakeUploadState,
+) -> Vec<(&'static str, MethodRouter)> {
     vec![
         ("GetTexture", get(get_texture).with_state(asset_state.clone())),
         ("GetMesh", get(get_mesh).with_state(asset_state.clone())),
@@ -311,10 +679,10 @@ pub fn cap_routes(asset_state: AssetServiceState) -> Vec<(&'static str, MethodRo
         ("UpdateScriptAgent", post(update_script_agent)),
         (
             "FetchInventoryDescendents2",
-            post(fetch_inventory_descendents2),
+            post(fetch_inventory_descendents2).with_state(inv_state.clone()),
         ),
-        ("FetchInventory2", post(fetch_inventory2)),
-        ("UploadBakedTexture", post(upload_baked_texture)),
+        ("FetchInventory2", post(fetch_inventory2).with_state(inv_state)),
+        ("UploadBakedTexture", post(upload_baked_texture).with_state(bake_state)),
     ]
 }
 
@@ -332,9 +700,25 @@ mod tests {
         }
     }
 
+    fn test_inv_state() -> InventoryProxyState {
+        InventoryProxyState {
+            client: reqwest::Client::new(),
+            inventory_url: "http://localhost:99999".to_string(),
+        }
+    }
+
+    fn test_bake_state() -> BakeUploadState {
+        BakeUploadState {
+            client: reqwest::Client::new(),
+            asset_url: "http://localhost:99999".to_string(),
+            caps_url: "http://localhost:99999".to_string(),
+            pending: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
     fn test_router() -> Router {
         let mut router = Router::new();
-        for (name, method_router) in cap_routes(test_asset_state()) {
+        for (name, method_router) in cap_routes(test_asset_state(), test_inv_state(), test_bake_state()) {
             router = router.route(&format!("/{name}"), method_router);
         }
         router
@@ -420,8 +804,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_cap_routes_count() {
-        let routes = cap_routes(test_asset_state());
-        assert_eq!(routes.len(), 10);
+        let routes = cap_routes(test_asset_state(), test_inv_state(), test_bake_state());
+        assert_eq!(routes.len(), 13);
     }
 
     #[tokio::test]

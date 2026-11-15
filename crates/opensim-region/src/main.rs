@@ -335,15 +335,27 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let cap_server = opensim_caps::server::CapabilityServer::new();
 
     let asset_url = region_config.grid_service_url.as_deref().unwrap_or("http://localhost:8003");
+    let http_client = reqwest::Client::new();
     let asset_state = opensim_caps::handlers::AssetServiceState {
-        client: reqwest::Client::new(),
+        client: http_client.clone(),
         asset_url: asset_url.to_string(),
+    };
+    let inv_state = opensim_caps::handlers::InventoryProxyState {
+        client: http_client.clone(),
+        inventory_url: asset_url.to_string(),
+    };
+    let bake_state = opensim_caps::handlers::BakeUploadState {
+        client: http_client,
+        asset_url: asset_url.to_string(),
+        caps_url: format!("http://localhost:{}", caps_addr.port()),
+        pending: std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
     };
 
     let mut caps_router = cap_server.into_router();
-    for (name, method_router) in opensim_caps::handlers::cap_routes(asset_state) {
+    for (name, method_router) in opensim_caps::handlers::cap_routes(asset_state, inv_state, bake_state.clone()) {
         caps_router = caps_router.route(&format!("/{name}"), method_router);
     }
+    caps_router = caps_router.merge(opensim_caps::handlers::bake_upload_route(bake_state));
     caps_router = caps_router.route(
         "/EventQueueGet",
         axum::routing::post(opensim_caps::handlers::event_queue_get)
