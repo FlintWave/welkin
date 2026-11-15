@@ -148,6 +148,7 @@ pub async fn simulator_features() -> Response {
     map.insert("AnimatedObjects".into(), Llsd::Boolean(true));
     map.insert("MaxAgentGroupsBasic".into(), Llsd::Integer(42));
     map.insert("MaxAgentGroupsPremium".into(), Llsd::Integer(60));
+    map.insert("map-server-url".into(), Llsd::String("http://127.0.0.1:8002/map/".into()));
     llsd_response(Llsd::Map(map))
 }
 

@@ -507,6 +507,42 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 type ClientMap = Arc<RwLock<std::collections::HashMap<SocketAddr, Arc<Mutex<ClientSession>>>>>;
+/// Default avatar wearables (shape, skin, hair, eyes, shirt, pants).
+fn default_wearables() -> Vec<agent_wearables_update::WearableData> {
+    vec![
+        agent_wearables_update::WearableData {
+            wearable_type: 0,
+            item_id: Uuid::parse_str("66c41e39-38f9-f75a-024e-585989bfaba9").unwrap(),
+            asset_id: Uuid::parse_str("66c41e39-38f9-f75a-024e-585989bfab73").unwrap(),
+        },
+        agent_wearables_update::WearableData {
+            wearable_type: 1,
+            item_id: Uuid::parse_str("77c41e39-38f9-f75a-024e-585989bfabc9").unwrap(),
+            asset_id: Uuid::parse_str("77c41e39-38f9-f75a-024e-585989bbabbb").unwrap(),
+        },
+        agent_wearables_update::WearableData {
+            wearable_type: 2,
+            item_id: Uuid::parse_str("d342e6c1-b9d2-11dc-95ff-0800200c9a66").unwrap(),
+            asset_id: Uuid::parse_str("d342e6c0-b9d2-11dc-95ff-0800200c9a66").unwrap(),
+        },
+        agent_wearables_update::WearableData {
+            wearable_type: 3,
+            item_id: Uuid::parse_str("cdc31054-eed8-4021-994f-4e0c6e861b50").unwrap(),
+            asset_id: Uuid::parse_str("4bb6fa4d-1cd2-498a-a84c-95c1a0e745a7").unwrap(),
+        },
+        agent_wearables_update::WearableData {
+            wearable_type: 4,
+            item_id: Uuid::parse_str("77c41e39-38f9-f75a-0000-585989bf0000").unwrap(),
+            asset_id: Uuid::parse_str("00000000-38f9-1111-024e-222222111110").unwrap(),
+        },
+        agent_wearables_update::WearableData {
+            wearable_type: 5,
+            item_id: Uuid::parse_str("77c41e39-38f9-f75a-0000-5859892f1111").unwrap(),
+            asset_id: Uuid::parse_str("00000000-38f9-1111-024e-222222111120").unwrap(),
+        },
+    ]
+}
+
 use welkin_caps::handlers::EventQueueMap;
 
 async fn process_messages(
@@ -602,7 +638,7 @@ async fn process_messages(
                         session_id: session.session_id,
                         serial_num: 1,
                     },
-                    wearable_data: Vec::new(),
+                    wearable_data: default_wearables(),
                 };
                 let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
                 let _ = socket.send_to(&pkt_bytes, src).await;
@@ -1160,7 +1196,7 @@ fn build_avatar_packets(
             session_id: session.session_id,
             serial_num: 1,
         },
-        wearable_data: Vec::new(),
+        wearable_data: default_wearables(),
     };
     let (wear_pkt, _) = session.circuit.send_msg(&wearables_msg, true);
 
