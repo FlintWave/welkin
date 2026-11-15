@@ -10,8 +10,9 @@ build-dir = "book"
 create-missing = false
 
 [output.html]
-default-theme = "rust"
-preferred-dark-theme = "ayu"
+default-theme = "mocha"
+preferred-dark-theme = "mocha"
+additional-css = ["./theme/catppuccin.css"]
 git-repository-url = "https://github.com/FlintWave/welkin"
 edit-url-template = "https://github.com/FlintWave/welkin/edit/main/docs/{path}"
 

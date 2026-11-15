@@ -3,6 +3,7 @@
 ![License](https://img.shields.io/badge/license-LGPL--3.0-blue)
 ![Rust](https://img.shields.io/badge/rust-edition%202024-orange)
 ![Tests](https://img.shields.io/badge/tests-2%2C353%20passing-brightgreen)
+[![Docs](https://img.shields.io/badge/docs-flintwave.github.io%2Fwelkin-purple)](https://flintwave.github.io/welkin/)
 
 A Rust implementation of the [OpenSimulator](http://opensimulator.org/) 0.9.3.0
 virtual-world server. Wire-compatible with existing viewers and grids.
@@ -139,7 +140,7 @@ database connection, first user account, and region placement.
 | Binaries | `welkin-region`, `-robust` | Region simulator, grid services server |
 | Desktop | `welkin-companion` | Tauri 2 tray app (builds separately) |
 
-Full architecture docs: [docs/architecture.md](docs/architecture.md).
+Full documentation: [flintwave.github.io/welkin](https://flintwave.github.io/welkin/) (architecture, operator guides, security reviews, API reference).
 
 ## Contributing
 
