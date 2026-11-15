@@ -68,17 +68,17 @@ vector is still needed to prove interoperability.
 
 | ID | Sev | Finding |
 |---|---|---|
-| S1 | HIGH | PBKDF2 used SHA256, not SHA1; breaks C# interop (fix above) |
+| S1 | ~~HIGH~~ | ~~PBKDF2 used SHA256, not SHA1~~ — RESOLVED (074b1af) |
 | S2 | MEDIUM | Role-based per-function permissions are not enforced, because gating runs at registration when no caller context exists |
-| S3 | MEDIUM | `expect()` panics in crypto primitives |
+| S3 | ~~MEDIUM~~ | ~~`expect()` panics in crypto primitives~~ — RESOLVED |
 | S4 | LOW | `OsslRole` membership is flat, not hierarchical |
 | S5 | LOW | Distinct AES error messages could form a padding oracle once functions are no longer stubs |
 | S6 | INFO | `OsslRole::Anyone` not parseable from INI |
 | S7 | INFO | Macro expansion loop is not provably bounded |
 | S8 | INFO | PBKDF2 salt is hardcoded (matches C#) |
 
-Until S1 is committed and S2 is resolved, treat role-restricted functions as
-threat-level gated only.
+S1 and S3 are resolved. Until S2 is resolved, treat role-restricted functions
+as threat-level gated only.
 
 ## Deferred and stubbed
 

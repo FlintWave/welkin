@@ -34,10 +34,18 @@ Viewer and Firestorm). Working toward full viewer compatibility.
 | 6 | [External grid mode](external-grid-mode-summary.md) | [Remote writes](security-review-remote-writes.md) |
 | 6 | [Hypergrid](hypergrid-summary.md) | [Hypergrid](security-review-hypergrid.md) |
 | 6 | [WebRTC voice](webrtc-voice-summary.md) | [Voice](security-review-voice.md) |
+| — | [Object interaction](object-interaction-summary.md) | — |
+| — | [Module activation](module-activation-summary.md) | — |
+| — | [Viewer messaging](viewer-messaging-summary.md) | — |
+| — | [Currency module](currency-module-summary.md) | — |
+| — | [Remaining parity](remaining-parity-summary.md) | — |
+| — | [Cutover](cutover-summary.md) | — |
 
 ## Operator documentation
 
+- [ROBUST grid services server](robust-server.md) — architecture, configuration, endpoints
 - [Test grid deployment](test-grid-deployment.md) — deploy a containerised test grid in minutes
+- [Container deployment](container-guide.md) — Podman and Docker container setup
 - [Operator guide](operator-guide.md) — installation, configuration, running, monitoring, security
 - [Migration guide](migration-guide.md) — step-by-step C# to Rust migration with rollback at every step
 
@@ -49,6 +57,9 @@ Viewer and Firestorm). Working toward full viewer compatibility.
 - [LSL corpus analysis](lsl-corpus-analysis.md) — function frequency in real scripts
 - [Naming and trademarks](naming-and-trademarks.md)
 - [OSgrid compatibility](osgrid-compatibility.md)
+- [Script engine spike results](script-engine-spike-results.md)
+- [Viewer compatibility](viewer-compatibility.md)
+- [Final acceptance review](final-acceptance-review.md)
 
 ## Security reviews
 
@@ -59,8 +70,8 @@ acceptance. Current verdicts:
 |---|---|---|---|---|
 | [Permissions](security-review-permissions.md) | CONDITIONAL PASS | 1 | 3 | 4 |
 | [OSSL API](security-review-ossl-api.md) | CONDITIONAL PASS | 0 | 1 | 2 |
-| [Script sandboxing](security-review-script-sandboxing.md) | CONDITIONAL PASS | 0 | 2 | 0 |
-| [Remote writes](security-review-remote-writes.md) | CONDITIONAL PASS | 1 | 4 | 0 |
+| [Script sandboxing](security-review-script-sandboxing.md) | CONDITIONAL PASS | 0 | 2 | 4 |
+| [Remote writes](security-review-remote-writes.md) | CONDITIONAL PASS | 1 | 4 | 6 |
 | [Archives](security-review-archives.md) | CONDITIONAL PASS | 0 | 0 | 5 |
 | [Social modules](security-review-social-modules.md) | CONDITIONAL PASS | 0 | 3 | 10 |
 | [Hypergrid](security-review-hypergrid.md) | CONDITIONAL PASS | 3 | 3 | 3 |
