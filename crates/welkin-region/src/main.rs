@@ -2493,6 +2493,127 @@ async fn process_messages(
             }
         }
 
+        if msg_id == UUIDNameRequest::ID
+            && let Ok(req) = UUIDNameRequest::decode(&pkt.body)
+            && let Some(client) = &client
+        {
+            let mut reply_blocks = Vec::new();
+            for block in &req.uuid_name_block {
+                let target_id = block.id;
+                let mut first = b"Unknown".to_vec();
+                let mut last = b"User".to_vec();
+                if let Some(p) = scene.get_presence(&target_id) {
+                    first = p.first_name.as_bytes().to_vec();
+                    last = p.last_name.as_bytes().to_vec();
+                }
+                first.push(0);
+                last.push(0);
+                reply_blocks.push(uuid_name_reply::UUIDNameBlock {
+                    id: target_id,
+                    first_name: first,
+                    last_name: last,
+                });
+            }
+            let reply = UUIDNameReply {
+                uuid_name_block: reply_blocks,
+            };
+            let mut session = client.lock().await;
+            let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+            let _ = socket.send_to(&pkt_bytes, src).await;
+            info!(agent = %agent_id, count = req.uuid_name_block.len(), "UUIDNameRequest: replied");
+        }
+
+        if msg_id == UUIDGroupNameRequest::ID
+            && let Ok(req) = UUIDGroupNameRequest::decode(&pkt.body)
+            && let Some(client) = &client
+        {
+            let mut reply_blocks = Vec::new();
+            for block in &req.uuid_name_block {
+                let mut name = b"Unknown".to_vec();
+                name.push(0);
+                reply_blocks.push(uuid_group_name_reply::UUIDNameBlock {
+                    id: block.id,
+                    group_name: name,
+                });
+            }
+            let reply = UUIDGroupNameReply {
+                uuid_name_block: reply_blocks,
+            };
+            let mut session = client.lock().await;
+            let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+            let _ = socket.send_to(&pkt_bytes, src).await;
+            info!(agent = %agent_id, count = req.uuid_name_block.len(), "UUIDGroupNameRequest: replied");
+        }
+
+        if msg_id == ViewerEffect::ID
+            && let Ok(ve) = ViewerEffect::decode(&pkt.body)
+        {
+            let clients_map = clients.read().await;
+            for (peer_addr, peer_client) in clients_map.iter() {
+                if *peer_addr == src {
+                    continue;
+                }
+                let mut sess = peer_client.lock().await;
+                let (pkt_bytes, _) = sess.circuit.send_msg(&ve, false);
+                let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+            }
+        }
+
+        if msg_id == ScriptDialogReply::ID
+            && let Ok(reply) = ScriptDialogReply::decode(&pkt.body)
+        {
+            let channel = reply.data.chat_channel;
+            let object_id = reply.data.object_id;
+            let label = String::from_utf8_lossy(&reply.data.button_label)
+                .trim_end_matches('\0')
+                .to_string();
+            info!(
+                agent = %agent_id,
+                object = %object_id,
+                channel = channel,
+                button = %label,
+                "ScriptDialogReply: button clicked"
+            );
+            let sender_name = {
+                let mut name = String::new();
+                scene.for_each_presence(|p| {
+                    if p.uuid == agent_id {
+                        name = p.full_name();
+                    }
+                });
+                if name.is_empty() {
+                    "Unknown".to_string()
+                } else {
+                    name
+                }
+            };
+            let mut name_bytes = sender_name.into_bytes();
+            name_bytes.push(0);
+            let chat_msg = ChatFromSimulator {
+                chat_data: chat_from_simulator::ChatData {
+                    from_name: name_bytes,
+                    source_id: agent_id,
+                    owner_id: agent_id,
+                    source_type: 1,
+                    chat_type: 0,
+                    audible: 1,
+                    position: scene
+                        .get_presence(&agent_id)
+                        .map(|p| p.position)
+                        .unwrap_or(glam::Vec3::ZERO),
+                    message: label.into_bytes(),
+                },
+            };
+            if channel == 0 {
+                let clients_map = clients.read().await;
+                for (peer_addr, peer_client) in clients_map.iter() {
+                    let mut sess = peer_client.lock().await;
+                    let (pkt_bytes, _) = sess.circuit.send_msg(&chat_msg, true);
+                    let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                }
+            }
+        }
+
         if msg_id == ImprovedInstantMessage::ID
             && let Ok(im) = ImprovedInstantMessage::decode(&pkt.body)
         {

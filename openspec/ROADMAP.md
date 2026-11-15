@@ -1,6 +1,6 @@
 # Roadmap: OpenSimulator 0.9.3.0 ported to Rust
 
-Status: planning. Nothing is implemented. Last updated 2026-11-13.
+Status: implementation. 18/20 original changes complete, 3 new parity changes added, viewer validation in progress. Last updated 2026-11-14.
 
 ## Goal
 
@@ -107,7 +107,12 @@ when its phase starts, so later rows are placeholders until then.
 | 6 | Hypergrid | `hypergrid` | accepted |
 | 6 | Grid profiles: standalone, own grid, OSgrid, custom | `external-grid-mode` | accepted |
 | 6 | WebRTC voice | `webrtc-voice` | accepted |
+| 5 | Economy interface, currency module plugin system | `currency-module` | accepted |
 | 7 | Migration tooling, load tests, first production grid | `cutover` | accepted |
+| 3.1 | Object editing packets (~15 handlers): MultipleObjectUpdate, Select, rez/derez | `object-interaction` | proposal |
+| 3.2 | Instant messaging, ViewerEffect relay, UUID lookups, sitting | `viewer-messaging` | proposal |
+| 3.3 | Load and wire ~30 existing but unregistered region modules | `module-activation` | proposal |
+| — | Viewer session validation (Aurora + Firestorm) | `firestorm-session` | in progress (round 2) |
 
 ## Order and dependencies
 
@@ -188,6 +193,31 @@ New features that are mostly connectors:
 | Procedural terrain | `noise` | Low |
 | Single sign-on for web tools | `openidconnect` | Low |
 | Region modules as sandboxed plug-ins | `wasmtime` | Medium |
+
+## Parity audit (2026-11-14)
+
+Automated audit of the Rust codebase (143,607 lines, 25 crates) against C#
+OpenSim 0.9.3.0. ROBUST services are complete; the region simulator is thin.
+
+| Area | Current | Target | Coverage |
+|---|---|---|---|
+| ROBUST grid services | 17/17 | 17 | 100% |
+| Region modules loaded | 9/~40 essential | ~40 | 22% |
+| UDP packet handlers | 18/~80 | ~80 | 22% |
+| HTTP capabilities | ~21/~40 | ~40 | 52% |
+| ll* script functions | 67/454 | 454 | 15% |
+| os* functions (real) | ~90/290 | 290 | 31% |
+| LSL compilation pipeline | not started | working | 0% |
+| Physics (Rapier) | integrated | stepping + tested | ~80% |
+| Hypergrid | code exists, not loaded | loaded + tested | ~60% |
+| OAR/IAR archives | code exists, not tested | tested with real archives | ~70% |
+
+Three new changes (`object-interaction`, `viewer-messaging`,
+`module-activation`) address the P0 and P1 gaps. The currency module
+(`currency-module`) was already planned. Script compilation is covered by the
+existing `script-engine` change.
+
+Full audit report: `scratchpad/parity-audit.md` in the session directory.
 
 ## Open questions
 

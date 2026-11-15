@@ -23,11 +23,11 @@
 
 ## Phase 3: Identity and interaction
 
-- [ ] Handle UUIDNameRequest — batch name lookup against user accounts service, send UUIDNameReply
-- [ ] Handle UUIDGroupNameRequest — group name lookup against groups service, send UUIDGroupNameReply
-- [ ] Handle AvatarPropertiesRequest — query profiles service, send AvatarPropertiesReply
-- [ ] Handle ViewerEffect — relay to all agents in region (no server-side interpretation)
-- [ ] Handle AgentRequestSit — find sit target, check permissions, calculate sit position, send AvatarSitResponse
-- [ ] Handle AgentSit — transition avatar to sitting state, set parent linkage, broadcast ObjectUpdate
-- [ ] Implement stand logic — clear parent, reposition avatar, broadcast update
-- [ ] Handle ScriptDialogReply — fire chat event on specified channel with button label
+- [x] Handle UUIDNameRequest — batch name lookup against user accounts service, send UUIDNameReply
+- [x] Handle UUIDGroupNameRequest — group name lookup against groups service, send UUIDGroupNameReply
+- [x] Handle AvatarPropertiesRequest — query profiles service, send AvatarPropertiesReply
+- [x] Handle ViewerEffect — relay to all agents in region (no server-side interpretation)
+- [x] Handle AgentRequestSit — find sit target, check permissions, calculate sit position, send AvatarSitResponse
+- [x] Handle AgentSit — transition avatar to sitting state, set parent linkage, broadcast ObjectUpdate
+- [x] Implement stand logic — clear parent, reposition avatar, broadcast update
+- [x] Handle ScriptDialogReply — fire chat event on specified channel with button label
