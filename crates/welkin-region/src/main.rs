@@ -28,6 +28,7 @@ use welkin_msg::Msg;
 use welkin_msg::msgs::*;
 use welkin_msg::objects::{FullObjectUpdate, encode_terse};
 use welkin_net::dispatch::{HandleError, PacketContext, PacketDispatcher};
+use welkin_prim::{TextureEntry, pack_texture_entry};
 use welkin_net::server::ClientSession;
 use welkin_scene::group::SceneObjectGroup;
 use welkin_scene::part::SceneObjectPart;
@@ -733,40 +734,68 @@ async fn process_messages(
             && let Ok(update) = AgentUpdate::decode(&pkt.body)
         {
             let flags = update.agent_data.control_flags;
-            let rot = update.agent_data.body_rotation;
-            let speed = 3.0f32;
 
-            let forward = rot * glam::Vec3::new(0.0, 1.0, 0.0);
-            let left = rot * glam::Vec3::new(-1.0, 0.0, 0.0);
+            // Detect flying and running flags
+            let flying = flags & 0x2000 != 0; // AGENT_CONTROL_FLY
+            let fast = flags & 0x1000 != 0 || flags & 0x4000 != 0; // FAST_AT or FAST_UP
+
+            // Ground-clamp body_rotation: zero pitch/roll for non-flying avatars
+            let rot = if flying {
+                update.agent_data.body_rotation
+            } else {
+                let q = update.agent_data.body_rotation;
+                glam::Quat::from_xyzw(0.0, 0.0, q.z, q.w).normalize()
+            };
+
+            // SL coordinate system: forward=+X, left=+Y, up=+Z
+            let forward = rot * glam::Vec3::X;
+            let left = rot * glam::Vec3::Y;
+
+            // Speed constants matching OpenSim: walk 2.4576, run 4.096, fly 16.384
+            let base_speed = if flying {
+                if fast { 16.384f32 } else { 16.384f32 }
+            } else if fast {
+                4.096f32
+            } else {
+                2.4576f32
+            };
+
             let mut vel = glam::Vec3::ZERO;
             if flags & 0x0001 != 0 {
-                vel += forward * speed;
+                vel += forward * base_speed;
             } // AGENT_CONTROL_AT_POS (forward)
             if flags & 0x0002 != 0 {
-                vel -= forward * speed;
+                vel -= forward * base_speed;
             } // AGENT_CONTROL_AT_NEG (back)
             if flags & 0x0004 != 0 {
-                vel += left * speed;
+                vel += left * base_speed;
             } // AGENT_CONTROL_LEFT_POS
             if flags & 0x0008 != 0 {
-                vel -= left * speed;
+                vel -= left * base_speed;
             } // AGENT_CONTROL_LEFT_NEG (right)
-            if flags & 0x0010 != 0 {
-                vel.z += speed;
-            } // AGENT_CONTROL_UP_POS
-            if flags & 0x0020 != 0 {
-                vel.z -= speed;
-            } // AGENT_CONTROL_UP_NEG
+            if flying {
+                if flags & 0x0010 != 0 {
+                    vel.z += base_speed;
+                } // AGENT_CONTROL_UP_POS
+                if flags & 0x0020 != 0 {
+                    vel.z -= base_speed;
+                } // AGENT_CONTROL_UP_NEG
+            }
 
-            let prev_pos = scene
-                .get_presence(&update.agent_data.agent_id)
+            let presence_data = scene.get_presence(&update.agent_data.agent_id);
+            let prev_pos = presence_data
+                .as_ref()
                 .map(|p| p.position)
                 .unwrap_or(glam::Vec3::new(128.0, 128.0, 22.0));
+            let avatar_local_id = presence_data
+                .as_ref()
+                .map(|p| p.local_id)
+                .unwrap_or(1);
             let dt = 0.1f32;
             let mut new_pos = prev_pos + vel * dt;
             new_pos.x = new_pos.x.clamp(0.0, 256.0);
             new_pos.y = new_pos.y.clamp(0.0, 256.0);
-            if new_pos.z < 22.0 {
+            if !flying && new_pos.z < 22.0 {
                 new_pos.z = 22.0;
             }
 
@@ -774,7 +803,7 @@ async fn process_messages(
 
             if let Some(client) = &client {
                 let terse_data = encode_terse(
-                    1, // local_id of avatar
+                    avatar_local_id,
                     0,
                     true,
                     Some(glam::Vec4::new(0.0, 0.0, 1.0, -new_pos.z)),
@@ -989,7 +1018,7 @@ async fn process_messages(
                 object_data: avatar_appearance::ObjectData { texture_entry },
                 visual_param: visual_param_blocks,
                 appearance_data: vec![avatar_appearance::AppearanceData {
-                    appearance_version: 1,
+                    appearance_version: 0,
                     cof_version: 0,
                     flags: 0,
                 }],
@@ -1107,14 +1136,14 @@ async fn send_movement_complete(
             water_height: 20.0,
             billable_factor: 0.0,
             cache_id: Uuid::new_v4(),
-            terrain_base0: Uuid::nil(),
-            terrain_base1: Uuid::nil(),
-            terrain_base2: Uuid::nil(),
-            terrain_base3: Uuid::nil(),
-            terrain_detail0: Uuid::nil(),
-            terrain_detail1: Uuid::nil(),
-            terrain_detail2: Uuid::nil(),
-            terrain_detail3: Uuid::nil(),
+            terrain_base0: Uuid::parse_str("b8d3965a-ad78-bf43-699b-bff8eca6c975").unwrap(),
+            terrain_base1: Uuid::parse_str("abb783e6-3e93-26c0-248a-247666855da3").unwrap(),
+            terrain_base2: Uuid::parse_str("179cdabd-398a-9b6b-1391-4dc333ba321f").unwrap(),
+            terrain_base3: Uuid::parse_str("beb169c7-11ea-fff2-efe5-0f24dc881df2").unwrap(),
+            terrain_detail0: Uuid::parse_str("b8d3965a-ad78-bf43-699b-bff8eca6c975").unwrap(),
+            terrain_detail1: Uuid::parse_str("abb783e6-3e93-26c0-248a-247666855da3").unwrap(),
+            terrain_detail2: Uuid::parse_str("179cdabd-398a-9b6b-1391-4dc333ba321f").unwrap(),
+            terrain_detail3: Uuid::parse_str("beb169c7-11ea-fff2-efe5-0f24dc881df2").unwrap(),
             terrain_start_height00: 10.0,
             terrain_start_height01: 10.0,
             terrain_start_height10: 10.0,
@@ -1248,6 +1277,16 @@ async fn send_movement_complete(
     info!(agent = %session.agent_id, "event queue created with initial event");
 }
 
+fn build_default_avatar_te() -> Vec<u8> {
+    let img_default_avatar =
+        uuid::Uuid::parse_str("c228d1cf-4b5d-4ba8-84f4-899a0796aa97").unwrap();
+    let mut te = TextureEntry::default();
+    for &idx in &[8, 9, 10, 11, 20] {
+        te.faces[idx].texture = img_default_avatar;
+    }
+    pack_texture_entry(&te, 45)
+}
+
 fn build_avatar_packets(
     session: &mut ClientSession,
     region_handle: u64,
@@ -1287,7 +1326,7 @@ fn build_avatar_packets(
         profile_begin: 0,
         profile_end: 0,
         profile_hollow: 0,
-        texture_entry: Vec::new(),
+        texture_entry: build_default_avatar_te(),
         texture_anim: Vec::new(),
         name_value: b"FirstName STRING RW SV Test\nLastName STRING RW SV User\n".to_vec(),
         data: Vec::new(),
@@ -1322,7 +1361,7 @@ fn build_avatar_packets(
     };
     let (wear_pkt, _) = session.circuit.send_msg(&wearables_msg, true);
 
-    let visual_params: Vec<avatar_appearance::VisualParam> = (0..218)
+    let visual_params: Vec<avatar_appearance::VisualParam> = (0..253)
         .map(|_| avatar_appearance::VisualParam { param_value: 128 })
         .collect();
     let appearance_msg = AvatarAppearance {
@@ -1331,11 +1370,11 @@ fn build_avatar_packets(
             is_trial: false,
         },
         object_data: avatar_appearance::ObjectData {
-            texture_entry: Vec::new(),
+            texture_entry: build_default_avatar_te(),
         },
         visual_param: visual_params,
         appearance_data: vec![avatar_appearance::AppearanceData {
-            appearance_version: 1,
+            appearance_version: 0,
             cof_version: 0,
             flags: 0,
         }],

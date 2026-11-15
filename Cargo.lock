@@ -4743,6 +4743,7 @@ dependencies = [
  "welkin-msg",
  "welkin-net",
  "welkin-physics-rapier",
+ "welkin-prim",
  "welkin-runtime",
  "welkin-scene",
  "welkin-services",

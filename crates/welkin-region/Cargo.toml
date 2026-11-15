@@ -14,6 +14,7 @@ welkin-caps = { path = "../welkin-caps" }
 welkin-physics-rapier = { path = "../welkin-physics-rapier" }
 welkin-modules = { path = "../welkin-modules" }
 welkin-data = { path = "../welkin-data" }
+welkin-prim = { path = "../welkin-prim" }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

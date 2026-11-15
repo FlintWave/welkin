@@ -190,8 +190,13 @@ fn agent_preferences_llsd() -> Llsd {
     Llsd::Map(map)
 }
 
-pub async fn map_layer() -> Response {
-    llsd_response(Llsd::new_array())
+pub async fn map_layer(_body: Bytes) -> Response {
+    let mut agent_data = Map::new();
+    agent_data.insert("Flags".into(), Llsd::Integer(0));
+    let mut map = Map::new();
+    map.insert("AgentData".into(), Llsd::Map(agent_data));
+    map.insert("MapBlocks".into(), Llsd::Array(Vec::new()));
+    llsd_response(Llsd::Map(map))
 }
 
 pub async fn new_file_agent_inventory(body: Bytes) -> Response {
@@ -829,7 +834,7 @@ pub fn cap_routes(
             "AgentPreferences",
             get(agent_preferences).post(agent_preferences_post),
         ),
-        ("MapLayer", get(map_layer)),
+        ("MapLayer", get(map_layer).post(map_layer)),
         ("NewFileAgentInventory", post(new_file_agent_inventory)),
         (
             "UpdateNotecardAgentInventory",
