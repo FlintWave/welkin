@@ -39,9 +39,9 @@
 ## Phase 4: Validation
 
 - [x] Full test suite green (2,055 tests, zero regressions)
-- [ ] Connect Aurora viewer; verify login, chat, map, physics, scripts all function
+- [x] Connect Aurora viewer; verify login, chat, map, physics, scripts all function
 - [ ] Connect Firestorm viewer; verify same feature set works
-- [ ] 10-minute soak test with no crashes or disconnects
+- [x] 10-minute soak test with no crashes or disconnects
 - [ ] Test local teleport between regions
 - [x] Verify graceful disconnect and presence cleanup
 - [x] Test reconnection after viewer restart

@@ -3955,8 +3955,9 @@ async fn send_movement_complete(
     }
     info!(agent = %session.agent_id, "sent terrain LayerData (256 flat patches)");
 
+    let avatar_local_id = scene.allocate_local_id();
     let (obj_pkt, wear_pkt, app_pkt) =
-        build_avatar_packets(&mut session, region_info.region_handle);
+        build_avatar_packets(&mut session, region_info.region_handle, avatar_local_id);
     for (pkt, name) in [
         (obj_pkt, "ObjectUpdate"),
         (wear_pkt, "AgentWearablesUpdate"),
@@ -4005,6 +4006,7 @@ async fn send_movement_complete(
     info!(agent = %session.agent_id, "sent AgentDataUpdate");
 
     let mut presence = ScenePresence::new(session.agent_id, "Test", "User", PresenceType::User);
+    presence.local_id = avatar_local_id;
     presence.position = glam::Vec3::new(128.0, 128.0, 22.0);
     presence.region_handle = region_info.region_handle;
     scene.add_presence(presence);
@@ -4173,9 +4175,10 @@ fn build_default_avatar_te() -> Vec<u8> {
 fn build_avatar_packets(
     session: &mut ClientSession,
     region_handle: u64,
+    local_id: u32,
 ) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
     let avatar_obj = FullObjectUpdate {
-        local_id: 1,
+        local_id,
         full_id: session.agent_id,
         parent_id: 0,
         pcode: 47,
