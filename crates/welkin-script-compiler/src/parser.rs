@@ -96,6 +96,9 @@ impl Parser {
         let mut states = Vec::new();
 
         while !self.at_end() {
+            if self.errors.len() > 1000 {
+                break;
+            }
             if self.check(&Token::KwDefault) {
                 match self.parse_state() {
                     Ok(s) => states.push(s),
@@ -107,7 +110,6 @@ impl Parser {
                     Err(()) => self.synchronize_top(),
                 }
             } else if self.peek().is_type_keyword() {
-                let save = self.pos;
                 let ty_span = self.peek_span();
                 let ty = self.parse_type().unwrap();
                 if let Token::Ident(name) = self.peek().clone() {
@@ -127,7 +129,19 @@ impl Parser {
                     }
                 } else {
                     self.error("expected identifier after type");
-                    self.pos = save;
+                    self.synchronize_top();
+                }
+            } else if let Token::Ident(ref name) = self.peek().clone() {
+                if *self.peek_at(1) == Token::LParen {
+                    let name = name.clone();
+                    let start_span = self.peek_span();
+                    self.advance(); // consume identifier
+                    match self.parse_func_decl_rest(LslType::Void, name, start_span) {
+                        Ok(f) => functions.push(f),
+                        Err(()) => self.synchronize_top(),
+                    }
+                } else {
+                    self.error("expected type, 'default', or 'state'");
                     self.synchronize_top();
                 }
             } else {
@@ -389,6 +403,9 @@ impl Parser {
     fn parse_stmt_list(&mut self) -> Result<Vec<Stmt>, ()> {
         let mut stmts = Vec::new();
         while !self.check(&Token::RBrace) && !self.at_end() {
+            if self.errors.len() > 1000 {
+                break;
+            }
             match self.parse_stmt() {
                 Ok(s) => stmts.push(s),
                 Err(()) => self.synchronize_stmt(),
@@ -1397,5 +1414,57 @@ state active {
         assert_eq!(script.states.len(), 2);
         assert_eq!(script.states[0].events.len(), 2);
         assert_eq!(script.states[1].events.len(), 2);
+    }
+
+    #[test]
+    fn parse_void_function() {
+        let script = parse_script(
+            r#"myFunc() { llSay(0, "hello"); } default { state_entry() {} }"#,
+        ).unwrap();
+        assert_eq!(script.functions.len(), 1);
+        assert_eq!(script.functions[0].name, "myFunc");
+        assert_eq!(script.functions[0].return_type, LslType::Void);
+    }
+
+    #[test]
+    fn parse_void_function_with_params() {
+        let script = parse_script(
+            r#"doStuff(string msg, integer n) { llSay(0, msg); } default { state_entry() {} }"#,
+        ).unwrap();
+        assert_eq!(script.functions.len(), 1);
+        assert_eq!(script.functions[0].name, "doStuff");
+        assert_eq!(script.functions[0].params.len(), 2);
+        assert_eq!(script.functions[0].return_type, LslType::Void);
+    }
+
+    #[test]
+    fn parse_void_function_with_typecast_no_oom() {
+        // This was the OOM reproducer - a void function with a type cast
+        let script = parse_script(
+            r#"myFunc() { integer x = 5; llSay(0, (string)x); } default { state_entry() {} }"#,
+        ).unwrap();
+        assert_eq!(script.functions.len(), 1);
+    }
+
+    #[test]
+    fn parse_mixed_void_and_typed_functions() {
+        let script = parse_script(
+            r#"
+            integer add(integer a, integer b) { return a + b; }
+            sayHello() { llSay(0, "hi"); }
+            default { state_entry() {} }
+            "#,
+        ).unwrap();
+        assert_eq!(script.functions.len(), 2);
+        assert_eq!(script.functions[0].return_type, LslType::Integer);
+        assert_eq!(script.functions[1].return_type, LslType::Void);
+    }
+
+    #[test]
+    fn parse_error_recovery_bounded() {
+        // Even with errors, should complete without OOM
+        let result = parse_script("!!! ) ) 5 ; default { state_entry() {} }");
+        // May succeed or error, but must not hang
+        let _ = result;
     }
 }
