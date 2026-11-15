@@ -20,6 +20,7 @@ use axum::response::IntoResponse;
 use welkin_config::Config;
 use welkin_data::DataPool;
 use welkin_llsd::{Llsd, Map, from_xml, to_xml_string};
+use welkin_modules::groups::messaging::ChatSessionState;
 use welkin_modules::{
     AccessModule, AssetTransactionModule, AttachmentsModule, AvatarCombatModule,
     AvatarFactoryModule, BakedTexturesModule, BasicProfileModule, CapsModule, ChatModule,
@@ -623,6 +624,7 @@ async fn process_messages(
     let mut last_agent_update: HashMap<Uuid, Instant> = HashMap::new();
     let mut last_anim: HashMap<Uuid, &'static str> = HashMap::new();
     let mut always_run: HashSet<Uuid> = HashSet::new();
+    let mut group_sessions = ChatSessionState::new();
     loop {
         let (src, pkt) = tokio::select! {
             _ = cancel.cancelled() => break,
@@ -2597,17 +2599,42 @@ async fn process_messages(
                         }
                     }
                 }
-                // 20: BusyAutoResponse
+                // 20: SessionSend (from_group=true) or BusyAutoResponse (from_group=false)
                 20 => {
-                    let relay = build_relay(20);
-                    let clients_map = clients.read().await;
-                    for (peer_addr, peer_client) in clients_map.iter() {
-                        let mut sess = peer_client.lock().await;
-                        if sess.agent_id == to_agent {
-                            let (pkt_bytes, _) = sess.circuit.send_msg(&relay, true);
-                            let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
-                            info!(from = %agent_id, to = %to_agent, "IM: busy auto-response relayed");
-                            break;
+                    if mb.from_group {
+                        // SessionSend — group IM fan-out
+                        if !group_sessions.is_agent_active(im_session_id, agent_id) {
+                            group_sessions.invite_agent(im_session_id, agent_id);
+                        }
+                        let recipients: Vec<Uuid> = group_sessions
+                            .active_agents(im_session_id)
+                            .into_iter()
+                            .filter(|a| *a != agent_id)
+                            .collect();
+                        let clients_map = clients.read().await;
+                        let mut count = 0u32;
+                        for (peer_addr, peer_client) in clients_map.iter() {
+                            let mut sess = peer_client.lock().await;
+                            if recipients.contains(&sess.agent_id) {
+                                let relay = build_relay(20);
+                                let (pkt_bytes, _) = sess.circuit.send_msg(&relay, true);
+                                let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                                count += 1;
+                            }
+                        }
+                        info!(from = %agent_id, group = %im_session_id, delivered = count, "IM: group session send");
+                    } else {
+                        // BusyAutoResponse — relay to target
+                        let relay = build_relay(20);
+                        let clients_map = clients.read().await;
+                        for (peer_addr, peer_client) in clients_map.iter() {
+                            let mut sess = peer_client.lock().await;
+                            if sess.agent_id == to_agent {
+                                let (pkt_bytes, _) = sess.circuit.send_msg(&relay, true);
+                                let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                                info!(from = %agent_id, to = %to_agent, "IM: busy auto-response relayed");
+                                break;
+                            }
                         }
                     }
                 }
@@ -2698,6 +2725,75 @@ async fn process_messages(
                             break;
                         }
                     }
+                }
+                // 3: GroupInvitation
+                3 => {
+                    let relay = build_relay(3);
+                    let clients_map = clients.read().await;
+                    for (peer_addr, peer_client) in clients_map.iter() {
+                        let mut sess = peer_client.lock().await;
+                        if sess.agent_id == to_agent {
+                            let (pkt_bytes, _) = sess.circuit.send_msg(&relay, true);
+                            let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                            info!(from = %agent_id, to = %to_agent, group = %im_session_id, "IM: group invitation relayed");
+                            break;
+                        }
+                    }
+                }
+                // 17: SessionGroupStart
+                17 => {
+                    group_sessions.invite_agent(im_session_id, agent_id);
+                    let relay = build_relay(17);
+                    if let Some(client) = &client {
+                        let mut sess = client.lock().await;
+                        let (pkt_bytes, _) = sess.circuit.send_msg(&relay, true);
+                        let _ = socket.send_to(&pkt_bytes, src).await;
+                    }
+                    info!(agent = %agent_id, group = %im_session_id, "IM: group session started");
+                }
+                // 32: GroupNotice
+                32 => {
+                    let recipients: Vec<Uuid> = group_sessions
+                        .active_agents(im_session_id)
+                        .into_iter()
+                        .filter(|a| *a != agent_id)
+                        .collect();
+                    let clients_map = clients.read().await;
+                    let mut count = 0u32;
+                    for (peer_addr, peer_client) in clients_map.iter() {
+                        let mut sess = peer_client.lock().await;
+                        if recipients.contains(&sess.agent_id) {
+                            let relay = build_relay(32);
+                            let (pkt_bytes, _) = sess.circuit.send_msg(&relay, true);
+                            let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                            count += 1;
+                        }
+                    }
+                    info!(from = %agent_id, group = %im_session_id, delivered = count, "IM: group notice sent");
+                }
+                // 33: GroupNoticeInventoryAccepted
+                33 => {
+                    let relay = build_relay(33);
+                    let clients_map = clients.read().await;
+                    for (peer_addr, peer_client) in clients_map.iter() {
+                        let mut sess = peer_client.lock().await;
+                        if sess.agent_id == to_agent {
+                            let (pkt_bytes, _) = sess.circuit.send_msg(&relay, true);
+                            let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                            info!(from = %agent_id, to = %to_agent, "IM: group notice inventory accepted");
+                            break;
+                        }
+                    }
+                }
+                // 37: GroupNoticeRequested
+                37 => {
+                    let relay = build_relay(37);
+                    if let Some(client) = &client {
+                        let mut sess = client.lock().await;
+                        let (pkt_bytes, _) = sess.circuit.send_msg(&relay, true);
+                        let _ = socket.send_to(&pkt_bytes, src).await;
+                    }
+                    info!(agent = %agent_id, notice = %im_session_id, "IM: group notice requested");
                 }
                 other => {
                     warn!(from = %agent_id, dialog = other, "IM: unhandled dialog type");

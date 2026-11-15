@@ -14,12 +14,12 @@
 
 ## Phase 2: Group messaging
 
-- [ ] Dialog 17 (SessionGroupStart): create/join group IM session, track membership in memory
-- [ ] Dialog 20 with from_group (SessionSend): relay group IM to all online session participants
-- [ ] Dialog 32 (GroupNotice): send group notice via groups service, relay to online members
-- [ ] Dialog 37 (GroupNoticeRequested): return stored group notice to requester
-- [ ] Dialog 33 (GroupNoticeInventoryAccepted): attach notice inventory item to accepting user
-- [ ] Dialog 3 (GroupInvitation): forward to groups service invite flow
+- [x] Dialog 17 (SessionGroupStart): create/join group IM session, track membership in memory
+- [x] Dialog 20 with from_group (SessionSend): relay group IM to all online session participants
+- [x] Dialog 32 (GroupNotice): send group notice via groups service, relay to online members
+- [x] Dialog 37 (GroupNoticeRequested): return stored group notice to requester
+- [x] Dialog 33 (GroupNoticeInventoryAccepted): attach notice inventory item to accepting user
+- [x] Dialog 3 (GroupInvitation): forward to groups service invite flow
 
 ## Phase 3: Identity and interaction
 
