@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Configuration reference
 
-[← Back to docs](README.md) · [Quick start](quick-start.md) · [Architecture](architecture.md)
+[← Back to docs](index.md) · [Quick start](quick-start.md) · [Architecture](architecture.md)
 
 Welkin reads TOML configuration files at startup. Each binary takes a
 `--config` flag pointing to its config file; defaults are `welkin.toml`

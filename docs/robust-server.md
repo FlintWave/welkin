@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # ROBUST grid services server
 
-[← Back to docs](README.md) · [Operator guide](operator-guide.md) · [Integration architecture](integration-architecture.md) · [Container deployment](container-guide.md)
+[← Back to docs](index.md) · [Operator guide](operator-guide.md) · [Integration architecture](integration-architecture.md) · [Container deployment](container-guide.md)
 
 ROBUST is the grid services process. It handles login, asset storage,
 inventory, user accounts, presence, grid registration and every other

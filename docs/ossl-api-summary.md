@@ -1,6 +1,6 @@
 # OSSL API summary
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#o1) · Previous: [Script engine](script-engine-summary.md) · Next: [Region modules](region-modules-summary.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Decisions](decisions.md#o1) · Previous: [Script engine](script-engine-summary.md) · Next: [Region modules](region-modules-summary.md)
 
 Change: `openspec/changes/ossl-api` (18/18 tasks, accepted as CONDITIONAL PASS).
 Code: `crates/welkin-script-vm/src/ossl/` (13 files, about 5,900 lines).

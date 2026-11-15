@@ -1,6 +1,6 @@
 # region-simulator-core summary
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#n1) · Previous: [Grid portal](grid-portal-summary.md) · Next: [Prim meshing](prim-meshing-summary.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Decisions](decisions.md#n1) · Previous: [Grid portal](grid-portal-summary.md) · Next: [Prim meshing](prim-meshing-summary.md)
 
 Status: accepted (Phase 3). All 7 task groups in
 `openspec/changes/region-simulator-core/tasks.md` are checked. Commits

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Module development guide
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Region simulator core](region-simulator-core-summary.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Region simulator core](region-simulator-core-summary.md)
 
 Welkin loads region modules at startup through the `RegionModule` trait
 defined in the `welkin-modules` crate. Third-party modules implement this

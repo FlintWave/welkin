@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Extension modules
 
-[← Back to docs](README.md) · [Script engine](scripting.md) · [OSSL function reference](ossl.md) · [Architecture](architecture.md)
+[← Back to docs](index.md) · [Script engine](scripting.md) · [OSSL function reference](ossl.md) · [Architecture](architecture.md)
 
 Three optional extension modules give scripts capabilities beyond the core
 LSL and OSSL APIs: an in-memory JSON document store, Windlight environment

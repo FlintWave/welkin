@@ -1,6 +1,6 @@
 # Social modules summary
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#sm1) · Previous: [Archives](archives-summary.md) · Next: [Hypergrid](hypergrid-summary.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Decisions](decisions.md#sm1) · Previous: [Archives](archives-summary.md) · Next: [Hypergrid](hypergrid-summary.md)
 
 Status: accepted (19 of 19 tasks, 7 sections, 444 tests). Security review
 verdict: CONDITIONAL PASS. Change: `openspec/changes/social-modules/`.
