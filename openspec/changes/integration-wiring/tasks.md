@@ -2,10 +2,10 @@
 
 ## Phase 1: Fix the broken paths
 
-- [ ] Remove ChatFromViewer stub in handlers.rs that masks the real chat implementation in main.rs; verify chat works between two avatars
-- [ ] Fix MapBlockRequest to query ROBUST GridService and return populated MapBlock replies with region names, coordinates, and access flags
-- [ ] Set PhysicsEnabled=true in welkin.toml; verify Rapier3D physics loop starts and objects respond to gravity
-- [ ] Replace flat 21m terrain with proper heightmap loading from terrain files; verify terrain renders with elevation in viewer
+- [x] Remove ChatFromViewer stub in handlers.rs that masks the real chat implementation in main.rs; verify chat works between two avatars
+- [x] Fix MapBlockRequest to query ROBUST GridService and return populated MapBlock replies with region names, coordinates, and access flags
+- [x] Set PhysicsEnabled=true in welkin.toml; verify Rapier3D physics loop starts and objects respond to gravity
+- [x] Replace flat 21m terrain with proper heightmap loading from terrain files; verify terrain renders with elevation in viewer
 - [ ] Integration test: connect viewer, verify chat sends/receives, minimap shows data, dropped objects fall
 
 ## Phase 2: Script lifecycle
