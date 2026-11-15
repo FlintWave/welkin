@@ -909,6 +909,247 @@ pub async fn provision_voice_account() -> Response {
     llsd_response(Llsd::Map(map))
 }
 
+pub async fn avatar_picker_search(body: Bytes) -> Response {
+    if let Ok(llsd) = from_xml(&body) {
+        tracing::debug!(?llsd, "AvatarPickerSearch");
+    }
+    let mut map = Map::new();
+    map.insert("agents".into(), Llsd::Array(Vec::new()));
+    llsd_response(Llsd::Map(map))
+}
+
+pub async fn mesh_upload_flag() -> Response {
+    let mut map = Map::new();
+    map.insert("mesh_upload_status".into(), Llsd::Integer(1));
+    map.insert("MeshUploadEnabled".into(), Llsd::Boolean(true));
+    llsd_response(Llsd::Map(map))
+}
+
+pub async fn server_release_notes() -> Response {
+    let mut map = Map::new();
+    map.insert("release_notes_url".into(), Llsd::String("about:blank".into()));
+    llsd_response(Llsd::Map(map))
+}
+
+pub async fn viewer_metrics(body: Bytes) -> Response {
+    if let Ok(llsd) = from_xml(&body) {
+        tracing::debug!(?llsd, "ViewerMetrics");
+    }
+    llsd_response(Llsd::Map(Map::new()))
+}
+
+pub async fn sim_console_async(body: Bytes) -> Response {
+    if let Ok(llsd) = from_xml(&body) {
+        tracing::info!(?llsd, "SimConsoleAsync command");
+    }
+    llsd_response(Llsd::Map(Map::new()))
+}
+
+pub async fn chat_session_request(body: Bytes) -> Response {
+    match from_xml(&body) {
+        Ok(llsd) => {
+            let method = llsd.get("method").as_str().to_string();
+            tracing::debug!(%method, "ChatSessionRequest");
+        }
+        Err(e) => tracing::debug!(?e, "ChatSessionRequest: could not parse body"),
+    }
+    let mut map = Map::new();
+    map.insert("success".into(), Llsd::Boolean(true));
+    map.insert(
+        "temp_session_id".into(),
+        Llsd::String(Uuid::new_v4().to_string()),
+    );
+    llsd_response(Llsd::Map(map))
+}
+
+pub async fn group_member_data(body: Bytes) -> Response {
+    match from_xml(&body) {
+        Ok(llsd) => {
+            let group_id = llsd.get("group_id").as_str().to_string();
+            tracing::debug!(%group_id, "GroupMemberData");
+        }
+        Err(e) => tracing::debug!(?e, "GroupMemberData: could not parse body"),
+    }
+    let mut map = Map::new();
+    map.insert("member_count".into(), Llsd::Integer(0));
+    map.insert("members".into(), Llsd::Array(vec![]));
+    llsd_response(Llsd::Map(map))
+}
+
+pub async fn set_display_name(body: Bytes) -> Response {
+    let display_name = match from_xml(&body) {
+        Ok(llsd) => {
+            let name = llsd.get("display_name").as_str().to_string();
+            tracing::info!(%name, "SetDisplayName");
+            name
+        }
+        Err(e) => {
+            tracing::debug!(?e, "SetDisplayName: could not parse body");
+            String::new()
+        }
+    };
+    let mut map = Map::new();
+    map.insert("status".into(), Llsd::Integer(200));
+    map.insert("display_name".into(), Llsd::String(display_name));
+    map.insert("display_name_next_update".into(), Llsd::Integer(0));
+    llsd_response(Llsd::Map(map))
+}
+
+pub async fn search_stat_request(body: Bytes) -> Response {
+    match from_xml(&body) {
+        Ok(llsd) => {
+            let query = llsd.get("query").as_str().to_string();
+            tracing::debug!(%query, "SearchStatRequest");
+        }
+        Err(e) => tracing::debug!(?e, "SearchStatRequest: could not parse body"),
+    }
+    let mut map = Map::new();
+    map.insert("classifieds".into(), Llsd::Array(vec![]));
+    map.insert("events".into(), Llsd::Array(vec![]));
+    map.insert("places".into(), Llsd::Array(vec![]));
+    map.insert("land".into(), Llsd::Array(vec![]));
+    llsd_response(Llsd::Map(map))
+}
+
+pub async fn remote_parcel_request(body: Bytes) -> Response {
+    match from_xml(&body) {
+        Ok(llsd) => tracing::debug!(?llsd, "RemoteParcelRequest"),
+        Err(e) => tracing::debug!(?e, "RemoteParcelRequest: could not parse body"),
+    }
+    let mut map = Map::new();
+    map.insert(
+        "parcel_id".into(),
+        Llsd::String("00000000-0000-0000-0000-000000000000".into()),
+    );
+    map.insert("name".into(), Llsd::String("Unknown".into()));
+    map.insert("desc".into(), Llsd::String(String::new()));
+    map.insert("actual_area".into(), Llsd::Integer(256));
+    map.insert(
+        "owner_id".into(),
+        Llsd::String("00000000-0000-0000-0000-000000000000".into()),
+    );
+    llsd_response(Llsd::Map(map))
+}
+
+pub async fn copy_inventory_from_notecard(body: Bytes) -> Response {
+    log_upload_body("CopyInventoryFromNotecard", &body);
+    let mut map = Map::new();
+    map.insert("state".into(), Llsd::String("complete".into()));
+    map.insert(
+        "new_inventory_item".into(),
+        Llsd::String(Uuid::new_v4().to_string()),
+    );
+    llsd_response(Llsd::Map(map))
+}
+
+pub async fn dispatch_region_info() -> Response {
+    let mut map = Map::new();
+    map.insert("block_terraform".into(), Llsd::Boolean(false));
+    map.insert("block_fly".into(), Llsd::Boolean(false));
+    map.insert("allow_damage".into(), Llsd::Boolean(false));
+    map.insert("restrict_pushing".into(), Llsd::Boolean(false));
+    map.insert("allow_land_resell".into(), Llsd::Boolean(true));
+    map.insert("agent_limit".into(), Llsd::Integer(100));
+    map.insert("object_bonus".into(), Llsd::Real(1.0));
+    llsd_response(Llsd::Map(map))
+}
+
+pub async fn estate_change_info(body: Bytes) -> Response {
+    if let Ok(llsd) = from_xml(&body) {
+        tracing::info!(?llsd, "EstateChangeInfo");
+    }
+    llsd_response(Llsd::Map(Map::new()))
+}
+
+pub async fn environment_settings_get() -> Response {
+    let mut entry = Map::new();
+    entry.insert("type".into(), Llsd::String("default".into()));
+    entry.insert(
+        "regionID".into(),
+        Llsd::String("00000000-0000-0000-0000-000000000000".into()),
+    );
+    llsd_response(Llsd::Array(vec![Llsd::Map(entry)]))
+}
+
+pub async fn environment_settings_post(body: Bytes) -> Response {
+    log_upload_body("EnvironmentSettings", &body);
+    let mut map = Map::new();
+    map.insert("success".into(), Llsd::Boolean(true));
+    llsd_response(Llsd::Map(map))
+}
+
+pub async fn land_resources(_body: Bytes) -> Response {
+    let mut avail_entry = Map::new();
+    avail_entry.insert("type".into(), Llsd::String("urls".into()));
+    avail_entry.insert("amount".into(), Llsd::Integer(100));
+
+    let mut used_entry = Map::new();
+    used_entry.insert("type".into(), Llsd::String("urls".into()));
+    used_entry.insert("amount".into(), Llsd::Integer(0));
+
+    let mut resource_summary = Map::new();
+    resource_summary.insert("available".into(), Llsd::Array(vec![Llsd::Map(avail_entry)]));
+    resource_summary.insert("used".into(), Llsd::Array(vec![Llsd::Map(used_entry)]));
+
+    let mut summary = Map::new();
+    summary.insert("available_prims".into(), Llsd::Integer(15000));
+    summary.insert("used_prims".into(), Llsd::Integer(0));
+    summary.insert("max_prims".into(), Llsd::Integer(15000));
+
+    let mut map = Map::new();
+    map.insert("ScriptResourceSummary".into(), Llsd::Map(resource_summary));
+    map.insert("summary".into(), Llsd::Map(summary));
+    llsd_response(Llsd::Map(map))
+}
+
+pub async fn update_gesture_agent_inventory(body: Bytes) -> Response {
+    log_upload_body("UpdateGestureAgentInventory", &body);
+    let mut map = Map::new();
+    map.insert("state".into(), Llsd::String("complete".into()));
+    map.insert("new_asset".into(), Llsd::String(Uuid::new_v4().to_string()));
+    map.insert(
+        "new_inventory_item".into(),
+        Llsd::String(Uuid::new_v4().to_string()),
+    );
+    llsd_response(Llsd::Map(map))
+}
+
+pub async fn update_gesture_task_inventory(body: Bytes) -> Response {
+    log_upload_body("UpdateGestureTaskInventory", &body);
+    let mut map = Map::new();
+    map.insert("state".into(), Llsd::String("complete".into()));
+    map.insert("new_asset".into(), Llsd::String(Uuid::new_v4().to_string()));
+    map.insert(
+        "new_inventory_item".into(),
+        Llsd::String(Uuid::new_v4().to_string()),
+    );
+    llsd_response(Llsd::Map(map))
+}
+
+pub async fn update_notecard_task_inventory(body: Bytes) -> Response {
+    log_upload_body("UpdateNotecardTaskInventory", &body);
+    let mut map = Map::new();
+    map.insert("state".into(), Llsd::String("complete".into()));
+    map.insert("new_asset".into(), Llsd::String(Uuid::new_v4().to_string()));
+    map.insert(
+        "new_inventory_item".into(),
+        Llsd::String(Uuid::new_v4().to_string()),
+    );
+    llsd_response(Llsd::Map(map))
+}
+
+pub async fn update_script_task(body: Bytes) -> Response {
+    log_upload_body("UpdateScriptTask", &body);
+    let mut map = Map::new();
+    map.insert("state".into(), Llsd::String("complete".into()));
+    map.insert("new_asset".into(), Llsd::String(Uuid::new_v4().to_string()));
+    map.insert(
+        "new_inventory_item".into(),
+        Llsd::String(Uuid::new_v4().to_string()),
+    );
+    llsd_response(Llsd::Map(map))
+}
+
 pub fn cap_routes(
     asset_state: AssetServiceState,
     inv_state: InventoryProxyState,
@@ -965,6 +1206,43 @@ pub fn cap_routes(
             "ProvisionVoiceAccountRequest",
             get(provision_voice_account).post(provision_voice_account),
         ),
+        ("AvatarPickerSearch", post(avatar_picker_search)),
+        ("MeshUploadFlag", get(mesh_upload_flag)),
+        ("ServerReleaseNotes", get(server_release_notes)),
+        ("ViewerMetrics", post(viewer_metrics)),
+        ("SimConsoleAsync", post(sim_console_async)),
+        ("ChatSessionRequest", post(chat_session_request)),
+        ("GroupMemberData", post(group_member_data)),
+        ("SetDisplayName", post(set_display_name)),
+        ("SearchStatRequest", post(search_stat_request)),
+        ("RemoteParcelRequest", post(remote_parcel_request)),
+        (
+            "CopyInventoryFromNotecard",
+            post(copy_inventory_from_notecard),
+        ),
+        (
+            "DispatchRegionInfo",
+            get(dispatch_region_info).post(dispatch_region_info),
+        ),
+        ("EstateChangeInfo", post(estate_change_info)),
+        (
+            "EnvironmentSettings",
+            get(environment_settings_get).post(environment_settings_post),
+        ),
+        ("LandResources", post(land_resources)),
+        (
+            "UpdateGestureAgentInventory",
+            post(update_gesture_agent_inventory),
+        ),
+        (
+            "UpdateGestureTaskInventory",
+            post(update_gesture_task_inventory),
+        ),
+        (
+            "UpdateNotecardTaskInventory",
+            post(update_notecard_task_inventory),
+        ),
+        ("UpdateScriptTask", post(update_script_task)),
     ]
 }
 
@@ -1085,7 +1363,7 @@ mod tests {
     #[tokio::test]
     async fn test_cap_routes_count() {
         let routes = cap_routes(test_asset_state(), test_inv_state(), test_bake_state());
-        assert_eq!(routes.len(), 23);
+        assert_eq!(routes.len(), 42);
     }
 
     #[tokio::test]

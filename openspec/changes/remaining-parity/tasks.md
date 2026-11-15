@@ -16,22 +16,22 @@
 
 ## Phase 2: Missing HTTP capabilities
 
-- [ ] Implement AvatarPickerSearch cap — search user accounts by name prefix, return matches
-- [ ] Implement ChatSessionRequest cap — create/join/leave group chat sessions via groups service
-- [ ] Implement CopyInventoryFromNotecard cap — extract embedded inventory items from notecard asset
-- [ ] Implement DispatchRegionInfo, EstateChangeInfo caps — read/write region and estate settings
-- [ ] Implement EnvironmentSettings cap — Windlight/EEP sky/water/day cycle settings, store per-region
-- [ ] Implement GroupMemberData cap — paginated group member list with roles
-- [ ] Implement LandResources cap — parcel prim limits (max prims, prim counts by category)
-- [ ] Implement MeshUploadFlag cap — return whether account has mesh upload permission
-- [ ] Implement RemoteParcelRequest cap — look up parcel info by global position
-- [ ] Implement SearchStatRequest cap — search places, people, classifieds, events
-- [ ] Implement SetDisplayName cap — set avatar display name with cooldown
-- [ ] Implement SimConsoleAsync cap — admin console command execution (god-mode only)
-- [ ] Implement UpdateGestureAgentInventory, UpdateGestureTaskInventory caps — gesture upload to agent/task inventory
-- [ ] Implement UpdateNotecardTaskInventory, UpdateScriptTask caps — notecard/script upload to task inventory
-- [ ] Implement ViewerMetrics cap — accept viewer performance stats (log or discard)
-- [ ] Implement ServerReleaseNotes cap — return server version/release notes URL
+- [x] Implement AvatarPickerSearch cap — search user accounts by name prefix, return matches
+- [x] Implement ChatSessionRequest cap — create/join/leave group chat sessions via groups service
+- [x] Implement CopyInventoryFromNotecard cap — extract embedded inventory items from notecard asset
+- [x] Implement DispatchRegionInfo, EstateChangeInfo caps — read/write region and estate settings
+- [x] Implement EnvironmentSettings cap — Windlight/EEP sky/water/day cycle settings, store per-region
+- [x] Implement GroupMemberData cap — paginated group member list with roles
+- [x] Implement LandResources cap — parcel prim limits (max prims, prim counts by category)
+- [x] Implement MeshUploadFlag cap — return whether account has mesh upload permission
+- [x] Implement RemoteParcelRequest cap — look up parcel info by global position
+- [x] Implement SearchStatRequest cap — search places, people, classifieds, events
+- [x] Implement SetDisplayName cap — set avatar display name with cooldown
+- [x] Implement SimConsoleAsync cap — admin console command execution (god-mode only)
+- [x] Implement UpdateGestureAgentInventory, UpdateGestureTaskInventory caps — gesture upload to agent/task inventory
+- [x] Implement UpdateNotecardTaskInventory, UpdateScriptTask caps — notecard/script upload to task inventory
+- [x] Implement ViewerMetrics cap — accept viewer performance stats (log or discard)
+- [x] Implement ServerReleaseNotes cap — return server version/release notes URL
 
 ## Phase 3: Estate admin and cross-region teleport
 
