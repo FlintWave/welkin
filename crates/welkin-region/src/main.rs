@@ -854,6 +854,73 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         for (script_id, err) in errors {
                             tracing::warn!(script = %script_id, error = %err, "script execution error");
                         }
+
+                        // Propagate script context changes to scene objects
+                        let script_changes: Vec<(Uuid, glam::Vec3, glam::Quat, glam::Vec3, String)> = {
+                            let sched = heartbeat_scheduler.lock();
+                            sched.all_scripts().filter_map(|inst| {
+                                let ctx_arc = inst.context()?;
+                                let ctx = ctx_arc.read();
+                                Some((
+                                    inst.prim_id,
+                                    glam::Vec3::new(ctx.position[0] as f32, ctx.position[1] as f32, ctx.position[2] as f32),
+                                    glam::Quat::from_xyzw(ctx.rotation[0] as f32, ctx.rotation[1] as f32, ctx.rotation[2] as f32, ctx.rotation[3] as f32),
+                                    glam::Vec3::new(ctx.scale[0] as f32, ctx.scale[1] as f32, ctx.scale[2] as f32),
+                                    ctx.hover_text.clone(),
+                                ))
+                            }).collect()
+                        };
+                        for (prim_id, ctx_pos, ctx_rot, ctx_scale, ctx_text) in &script_changes {
+                            let needs_update = if let Some(obj) = heartbeat_scene.get_object(prim_id) {
+                                let rp = obj.root_part();
+                                let pos_diff = (rp.group_position - *ctx_pos).length() > 0.001;
+                                let rot_diff = (rp.rotation_offset.x - ctx_rot.x).abs() > 0.001
+                                    || (rp.rotation_offset.y - ctx_rot.y).abs() > 0.001
+                                    || (rp.rotation_offset.z - ctx_rot.z).abs() > 0.001
+                                    || (rp.rotation_offset.w - ctx_rot.w).abs() > 0.001;
+                                let scale_diff = (rp.scale - *ctx_scale).length() > 0.001;
+                                let text_diff = rp.text != *ctx_text;
+                                (pos_diff, rot_diff, scale_diff, text_diff)
+                            } else {
+                                continue;
+                            };
+                            let (pos_changed, rot_changed, scale_changed, text_changed) = needs_update;
+                            if pos_changed || rot_changed || scale_changed || text_changed {
+                                heartbeat_scene.with_object_mut(prim_id, |group| {
+                                    if pos_changed {
+                                        group.set_position(*ctx_pos);
+                                    }
+                                    if rot_changed {
+                                        group.set_rotation(*ctx_rot);
+                                    }
+                                    if scale_changed {
+                                        group.root_part_mut().scale = *ctx_scale;
+                                    }
+                                    if text_changed {
+                                        group.root_part_mut().text = ctx_text.clone();
+                                    }
+                                });
+                                if let Some(updated) = heartbeat_scene.get_object(prim_id) {
+                                    if text_changed {
+                                        broadcast_full_object_update(&updated, heartbeat_scene.region_info.region_handle, &heartbeat_socket, &heartbeat_clients).await;
+                                    } else {
+                                        let rp = updated.root_part();
+                                        broadcast_terse_object_update(
+                                            rp.local_id,
+                                            rp.group_position,
+                                            glam::Vec3::ZERO,
+                                            glam::Vec3::ZERO,
+                                            rp.rotation_offset,
+                                            glam::Vec3::ZERO,
+                                            heartbeat_scene.region_info.region_handle,
+                                            &heartbeat_socket,
+                                            &heartbeat_clients,
+                                        ).await;
+                                    }
+                                }
+                            }
+                        }
+
                         // Post collision events with start/end tracking
                         let colliders = heartbeat_scene.get_top_colliders();
                         let cur_colliding: HashSet<u32> = colliders.iter().map(|(id, _)| *id).collect();
@@ -3229,7 +3296,7 @@ async fn process_messages(
             let name = scene
                 .get_presence(&session.agent_id)
                 .map(|p| (p.first_name.clone(), p.last_name.clone()))
-                .unwrap_or_else(|| ("Test".to_string(), "User".to_string()));
+                .unwrap_or_else(|| ("Unknown".to_string(), "User".to_string()));
             let reply = AgentDataUpdate {
                 agent_data: agent_data_update::AgentData {
                     agent_id: session.agent_id,
@@ -4241,7 +4308,7 @@ async fn send_movement_complete(
 
     let avatar_local_id = scene.allocate_local_id();
     let (obj_pkt, wear_pkt, app_pkt) =
-        build_avatar_packets(&mut session, region_info.region_handle, avatar_local_id);
+        build_avatar_packets(&mut session, region_info.region_handle, avatar_local_id, &first_name, &last_name);
     for (pkt, name) in [
         (obj_pkt, "ObjectUpdate"),
         (wear_pkt, "AgentWearablesUpdate"),
@@ -4274,8 +4341,8 @@ async fn send_movement_complete(
     let agent_data_msg = AgentDataUpdate {
         agent_data: agent_data_update::AgentData {
             agent_id: session.agent_id,
-            first_name: b"Test".to_vec(),
-            last_name: b"User".to_vec(),
+            first_name: first_name.as_bytes().to_vec(),
+            last_name: last_name.as_bytes().to_vec(),
             group_title: Vec::new(),
             active_group_id: Uuid::nil(),
             group_powers: 0,
@@ -4289,7 +4356,7 @@ async fn send_movement_complete(
     }
     info!(agent = %session.agent_id, "sent AgentDataUpdate");
 
-    let mut presence = ScenePresence::new(session.agent_id, "Test", "User", PresenceType::User);
+    let mut presence = ScenePresence::new(session.agent_id, &first_name, &last_name, PresenceType::User);
     presence.local_id = avatar_local_id;
     presence.position = glam::Vec3::new(128.0, 128.0, 22.0);
     presence.region_handle = region_info.region_handle;
@@ -4460,6 +4527,8 @@ fn build_avatar_packets(
     session: &mut ClientSession,
     region_handle: u64,
     local_id: u32,
+    first_name: &str,
+    last_name: &str,
 ) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
     let avatar_obj = FullObjectUpdate {
         local_id,
@@ -4498,7 +4567,10 @@ fn build_avatar_packets(
         profile_hollow: 0,
         texture_entry: build_default_avatar_te(),
         texture_anim: Vec::new(),
-        name_value: b"FirstName STRING RW SV Test\nLastName STRING RW SV User\n".to_vec(),
+        name_value: format!(
+            "FirstName STRING RW SV {}\nLastName STRING RW SV {}\n",
+            first_name, last_name
+        ).into_bytes(),
         data: Vec::new(),
         text: String::new(),
         text_color: [0, 0, 0, 0],

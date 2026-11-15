@@ -2,6 +2,7 @@
 
 //! Remote HTTP connectors for talking to an external grid's Robust services.
 
+pub mod accounts;
 pub mod asset;
 pub mod grid;
 pub mod inventory;

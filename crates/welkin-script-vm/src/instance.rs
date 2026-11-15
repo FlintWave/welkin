@@ -490,6 +490,10 @@ impl ScriptInstance {
         Ok(())
     }
 
+    pub fn context(&self) -> Option<&Arc<RwLock<ScriptContext>>> {
+        self.ctx.as_ref()
+    }
+
     /// Register a global name to be tracked for serialization.
     pub fn track_global(&mut self, name: &str) {
         if !self.tracked_globals.iter().any(|g| g == name) {
