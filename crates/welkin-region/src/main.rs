@@ -737,6 +737,113 @@ async fn process_messages(
                 }
                 info!(agent = %agent_id, "announced new avatar to other clients");
             }
+
+            // --- Issue 2B: Send all EXISTING avatars to the newly logged-in user ---
+            {
+                let mut existing_presences = Vec::new();
+                scene.for_each_presence(|p| {
+                    if p.uuid != agent_id {
+                        existing_presences.push((
+                            p.uuid,
+                            p.local_id,
+                            p.position,
+                            p.rotation,
+                            p.first_name.clone(),
+                            p.last_name.clone(),
+                        ));
+                    }
+                });
+                if !existing_presences.is_empty() {
+                    let mut session = client.lock().await;
+                    for (ex_id, ex_local_id, ex_pos, ex_rot, ex_first, ex_last) in &existing_presences {
+                        let ex_obj = FullObjectUpdate {
+                            local_id: *ex_local_id,
+                            full_id: *ex_id,
+                            parent_id: 0,
+                            pcode: 47,
+                            state: 0,
+                            crc: 0,
+                            material: 0,
+                            click_action: 0,
+                            scale: glam::Vec3::new(0.45, 0.6, 1.75),
+                            position: *ex_pos,
+                            velocity: glam::Vec3::ZERO,
+                            acceleration: glam::Vec3::ZERO,
+                            rotation: *ex_rot,
+                            angular_velocity: glam::Vec3::ZERO,
+                            update_flags: 0x2000_0001,
+                            owner_id: *ex_id,
+                            path_curve: 0,
+                            profile_curve: 0,
+                            path_begin: 0,
+                            path_end: 0,
+                            path_scale_x: 0,
+                            path_scale_y: 0,
+                            path_shear_x: 0,
+                            path_shear_y: 0,
+                            path_twist: 0,
+                            path_twist_begin: 0,
+                            path_radius_offset: 0,
+                            path_taper_x: 0,
+                            path_taper_y: 0,
+                            path_revolutions: 0,
+                            path_skew: 0,
+                            profile_begin: 0,
+                            profile_end: 0,
+                            profile_hollow: 0,
+                            texture_entry: build_default_avatar_te(),
+                            texture_anim: Vec::new(),
+                            name_value: format!(
+                                "FirstName STRING RW SV {}\nLastName STRING RW SV {}\n",
+                                ex_first, ex_last
+                            ).into_bytes(),
+                            data: Vec::new(),
+                            text: String::new(),
+                            text_color: [0, 0, 0, 0],
+                            media_url: String::new(),
+                            ps_block: Vec::new(),
+                            extra_params: Vec::new(),
+                            sound_id: Uuid::nil(),
+                            sound_gain: 0.0,
+                            sound_flags: 0,
+                            sound_radius: 0.0,
+                            foot_plane: Some(glam::Vec4::new(0.0, 0.0, 1.0, 0.0)),
+                        };
+                        let obj_msg = ObjectUpdate {
+                            region_data: object_update::RegionData {
+                                region_handle: scene.region_info.region_handle,
+                                time_dilation: 65535,
+                            },
+                            object_data: vec![ex_obj.to_object_data()],
+                        };
+                        let visual_params: Vec<avatar_appearance::VisualParam> = (0..253)
+                            .map(|_| avatar_appearance::VisualParam { param_value: 128 })
+                            .collect();
+                        let appearance_msg = AvatarAppearance {
+                            sender: avatar_appearance::Sender {
+                                id: *ex_id,
+                                is_trial: false,
+                            },
+                            object_data: avatar_appearance::ObjectData {
+                                texture_entry: build_default_avatar_te(),
+                            },
+                            visual_param: visual_params,
+                            appearance_data: vec![avatar_appearance::AppearanceData {
+                                appearance_version: 0,
+                                cof_version: 0,
+                                flags: 0,
+                            }],
+                            appearance_hover: Vec::new(),
+                            attachment_block: Vec::new(),
+                        };
+                        let (pkt_bytes, _) = session.circuit.send_msg(&obj_msg, true);
+                        let _ = socket.send_to(&pkt_bytes, src).await;
+                        let (pkt_bytes, _) = session.circuit.send_msg(&appearance_msg, true);
+                        let _ = socket.send_to(&pkt_bytes, src).await;
+                    }
+                    info!(agent = %agent_id, count = existing_presences.len(), "sent existing avatars to new user");
+                }
+            }
         }
 
         if msg_id == StartPingCheck::ID
@@ -1012,6 +1119,40 @@ async fn process_messages(
             }
         }
 
+        if msg_id == AgentRequestSit::ID
+            && let Ok(req) = AgentRequestSit::decode(&pkt.body)
+            && let Some(client) = &client
+        {
+            let target_id = req.target_object.target_id;
+            let sit_offset = req.target_object.offset;
+            if let Some(obj) = scene.get_object(&target_id) {
+                let sit_pos = obj.root_part().group_position + sit_offset;
+                let reply = AvatarSitResponse {
+                    sit_object: avatar_sit_response::SitObject { id: target_id },
+                    sit_transform: avatar_sit_response::SitTransform {
+                        auto_pilot: true,
+                        sit_position: sit_pos,
+                        sit_rotation: glam::Quat::IDENTITY,
+                        camera_eye_offset: glam::Vec3::new(0.0, 0.0, 1.0),
+                        camera_at_offset: glam::Vec3::new(0.0, 0.0, 0.0),
+                        force_mouselook: false,
+                    },
+                };
+                let mut session = client.lock().await;
+                let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                let _ = socket.send_to(&pkt_bytes, src).await;
+                info!(agent = %agent_id, target = %target_id, "AgentRequestSit: sent sit response");
+            } else {
+                info!(agent = %agent_id, target = %target_id, "AgentRequestSit: target object not found");
+            }
+        }
+
+        if msg_id == AgentSit::ID
+            && let Ok(_sit) = AgentSit::decode(&pkt.body)
+        {
+            info!(agent = %agent_id, "AgentSit: confirmed sit");
+        }
+
         if msg_id == MapBlockRequest::ID
             && let Ok(req) = MapBlockRequest::decode(&pkt.body)
         {
@@ -1108,9 +1249,80 @@ async fn process_messages(
             root.scale = add.object_data.scale;
             root.rotation_offset = add.object_data.rotation;
             root.name = "Object".to_string();
+            let obj_uuid = root.uuid;
+            let obj_pos = root.group_position;
+            let obj_scale = root.scale;
+            let obj_rot = root.rotation_offset;
             let group = SceneObjectGroup::new(root);
-            let obj_id = scene.add_object(group);
-            info!(agent = %add.agent_data.agent_id, object = %obj_id, "ObjectAdd: created in scene");
+            let _obj_id = scene.add_object(group);
+            info!(agent = %add.agent_data.agent_id, object = %obj_uuid, "ObjectAdd: created in scene");
+
+            if let Some(obj) = scene.get_object(&obj_uuid) {
+                let local_id = obj.root_part().local_id;
+                let prim_obj = FullObjectUpdate {
+                    local_id,
+                    full_id: obj_uuid,
+                    parent_id: 0,
+                    pcode: 9,
+                    state: 0,
+                    crc: 0,
+                    material: 3,
+                    click_action: 0,
+                    scale: obj_scale,
+                    position: obj_pos,
+                    velocity: glam::Vec3::ZERO,
+                    acceleration: glam::Vec3::ZERO,
+                    rotation: obj_rot,
+                    angular_velocity: glam::Vec3::ZERO,
+                    update_flags: 0x0001_000D,
+                    owner_id: add.agent_data.agent_id,
+                    path_curve: 16,
+                    profile_curve: 1,
+                    path_begin: 0,
+                    path_end: 0,
+                    path_scale_x: 100,
+                    path_scale_y: 100,
+                    path_shear_x: 0,
+                    path_shear_y: 0,
+                    path_twist: 0,
+                    path_twist_begin: 0,
+                    path_radius_offset: 0,
+                    path_taper_x: 0,
+                    path_taper_y: 0,
+                    path_revolutions: 0,
+                    path_skew: 0,
+                    profile_begin: 0,
+                    profile_end: 0,
+                    profile_hollow: 0,
+                    texture_entry: build_default_prim_te(),
+                    texture_anim: Vec::new(),
+                    name_value: Vec::new(),
+                    data: Vec::new(),
+                    text: String::new(),
+                    text_color: [0, 0, 0, 0],
+                    media_url: String::new(),
+                    ps_block: Vec::new(),
+                    extra_params: Vec::new(),
+                    sound_id: Uuid::nil(),
+                    sound_gain: 0.0,
+                    sound_flags: 0,
+                    sound_radius: 0.0,
+                    foot_plane: None,
+                };
+                let obj_msg = ObjectUpdate {
+                    region_data: object_update::RegionData {
+                        region_handle: scene.region_info.region_handle,
+                        time_dilation: 65535,
+                    },
+                    object_data: vec![prim_obj.to_object_data()],
+                };
+                let all_clients = clients.read().await;
+                for (addr, c) in all_clients.iter() {
+                    let mut sess = c.lock().await;
+                    let (pkt_bytes, _) = sess.circuit.send_msg(&obj_msg, true);
+                    let _ = socket.send_to(&pkt_bytes, *addr).await;
+                }
+            }
         }
 
         if msg_id == ObjectDelete::ID
@@ -1171,6 +1383,39 @@ async fn process_messages(
             };
             let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
             let _ = socket.send_to(&pkt_bytes, src).await;
+        }
+
+        if msg_id == AvatarPropertiesRequest::ID
+            && let Ok(req) = AvatarPropertiesRequest::decode(&pkt.body)
+            && let Some(client) = &client
+        {
+            let target = req.agent_data.avatar_id;
+            let (first, last) = scene.get_presence(&target)
+                .map(|p| (p.first_name.clone(), p.last_name.clone()))
+                .unwrap_or_else(|| ("Unknown".to_string(), "User".to_string()));
+            let born_str = "2024-01-01";
+            let about = format!("{} {}", first, last);
+            let reply = AvatarPropertiesReply {
+                agent_data: avatar_properties_reply::AgentData {
+                    agent_id,
+                    avatar_id: target,
+                },
+                properties_data: avatar_properties_reply::PropertiesData {
+                    image_id: Uuid::nil(),
+                    fl_image_id: Uuid::nil(),
+                    partner_id: Uuid::nil(),
+                    about_text: about.into_bytes(),
+                    fl_about_text: Vec::new(),
+                    born_on: born_str.as_bytes().to_vec(),
+                    profile_url: Vec::new(),
+                    charter_member: Vec::new(),
+                    flags: 0,
+                },
+            };
+            let mut session = client.lock().await;
+            let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+            let _ = socket.send_to(&pkt_bytes, src).await;
+            info!(agent = %agent_id, target = %target, "sent AvatarPropertiesReply");
         }
 
         if msg_id == AgentSetAppearance::ID
@@ -1460,6 +1705,11 @@ async fn send_movement_complete(
     info!(agent = %session.agent_id, "event queue created with initial event");
 }
 
+fn build_default_prim_te() -> Vec<u8> {
+    let te = TextureEntry::default();
+    pack_texture_entry(&te, 6)
+}
+
 fn build_default_avatar_te() -> Vec<u8> {
     let img_default_avatar =
         uuid::Uuid::parse_str("c228d1cf-4b5d-4ba8-84f4-899a0796aa97").unwrap();
@@ -1645,10 +1895,6 @@ const KNOWN_CAPS: &[&str] = &[
     "ViewerStats",
     "UpdateAgentLanguage",
     "UpdateAgentInformation",
-    "GetObjectCost",
-    "GetObjectPhysicsData",
-    "ObjectMedia",
-    "ObjectMediaNavigate",
     "ParcelVoiceInfoRequest",
     "ProvisionVoiceAccountRequest",
 ];
