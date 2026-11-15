@@ -7,7 +7,7 @@
 
 ## Summary
 
-The welkin script VM (welkin-script-vm crate) runs untrusted LSL/Luau
+The Welkin script VM (`welkin-script-vm` crate) runs untrusted LSL/Luau
 scripts inside per-instance Luau VMs via mlua 0.12. The architecture is
 fundamentally sound: each script gets its own VM (strong isolation), the Luau
 language itself lacks dangerous standard libraries (no `io`, `os`, `debug`,

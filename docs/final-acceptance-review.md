@@ -3,7 +3,7 @@
 **Date:** 2026-11-14
 **Reviewer:** Claude Opus 4.6 (automated, end-to-end)
 **Scope:** All 18 phases, 333 tasks (task 333 of 333)
-**Codebase:** 26 workspace crates across welkin
+**Codebase:** 26 workspace crates across Welkin
 **Method:** Source files read directly for each of the 12 subsystems below;
 `cargo test --workspace` run to verify compilation and test counts
 
@@ -11,7 +11,7 @@
 
 **PASS**
 
-The welkin project has successfully ported all major subsystems of
+The Welkin project has successfully ported all major subsystems of
 OpenSimulator 0.9.3.0 from C#/.NET to Rust. Every workspace crate compiles and
 all 1,844 tests pass with zero failures. The architecture is clean,
 well-documented, and follows idiomatic Rust patterns throughout. Security
@@ -344,12 +344,12 @@ These are tracked for post-acceptance work, not blockers:
 
 **PASS -- Accept for completion.**
 
-The welkin project has achieved its goal: a complete, compiling, tested
+The Welkin project has achieved its goal: a complete, compiling, tested
 port of OpenSimulator 0.9.3.0 from C#/.NET to idiomatic Rust across 26
 workspace crates. All 333 tasks across 18 phases are reflected in the codebase.
 1,844 tests pass with zero failures. Security reviews cover all high-risk
 areas. Container hardening meets production standards. Documentation is
-comprehensive and operator-ready.
+complete and operator-ready.
 
 The implementation uses proper error handling (thiserror), structured logging
 (tracing), async I/O (tokio/axum), and clean module boundaries. The licence is

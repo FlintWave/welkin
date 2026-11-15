@@ -2,36 +2,36 @@
 
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-Production container guide for OpenSim Rust (Robust, Region, Portal, Migrate).
+Production container guide for Welkin (Robust, Region, Portal, Migrate).
 
 ## Building Images
 
-The multi-stage `Dockerfile` compiles all binaries in a single builder stage and
-produces a minimal distroless runtime image.
+The multi-stage `Containerfile` compiles all binaries in a single builder stage
+and produces a minimal distroless runtime image.
 
 ```bash
 # Full image (robust, region, portal, osim-migrate)
-docker build -f Dockerfile -t welkin:latest .
+podman build -f Containerfile -t welkin:latest .
 
 # Region-only image (smaller, single binary)
-docker build -f Dockerfile.region -t welkin-region:latest .
+podman build -f Containerfile.region -t welkin-region:latest .
 ```
 
 Builds use `cargo-chef` for dependency caching. The first build downloads and
 compiles all crates; subsequent builds reuse cached layers unless `Cargo.toml`
 or `Cargo.lock` change.
 
-## Running with Docker Compose
+## Running with Podman Compose
 
 ```bash
 # 1. Create your environment file from the template
 cp .env.example .env
-# 2. Edit .env — change every "change-me-*" value
+# 2. Edit .env -- change every "change-me-*" value
 vi .env
 # 3. Start the production stack
-docker compose -f docker-compose.prod.yml up -d
+podman compose -f compose.prod.yaml up -d
 # 4. Check service health
-docker compose -f docker-compose.prod.yml ps
+podman compose -f compose.prod.yaml ps
 ```
 
 The production stack starts: MySQL 8.0, Robust (grid services), Region
@@ -61,7 +61,7 @@ Each region instance needs a unique UDP port for LLUDP viewer traffic:
 
 ```bash
 # Start three region instances
-docker compose -f docker-compose.prod.yml up -d --scale region=3
+podman compose -f compose.prod.yaml up -d --scale region=3
 ```
 
 When scaling beyond one region, you must assign distinct external UDP ports.
@@ -75,7 +75,7 @@ environment or a mounted config volume.
 
 ```bash
 # Dump the entire opensim database
-docker compose -f docker-compose.prod.yml exec db \
+podman compose -f compose.prod.yaml exec db \
   mysqldump -u opensim -p"$MYSQL_PASSWORD" opensim > backup-$(date +%F).sql
 ```
 
@@ -83,11 +83,11 @@ docker compose -f docker-compose.prod.yml exec db \
 
 ```bash
 # Back up the persistent database volume
-docker run --rm -v welkin_db-data:/data -v $(pwd):/backup \
+podman run --rm -v welkin_db-data:/data -v $(pwd):/backup \
   alpine tar czf /backup/db-data-$(date +%F).tar.gz -C /data .
 
 # Back up region data
-docker run --rm -v welkin_region-data:/data -v $(pwd):/backup \
+podman run --rm -v welkin_region-data:/data -v $(pwd):/backup \
   alpine tar czf /backup/region-data-$(date +%F).tar.gz -C /data .
 ```
 
@@ -128,14 +128,14 @@ scrape_configs:
 
 ```bash
 # All services
-docker compose -f docker-compose.prod.yml logs -f
+podman compose -f compose.prod.yaml logs -f
 
 # Single service, last 100 lines
-docker compose -f docker-compose.prod.yml logs --tail=100 robust
+podman compose -f compose.prod.yaml logs --tail=100 robust
 
 # Enable debug logging for a single crate
 # Set in .env: RUST_LOG=welkin_robust=debug,info
-docker compose -f docker-compose.prod.yml up -d robust
+podman compose -f compose.prod.yaml up -d robust
 ```
 
 ### Health Checks
@@ -155,7 +155,7 @@ curl http://localhost:8080/health   # Portal
 - **Port conflicts**: ensure no other process binds 8002, 9000, 8080, or 3306
   on the host. Remap in `.env` if needed.
 - **Region not connecting to grid**: verify `REGION_GRID_URI` points to the
-  Robust service name (`http://robust:8002`) on the Docker network.
+  Robust service name (`http://robust:8002`) on the Podman network.
 - **Graceful shutdown hangs**: the runtime handles `SIGTERM` via tokio; the
-  default Docker stop timeout is 10 seconds. Increase with
-  `docker compose stop -t 30` if regions need longer to persist state.
+  default stop timeout is 10 seconds. Increase with
+  `podman compose stop -t 30` if regions need longer to persist state.

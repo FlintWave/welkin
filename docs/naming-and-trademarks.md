@@ -1,14 +1,16 @@
 # Naming and Trademark Guidelines
 
+[← Back to docs](README.md) · [Licence audit](licence-audit.md)
+
 This document covers trademark obligations and naming conventions for
-the welkin project.
+Welkin.
 
 ## Trademarks we reference
 
 **OpenSimulator** is a trademark of the OpenSimulator project
-(opensimulator.org). Our use of the name is descriptive: welkin
-is a Rust port derived from OpenSimulator source code. We do not claim
-endorsement by or affiliation with the OpenSimulator project.
+(opensimulator.org). Welkin is derived from OpenSimulator source code
+but is a separate project. We do not claim endorsement by or affiliation
+with the OpenSimulator project.
 
 **Second Life** is a registered trademark of Linden Research, Inc. Use
 it only when referring to the Second Life platform or protocol in
@@ -16,19 +18,16 @@ factual context (e.g., "implements the Second Life protocol"). Never
 imply endorsement by or partnership with Linden Research.
 
 **Aurora Viewer** and the Aurora logo are trademarks of their
-respective owners. welkin depends on Aurora Viewer crates as
-build dependencies but does not use the Aurora name or branding in its
-own identity.
+respective owners. Welkin depends on Aurora Viewer crates as build
+dependencies but does not use the Aurora name or branding in its own
+identity.
 
 ## Our project name
 
-The project name is **welkin**. The `opensim-` prefix signals
-protocol compatibility with OpenSimulator grids, not organisational
-affiliation. Binary names follow the same convention: `welkin-robust`,
-`welkin-region`.
-
-This name is used pending trademark review. If the OpenSimulator project
-objects, the project will rename.
+The project name is **Welkin** (Old English for "the sky, the firmament").
+Crate names use the `opensim-` prefix as a compatibility signal (e.g.,
+`opensim-services`, `opensim-scene`). Binary names: `opensim-robust`
+(grid services), `opensim-region` (region simulator).
 
 ## Contributor guidelines
 
@@ -62,8 +61,9 @@ objects, the project will rename.
 |---|---|---|
 | OpenSimulator | OpenSimulator project | Descriptive reference; no affiliation claim |
 | OpenSim | OpenSimulator project (informal) | Avoid in public text; use full name |
-| welkin | This project | Project and crate name (pending review) |
-| welkin-robust, welkin-region | This project | Binary names |
+| Welkin | This project | Project name |
+| opensim-* crates | This project | Crate names (compatibility prefix) |
+| opensim-robust, opensim-region | This project | Binary names |
 | Second Life | Linden Research, Inc. | Factual protocol references only |
 | Aurora Viewer | Aurora Viewer project | Technical docs only; not in branding |
 | LSL | Descriptive term | Free use in technical context |

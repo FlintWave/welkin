@@ -2,7 +2,7 @@
 
 **Date:** 2024-11  
 **Spike goal:** Determine whether Luau (via mlua 0.12) is a viable runtime for
-LSL script execution in welkin, and identify the work needed to make it
+LSL script execution in Welkin, and identify the work needed to make it
 production-ready.
 
 ---
@@ -113,7 +113,7 @@ Their script engines are:
 - **XEngine** (OpenSim legacy): LSL -> C# source -> .NET compiler -> CIL.
 - **Aurora ScriptEngine**: similar pipeline to XEngine.
 
-Language detection in welkin would be server-side at compile time:
+Language detection in Welkin would be server-side at compile time:
 inspect the first line for a `//!luau` directive, or assume LSL and transpile.
 
 ---
@@ -123,7 +123,7 @@ inspect the first line for a `//!luau` directive, or assume LSL and transpile.
 ### GO -- with caveats
 
 The spike confirms that Luau via mlua is a viable and attractive runtime for
-LSL script execution in welkin.
+LSL script execution in Welkin.
 
 **Strengths:**
 

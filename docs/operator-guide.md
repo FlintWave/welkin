@@ -39,7 +39,6 @@ Alpine-based runtime image:
 
 ```sh
 podman build -t welkin .
-# or: docker build -t welkin .
 ```
 
 The image contains `welkin-robust` and `welkin-region` in `/usr/local/bin/`.

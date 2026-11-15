@@ -299,7 +299,7 @@ LSL source text
 
 ### Comparison: YEngine vs. our Luau approach
 
-| Aspect | YEngine (C#/.NET) | welkin (Luau/mlua) |
+| Aspect | YEngine (C#/.NET) | Welkin (Luau/mlua) |
 |--------|-------------------|--------------------------|
 | **Source language** | LSL (parsed directly) | LSL (transpiled to Luau) |
 | **Compilation target** | CIL bytecode (.yobj) | Luau bytecode (mlua compile) |

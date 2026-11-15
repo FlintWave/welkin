@@ -1,4 +1,4 @@
-# Licence Audit -- welkin
+# Licence Audit
 
 Audit of the OpenSimulator 0.9.3.0 C# source tree and its dependencies,
 performed 2026-11-13 against the C# reference tree
@@ -10,7 +10,7 @@ Project licence: **GPL-3.0-or-later**.
 
 ## Executive summary
 
-welkin is a clean-room Rust port of OpenSimulator, licensed
+Welkin is a clean-room Rust port of OpenSimulator, licensed
 GPL-3.0-or-later. This audit examined every third-party library, binary,
 and data file shipped in the C# source tree to determine what can be
 reused, what must be replaced, and what licence obligations apply.
@@ -204,9 +204,9 @@ and updated for protocol extensions.
   time. The generated code is a derivative work of the template.
 - **Status: CLEAR.** LGPL 2.1 -> GPL-3.0-or-later is permitted.
 
-**Note:** The template is not shipped in welkin directly. It lives in
+**Note:** The template is not shipped in Welkin directly. It lives in
 the aurora-msg crate (pinned git dependency) and is consumed via build.rs
-code generation. No .msg file is distributed with welkin binaries.
+code generation. No .msg file is distributed with Welkin binaries.
 
 ---
 
@@ -233,7 +233,7 @@ were bundled with the OpenMetaverse / libsecondlife library.
   Aurora Viewer's copies which are properly attributed under GPL-3.0-or-later.
 - **TGA textures (baking)**: CC-BY-SA 3.0. **NOT GPLv3-compatible** (only
   CC-BY-SA 4.0 has the one-way GPL compatibility provision). Do not bundle
-  in welkin. The server does not need these; they are viewer-side baking
+  in Welkin. The server does not need these; they are viewer-side baking
   templates.
 
 ### bin/assets/ (default asset library)
@@ -317,7 +317,7 @@ Every texture asset is stored and transmitted as a `.jp2` file.
 Licence: BSD-2-Clause. This is compiled from C source via `cc` build
 dependency.
 
-**In welkin currently:** `aurora-assets` is declared as a workspace
+**In Welkin currently:** `aurora-assets` is declared as a workspace
 dependency in the root `Cargo.toml` but is not actually used by any crate
 (no `aurora-assets` in any crate-level `Cargo.toml` `[dependencies]`).
 However, it appears in `Cargo.lock`, meaning it is resolved. The `openjpeg-sys`
@@ -340,7 +340,7 @@ dependency comes transitively through `aurora-assets`.
 3. **If avoiding C FFI becomes a goal**, the only option is to transcode
    textures to PNG/KTX2 at ingest and serve a non-J2K format, which would
    break viewer compatibility.
-4. When welkin actually needs J2K decode/encode (texture upload handling,
+4. When Welkin actually needs J2K decode/encode (texture upload handling,
    map tile generation), add `aurora-assets` or `openjpeg-sys` directly as a
    dependency to the relevant crate.
 
@@ -372,27 +372,27 @@ All 11 patches replace upstream wgpu 30.0.1 crates with Aurora's fork
 a single 11-line fix for Intel 6th-9th gen iGPU Vulkan drivers that crash on
 an empty descriptor pool (`gfx-rs/wgpu#10124`, Aurora `#1302`).
 
-### Impact on welkin
+### Impact on Welkin
 
 **None.** These patches are irrelevant for several reasons:
 
-1. **welkin does not depend on wgpu.** It is a server project; GPU
+1. **Welkin does not depend on wgpu.** It is a server project; GPU
    rendering is not in scope. Confirmed: `wgpu` and `naga` do not appear in
-   `welkin/Cargo.lock`.
+   Welkin's `Cargo.lock`.
 
 2. **`[patch.crates-io]` does not propagate through git dependencies.** When
-   Cargo resolves a `git` dependency (as welkin uses for Aurora crates),
+   Cargo resolves a `git` dependency (as Welkin uses for Aurora crates),
    it resolves only the crates in that git repo that the consumer actually
    depends on. The workspace-level `[patch]` section of the _dependency's_
    `Cargo.toml` is **ignored** by the consumer. Only patches declared in the
    _consumer's_ own workspace `Cargo.toml` apply.
 
-3. **The Aurora crates welkin uses** (`aurora-llsd`, `aurora-msg`,
+3. **The Aurora crates Welkin uses** (`aurora-llsd`, `aurora-msg`,
    `aurora-prim`, `aurora-net`, `aurora-assets`) do not depend on wgpu. The
    wgpu dependency comes from `aurora-render` and `aurora-viewer`, which
-   welkin does not pull in.
+   Welkin does not pull in.
 
-**No action needed.** The patches do not affect welkin's build, its
+**No action needed.** The patches do not affect Welkin's build, its
 dependency tree, or its licence obligations.
 
 ---

@@ -7,6 +7,7 @@
 # Architecture
 
 - [Architecture](architecture.md)
+- [Integration architecture](integration-architecture.md)
 - [Decision log](decisions.md)
 
 ---
@@ -47,7 +48,9 @@
 
 # Operator documentation
 
+- [ROBUST grid services server](robust-server.md)
 - [Test grid deployment](test-grid-deployment.md)
+- [Container deployment](container-guide.md)
 - [Operator guide](operator-guide.md)
 - [Migration guide (C# to Rust)](migration-guide.md)
 
@@ -60,3 +63,5 @@
 - [Naming and trademarks](naming-and-trademarks.md)
 - [OSgrid compatibility](osgrid-compatibility.md)
 - [Script engine spike results](script-engine-spike-results.md)
+- [Viewer compatibility](viewer-compatibility.md)
+- [Final acceptance review](final-acceptance-review.md)

@@ -1,11 +1,14 @@
-# OpenSim Rust Documentation
+# Welkin
 
-Rust port of [OpenSimulator 0.9.3.0](http://opensimulator.org/) — a complete
-reimplementation of the grid services and region simulator in Rust, with wire
-and schema compatibility so existing grids can migrate without losing content.
+Rust reimplementation of [OpenSimulator 0.9.3.0](http://opensimulator.org/)
+grid services and region simulator. Wire and schema compatible with the C#
+server, so existing grids can migrate without losing content.
 
-**Status:** 314/333 tasks (94%), 17 of 18 phases accepted.
-See the [Roadmap](../openspec/ROADMAP.md) for the full plan.
+Your existing grid, content and viewer, on a server that is easier to run and
+harder to break.
+
+**Status:** Pre-alpha. First successful viewer connection achieved (Aurora
+Viewer and Firestorm). Working toward full viewer compatibility.
 
 > [!NOTE]
 > Start here: [Architecture](architecture.md) gives the workspace layout,
