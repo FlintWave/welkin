@@ -3,7 +3,7 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use clap::Parser;
 use tokio::net::UdpSocket;
@@ -188,8 +188,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         "Creating scene"
     );
     let frame_time = region_config.scene_config.frame_time;
+    let physics_enabled = region_config.scene_config.physics_enabled;
     let scene = Arc::new(Scene::new(region_info, region_config.scene_config));
     scene.start();
+
+    if physics_enabled {
+        let physics = opensim_physics_rapier::RapierPhysicsScene::new(&scene.region_info.region_name);
+        scene.set_physics(Box::new(physics));
+        info!("Physics engine (Rapier) initialised");
+    }
 
     // --- Module system ---
     let scene_ref = SceneRef::new(scene.region_info.region_id, scene.region_info.region_name.clone());
@@ -290,6 +297,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     info!(addr = %udp_addr, "LLUDP receive loop started");
 
+    // --- Per-session EventQueue map ---
+    let event_queues: EventQueueMap = Arc::new(RwLock::new(std::collections::HashMap::new()));
+
+    // --- Caps base URL (used by both process_messages and the caps server) ---
+    let caps_port = region_config.internal_port.wrapping_add(1);
+    let caps_addr = SocketAddr::from(([0, 0, 0, 0], caps_port));
+    let caps_base = format!(
+        "http://{}:{}",
+        region_config.external_host_name, caps_port
+    );
+
     // --- Message processing loop ---
     let mut dispatcher = PacketDispatcher::new();
     opensim_net::handlers::register_core_handlers(&mut dispatcher);
@@ -298,6 +316,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let process_scene = Arc::clone(&scene);
     let process_socket = udp_socket.clone();
     let process_clients = udp_clients.clone();
+    let process_eqs = event_queues.clone();
+    let process_caps_base = caps_base.clone();
     let process_handle = tokio::spawn(async move {
         process_messages(
             msg_rx,
@@ -305,28 +325,33 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             process_socket,
             process_clients,
             process_scene,
+            process_eqs,
+            process_caps_base,
             process_cancel,
         )
         .await;
     });
 
-    // --- Capability HTTP server ---
-    let caps_port = region_config.internal_port.wrapping_add(1);
-    let caps_addr = SocketAddr::from(([0, 0, 0, 0], caps_port));
-    let caps_base = format!(
-        "http://{}:{}",
-        region_config.external_host_name, caps_port
-    );
-
     let cap_server = opensim_caps::server::CapabilityServer::new();
 
+    let asset_url = region_config.grid_service_url.as_deref().unwrap_or("http://localhost:8003");
+    let asset_state = opensim_caps::handlers::AssetServiceState {
+        client: reqwest::Client::new(),
+        asset_url: asset_url.to_string(),
+    };
+
     let mut caps_router = cap_server.into_router();
-    for (name, method_router) in opensim_caps::handlers::cap_routes() {
+    for (name, method_router) in opensim_caps::handlers::cap_routes(asset_state) {
         caps_router = caps_router.route(&format!("/{name}"), method_router);
     }
     caps_router = caps_router.route(
+        "/EventQueueGet",
+        axum::routing::post(opensim_caps::handlers::event_queue_get)
+            .with_state(event_queues.clone()),
+    );
+    caps_router = caps_router.route(
         "/CAPS/{*path}",
-        axum::routing::post(seed_caps_handler).with_state(caps_base),
+        axum::routing::post(seed_caps_handler).with_state(caps_base.clone()),
     );
 
     let caps_listener = tokio::net::TcpListener::bind(caps_addr).await?;
@@ -402,6 +427,38 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // --- Connection timeout sweep ---
+    let timeout_cancel = cancel.clone();
+    let timeout_scene = Arc::clone(&scene);
+    let timeout_clients = udp_clients.clone();
+    let timeout_eqs = event_queues.clone();
+    let timeout_handle = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(5));
+        loop {
+            tokio::select! {
+                _ = timeout_cancel.cancelled() => break,
+                _ = interval.tick() => {
+                    let mut timed_out = Vec::new();
+                    {
+                        let clients_map = timeout_clients.read().await;
+                        for (addr, client) in clients_map.iter() {
+                            let session = client.lock().await;
+                            if session.circuit.is_timed_out(Duration::from_secs(60)) {
+                                timed_out.push((*addr, session.agent_id));
+                            }
+                        }
+                    }
+                    for (addr, agent) in &timed_out {
+                        timeout_clients.write().await.remove(addr);
+                        timeout_scene.remove_presence(agent);
+                        timeout_eqs.write().await.remove(agent);
+                        info!(agent = %agent, addr = %addr, "client timed out, removed");
+                    }
+                }
+            }
+        }
+    });
+
     info!(
         region = %scene.region_info.region_name,
         "Region simulator started successfully"
@@ -419,6 +476,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let _ = caps_handle.await;
     let _ = heartbeat_handle.await;
     let _ = coarse_handle.await;
+    let _ = timeout_handle.await;
 
     if let Some(ref reg) = grid_reg {
         if let Err(e) = reg.shutdown().await {
@@ -437,6 +495,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 type ClientMap = Arc<RwLock<std::collections::HashMap<SocketAddr, Arc<Mutex<ClientSession>>>>>;
+use opensim_caps::handlers::EventQueueMap;
 
 async fn process_messages(
     mut msg_rx: tokio::sync::mpsc::UnboundedReceiver<(SocketAddr, opensim_msg::IncomingPacket)>,
@@ -444,6 +503,8 @@ async fn process_messages(
     socket: Arc<UdpSocket>,
     clients: ClientMap,
     scene: Arc<Scene>,
+    event_queues: EventQueueMap,
+    caps_base: String,
     cancel: CancellationToken,
 ) {
     loop {
@@ -485,7 +546,7 @@ async fn process_messages(
 
         if msg_id == CompleteAgentMovement::ID {
             if let Some(client) = &client {
-                send_movement_complete(&socket, client, src, &scene.region_info, &scene).await;
+                send_movement_complete(&socket, client, src, &scene.region_info, &scene, &event_queues, &caps_base).await;
             }
         }
 
@@ -549,6 +610,7 @@ async fn process_messages(
                 let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
                 let _ = socket.send_to(&pkt_bytes, src).await;
                 scene.remove_presence(&session.agent_id);
+                event_queues.write().await.remove(&session.agent_id);
                 info!(agent = %session.agent_id, "logout acknowledged, presence removed");
             }
         }
@@ -602,6 +664,35 @@ async fn process_messages(
                     "chat: {}",
                     text
                 );
+                let sender_name = {
+                    let mut name = String::new();
+                    scene.for_each_presence(|p| {
+                        if p.uuid == agent_id { name = p.full_name(); }
+                    });
+                    if name.is_empty() { "Unknown".to_string() } else { name }
+                };
+                let sender_pos = scene.get_presence(&agent_id)
+                    .map(|p| p.position)
+                    .unwrap_or(glam::Vec3::ZERO);
+                let relay = ChatFromSimulator {
+                    chat_data: chat_from_simulator::ChatData {
+                        from_name: sender_name.into_bytes(),
+                        source_id: agent_id,
+                        owner_id: agent_id,
+                        source_type: 1,
+                        chat_type: chat.chat_data.type_,
+                        audible: 1,
+                        position: sender_pos,
+                        message: chat.chat_data.message.clone(),
+                    },
+                };
+                let clients_map = clients.read().await;
+                for (peer_addr, peer_client) in clients_map.iter() {
+                    let mut peer = peer_client.lock().await;
+                    if peer.agent_id == agent_id { continue; }
+                    let (pkt_bytes, _) = peer.circuit.send_msg(&relay, true);
+                    let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                }
             }
         }
 
@@ -630,6 +721,54 @@ async fn process_messages(
                 }
             }
         }
+
+        if msg_id == AgentThrottle::ID {
+            if let Ok(throttle_msg) = AgentThrottle::decode(&pkt.body) {
+                if let Some(client) = &client {
+                    let mut session = client.lock().await;
+                    session.throttle.set_from_viewer(&throttle_msg.throttle.throttles);
+                    tracing::debug!(agent = %agent_id, "throttle updated from viewer");
+                }
+            }
+        }
+
+        if msg_id == RequestImage::ID {
+            if let Ok(req) = RequestImage::decode(&pkt.body) {
+                if let Some(client) = &client {
+                    let mut session = client.lock().await;
+                    for img in &req.request_image {
+                        let reply = ImageNotInDatabase {
+                            image_id: image_not_in_database::ImageID { id: img.image },
+                        };
+                        let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                        let _ = socket.send_to(&pkt_bytes, src).await;
+                    }
+                    tracing::debug!(agent = %agent_id, count = req.request_image.len(), "RequestImage: replied ImageNotInDatabase");
+                }
+            }
+        }
+
+        if msg_id == AgentDataUpdateRequest::ID {
+            if let Some(client) = &client {
+                let mut session = client.lock().await;
+                let name = scene.get_presence(&session.agent_id)
+                    .map(|p| (p.first_name.clone(), p.last_name.clone()))
+                    .unwrap_or_else(|| ("Test".to_string(), "User".to_string()));
+                let reply = AgentDataUpdate {
+                    agent_data: agent_data_update::AgentData {
+                        agent_id: session.agent_id,
+                        first_name: name.0.into_bytes(),
+                        last_name: name.1.into_bytes(),
+                        group_title: Vec::new(),
+                        active_group_id: Uuid::nil(),
+                        group_powers: 0,
+                        group_name: Vec::new(),
+                    },
+                };
+                let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                let _ = socket.send_to(&pkt_bytes, src).await;
+            }
+        }
     }
 }
 
@@ -639,6 +778,8 @@ async fn send_movement_complete(
     addr: SocketAddr,
     region_info: &RegionInfo,
     scene: &Arc<Scene>,
+    event_queues: &EventQueueMap,
+    caps_base: &str,
 ) {
     let mut session = client.lock().await;
 
@@ -776,6 +917,23 @@ async fn send_movement_complete(
     presence.region_handle = region_info.region_handle;
     scene.add_presence(presence);
     info!(agent = %session.agent_id, "registered presence in scene");
+
+    let eq = Arc::new(opensim_caps::event_queue::EventQueue::new());
+    {
+        let mut eq_body = Map::new();
+        eq_body.insert("agent-id".into(), Llsd::String(session.agent_id.to_string()));
+        eq_body.insert(
+            "sim-ip-and-port".into(),
+            Llsd::String(format!("{}:{}", region_info.external_host_name, region_info.internal_port)),
+        );
+        eq_body.insert(
+            "seed-capability".into(),
+            Llsd::String(format!("{}/CAPS/seed", caps_base)),
+        );
+        eq.enqueue("EstablishAgentCommunication", Llsd::Map(eq_body)).await;
+    }
+    event_queues.write().await.insert(session.agent_id, eq);
+    info!(agent = %session.agent_id, "event queue created with initial event");
 }
 
 fn build_avatar_packets(

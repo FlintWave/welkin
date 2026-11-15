@@ -43,6 +43,8 @@ pub fn register_core_handlers(dispatcher: &mut PacketDispatcher) {
     register_agent_wearables_request(dispatcher);
     register_logout_request(dispatcher);
     register_economy_data_request(dispatcher);
+    register_request_image(dispatcher);
+    register_agent_data_update_request(dispatcher);
 }
 
 // ---------------------------------------------------------------------------
@@ -291,6 +293,27 @@ fn register_logout_request(d: &mut PacketDispatcher) {
 fn register_economy_data_request(d: &mut PacketDispatcher) {
     d.register::<EconomyDataRequest, _>(|_ctx, _msg| {
         tracing::debug!("EconomyDataRequest");
+        Ok(())
+    });
+}
+
+fn register_request_image(d: &mut PacketDispatcher) {
+    d.register::<RequestImage, _>(|ctx, msg| {
+        tracing::debug!(
+            agent = %ctx.agent_id,
+            count = msg.request_image.len(),
+            "RequestImage",
+        );
+        Ok(())
+    });
+}
+
+fn register_agent_data_update_request(d: &mut PacketDispatcher) {
+    d.register::<AgentDataUpdateRequest, _>(|ctx, _msg| {
+        tracing::debug!(
+            agent = %ctx.agent_id,
+            "AgentDataUpdateRequest",
+        );
         Ok(())
     });
 }

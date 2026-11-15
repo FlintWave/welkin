@@ -2,11 +2,13 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use glam::{Quat, Vec3};
 use uuid::Uuid;
+
+use opensim_physics::PhysicsScene;
 
 use crate::group::SceneObjectGroup;
 use crate::presence::ScenePresence;
@@ -108,6 +110,7 @@ pub struct Scene {
     pub presence_count: AtomicU32,
 
     started_at: RwLock<Option<Instant>>,
+    physics: Mutex<Option<Box<dyn PhysicsScene + Send>>>,
 }
 
 impl Scene {
@@ -126,6 +129,7 @@ impl Scene {
             object_count: AtomicU32::new(0),
             presence_count: AtomicU32::new(0),
             started_at: RwLock::new(None),
+            physics: Mutex::new(None),
         }
     }
 
@@ -302,6 +306,16 @@ impl Scene {
             .map(|(id, _)| *id)
     }
 
+    // ---- Physics ----
+
+    pub fn set_physics(&self, physics: Box<dyn PhysicsScene + Send>) {
+        *self.physics.lock().unwrap() = Some(physics);
+    }
+
+    pub fn has_physics(&self) -> bool {
+        self.physics.lock().unwrap().is_some()
+    }
+
     // ---- Scene loop ----
 
     pub fn frame_number(&self) -> u64 {
@@ -331,6 +345,14 @@ impl Scene {
 
     pub fn tick(&self) -> FrameStats {
         let frame_number = self.frame.fetch_add(1, Ordering::Relaxed) + 1;
+
+        if self.config.physics_enabled {
+            if let Ok(mut guard) = self.physics.lock() {
+                if let Some(ref mut physics) = *guard {
+                    physics.simulate(self.config.frame_time);
+                }
+            }
+        }
 
         let mut dirty_objects = 0u32;
         {

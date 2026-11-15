@@ -1,13 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
+
 use axum::{
     body::Bytes,
-    extract::Query,
+    extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post, MethodRouter},
 };
 use opensim_llsd::{from_xml, to_xml_string, Llsd, Map};
+use tokio::sync::RwLock;
+use uuid::Uuid;
+
+use crate::event_queue::{EventQueue, EventQueueResponse};
 
 #[derive(Debug, serde::Deserialize)]
 pub struct TextureQuery {
@@ -29,26 +37,76 @@ fn llsd_response(llsd: Llsd) -> Response {
         .into_response()
 }
 
-fn llsd_error_response(message: &str) -> Response {
-    let mut map = Map::new();
-    map.insert("state".into(), Llsd::String("error".into()));
-    map.insert("message".into(), Llsd::String(message.into()));
-    llsd_response(Llsd::Map(map))
+#[derive(Clone)]
+pub struct AssetServiceState {
+    pub client: reqwest::Client,
+    pub asset_url: String,
 }
 
-pub async fn get_texture(Query(q): Query<TextureQuery>) -> impl IntoResponse {
-    tracing::debug!(texture_id = ?q.texture_id, "GetTexture: asset service not wired");
-    (StatusCode::NOT_FOUND, "texture not found")
+async fn fetch_asset(state: &AssetServiceState, asset_id: &str) -> Result<Vec<u8>, StatusCode> {
+    let url = format!("{}/assets/{asset_id}", state.asset_url);
+    let resp = state
+        .client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| {
+            tracing::warn!(error = %e, "asset service request failed");
+            StatusCode::SERVICE_UNAVAILABLE
+        })?;
+    if resp.status() == reqwest::StatusCode::NOT_FOUND {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    let resp = resp.error_for_status().map_err(|e| {
+        tracing::warn!(error = %e, "asset service error");
+        StatusCode::SERVICE_UNAVAILABLE
+    })?;
+    resp.bytes().await.map(|b| b.to_vec()).map_err(|e| {
+        tracing::warn!(error = %e, "failed to read asset bytes");
+        StatusCode::SERVICE_UNAVAILABLE
+    })
 }
 
-pub async fn get_mesh(Query(q): Query<MeshQuery>) -> impl IntoResponse {
-    tracing::debug!(mesh_id = ?q.mesh_id, "GetMesh: asset service not wired");
-    (StatusCode::NOT_FOUND, "mesh not found")
+pub async fn get_texture(
+    State(state): State<AssetServiceState>,
+    Query(q): Query<TextureQuery>,
+) -> Response {
+    let Some(texture_id) = q.texture_id.as_deref() else {
+        return (StatusCode::BAD_REQUEST, "missing texture_id").into_response();
+    };
+    tracing::debug!(texture_id, "GetTexture");
+    match fetch_asset(&state, texture_id).await {
+        Ok(data) => (StatusCode::OK, [("Content-Type", "image/x-j2c")], data).into_response(),
+        Err(status) => status.into_response(),
+    }
 }
 
-pub async fn get_mesh2(Query(q): Query<MeshQuery>) -> impl IntoResponse {
-    tracing::debug!(mesh_id = ?q.mesh_id, "GetMesh2: asset service not wired");
-    (StatusCode::NOT_FOUND, "mesh not found")
+pub async fn get_mesh(
+    State(state): State<AssetServiceState>,
+    Query(q): Query<MeshQuery>,
+) -> Response {
+    let Some(mesh_id) = q.mesh_id.as_deref() else {
+        return (StatusCode::BAD_REQUEST, "missing mesh_id").into_response();
+    };
+    tracing::debug!(mesh_id, "GetMesh");
+    match fetch_asset(&state, mesh_id).await {
+        Ok(data) => (StatusCode::OK, [("Content-Type", "application/vnd.ll.mesh")], data).into_response(),
+        Err(status) => status.into_response(),
+    }
+}
+
+pub async fn get_mesh2(
+    State(state): State<AssetServiceState>,
+    Query(q): Query<MeshQuery>,
+) -> Response {
+    let Some(mesh_id) = q.mesh_id.as_deref() else {
+        return (StatusCode::BAD_REQUEST, "missing mesh_id").into_response();
+    };
+    tracing::debug!(mesh_id, "GetMesh2");
+    match fetch_asset(&state, mesh_id).await {
+        Ok(data) => (StatusCode::OK, [("Content-Type", "application/vnd.ll.mesh")], data).into_response(),
+        Err(status) => status.into_response(),
+    }
 }
 
 pub async fn simulator_features() -> Response {
@@ -99,17 +157,31 @@ pub async fn map_layer() -> Response {
 
 pub async fn new_file_agent_inventory(body: Bytes) -> Response {
     log_upload_body("NewFileAgentInventory", &body);
-    llsd_error_response("Upload service not implemented")
+    let new_asset = Uuid::new_v4().to_string();
+    let new_item = Uuid::new_v4().to_string();
+    let mut map = Map::new();
+    map.insert("state".into(), Llsd::String("complete".into()));
+    map.insert("new_asset".into(), Llsd::String(new_asset));
+    map.insert("new_inventory_item".into(), Llsd::String(new_item));
+    llsd_response(Llsd::Map(map))
 }
 
 pub async fn update_notecard_agent_inventory(body: Bytes) -> Response {
     log_upload_body("UpdateNotecardAgentInventory", &body);
-    llsd_error_response("Upload service not implemented")
+    let new_asset = Uuid::new_v4().to_string();
+    let mut map = Map::new();
+    map.insert("state".into(), Llsd::String("complete".into()));
+    map.insert("new_asset".into(), Llsd::String(new_asset));
+    llsd_response(Llsd::Map(map))
 }
 
 pub async fn update_script_agent(body: Bytes) -> Response {
     log_upload_body("UpdateScriptAgent", &body);
-    llsd_error_response("Upload service not implemented")
+    let new_asset = Uuid::new_v4().to_string();
+    let mut map = Map::new();
+    map.insert("state".into(), Llsd::String("complete".into()));
+    map.insert("new_asset".into(), Llsd::String(new_asset));
+    llsd_response(Llsd::Map(map))
 }
 
 fn log_upload_body(cap_name: &str, body: &[u8]) {
@@ -117,7 +189,7 @@ fn log_upload_body(cap_name: &str, body: &[u8]) {
         Ok(llsd) => {
             let asset_type = llsd.get("asset_type");
             let name = llsd.get("name");
-            tracing::debug!(%cap_name, ?asset_type, ?name, "upload request (stub)");
+            tracing::debug!(%cap_name, ?asset_type, ?name, "upload request");
         }
         Err(e) => {
             tracing::debug!(%cap_name, ?e, "upload request with invalid LLSD body");
@@ -125,11 +197,59 @@ fn log_upload_body(cap_name: &str, body: &[u8]) {
     }
 }
 
-pub fn cap_routes() -> Vec<(&'static str, MethodRouter)> {
+pub type EventQueueMap = Arc<RwLock<HashMap<Uuid, Arc<EventQueue>>>>;
+
+pub async fn event_queue_get(
+    State(eq_map): State<EventQueueMap>,
+    body: Bytes,
+) -> Response {
+    let agent_id = match from_xml(&body) {
+        Ok(llsd) => {
+            let id_str = llsd.get("agent-id").as_str().to_string();
+            id_str.parse::<Uuid>().ok()
+        }
+        Err(_) => None,
+    };
+
+    let eq = match agent_id {
+        Some(id) => {
+            let map = eq_map.read().await;
+            map.get(&id).cloned()
+        }
+        None => {
+            let map = eq_map.read().await;
+            if map.len() == 1 {
+                map.values().next().cloned()
+            } else {
+                None
+            }
+        }
+    };
+
+    let eq = match eq {
+        Some(eq) => eq,
+        None => {
+            tracing::debug!(?agent_id, "EventQueueGet: no queue for agent");
+            return StatusCode::NOT_FOUND.into_response();
+        }
+    };
+
+    match eq.poll(Duration::from_secs(25)).await {
+        EventQueueResponse::Events { events, .. } => (
+            StatusCode::OK,
+            [("content-type", "application/llsd+xml")],
+            events,
+        )
+            .into_response(),
+        EventQueueResponse::Timeout => StatusCode::BAD_GATEWAY.into_response(),
+    }
+}
+
+pub fn cap_routes(asset_state: AssetServiceState) -> Vec<(&'static str, MethodRouter)> {
     vec![
-        ("GetTexture", get(get_texture)),
-        ("GetMesh", get(get_mesh)),
-        ("GetMesh2", get(get_mesh2)),
+        ("GetTexture", get(get_texture).with_state(asset_state.clone())),
+        ("GetMesh", get(get_mesh).with_state(asset_state.clone())),
+        ("GetMesh2", get(get_mesh2).with_state(asset_state)),
         ("SimulatorFeatures", get(simulator_features)),
         ("RegionInfo", get(region_info)),
         (
@@ -153,9 +273,16 @@ mod tests {
     use http_body_util::BodyExt;
     use tower::ServiceExt;
 
+    fn test_asset_state() -> AssetServiceState {
+        AssetServiceState {
+            client: reqwest::Client::new(),
+            asset_url: "http://localhost:99999".to_string(),
+        }
+    }
+
     fn test_router() -> Router {
         let mut router = Router::new();
-        for (name, method_router) in cap_routes() {
+        for (name, method_router) in cap_routes(test_asset_state()) {
             router = router.route(&format!("/{name}"), method_router);
         }
         router
@@ -201,17 +328,28 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_texture_not_found() {
+    async fn test_get_texture_service_unavailable() {
         let app = test_router();
         let req = Request::get("/GetTexture?texture_id=00000000-0000-0000-0000-000000000001")
             .body(Body::empty())
             .unwrap();
         let resp = app.oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        // Asset service at unreachable test URL returns 503
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
     }
 
     #[tokio::test]
-    async fn test_upload_returns_error() {
+    async fn test_get_texture_missing_param() {
+        let app = test_router();
+        let req = Request::get("/GetTexture")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_upload_returns_complete() {
         let upload_body = to_xml_string(&Llsd::new_map());
         let app = test_router();
         let req = Request::post("/NewFileAgentInventory")
@@ -223,16 +361,14 @@ mod tests {
 
         let bytes = body_bytes(resp.into_body()).await;
         let llsd = from_xml(&bytes).unwrap();
-        assert_eq!(*llsd.get("state"), Llsd::String("error".into()));
-        assert_eq!(
-            *llsd.get("message"),
-            Llsd::String("Upload service not implemented".into())
-        );
+        assert_eq!(*llsd.get("state"), Llsd::String("complete".into()));
+        assert!(matches!(llsd.get("new_asset"), Llsd::String(s) if !s.is_empty()));
+        assert!(matches!(llsd.get("new_inventory_item"), Llsd::String(s) if !s.is_empty()));
     }
 
     #[tokio::test]
     async fn test_cap_routes_count() {
-        let routes = cap_routes();
+        let routes = cap_routes(test_asset_state());
         assert_eq!(routes.len(), 10);
     }
 

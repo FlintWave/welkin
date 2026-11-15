@@ -204,8 +204,10 @@ mod tests {
         assert!(d.has_handler(&AgentWearablesRequest::ID));
         assert!(d.has_handler(&LogoutRequest::ID));
         assert!(d.has_handler(&EconomyDataRequest::ID));
+        assert!(d.has_handler(&RequestImage::ID));
+        assert!(d.has_handler(&AgentDataUpdateRequest::ID));
 
-        assert_eq!(d.handler_count(), 20);
+        assert_eq!(d.handler_count(), 22);
     }
 
     #[test]
