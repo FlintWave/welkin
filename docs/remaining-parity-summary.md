@@ -45,6 +45,10 @@ Verified through viewer sessions (Aurora, Firestorm) and the 10-step bot test:
 - 53 region modules loaded
 - 20 NPC functions with real implementations
 - Rapier physics at 11ms (90fps), collision events flowing to scripts
+- Object persistence wired into region heartbeat (every 60 ticks) and graceful shutdown, with 85+30 field mappings from SceneObjectPart to database rows
+- Permission enforcement on 14 object mutation handlers (ObjectDelete, MultipleObjectUpdate, ObjectName, ObjectDescription, ObjectShape, ObjectPermissions, ObjectSaleInfo, ObjectExtraParams, ObjectGroup, ObjectOwner, ObjectLink, ObjectDelink, ObjectDuplicate, ObjectDuplicateOnRay)
+- Avatar name resolution from ROBUST UserAccountService (replaces hardcoded names)
+- Script-to-scene change propagation: llSetPos, llSetRot, llSetScale, llSetText changes flow from ScriptContext back to SceneObjectPart each scheduler tick, with ObjectUpdate broadcast to viewers
 - OAR/IAR archive load and save
 - Estate administration (11 sub-commands, freeze, eject, god mode)
 - Cross-region teleport, hypergrid teleport

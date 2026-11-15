@@ -10,6 +10,12 @@ However, several issues range from a critical nil-UUID ownership bypass to multi
 medium-severity gaps in group permission logic. The module must not be deployed to a
 production multi-user grid without addressing at least the Critical and High findings.
 
+**Update (2026-11-15):** As of commit 69f0db4 the module is enforced on 14 object
+mutation handlers in the region binary (ObjectDelete, MultipleObjectUpdate, ObjectName,
+ObjectDescription, ObjectShape, ObjectPermissions, ObjectSaleInfo, ObjectExtraParams,
+ObjectGroup, ObjectOwner, ObjectLink, ObjectDelink, ObjectDuplicate,
+ObjectDuplicateOnRay). The findings below are now operationally live, not theoretical.
+
 ---
 
 ## Critical findings (blocking)

@@ -39,6 +39,8 @@ described below.
 
 ### Object interaction
 
+- Permission enforcement on 14 object mutation handlers via DefaultPermissionsModule: ObjectDelete, MultipleObjectUpdate, ObjectName, ObjectDescription, ObjectShape, ObjectPermissions, ObjectSaleInfo, ObjectExtraParams, ObjectGroup, ObjectOwner, ObjectLink, ObjectDelink, ObjectDuplicate, ObjectDuplicateOnRay. Denied mutations log a warning and skip the operation.
+- Object persistence wired into region heartbeat (every 60 ticks) and graceful shutdown
 - Object creation (ObjectAdd with FullObjectUpdate broadcast)
 - Object editing: move, rotate and scale via MultipleObjectUpdate
 - ObjectSelect, ObjectDeselect
@@ -78,6 +80,7 @@ described below.
 
 ### Avatar and presence
 
+- Avatar name resolution from ROBUST UserAccountService via RemoteAccountsConnector (POST METHOD=getaccount); falls back to "Unknown User" if unreachable
 - Avatar profile viewing
 - Multi-user presence (new users see existing avatars)
 - AgentUpdate and ViewerEffect flowing
@@ -129,6 +132,12 @@ to UpdateScriptAgent, which returns a one-shot uploader URL with
 server compiles it, loads it into the VM, and returns `state: "complete"`.
 Upload tokens are single-use (replay returns 404). Direct raw-text POST
 still works for bot tests and automation.
+
+Script-to-scene change propagation: llSetPos, llSetRot, llSetScale and
+llSetText changes in ScriptContext flow back to SceneObjectPart after each
+scheduler tick, with terse ObjectUpdate broadcast for transform changes and
+full ObjectUpdate for hover text changes. Threshold-based diffing (0.001)
+prevents unnecessary broadcasts.
 
 The bot test validates the full scripting chain: rez a prim, upload LSL,
 confirm state_entry fires llSay, send ObjectGrab, confirm touch_start fires
@@ -274,3 +283,6 @@ without manual intervention.
 | `c707f3b` | Bot test: script upload, execution and touch interaction (10 steps) |
 | `56d05a3` | ViewerAsset: support all asset type query params (bodypart_id, clothing_id, etc.) |
 | `3d68f07` | UpdateScriptAgent: two-step LLSD upload protocol (fixes viewer-initiated uploads) |
+| `f94dacd` | Object persistence wired into region heartbeat and shutdown (85+30 field mappings) |
+| `69f0db4` | Permission enforcement on 14 object mutation handlers |
+| `58e5d0a` | Avatar name resolution from ROBUST, script-to-scene change propagation |

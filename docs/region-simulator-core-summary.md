@@ -35,7 +35,11 @@ viewer --HTTP-> welkin-caps (seed cap, event queue, cap handlers)
 - LLUDP dispatch is a table keyed on message id, calling typed handler
   functions. Wire codecs come from `welkin-msg`.
 - Persistence stores objects as XML2 and uses the existing `regionstore`
-  tables, so a C#-created database loads without migration.
+  tables, so a C#-created database loads without migration. `persist.rs`
+  (f94dacd) wires `backup_dirty_objects` into the heartbeat loop (every
+  60 ticks, about 3 seconds) and flushes all dirty objects on graceful
+  shutdown. The conversion maps 85 prim fields and 30 shape fields from
+  `SceneObjectPart` to the database row types.
 
 ## Key modules
 
@@ -101,8 +105,9 @@ network. Persistence code had no HIGH findings.
 - The three HIGH findings above are open.
 - Cap handlers beyond the seed cap and event queue are thin; texture and mesh
   fetch and upload caps need real asset-service wiring.
-- Avatar and object handlers cover the core viewer flow only; permissions,
-  land and chat are absent by scope.
+- Avatar and object handlers cover the core viewer flow; permission checks
+  are now enforced on 14 object mutation handlers (69f0db4). Land and chat
+  are absent by scope.
 - Capacity assessor benchmark/model/live modules are still stubs; they can
   now be built on this simulator (see decision C1).
 - Test counts for `welkin-net` and `welkin-caps` are modest relative to the
