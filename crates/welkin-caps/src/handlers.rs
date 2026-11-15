@@ -107,6 +107,20 @@ pub struct ScriptLoadState {
     pub sender: std::sync::mpsc::Sender<ScriptLoadRequest>,
 }
 
+pub type PendingScriptUploads = Arc<RwLock<HashMap<String, ScriptUploadPending>>>;
+
+#[derive(Debug, Clone)]
+pub struct ScriptUploadPending {
+    pub prim_id: Option<Uuid>,
+}
+
+#[derive(Clone)]
+pub struct ScriptUploadState {
+    pub script_load: ScriptLoadState,
+    pub caps_url: String,
+    pub pending: PendingScriptUploads,
+}
+
 pub type PendingBakeUploads = Arc<RwLock<HashMap<String, ()>>>;
 
 #[derive(Clone)]
@@ -271,22 +285,33 @@ pub async fn update_notecard_agent_inventory(body: Bytes) -> Response {
 }
 
 pub async fn update_script_agent(
-    State(script_load): State<ScriptLoadState>,
+    State(state): State<ScriptUploadState>,
     Query(params): Query<ScriptUploadQuery>,
     body: Bytes,
 ) -> Response {
     log_upload_body("UpdateScriptAgent", &body);
 
-    let is_llsd = from_xml(&body).is_ok();
-    if is_llsd {
-        let new_asset = Uuid::new_v4().to_string();
-        let mut map = Map::new();
-        map.insert("state".into(), Llsd::String("complete".into()));
-        map.insert("new_asset".into(), Llsd::String(new_asset));
-        return llsd_response(Llsd::Map(map));
+    let parsed = from_xml(&body).ok();
+    if parsed.is_some() {
+        if let Some(Llsd::Map(ref m)) = parsed {
+            if let Some(item_id) = m.get("item_id") {
+                tracing::debug!(?item_id, "UpdateScriptAgent: item_id");
+            }
+        }
+        let token = Uuid::new_v4().to_string();
+        state.pending.write().await.insert(token.clone(), ScriptUploadPending {
+            prim_id: params.prim_id,
+        });
+        let uploader_url = format!("{}/script-upload/{}", state.caps_url, token);
+        tracing::debug!(%uploader_url, "UpdateScriptAgent: created uploader");
+        let mut root = Map::new();
+        root.insert("uploader".into(), Llsd::String(uploader_url));
+        root.insert("state".into(), Llsd::String("upload".into()));
+        return llsd_response(Llsd::Map(root));
     }
 
     let source = String::from_utf8_lossy(&body);
+    let script_load = &state.script_load;
     match welkin_script_compiler::compile_lsl(&source) {
         Ok(luau) => {
             let script_id = Uuid::new_v4();
@@ -318,6 +343,66 @@ pub async fn update_script_agent(
             llsd_response(Llsd::Map(map))
         }
     }
+}
+
+pub async fn script_upload_handler(
+    State(state): State<ScriptUploadState>,
+    axum::extract::Path(token): axum::extract::Path<String>,
+    body: Bytes,
+) -> Response {
+    let pending = {
+        let mut pending = state.pending.write().await;
+        pending.remove(&token)
+    };
+    let info = match pending {
+        Some(p) => p,
+        None => {
+            tracing::warn!(%token, "script upload: unknown or expired token");
+            return StatusCode::NOT_FOUND.into_response();
+        }
+    };
+
+    let source = String::from_utf8_lossy(&body);
+    match welkin_script_compiler::compile_lsl(&source) {
+        Ok(luau) => {
+            let script_id = Uuid::new_v4();
+            let new_asset = script_id.to_string();
+            let new_inventory_item = Uuid::new_v4().to_string();
+            tracing::info!(
+                asset = %new_asset,
+                luau_len = luau.len(),
+                "script upload: compiled successfully, loading into VM"
+            );
+            let _ = state.script_load.sender.send(ScriptLoadRequest {
+                script_id,
+                prim_id: info.prim_id.unwrap_or(Uuid::nil()),
+                luau_source: luau,
+            });
+            let mut map = Map::new();
+            map.insert("state".into(), Llsd::String("complete".into()));
+            map.insert("new_asset".into(), Llsd::String(new_asset));
+            map.insert("new_inventory_item".into(), Llsd::String(new_inventory_item));
+            llsd_response(Llsd::Map(map))
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "script upload: compilation failed");
+            let new_asset = Uuid::new_v4().to_string();
+            let mut map = Map::new();
+            map.insert("state".into(), Llsd::String("complete".into()));
+            map.insert("new_asset".into(), Llsd::String(new_asset));
+            map.insert("errors".into(), Llsd::Array(vec![
+                Llsd::String(e.to_string()),
+            ]));
+            llsd_response(Llsd::Map(map))
+        }
+    }
+}
+
+pub fn script_upload_route(script_state: ScriptUploadState) -> axum::Router {
+    axum::Router::new().route(
+        "/script-upload/{token}",
+        post(script_upload_handler).with_state(script_state),
+    )
 }
 
 #[derive(Debug, Default)]
@@ -1200,7 +1285,7 @@ pub fn cap_routes(
     asset_state: AssetServiceState,
     inv_state: InventoryProxyState,
     bake_state: BakeUploadState,
-    script_load_state: ScriptLoadState,
+    script_upload_state: ScriptUploadState,
 ) -> Vec<(&'static str, MethodRouter)> {
     vec![
         (
@@ -1222,7 +1307,7 @@ pub fn cap_routes(
             "UpdateNotecardAgentInventory",
             post(update_notecard_agent_inventory),
         ),
-        ("UpdateScriptAgent", post(update_script_agent).with_state(script_load_state.clone())),
+        ("UpdateScriptAgent", post(update_script_agent).with_state(script_upload_state.clone())),
         (
             "FetchInventoryDescendents2",
             post(fetch_inventory_descendents2).with_state(inv_state.clone()),
@@ -1323,15 +1408,19 @@ mod tests {
         }
     }
 
-    fn test_script_load_state() -> ScriptLoadState {
+    fn test_script_upload_state() -> ScriptUploadState {
         let (tx, _rx) = std::sync::mpsc::channel();
-        ScriptLoadState { sender: tx }
+        ScriptUploadState {
+            script_load: ScriptLoadState { sender: tx },
+            caps_url: "http://localhost:9001".to_string(),
+            pending: std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
+        }
     }
 
     fn test_router() -> Router {
         let mut router = Router::new();
         for (name, method_router) in
-            cap_routes(test_asset_state(), test_inv_state(), test_bake_state(), test_script_load_state())
+            cap_routes(test_asset_state(), test_inv_state(), test_bake_state(), test_script_upload_state())
         {
             router = router.route(&format!("/{name}"), method_router);
         }
@@ -1414,7 +1503,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cap_routes_count() {
-        let routes = cap_routes(test_asset_state(), test_inv_state(), test_bake_state(), test_script_load_state());
+        let routes = cap_routes(test_asset_state(), test_inv_state(), test_bake_state(), test_script_upload_state());
         assert_eq!(routes.len(), 42);
     }
 

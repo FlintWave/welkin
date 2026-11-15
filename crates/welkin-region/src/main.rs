@@ -484,14 +484,20 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let script_load_state = welkin_caps::handlers::ScriptLoadState {
         sender: script_load_tx,
     };
+    let script_upload_state = welkin_caps::handlers::ScriptUploadState {
+        script_load: script_load_state,
+        caps_url: format!("http://localhost:{}", caps_addr.port()),
+        pending: std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
+    };
 
     let mut caps_router = cap_server.into_router();
     for (name, method_router) in
-        welkin_caps::handlers::cap_routes(asset_state, inv_state, bake_state.clone(), script_load_state)
+        welkin_caps::handlers::cap_routes(asset_state, inv_state, bake_state.clone(), script_upload_state.clone())
     {
         caps_router = caps_router.route(&format!("/{name}"), method_router);
     }
     caps_router = caps_router.merge(welkin_caps::handlers::bake_upload_route(bake_state));
+    caps_router = caps_router.merge(welkin_caps::handlers::script_upload_route(script_upload_state));
     caps_router = caps_router.route(
         "/EventQueueGet",
         axum::routing::post(welkin_caps::handlers::event_queue_get)

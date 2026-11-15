@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use welkin_caps::handlers::{
-    AssetServiceState, BakeUploadState, InventoryProxyState, ScriptLoadState, cap_routes,
+    AssetServiceState, BakeUploadState, InventoryProxyState, ScriptLoadState, ScriptUploadState, cap_routes,
 };
 use welkin_caps::server::CapabilityServer;
 use welkin_msg::{Msg, build_packet};
@@ -115,7 +115,11 @@ async fn caps_http_simulator_features() {
     let mut router: Router = cap_server.into_router();
     let (a, i, b) = test_cap_state();
     let (sl_tx, _sl_rx) = std::sync::mpsc::channel();
-    let sl = ScriptLoadState { sender: sl_tx };
+    let sl = ScriptUploadState {
+        script_load: ScriptLoadState { sender: sl_tx },
+        caps_url: "http://localhost:9001".to_string(),
+        pending: Arc::new(RwLock::new(HashMap::new())),
+    };
     for (name, method_router) in cap_routes(a, i, b, sl) {
         router = router.route(&format!("/{name}"), method_router);
     }
@@ -230,7 +234,11 @@ async fn shutdown_coordination() {
     let mut caps_router: Router = cap_server.into_router();
     let (a, i, b) = test_cap_state();
     let (sl_tx, _sl_rx) = std::sync::mpsc::channel();
-    let sl = ScriptLoadState { sender: sl_tx };
+    let sl = ScriptUploadState {
+        script_load: ScriptLoadState { sender: sl_tx },
+        caps_url: "http://localhost:9001".to_string(),
+        pending: Arc::new(RwLock::new(HashMap::new())),
+    };
     for (name, method_router) in cap_routes(a, i, b, sl) {
         caps_router = caps_router.route(&format!("/{name}"), method_router);
     }
