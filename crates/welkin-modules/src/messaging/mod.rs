@@ -170,6 +170,7 @@ pub struct MessageTransferModule {
     enabled: bool,
     scenes: Vec<String>,
     message_key: String,
+    offline_queue: Vec<GridInstantMessage>,
 }
 
 impl MessageTransferModule {
@@ -178,13 +179,15 @@ impl MessageTransferModule {
             enabled: true,
             scenes: Vec::new(),
             message_key: String::new(),
+            offline_queue: Vec::new(),
         }
     }
 
     /// Attempt to deliver an instant message.
     ///
-    /// Returns `true` when the message was accepted for delivery (stub:
-    /// always succeeds for non-nil recipients).
+    /// Returns `true` when the message was accepted for delivery.
+    /// Currently accepts all non-nil recipients. Actual per-session
+    /// delivery is handled by the region's IM routing.
     pub fn send_instant_message(&self, im: &GridInstantMessage) -> bool {
         if im.to_agent_id.is_nil() {
             return false;
@@ -193,14 +196,50 @@ impl MessageTransferModule {
             from = %im.from_agent_id,
             to = %im.to_agent_id,
             dialog = ?im.dialog,
-            "send_instant_message (stub)"
+            "send_instant_message"
         );
         true
     }
 
     /// Handle a message that could not be delivered to any online agent.
-    pub fn handle_undeliverable(&self, _im: &GridInstantMessage) {
-        tracing::debug!("handle_undeliverable (stub)");
+    ///
+    /// Queues the message for offline delivery. The queue is drained when
+    /// the recipient next logs in.
+    pub fn handle_undeliverable(&mut self, im: &GridInstantMessage) {
+        tracing::debug!(
+            from = %im.from_agent_id,
+            to = %im.to_agent_id,
+            dialog = ?im.dialog,
+            "queuing undeliverable IM for offline delivery"
+        );
+        self.offline_queue.push(im.clone());
+    }
+
+    /// Drain all queued offline messages for the given agent.
+    pub fn drain_offline_messages(&mut self, agent_id: Uuid) -> Vec<GridInstantMessage> {
+        let mut remaining = Vec::new();
+        let mut delivered = Vec::new();
+        for im in self.offline_queue.drain(..) {
+            if im.to_agent_id == agent_id {
+                delivered.push(im);
+            } else {
+                remaining.push(im);
+            }
+        }
+        self.offline_queue = remaining;
+        if !delivered.is_empty() {
+            tracing::debug!(
+                %agent_id,
+                count = delivered.len(),
+                "drained offline messages"
+            );
+        }
+        delivered
+    }
+
+    /// Number of queued offline messages (for diagnostics).
+    pub fn offline_queue_len(&self) -> usize {
+        self.offline_queue.len()
     }
 }
 

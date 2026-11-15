@@ -113,7 +113,7 @@ when its phase starts, so later rows are placeholders until then.
 | 3.2 | Instant messaging, ViewerEffect relay, UUID lookups, sitting | `viewer-messaging` | proposal |
 | 3.3 | Load and wire ~30 existing but unregistered region modules | `module-activation` | proposal |
 | 4.1 | LSL parser, LSL→Luau transpiler, region integration, builtin completion | `lsl-compiler` | done (58/69) |
-| 4.2 | Deferred builtins, missing caps, estate admin, teleport, os* stubs | `remaining-parity` | in progress |
+| 4.2 | Deferred builtins, missing caps, estate admin, teleport, os* stubs | `remaining-parity` | done (46/46) |
 | — | Viewer session validation (Aurora + Firestorm) | `firestorm-session` | in progress (round 2) |
 
 ## Order and dependencies

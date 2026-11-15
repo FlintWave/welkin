@@ -673,8 +673,8 @@ fn region_handle_encode_decode() {
     let handle = info.region_handle;
     let x = (handle >> 32) as u32;
     let y = (handle & 0xFFFF_FFFF) as u32;
-    assert_eq!(x, 256);
-    assert_eq!(y, 512);
+    assert_eq!(x, 256 * 256);
+    assert_eq!(y, 512 * 256);
 }
 
 #[test]

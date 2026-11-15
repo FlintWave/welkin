@@ -9,6 +9,7 @@
 pub mod npc_avatar;
 
 use std::collections::HashMap;
+use std::sync::mpsc;
 
 use uuid::Uuid;
 
@@ -114,6 +115,8 @@ pub struct NPCModule {
     enabled: bool,
     /// The scene this module is attached to.
     scene: Option<SceneRef>,
+    /// Channel for dispatching NPC touch events (npc_id, target_prim_id).
+    pub touch_sender: Option<mpsc::Sender<(Uuid, Uuid)>>,
 }
 
 impl NPCModule {
@@ -125,6 +128,7 @@ impl NPCModule {
             persistence_enabled: false,
             enabled: true,
             scene: None,
+            touch_sender: None,
         }
     }
 
@@ -279,13 +283,22 @@ impl INPCModule for NPCModule {
     }
 
     fn touch(&self, npc_id: Uuid, target: Uuid) -> Result<(), ModuleError> {
-        let _npc = self
+        let npc = self
             .avatars
             .get(&npc_id)
             .ok_or_else(|| ModuleError::NotFound(format!("NPC {npc_id} not found")))?;
-        // Stub: in a full implementation this would simulate a touch event
-        // on the target prim.
-        tracing::debug!(npc = %npc_id, target = %target, "NPC touch (stub)");
+        let npc_pos = npc.position();
+        tracing::info!(
+            npc = %npc_id,
+            target = %target,
+            npc_pos = ?npc_pos,
+            "NPC touch — dispatching touch_start event on target prim"
+        );
+        if let Some(tx) = &self.touch_sender {
+            if let Err(e) = tx.send((npc_id, target)) {
+                tracing::warn!("NPC touch event channel closed: {e}");
+            }
+        }
         Ok(())
     }
 

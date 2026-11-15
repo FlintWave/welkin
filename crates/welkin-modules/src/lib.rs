@@ -1108,12 +1108,15 @@ mod tests {
     // -- 51. XferModule stubs don't panic ---------------------------------
 
     #[test]
-    fn xfer_module_stubs() {
-        let xfer = XferModule::new();
+    fn xfer_module_transfers() {
+        let mut xfer = XferModule::new();
         let id = xfer.request_xfer("test.dat");
         assert!(!id.is_nil());
+        assert_eq!(xfer.active_count(), 1);
+        xfer.append_data(id, &[1, 2, 3]).unwrap();
         let data = xfer.complete_xfer(id).unwrap();
-        assert!(data.is_empty());
+        assert_eq!(data, vec![1, 2, 3]);
+        assert_eq!(xfer.active_count(), 0);
     }
 
     // -- 52. InventoryTransferModule RegionModule lifecycle ----------------
@@ -2848,9 +2851,10 @@ mod tests {
         assert_eq!(module.name(), "SceneSerialiser");
         assert_eq!(module.module_type(), ModuleType::Shared);
 
-        let data = module.serialize_region();
-        assert!(data.is_empty());
-        module.deserialize_region(&[1, 2, 3]);
+        let result = module.serialize_region();
+        assert!(result.is_err());
+        let result = module.deserialize_region(&[1, 2, 3]);
+        assert!(result.is_err());
 
         module.add_region(&scene).unwrap();
         module.remove_region(&scene).unwrap();

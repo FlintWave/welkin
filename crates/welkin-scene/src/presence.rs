@@ -91,6 +91,7 @@ pub struct ScenePresence {
     pub animation_sequence: u32,
 
     pub attachments: Vec<(u8, Uuid)>,
+    pub speed_multiplier: f32,
 }
 
 impl ScenePresence {
@@ -133,6 +134,7 @@ impl ScenePresence {
             animation_sequence: 0,
 
             attachments: Vec::new(),
+            speed_multiplier: 1.0,
         }
     }
 

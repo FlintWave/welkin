@@ -61,19 +61,25 @@ impl HGAssetMapper {
         )
     }
 
-    /// Fetch an asset from a remote grid's asset server (stub).
+    /// Fetch an asset from a remote grid's asset server.
     ///
-    /// In a real implementation, this would download the asset and all
-    /// its referenced sub-assets (textures, scripts, etc.) from the
-    /// remote grid.
-    pub fn get_asset(&self, _asset_id: Uuid, _owner_id: Uuid, _remote_asset_url: &str) -> bool {
-        tracing::debug!("HGAssetMapper::get_asset (stub)");
-        true
+    /// Requires an HTTP client to download the asset and all its
+    /// referenced sub-assets from the remote grid. Returns `false`
+    /// until remote asset fetching is wired.
+    pub fn get_asset(&self, asset_id: Uuid, _owner_id: Uuid, remote_asset_url: &str) -> bool {
+        tracing::warn!(
+            asset = %asset_id,
+            url = %remote_asset_url,
+            "HGAssetMapper::get_asset — remote fetch not yet wired"
+        );
+        false
     }
 
-    /// Post (upload) an asset to a remote grid's asset server (stub).
+    /// Post (upload) an asset to a remote grid's asset server.
     ///
     /// Rewrites creator identifiers to UUI format before sending.
+    /// Tracks posted assets to avoid redundant transfers. The actual
+    /// HTTP POST is not yet wired.
     pub fn post_asset(&mut self, asset_id: Uuid, _owner_id: Uuid, remote_asset_url: &str) -> bool {
         let key = (asset_id, remote_asset_url.to_string());
         if self.posted_assets.contains(&key) {
@@ -85,10 +91,10 @@ impl HGAssetMapper {
             return true;
         }
 
-        tracing::debug!(
+        tracing::warn!(
             asset = %asset_id,
             url = %remote_asset_url,
-            "posting asset to remote grid (stub)"
+            "posting asset to remote grid — HTTP transfer not yet wired"
         );
         self.posted_assets.insert(key);
         true

@@ -66,7 +66,7 @@ impl MediaModule {
     /// Sets the media entries for this region.
     pub fn set_media(&mut self, entries: Vec<MediaEntry>) {
         self.entries = entries;
-        tracing::debug!(count = self.entries.len(), "media entries updated (stub)");
+        tracing::debug!(count = self.entries.len(), "media entries updated");
     }
 }
 
@@ -273,6 +273,7 @@ bitflags! {
 /// region based on configured access flags.
 pub struct AccessModule {
     flags: RegionAccessFlags,
+    pub banned_agents: std::collections::HashSet<Uuid>,
 }
 
 impl AccessModule {
@@ -281,6 +282,7 @@ impl AccessModule {
             flags: RegionAccessFlags::ALLOW_LANDMARK
                 | RegionAccessFlags::ALLOW_DIRECT
                 | RegionAccessFlags::ALLOW_TELEPORT,
+            banned_agents: std::collections::HashSet::new(),
         }
     }
 
@@ -297,10 +299,13 @@ impl AccessModule {
 
     /// Check whether an agent may enter the region.
     ///
-    /// Stub implementation — always returns `true`.  In production this
-    /// would consult ban lists, access lists, and estate settings.
-    pub fn check_access(&self, _agent_id: Uuid) -> bool {
-        tracing::debug!("check_access (stub) — allowing");
+    /// Denies access if the agent is on the banned list.
+    pub fn check_access(&self, agent_id: Uuid) -> bool {
+        if self.banned_agents.contains(&agent_id) {
+            tracing::info!(%agent_id, "check_access denied — agent is banned");
+            return false;
+        }
+        tracing::debug!(%agent_id, "check_access granted");
         true
     }
 }
@@ -393,10 +398,10 @@ impl RegionModule for VegetationModule {
 // SceneSerialiser
 // ===================================================================
 
-/// Region-scene serialisation / deserialisation stub.
+/// Region-scene serialisation / deserialisation.
 ///
 /// In the C# code base this converts the full scene to XML for backup
-/// and OAR archives.  Here it provides the structural entry points.
+/// and OAR archives. OAR format support is planned but not yet implemented.
 pub struct SceneSerialiser;
 
 impl SceneSerialiser {
@@ -404,19 +409,23 @@ impl SceneSerialiser {
         Self
     }
 
-    /// Serialize the region to a byte buffer.
-    ///
-    /// Stub — returns an empty buffer.
-    pub fn serialize_region(&self) -> Vec<u8> {
-        tracing::debug!("serialize_region (stub)");
-        Vec::new()
+    /// Serialize the region to a byte buffer (OAR format).
+    pub fn serialize_region(&self) -> Result<Vec<u8>, crate::module::ModuleError> {
+        tracing::warn!("serialize_region called — OAR serialization not yet implemented");
+        Err(crate::module::ModuleError::Other(
+            "OAR serialization not yet implemented".into(),
+        ))
     }
 
-    /// Deserialize region data from a byte buffer.
-    ///
-    /// Stub — logs and discards the data.
-    pub fn deserialize_region(&self, data: &[u8]) {
-        tracing::debug!(bytes = data.len(), "deserialize_region (stub)");
+    /// Deserialize region data from a byte buffer (OAR format).
+    pub fn deserialize_region(&self, data: &[u8]) -> Result<(), crate::module::ModuleError> {
+        tracing::warn!(
+            bytes = data.len(),
+            "deserialize_region called — OAR deserialization not yet implemented"
+        );
+        Err(crate::module::ModuleError::Other(
+            "OAR deserialization not yet implemented".into(),
+        ))
     }
 }
 

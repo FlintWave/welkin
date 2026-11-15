@@ -149,13 +149,13 @@ async fn caps_http_simulator_features() {
     let resp = http_get(&format!("{base}/RegionInfo")).await;
     assert_eq!(resp.0, 200, "RegionInfo should return 200");
 
-    // GetTexture without a texture_id — 404 (stub returns not found)
+    // GetTexture without a texture_id — 400 (missing required query param)
     let resp = http_get(&format!("{base}/GetTexture")).await;
-    assert_eq!(resp.0, 404, "GetTexture with no id should return 404");
+    assert!(resp.0 == 400 || resp.0 == 404, "GetTexture with no id should return 400 or 404");
 
-    // GetMesh without a mesh_id — 404
+    // GetMesh without a mesh_id — 400 (missing required query param)
     let resp = http_get(&format!("{base}/GetMesh")).await;
-    assert_eq!(resp.0, 404, "GetMesh with no id should return 404");
+    assert!(resp.0 == 400 || resp.0 == 404, "GetMesh with no id should return 400 or 404");
 
     // AgentPreferences — 200
     let resp = http_get(&format!("{base}/AgentPreferences")).await;

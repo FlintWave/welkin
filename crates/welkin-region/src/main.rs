@@ -1335,6 +1335,8 @@ async fn process_messages(
             let forward = rot * glam::Vec3::X;
             let left = rot * glam::Vec3::Y;
 
+            let presence_data = scene.get_presence(&update.agent_data.agent_id);
+
             // Speed constants matching OpenSim: walk 2.4576, run 4.096, fly 16.384
             let base_speed = if flying {
                 if fast { 16.384f32 } else { 9.8304f32 }
@@ -1343,6 +1345,8 @@ async fn process_messages(
             } else {
                 2.4576f32
             };
+            let speed_mod = presence_data.as_ref().map(|p| p.speed_multiplier).unwrap_or(1.0);
+            let base_speed = base_speed * speed_mod;
 
             let mut vel = glam::Vec3::ZERO;
             if flags & 0x0001 != 0 {
@@ -1366,7 +1370,6 @@ async fn process_messages(
                 } // AGENT_CONTROL_UP_NEG
             }
 
-            let presence_data = scene.get_presence(&update.agent_data.agent_id);
             let prev_pos = presence_data
                 .as_ref()
                 .map(|p| p.position)

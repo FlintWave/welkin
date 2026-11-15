@@ -124,14 +124,14 @@ impl SoundModule {
             sound = %sound_id,
             object = %object_id,
             gain,
-            "loop_sound (stub)"
+            "loop_sound registered"
         );
     }
 
     /// Stop a looping sound on an object.
     pub fn stop_sound(&mut self, object_id: Uuid) {
         self.active_loops.retain(|(oid, _)| *oid != object_id);
-        tracing::debug!(object = %object_id, "stop_sound (stub)");
+        tracing::debug!(object = %object_id, "stop_sound");
     }
 
     /// Adjust the volume of a currently playing sound.
@@ -139,7 +139,7 @@ impl SoundModule {
         tracing::debug!(
             object = %object_id,
             gain,
-            "adjust_sound_volume (stub)"
+            "adjust_sound_volume"
         );
     }
 

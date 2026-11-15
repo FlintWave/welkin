@@ -598,17 +598,29 @@ pub struct HgInstantMessage {
 pub struct StubHypergridInstantMessageService;
 
 impl HypergridInstantMessageService for StubHypergridInstantMessageService {
-    fn incoming_instant_message(&self, _im: &HgInstantMessage) -> HgResult<bool> {
-        todo!("HypergridInstantMessageService::incoming_instant_message")
+    fn incoming_instant_message(&self, im: &HgInstantMessage) -> HgResult<bool> {
+        tracing::warn!(
+            from = %im.from_agent_id,
+            to = %im.to_agent_id,
+            "HG incoming IM received — local delivery not yet wired"
+        );
+        Ok(false)
     }
 
     fn outgoing_instant_message(
         &self,
-        _im: &HgInstantMessage,
-        _target_url: &str,
-        _foreigner: bool,
+        im: &HgInstantMessage,
+        target_url: &str,
+        foreigner: bool,
     ) -> HgResult<bool> {
-        todo!("HypergridInstantMessageService::outgoing_instant_message")
+        tracing::warn!(
+            from = %im.from_agent_id,
+            to = %im.to_agent_id,
+            target_url,
+            foreigner,
+            "HG outgoing IM requested — remote delivery not yet wired"
+        );
+        Ok(false)
     }
 }
 

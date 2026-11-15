@@ -171,43 +171,10 @@ mod tests {
     }
 
     #[test]
-    fn register_core_handlers_populates_all() {
+    fn register_core_handlers_is_empty() {
         let mut d = PacketDispatcher::new();
         crate::handlers::register_core_handlers(&mut d);
-
-        // 2.4 core: 4 handlers
-        assert!(d.has_handler(&UseCircuitCode::ID));
-        assert!(d.has_handler(&CompleteAgentMovement::ID));
-        assert!(d.has_handler(&AgentUpdate::ID));
-        assert!(d.has_handler(&ChatFromViewer::ID));
-
-        // 2.5 object: 6 handlers
-        assert!(d.has_handler(&ObjectAdd::ID));
-        assert!(d.has_handler(&ObjectDelete::ID));
-        assert!(d.has_handler(&ObjectSelect::ID));
-        assert!(d.has_handler(&ObjectDeselect::ID));
-        assert!(d.has_handler(&ObjectGrab::ID));
-        assert!(d.has_handler(&MultipleObjectUpdate::ID));
-
-        // 2.6 avatar: 3 handlers
-        assert!(d.has_handler(&AvatarAnimation::ID));
-        assert!(d.has_handler(&AgentSetAppearance::ID));
-        assert!(d.has_handler(&ViewerEffect::ID));
-
-        // P1-5: 2 handlers
-        assert!(d.has_handler(&RegionHandshakeReply::ID));
-        assert!(d.has_handler(&AgentThrottle::ID));
-
-        // Critical reply handlers: 5 handlers
-        assert!(d.has_handler(&StartPingCheck::ID));
-        assert!(d.has_handler(&AgentCachedTexture::ID));
-        assert!(d.has_handler(&AgentWearablesRequest::ID));
-        assert!(d.has_handler(&LogoutRequest::ID));
-        assert!(d.has_handler(&EconomyDataRequest::ID));
-        assert!(d.has_handler(&RequestImage::ID));
-        assert!(d.has_handler(&AgentDataUpdateRequest::ID));
-
-        assert_eq!(d.handler_count(), 22);
+        assert_eq!(d.handler_count(), 0, "handlers moved to region inline dispatch");
     }
 
     #[test]

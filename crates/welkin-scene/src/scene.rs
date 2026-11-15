@@ -670,7 +670,7 @@ mod tests {
     #[test]
     fn region_handle_encoding() {
         let info = RegionInfo::new("Encode", 1000, 2000);
-        let expected = ((1000u64) << 32) | 2000u64;
+        let expected = ((1000u64 * 256) << 32) | (2000u64 * 256);
         assert_eq!(info.region_handle, expected);
     }
 

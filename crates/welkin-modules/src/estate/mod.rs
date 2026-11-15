@@ -4,11 +4,21 @@
 //! management, and estate-level actions.
 
 use std::collections::HashSet;
+use std::sync::mpsc;
 
 use uuid::Uuid;
 
 use crate::module::{ModuleConfig, ModuleError, ModuleType, RegionModule};
 use crate::registry::SceneRef;
+
+/// Actions dispatched by estate management methods for the region to execute.
+#[derive(Debug, Clone)]
+pub enum EstateAction {
+    Restart { delay_seconds: u32 },
+    Kick { agent_id: Uuid, message: String },
+    TeleportHome { agent_id: Uuid },
+    RegionMessage { sender: String, message: String },
+}
 
 // ---------------------------------------------------------------------------
 // EstateSettings
@@ -257,6 +267,7 @@ impl TelehubManager {
 pub struct EstateManagementModule {
     pub settings: EstateSettings,
     pub telehub: TelehubManager,
+    pub action_sender: Option<mpsc::Sender<EstateAction>>,
 }
 
 impl EstateManagementModule {
@@ -264,6 +275,7 @@ impl EstateManagementModule {
         Self {
             settings: EstateSettings::default(),
             telehub: TelehubManager::new(),
+            action_sender: None,
         }
     }
 
@@ -314,26 +326,46 @@ impl EstateManagementModule {
         tracing::debug!("estate settings updated");
     }
 
-    // -- Estate actions (stubs) --------------------------------------------
+    // -- Estate actions -------------------------------------------------------
 
-    /// Request a region restart after `delay_seconds`.  Stub — logs intent.
+    fn send_action(&self, action: EstateAction) {
+        if let Some(tx) = &self.action_sender {
+            if let Err(e) = tx.send(action) {
+                tracing::warn!("estate action channel closed: {e}");
+            }
+        } else {
+            tracing::warn!("estate action_sender not wired — action dropped");
+        }
+    }
+
+    /// Request a region restart after `delay_seconds`.
     pub fn restart_region(&self, delay_seconds: u32) {
-        tracing::debug!(delay_seconds, "restart_region requested (stub)");
+        tracing::info!(delay_seconds, "restart_region requested");
+        self.send_action(EstateAction::Restart { delay_seconds });
     }
 
-    /// Kick a user from the region.  Stub — logs intent.
+    /// Kick a user from the region.
     pub fn kick_user(&self, agent_id: Uuid, message: &str) {
-        tracing::debug!(%agent_id, message, "kick_user requested (stub)");
+        tracing::info!(%agent_id, message, "kick_user requested");
+        self.send_action(EstateAction::Kick {
+            agent_id,
+            message: message.to_string(),
+        });
     }
 
-    /// Teleport a user to their home region.  Stub — logs intent.
+    /// Teleport a user to their home region.
     pub fn teleport_home(&self, agent_id: Uuid) {
-        tracing::debug!(%agent_id, "teleport_home requested (stub)");
+        tracing::info!(%agent_id, "teleport_home requested");
+        self.send_action(EstateAction::TeleportHome { agent_id });
     }
 
-    /// Broadcast a message to all agents in the region.  Stub — logs intent.
+    /// Broadcast a message to all agents in the region.
     pub fn send_region_message(&self, sender: &str, message: &str) {
-        tracing::debug!(sender, message, "send_region_message (stub)");
+        tracing::info!(sender, message, "send_region_message");
+        self.send_action(EstateAction::RegionMessage {
+            sender: sender.to_string(),
+            message: message.to_string(),
+        });
     }
 
     // -- Sun position ------------------------------------------------------

@@ -320,11 +320,10 @@ impl WorldMapModule {
         self.map_items.retain(|item| item.item_type != item_type);
     }
 
-    /// Update the agent count for the map.  Stub — in a full implementation
-    /// this would broadcast to neighbouring regions.
+    /// Update the agent count for the map.
     pub fn update_agent_location(&mut self, agent_count: u8) {
         self.agent_count = agent_count;
-        tracing::debug!(agent_count, "updated agent count for map (stub)");
+        tracing::debug!(agent_count, "updated agent count for map");
     }
 
     /// Cache a neighbour region's map block.

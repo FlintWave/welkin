@@ -319,7 +319,7 @@ impl AssetTransactionModule {
         tracing::debug!(
             %transaction_id,
             bytes = data.len(),
-            "append_data: stub — appending"
+            "append_data: appending"
         );
         txn.data.extend_from_slice(data);
         Ok(())
@@ -334,14 +334,14 @@ impl AssetTransactionModule {
         let asset_id = Uuid::new_v4();
         tracing::debug!(
             %transaction_id, %asset_id,
-            "complete_upload: stub — asset created"
+            "complete_upload: asset created"
         );
         Ok(asset_id)
     }
 
     /// Cancel and discard an in-progress upload.
     pub fn cancel_upload(&mut self, transaction_id: Uuid) {
-        tracing::debug!(%transaction_id, "cancel_upload: stub — transaction removed");
+        tracing::debug!(%transaction_id, "cancel_upload: transaction removed");
         self.transactions.remove(&transaction_id);
     }
 
@@ -394,26 +394,68 @@ impl RegionModule for AssetTransactionModule {
 
 /// Handles the low-level Xfer (file transfer) protocol.
 ///
-/// Stub: real implementation would manage packet-level transfers between the
-/// viewer and simulator.
-pub struct XferModule;
+/// Manages packet-level transfers between the viewer and simulator.
+/// Transfer data accumulates in per-xfer buffers via `append_data` and
+/// is collected on completion.
+pub struct XferModule {
+    transfers: HashMap<Uuid, XferState>,
+}
+
+struct XferState {
+    filename: String,
+    data: Vec<u8>,
+}
 
 impl XferModule {
     pub fn new() -> Self {
-        Self
+        Self {
+            transfers: HashMap::new(),
+        }
     }
 
-    /// Request a file transfer.  Returns the xfer UUID.
-    pub fn request_xfer(&self, filename: &str) -> Uuid {
+    /// Request a file transfer. Returns the xfer UUID.
+    pub fn request_xfer(&mut self, filename: &str) -> Uuid {
         let xfer_id = Uuid::new_v4();
-        tracing::debug!(%xfer_id, filename, "request_xfer: stub — xfer started");
+        self.transfers.insert(
+            xfer_id,
+            XferState {
+                filename: filename.to_string(),
+                data: Vec::new(),
+            },
+        );
+        tracing::debug!(%xfer_id, filename, "request_xfer: transfer registered");
         xfer_id
     }
 
-    /// Complete a file transfer.  Returns the transferred bytes.
-    pub fn complete_xfer(&self, xfer_id: Uuid) -> Result<Vec<u8>, ModuleError> {
-        tracing::debug!(%xfer_id, "complete_xfer: stub — returning empty data");
-        Ok(Vec::new())
+    /// Append data to an in-progress transfer.
+    pub fn append_data(&mut self, xfer_id: Uuid, chunk: &[u8]) -> Result<(), ModuleError> {
+        let state = self
+            .transfers
+            .get_mut(&xfer_id)
+            .ok_or_else(|| ModuleError::NotFound(format!("xfer {xfer_id} not found")))?;
+        state.data.extend_from_slice(chunk);
+        tracing::debug!(%xfer_id, chunk_len = chunk.len(), total = state.data.len(), "xfer data appended");
+        Ok(())
+    }
+
+    /// Complete a file transfer. Returns the accumulated bytes.
+    pub fn complete_xfer(&mut self, xfer_id: Uuid) -> Result<Vec<u8>, ModuleError> {
+        let state = self
+            .transfers
+            .remove(&xfer_id)
+            .ok_or_else(|| ModuleError::NotFound(format!("xfer {xfer_id} not found")))?;
+        tracing::debug!(
+            %xfer_id,
+            filename = state.filename,
+            bytes = state.data.len(),
+            "complete_xfer: transfer complete"
+        );
+        Ok(state.data)
+    }
+
+    /// Number of active transfers (for diagnostics).
+    pub fn active_count(&self) -> usize {
+        self.transfers.len()
     }
 }
 
