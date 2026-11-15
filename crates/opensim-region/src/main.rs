@@ -1180,6 +1180,11 @@ const KNOWN_CAPS: &[&str] = &[
     "UpdateScriptAgent",
     "FetchInventoryDescendents2",
     "FetchInventory2",
+    "FetchLib2",
+    "ViewerAsset",
+    "GetDisplayNames",
+    "HomeLocation",
+    "CreateInventoryCategory",
     "UploadBakedTexture",
 ];
 

@@ -30,6 +30,17 @@ pub struct MeshQuery {
     pub mesh_id: Option<String>,
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub struct AssetQuery {
+    pub asset_id: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct DisplayNameQuery {
+    #[serde(default)]
+    pub ids: Vec<String>,
+}
+
 fn llsd_response(llsd: Llsd) -> Response {
     let body = to_xml_string(&llsd);
     (
@@ -587,6 +598,142 @@ pub async fn bake_upload_handler(
     llsd_response(Llsd::Map(root))
 }
 
+pub async fn viewer_asset(
+    State(state): State<AssetServiceState>,
+    Query(q): Query<AssetQuery>,
+) -> Response {
+    let Some(asset_id) = q.asset_id.as_deref() else {
+        return (StatusCode::BAD_REQUEST, "missing asset_id").into_response();
+    };
+    tracing::debug!(asset_id, "ViewerAsset");
+    match fetch_asset(&state, asset_id).await {
+        Ok(data) => (StatusCode::OK, [("Content-Type", "application/octet-stream")], data).into_response(),
+        Err(status) => status.into_response(),
+    }
+}
+
+pub async fn fetch_lib2(body: Bytes) -> Response {
+    let parsed = from_xml(&body).unwrap_or(Llsd::Undef);
+    let folders = match parsed.get("folders") {
+        Llsd::Array(arr) => arr.as_slice(),
+        _ => &[],
+    };
+    let mut result_folders = Vec::new();
+    for folder in folders {
+        let folder_id = folder.get("folder_id").as_uuid();
+        let owner_id = folder.get("owner_id").as_uuid();
+        let mut entry = Map::new();
+        entry.insert("agent_id".into(), Llsd::Uuid(owner_id));
+        entry.insert("descendents".into(), Llsd::Integer(0));
+        entry.insert("folder_id".into(), Llsd::Uuid(folder_id));
+        entry.insert("items".into(), Llsd::Array(Vec::new()));
+        entry.insert("categories".into(), Llsd::Array(Vec::new()));
+        entry.insert("owner_id".into(), Llsd::Uuid(owner_id));
+        entry.insert("version".into(), Llsd::Integer(1));
+        result_folders.push(Llsd::Map(entry));
+    }
+    let mut root = Map::new();
+    root.insert("folders".into(), Llsd::Array(result_folders));
+    llsd_response(Llsd::Map(root))
+}
+
+pub async fn get_display_names(req: axum::http::Request<axum::body::Body>) -> Response {
+    let query = req.uri().query().unwrap_or("");
+    let ids: Vec<&str> = query
+        .split('&')
+        .filter_map(|p| p.strip_prefix("ids="))
+        .collect();
+    let mut agents = Vec::new();
+    for id_str in &ids {
+        if let Ok(id) = Uuid::parse_str(id_str) {
+            let mut agent = Map::new();
+            agent.insert("username".into(), Llsd::String("User".into()));
+            agent.insert("display_name".into(), Llsd::String("User".into()));
+            agent.insert("legacy_first_name".into(), Llsd::String("User".into()));
+            agent.insert("legacy_last_name".into(), Llsd::String("Resident".into()));
+            agent.insert("id".into(), Llsd::Uuid(id));
+            agent.insert("is_display_name_default".into(), Llsd::Boolean(true));
+            agents.push(Llsd::Map(agent));
+        }
+    }
+    let mut root = Map::new();
+    root.insert("agents".into(), Llsd::Array(agents));
+    llsd_response(Llsd::Map(root))
+}
+
+pub async fn home_location(body: Bytes) -> Response {
+    match from_xml(&body) {
+        Ok(llsd) => tracing::debug!(?llsd, "HomeLocation request"),
+        Err(e) => tracing::debug!(?e, "HomeLocation: invalid LLSD body"),
+    }
+    let mut root = Map::new();
+    root.insert("success".into(), Llsd::Boolean(true));
+    llsd_response(Llsd::Map(root))
+}
+
+pub async fn create_inventory_category(
+    State(inv): State<InventoryProxyState>,
+    body: Bytes,
+) -> Response {
+    let parsed = from_xml(&body).unwrap_or(Llsd::Undef);
+    let folder_id = parsed.get("folder_id").as_uuid();
+    let parent_id = parsed.get("parent_id").as_uuid();
+    let name = parsed.get("name").as_str().to_string();
+    let folder_type = parsed.get("type").as_i32();
+
+    if folder_id.is_nil() || name.is_empty() {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+
+    let url = format!("{}/xinventory", inv.inventory_url);
+    let form = format!(
+        "METHOD=ADDFOLDER&ID={folder_id}&ParentID={parent_id}&Name={}&Type={folder_type}&Version=1&Owner=00000000-0000-0000-0000-000000000000",
+        urlencoding_simple(&name),
+    );
+
+    match inv
+        .client
+        .post(&url)
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .body(form)
+        .send()
+        .await
+    {
+        Ok(_) => {
+            tracing::info!(%folder_id, %parent_id, %name, "created inventory folder");
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, %folder_id, "failed to create inventory folder");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    }
+
+    let mut root = Map::new();
+    root.insert("folder_id".into(), Llsd::Uuid(folder_id));
+    root.insert("parent_id".into(), Llsd::Uuid(parent_id));
+    root.insert("name".into(), Llsd::String(name));
+    root.insert("type".into(), Llsd::Integer(folder_type));
+    llsd_response(Llsd::Map(root))
+}
+
+fn urlencoding_simple(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.bytes() {
+        match c {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(c as char);
+            }
+            b' ' => out.push('+'),
+            _ => {
+                out.push('%');
+                out.push(char::from(b"0123456789ABCDEF"[(c >> 4) as usize]));
+                out.push(char::from(b"0123456789ABCDEF"[(c & 0xf) as usize]));
+            }
+        }
+    }
+    out
+}
+
 fn log_upload_body(cap_name: &str, body: &[u8]) {
     match from_xml(body) {
         Ok(llsd) => {
@@ -663,7 +810,8 @@ pub fn cap_routes(
     vec![
         ("GetTexture", get(get_texture).with_state(asset_state.clone())),
         ("GetMesh", get(get_mesh).with_state(asset_state.clone())),
-        ("GetMesh2", get(get_mesh2).with_state(asset_state)),
+        ("GetMesh2", get(get_mesh2).with_state(asset_state.clone())),
+        ("ViewerAsset", get(viewer_asset).with_state(asset_state)),
         ("SimulatorFeatures", get(simulator_features)),
         ("RegionInfo", get(region_info)),
         (
@@ -681,7 +829,11 @@ pub fn cap_routes(
             "FetchInventoryDescendents2",
             post(fetch_inventory_descendents2).with_state(inv_state.clone()),
         ),
-        ("FetchInventory2", post(fetch_inventory2).with_state(inv_state)),
+        ("FetchInventory2", post(fetch_inventory2).with_state(inv_state.clone())),
+        ("FetchLib2", post(fetch_lib2)),
+        ("GetDisplayNames", get(get_display_names)),
+        ("HomeLocation", post(home_location)),
+        ("CreateInventoryCategory", post(create_inventory_category).with_state(inv_state)),
         ("UploadBakedTexture", post(upload_baked_texture).with_state(bake_state)),
     ]
 }
@@ -805,7 +957,7 @@ mod tests {
     #[tokio::test]
     async fn test_cap_routes_count() {
         let routes = cap_routes(test_asset_state(), test_inv_state(), test_bake_state());
-        assert_eq!(routes.len(), 13);
+        assert_eq!(routes.len(), 18);
     }
 
     #[tokio::test]

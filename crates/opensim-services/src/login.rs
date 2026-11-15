@@ -461,6 +461,7 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>)
     members.push_str(&xml_i4("max-agent-groups", 42));
     members.push_str(&xml_str("look_at", "[r0,r0,r0]"));
     members.push_str(&xml_str("home", &home_field));
+    members.push_str(&xml_str("map-server-url", &format!("http://{}:{}/", region.server_ip, region.server_http_port.unwrap_or(8003))));
     members.push_str(&login_flags_member);
     members.push_str(&global_textures_member);
     members.push_str(&ui_config_member);
