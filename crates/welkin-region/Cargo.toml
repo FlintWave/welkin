@@ -20,6 +20,7 @@ welkin-script-compiler = { path = "../welkin-script-compiler" }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+tracing-appender = { workspace = true }
 clap = { workspace = true }
 welkin-msg = { path = "../welkin-msg" }
 tokio-util = { workspace = true }

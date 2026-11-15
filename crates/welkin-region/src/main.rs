@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
+mod logging;
 mod persist;
 mod script_persist;
 mod sim_stats;
@@ -167,9 +168,8 @@ impl ModuleConfig for ConfigBridge<'_> {
 
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt::init();
-
     if let Err(e) = run().await {
+        eprintln!("Region simulator failed: {e}");
         error!("Region simulator failed: {e}");
         std::process::exit(1);
     }
@@ -190,6 +190,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     config.apply_env_overrides();
     config.resolve_substitutions()?;
+
+    // --- Logging (file rotation + console) ---
+    let _log_guard = logging::init(&config);
 
     // --- Extract typed config ---
     let region_config = RegionConfig::from_config(&config);
@@ -659,10 +662,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let frame_metrics = Arc::new(std::sync::Mutex::new(sim_stats::FrameMetrics::new()));
     let heartbeat_metrics = Arc::clone(&frame_metrics);
     let frame_time_ms = (frame_time * 1000.0) as u64;
+    let backup_interval_secs: u64 = {
+        let raw = config.get_i64_or("Backup", "IntervalSeconds", 900);
+        if raw <= 0 { 900 } else { raw.max(5) as u64 }
+    };
+    info!(backup_interval_secs, "periodic backup interval configured");
     let heartbeat_handle = tokio::spawn(async move {
         let mut interval =
             tokio::time::interval(std::time::Duration::from_millis(frame_time_ms.max(50)));
-        let mut backup_counter: u32 = 0;
+        let mut last_backup = Instant::now();
+        let backup_interval = Duration::from_secs(backup_interval_secs);
         let mut prev_colliding: HashSet<u32> = HashSet::new();
         let mut sensor_repeats: HashMap<Uuid, (welkin_script_vm::SensorRequest, std::time::Instant, std::time::Duration)> = HashMap::new();
         let mut control_registrations: HashMap<Uuid, (Uuid, u32, bool, bool)> = HashMap::new();
@@ -965,9 +974,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     let frame_ms = frame_start.elapsed().as_secs_f32() * 1000.0;
                     heartbeat_metrics.lock().unwrap().record(frame_ms, physics_ms, script_ms);
 
-                    backup_counter += 1;
-                    if backup_counter >= 60 {
-                        backup_counter = 0;
+                    if last_backup.elapsed() >= backup_interval {
+                        last_backup = Instant::now();
                         let n = persist::backup_dirty_objects(
                             &heartbeat_scene,
                             &heartbeat_sim_store,
