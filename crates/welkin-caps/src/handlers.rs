@@ -158,6 +158,10 @@ pub async fn simulator_features() -> Response {
         "map-server-url".into(),
         Llsd::String("http://127.0.0.1:8002/map/".into()),
     );
+    extras.insert(
+        "currency-base-uri".into(),
+        Llsd::String("http://127.0.0.1:8002/".into()),
+    );
     map.insert("OpenSimExtras".into(), Llsd::Map(extras));
 
     llsd_response(Llsd::Map(map))

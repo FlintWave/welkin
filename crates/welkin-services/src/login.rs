@@ -482,6 +482,14 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>)
             region.server_http_port.unwrap_or(8002)
         ),
     ));
+    members.push_str(&xml_str(
+        "currency",
+        &format!(
+            "http://{}:{}/",
+            region.server_ip,
+            region.server_http_port.unwrap_or(8002)
+        ),
+    ));
     members.push_str(&login_flags_member);
     members.push_str(&global_textures_member);
     members.push_str(&ui_config_member);

@@ -432,6 +432,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         "/CAPS/{*path}",
         axum::routing::post(seed_caps_handler).with_state(caps_base.clone()),
     );
+    caps_router = caps_router
+        .route("/currency.php", axum::routing::post(currency_php_handler))
+        .route("/landtool.php", axum::routing::post(landtool_php_handler));
 
     let caps_listener = tokio::net::TcpListener::bind(caps_addr).await?;
     info!(addr = %caps_addr, "Capability HTTP server listening");
@@ -1002,6 +1005,166 @@ async fn process_messages(
                     price_group_create: 0,
                 },
             };
+            let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+            let _ = socket.send_to(&pkt_bytes, src).await;
+        }
+
+        if msg_id == MoneyBalanceRequest::ID
+            && let Ok(req) = MoneyBalanceRequest::decode(&pkt.body)
+            && let Some(client) = &client
+        {
+            let txn_id = req.money_data.transaction_id;
+            let reply = MoneyBalanceReply {
+                money_data: money_balance_reply::MoneyData {
+                    agent_id,
+                    transaction_id: txn_id,
+                    transaction_success: true,
+                    money_balance: 0,
+                    square_meters_credit: 0,
+                    square_meters_committed: 0,
+                    description: b"\0".to_vec(),
+                },
+                transaction_info: money_balance_reply::TransactionInfo {
+                    transaction_type: 0,
+                    source_id: Uuid::nil(),
+                    is_source_group: false,
+                    dest_id: Uuid::nil(),
+                    is_dest_group: false,
+                    amount: 0,
+                    item_description: b"\0".to_vec(),
+                },
+            };
+            let mut session = client.lock().await;
+            let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+            let _ = socket.send_to(&pkt_bytes, src).await;
+            info!(agent = %agent_id, "MoneyBalanceRequest: replied with balance 0");
+        }
+
+        if msg_id == MoneyTransferRequest::ID
+            && let Ok(req) = MoneyTransferRequest::decode(&pkt.body)
+            && let Some(client) = &client
+        {
+            let md = &req.money_data;
+            let dest = md.dest_id;
+            let amount = md.amount;
+            let desc = String::from_utf8_lossy(&md.description)
+                .trim_end_matches('\0')
+                .to_string();
+            info!(agent = %agent_id, dest = %dest, amount = amount, desc = %desc, "MoneyTransferRequest: accepted (sample economy)");
+
+            let reply = MoneyBalanceReply {
+                money_data: money_balance_reply::MoneyData {
+                    agent_id,
+                    transaction_id: Uuid::new_v4(),
+                    transaction_success: true,
+                    money_balance: 0,
+                    square_meters_credit: 0,
+                    square_meters_committed: 0,
+                    description: b"Transaction complete\0".to_vec(),
+                },
+                transaction_info: money_balance_reply::TransactionInfo {
+                    transaction_type: md.transaction_type,
+                    source_id: agent_id,
+                    is_source_group: false,
+                    dest_id: dest,
+                    is_dest_group: false,
+                    amount,
+                    item_description: b"\0".to_vec(),
+                },
+            };
+            {
+                let mut session = client.lock().await;
+                let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                let _ = socket.send_to(&pkt_bytes, src).await;
+            }
+
+            let clients_map = clients.read().await;
+            for (peer_addr, peer_client) in clients_map.iter() {
+                let mut sess = peer_client.lock().await;
+                if sess.agent_id == dest {
+                    let dest_reply = MoneyBalanceReply {
+                        money_data: money_balance_reply::MoneyData {
+                            agent_id: dest,
+                            transaction_id: Uuid::new_v4(),
+                            transaction_success: true,
+                            money_balance: 0,
+                            square_meters_credit: 0,
+                            square_meters_committed: 0,
+                            description: b"Payment received\0".to_vec(),
+                        },
+                        transaction_info: money_balance_reply::TransactionInfo {
+                            transaction_type: md.transaction_type,
+                            source_id: agent_id,
+                            is_source_group: false,
+                            dest_id: dest,
+                            is_dest_group: false,
+                            amount,
+                            item_description: b"\0".to_vec(),
+                        },
+                    };
+                    let (pkt_bytes, _) = sess.circuit.send_msg(&dest_reply, true);
+                    let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                    break;
+                }
+            }
+        }
+
+        if msg_id == RequestPayPrice::ID
+            && let Ok(req) = RequestPayPrice::decode(&pkt.body)
+            && let Some(client) = &client
+        {
+            let object_id = req.object_data.object_id;
+            let reply = PayPriceReply {
+                object_data: pay_price_reply::ObjectData {
+                    object_id,
+                    default_pay_price: -1,
+                },
+                button_data: vec![
+                    pay_price_reply::ButtonData { pay_button: -1 },
+                    pay_price_reply::ButtonData { pay_button: -1 },
+                    pay_price_reply::ButtonData { pay_button: -1 },
+                    pay_price_reply::ButtonData { pay_button: -1 },
+                ],
+            };
+            let mut session = client.lock().await;
+            let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+            let _ = socket.send_to(&pkt_bytes, src).await;
+            info!(agent = %agent_id, object = %object_id, "RequestPayPrice: replied with defaults");
+        }
+
+        if msg_id == ObjectBuy::ID
+            && let Ok(buy) = ObjectBuy::decode(&pkt.body)
+            && let Some(client) = &client
+        {
+            for obj in &buy.object_data {
+                info!(
+                    agent = %agent_id,
+                    local_id = obj.object_local_id,
+                    sale_type = obj.sale_type,
+                    "ObjectBuy: accepted (sample economy)"
+                );
+            }
+            let reply = MoneyBalanceReply {
+                money_data: money_balance_reply::MoneyData {
+                    agent_id,
+                    transaction_id: Uuid::new_v4(),
+                    transaction_success: true,
+                    money_balance: 0,
+                    square_meters_credit: 0,
+                    square_meters_committed: 0,
+                    description: b"Purchase complete\0".to_vec(),
+                },
+                transaction_info: money_balance_reply::TransactionInfo {
+                    transaction_type: 0,
+                    source_id: agent_id,
+                    is_source_group: false,
+                    dest_id: Uuid::nil(),
+                    is_dest_group: false,
+                    amount: 0,
+                    item_description: b"\0".to_vec(),
+                },
+            };
+            let mut session = client.lock().await;
             let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
             let _ = socket.send_to(&pkt_bytes, src).await;
         }
@@ -3445,6 +3608,78 @@ async fn seed_caps_handler(State(base_url): State<String>, body: Bytes) -> impl 
         axum::http::StatusCode::OK,
         [("content-type", "application/llsd+xml")],
         xml,
+    )
+}
+
+async fn currency_php_handler(body: Bytes) -> impl IntoResponse {
+    let body_str = String::from_utf8_lossy(&body);
+
+    let response_xml = if body_str.contains("getCurrencyQuote") {
+        r#"<?xml version="1.0"?>
+<methodResponse><params><param><value><struct>
+<member><name>success</name><value><boolean>1</boolean></value></member>
+<member><name>currency</name><value><struct>
+<member><name>estimatedCost</name><value><string>&lt;$0.00&gt;</string></value></member>
+<member><name>currencyBuy</name><value><int>0</int></value></member>
+</struct></value></member>
+<member><name>confirm</name><value><string></string></value></member>
+</struct></value></param></params></methodResponse>"#
+    } else if body_str.contains("buyCurrency") {
+        r#"<?xml version="1.0"?>
+<methodResponse><params><param><value><struct>
+<member><name>success</name><value><boolean>1</boolean></value></member>
+</struct></value></param></params></methodResponse>"#
+    } else {
+        r#"<?xml version="1.0"?>
+<methodResponse><params><param><value><struct>
+<member><name>success</name><value><boolean>0</boolean></value></member>
+</struct></value></param></params></methodResponse>"#
+    };
+
+    (
+        axum::http::StatusCode::OK,
+        [("Content-Type", "text/xml")],
+        response_xml,
+    )
+}
+
+async fn landtool_php_handler(body: Bytes) -> impl IntoResponse {
+    let body_str = String::from_utf8_lossy(&body);
+
+    let response_xml = if body_str.contains("preflightBuyLandPrep") {
+        r#"<?xml version="1.0"?>
+<methodResponse><params><param><value><struct>
+<member><name>success</name><value><boolean>1</boolean></value></member>
+<member><name>currency</name><value><struct>
+<member><name>estimatedCost</name><value><string>&lt;$0.00&gt;</string></value></member>
+</struct></value></member>
+<member><name>membership</name><value><struct>
+<member><name>upgrade</name><value><boolean>0</boolean></value></member>
+<member><name>action</name><value><string></string></value></member>
+<member><name>levels</name><value><array><data></data></array></value></member>
+</struct></value></member>
+<member><name>landUse</name><value><struct>
+<member><name>upgrade</name><value><boolean>0</boolean></value></member>
+<member><name>action</name><value><string></string></value></member>
+</struct></value></member>
+<member><name>confirm</name><value><string></string></value></member>
+</struct></value></param></params></methodResponse>"#
+    } else if body_str.contains("buyLandPrep") {
+        r#"<?xml version="1.0"?>
+<methodResponse><params><param><value><struct>
+<member><name>success</name><value><boolean>1</boolean></value></member>
+</struct></value></param></params></methodResponse>"#
+    } else {
+        r#"<?xml version="1.0"?>
+<methodResponse><params><param><value><struct>
+<member><name>success</name><value><boolean>0</boolean></value></member>
+</struct></value></param></params></methodResponse>"#
+    };
+
+    (
+        axum::http::StatusCode::OK,
+        [("Content-Type", "text/xml")],
+        response_xml,
     )
 }
 
