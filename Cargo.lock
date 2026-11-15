@@ -4735,6 +4735,7 @@ dependencies = [
  "parking_lot 0.12.5",
  "reqwest 0.12.28",
  "serde_json",
+ "sqlx",
  "tokio",
  "tokio-util",
  "tracing",
