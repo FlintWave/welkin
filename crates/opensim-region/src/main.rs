@@ -24,6 +24,7 @@ use opensim_msg::Msg;
 use opensim_net::dispatch::{HandleError, PacketContext, PacketDispatcher};
 use opensim_net::server::ClientSession;
 use opensim_scene::scene::{RegionInfo, Scene, SceneConfig};
+use opensim_msg::objects::FullObjectUpdate;
 
 /// OpenSimulator Region Simulator
 #[derive(Parser, Debug)]
@@ -479,6 +480,113 @@ async fn send_movement_complete(
         }
     }
     info!(agent = %session.agent_id, "sent terrain LayerData (256 flat patches)");
+
+    let (obj_pkt, wear_pkt, app_pkt) = build_avatar_packets(&mut session, region_info.region_handle);
+    for (pkt, name) in [(obj_pkt, "ObjectUpdate"), (wear_pkt, "AgentWearablesUpdate"), (app_pkt, "AvatarAppearance")] {
+        if let Err(e) = socket.send_to(&pkt, addr).await {
+            tracing::warn!(error = %e, msg = name, "failed to send avatar packet");
+            return;
+        }
+    }
+    info!(agent = %session.agent_id, "sent avatar appearance packets");
+}
+
+fn build_avatar_packets(
+    session: &mut ClientSession,
+    region_handle: u64,
+) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+    let avatar_obj = FullObjectUpdate {
+        local_id: 1,
+        full_id: session.agent_id,
+        parent_id: 0,
+        pcode: 47,
+        state: 0,
+        crc: 0,
+        material: 0,
+        click_action: 0,
+        scale: glam::Vec3::new(0.45, 0.6, 1.75),
+        position: glam::Vec3::new(128.0, 128.0, 25.0),
+        velocity: glam::Vec3::ZERO,
+        acceleration: glam::Vec3::ZERO,
+        rotation: glam::Quat::IDENTITY,
+        angular_velocity: glam::Vec3::ZERO,
+        update_flags: 0x2000_0001,
+        owner_id: session.agent_id,
+        path_curve: 0,
+        profile_curve: 0,
+        path_begin: 0,
+        path_end: 0,
+        path_scale_x: 0,
+        path_scale_y: 0,
+        path_shear_x: 0,
+        path_shear_y: 0,
+        path_twist: 0,
+        path_twist_begin: 0,
+        path_radius_offset: 0,
+        path_taper_x: 0,
+        path_taper_y: 0,
+        path_revolutions: 0,
+        path_skew: 0,
+        profile_begin: 0,
+        profile_end: 0,
+        profile_hollow: 0,
+        texture_entry: Vec::new(),
+        texture_anim: Vec::new(),
+        name_value: b"FirstName STRING RW SV Test\nLastName STRING RW SV User\n".to_vec(),
+        data: Vec::new(),
+        text: String::new(),
+        text_color: [0, 0, 0, 0],
+        media_url: String::new(),
+        ps_block: Vec::new(),
+        extra_params: Vec::new(),
+        sound_id: Uuid::nil(),
+        sound_gain: 0.0,
+        sound_flags: 0,
+        sound_radius: 0.0,
+        foot_plane: Some(glam::Vec4::new(0.0, 0.0, 1.0, 0.0)),
+    };
+
+    let obj_msg = ObjectUpdate {
+        region_data: object_update::RegionData {
+            region_handle,
+            time_dilation: 65535,
+        },
+        object_data: vec![avatar_obj.to_object_data()],
+    };
+    let (obj_pkt, _) = session.circuit.send_msg(&obj_msg, true);
+
+    let wearables_msg = AgentWearablesUpdate {
+        agent_data: agent_wearables_update::AgentData {
+            agent_id: session.agent_id,
+            session_id: session.session_id,
+            serial_num: 1,
+        },
+        wearable_data: Vec::new(),
+    };
+    let (wear_pkt, _) = session.circuit.send_msg(&wearables_msg, true);
+
+    let visual_params: Vec<avatar_appearance::VisualParam> =
+        (0..218).map(|_| avatar_appearance::VisualParam { param_value: 128 }).collect();
+    let appearance_msg = AvatarAppearance {
+        sender: avatar_appearance::Sender {
+            id: session.agent_id,
+            is_trial: false,
+        },
+        object_data: avatar_appearance::ObjectData {
+            texture_entry: Vec::new(),
+        },
+        visual_param: visual_params,
+        appearance_data: vec![avatar_appearance::AppearanceData {
+            appearance_version: 1,
+            cof_version: 0,
+            flags: 0,
+        }],
+        appearance_hover: Vec::new(),
+        attachment_block: Vec::new(),
+    };
+    let (app_pkt, _) = session.circuit.send_msg(&appearance_msg, true);
+
+    (obj_pkt, wear_pkt, app_pkt)
 }
 
 fn build_flat_terrain_data(height: f32, patches: &[(u32, u32)]) -> Vec<u8> {
@@ -535,6 +643,7 @@ fn build_layer_data_raw(terrain_data: &[u8]) -> Vec<u8> {
 }
 
 const KNOWN_CAPS: &[&str] = &[
+    "EventQueueGet",
     "GetTexture",
     "GetMesh",
     "GetMesh2",

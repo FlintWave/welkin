@@ -32,6 +32,10 @@ pub fn register_core_handlers(dispatcher: &mut PacketDispatcher) {
     register_avatar_animation(dispatcher);
     register_agent_set_appearance(dispatcher);
     register_viewer_effect(dispatcher);
+
+    // Task P1-5: Missing handlers viewers actually send
+    register_region_handshake_reply(dispatcher);
+    register_agent_throttle(dispatcher);
 }
 
 // ---------------------------------------------------------------------------
@@ -201,6 +205,32 @@ fn register_viewer_effect(d: &mut PacketDispatcher) {
             agent = %ctx.agent_id,
             effect_count = msg.effect.len(),
             "ViewerEffect",
+        );
+        Ok(())
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Task P1-5 — Handlers the viewer sends during region entry
+// ---------------------------------------------------------------------------
+
+fn register_region_handshake_reply(d: &mut PacketDispatcher) {
+    d.register::<RegionHandshakeReply, _>(|ctx, msg| {
+        tracing::debug!(
+            agent = %ctx.agent_id,
+            flags = msg.region_info.flags,
+            "RegionHandshakeReply",
+        );
+        Ok(())
+    });
+}
+
+fn register_agent_throttle(d: &mut PacketDispatcher) {
+    d.register::<AgentThrottle, _>(|ctx, msg| {
+        tracing::debug!(
+            agent = %ctx.agent_id,
+            throttle_len = msg.throttle.throttles.len(),
+            "AgentThrottle",
         );
         Ok(())
     });
