@@ -24,17 +24,17 @@
 
 ## Phase 3: LSL completion
 
-- [ ] Implement llEmail, llGetNextEmail with SMTP send (lettre) and email queue polling
-- [ ] Implement llHTTPRequest, llSetHTTPBody with outbound HTTP, throttling, URL filtering
-- [ ] Implement llRequestURL, llRequestSecureURL, llReleaseURL for inbound HTTP to scripts
-- [ ] Implement llRezObject, llRezAtRoot: rez from script inventory at position with velocity and start param
-- [ ] Implement llSetLinkPrimitiveParams, llSetLinkPrimitiveParamsFast: modify linked prim properties
-- [ ] Implement llAttachToAvatar, llDetachFromAvatar, llAttachToAvatarTemp: attachment control via script
-- [ ] Implement llSetVehicleType and all llSetVehicle* functions: vehicle dynamics with 40+ VEHICLE_* constants from OpenSim Scene.cs
-- [ ] Implement llTarget, llTargetRemove: position target events (at_target/not_at_target)
-- [ ] Implement llRotTarget, llRotTargetRemove: rotation target events
-- [ ] Implement llRequestAgentData: query agent info (online status, birth date, payment info) via ROBUST
-- [ ] Implement llGetNotecardLine, llGetNumberOfNotecardLines: async notecard reading (dataserver event)
+- [x] Implement llEmail, llGetNextEmail with SMTP send (lettre) and email queue polling
+- [x] Implement llHTTPRequest, llSetHTTPBody with outbound HTTP, throttling, URL filtering
+- [x] Implement llRequestURL, llRequestSecureURL, llReleaseURL for inbound HTTP to scripts
+- [x] Implement llRezObject, llRezAtRoot: rez from script inventory at position with velocity and start param
+- [x] Implement llSetLinkPrimitiveParams, llSetLinkPrimitiveParamsFast: modify linked prim properties
+- [x] Implement llAttachToAvatar, llDetachFromAvatar, llAttachToAvatarTemp: attachment control via script
+- [x] Implement llSetVehicleType and all llSetVehicle* functions: vehicle dynamics with 40+ VEHICLE_* constants from OpenSim Scene.cs
+- [x] Implement llTarget, llTargetRemove: position target events (at_target/not_at_target)
+- [x] Implement llRotTarget, llRotTargetRemove: rotation target events
+- [x] Implement llRequestAgentData: query agent info (online status, birth date, payment info) via ROBUST
+- [x] Implement llGetNotecardLine, llGetNumberOfNotecardLines: async notecard reading (dataserver event)
 
 ## Phase 4: Validation
 
