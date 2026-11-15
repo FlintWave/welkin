@@ -45,51 +45,51 @@
 ## Phase 4: Builtin Completion (P1)
 
 ### Communication (highest priority — most scripts use these)
-- [ ] Implement llSay, llShout, llWhisper, llRegionSay, llRegionSayTo — chat on channels with range limits (20m/100m/region)
-- [ ] Implement llInstantMessage — send IM to avatar UUID via IM module
+- [x] Implement llSay, llShout, llWhisper, llRegionSay, llRegionSayTo — chat on channels with range limits (20m/100m/region)
+- [x] Implement llInstantMessage — send IM to avatar UUID via IM module
 - [ ] Implement llEmail, llGetNextEmail — SMTP send via lettre, email queue polling
 - [ ] Implement llHTTPRequest, llSetHTTPBody — outbound HTTP with throttling and URL filtering
 - [ ] Implement llRequestURL, llRequestSecureURL, llReleaseURL — inbound HTTP for scripts (register cap URL, route requests to script)
 
 ### Object/Prim (most-used after communication)
-- [ ] Implement remaining llSet* — llSetPos, llSetRot, llSetScale, llSetColor, llSetAlpha, llSetTexture, llSetPrimitiveParams (the big one — all BUILD_* constants from OpenSim)
-- [ ] Implement remaining llGet* — llGetPos, llGetRot, llGetScale, llGetColor, llGetAlpha, llGetTexture, llGetPrimitiveParams, llGetObjectDetails, llGetObjectDesc, llGetObjectName
+- [x] Implement remaining llSet* — llSetPos, llSetRot, llSetScale, llSetColor, llSetAlpha, llSetTexture, llSetPrimitiveParams (the big one — all BUILD_* constants from OpenSim)
+- [x] Implement remaining llGet* — llGetPos, llGetRot, llGetScale, llGetColor, llGetAlpha, llGetTexture, llGetPrimitiveParams, llGetObjectDetails, llGetObjectDesc, llGetObjectName
 - [ ] Implement llRezObject, llRezAtRoot — rez from script inventory at position with velocity and start param
-- [ ] Implement llDie — delete the object containing the script
+- [x] Implement llDie — delete the object containing the script
 - [ ] Implement llSetLinkPrimitiveParams, llSetLinkPrimitiveParamsFast — modify linked prims
-- [ ] Implement llGetLinkKey, llGetLinkName, llGetLinkNumber, llGetNumberOfPrims — link set queries
+- [x] Implement llGetLinkKey, llGetLinkName, llGetLinkNumber, llGetNumberOfPrims — link set queries
 - [ ] Implement llAttachToAvatar, llDetachFromAvatar, llAttachToAvatarTemp — attachment control
 
 ### Movement/Physics
-- [ ] Implement llSetForce, llSetTorque, llApplyImpulse, llApplyRotationalImpulse — physics forces via Rapier
-- [ ] Implement llSetBuoyancy, llSetHoverHeight — physics properties
+- [x] Implement llSetForce, llSetTorque, llApplyImpulse, llApplyRotationalImpulse — physics forces via Rapier
+- [x] Implement llSetBuoyancy, llSetHoverHeight — physics properties
 - [ ] Implement llSetVehicleType and all llSetVehicle* — vehicle dynamics (TYPE_CAR, TYPE_BOAT, TYPE_AIRPLANE, TYPE_BALLOON, TYPE_SLED, 40+ VEHICLE_* constants from OpenSim)
-- [ ] Implement llMoveToTarget, llStopMoveToTarget — PID-controlled movement
+- [x] Implement llMoveToTarget, llStopMoveToTarget — PID-controlled movement
 - [ ] Implement llTarget, llTargetRemove — position target events (at_target/not_at_target)
 - [ ] Implement llRotTarget, llRotTargetRemove — rotation target events
 
 ### Avatar
 - [ ] Implement llRequestAgentData — query agent info (online status, birth date, payment info) via ROBUST
-- [ ] Implement llGetAgentInfo, llGetAgentSize, llGetAgentLanguage — avatar properties
-- [ ] Implement llRequestPermissions, llGetPermissions — runtime permission system (PERMISSION_DEBIT, PERMISSION_TRIGGER_ANIMATION, PERMISSION_ATTACH, PERMISSION_TELEPORT, etc.)
-- [ ] Implement llStartAnimation, llStopAnimation — play animations on avatar (requires permission)
-- [ ] Implement llTeleportAgent, llTeleportAgentHome — teleport with permission check
-- [ ] Implement llSitTarget, llUnSit, llAvatarOnSitTarget, llAvatarOnLinkSitTarget — sit targeting
+- [x] Implement llGetAgentInfo, llGetAgentSize, llGetAgentLanguage — avatar properties
+- [x] Implement llRequestPermissions, llGetPermissions — runtime permission system (PERMISSION_DEBIT, PERMISSION_TRIGGER_ANIMATION, PERMISSION_ATTACH, PERMISSION_TELEPORT, etc.)
+- [x] Implement llStartAnimation, llStopAnimation — play animations on avatar (requires permission)
+- [x] Implement llTeleportAgent, llTeleportAgentHome — teleport with permission check
+- [x] Implement llSitTarget, llUnSit, llAvatarOnSitTarget, llAvatarOnLinkSitTarget — sit targeting
 
 ### Inventory/Notecard
-- [ ] Implement llGetInventoryName, llGetInventoryNumber, llGetInventoryType, llGetInventoryKey — query task inventory
-- [ ] Implement llGiveInventory, llGiveInventoryList — give items to avatars/objects
+- [x] Implement llGetInventoryName, llGetInventoryNumber, llGetInventoryType, llGetInventoryKey — query task inventory
+- [x] Implement llGiveInventory, llGiveInventoryList — give items to avatars/objects
 - [ ] Implement llGetNotecardLine, llGetNumberOfNotecardLines — async notecard reading (dataserver event)
-- [ ] Implement llRemoveInventory, llAllowInventoryDrop — inventory management
+- [x] Implement llRemoveInventory, llAllowInventoryDrop — inventory management
 
 ### Math/Utility (many already done, fill gaps)
-- [ ] Implement remaining math — llAngleBetween, llAxes2Rot, llRot2Angle, llRot2Axis, llRot2Euler, llEuler2Rot, llRotBetween (rotation math), llListStatistics (stats on numeric lists)
-- [ ] Implement llGetUnixTime, llGetTimestamp, llGetGMTclock, llGetWallclock — time functions
-- [ ] Implement llGenerateKey — generate new UUID
-- [ ] Implement llMD5String, llSHA1String, llSHA256String — crypto hashes
-- [ ] Implement llBase64ToString, llStringToBase64, llXorBase64, llIntegerToBase64 — encoding
+- [x] Implement remaining math — llAngleBetween, llAxes2Rot, llRot2Angle, llRot2Axis, llRot2Euler, llEuler2Rot, llRotBetween (rotation math), llListStatistics (stats on numeric lists)
+- [x] Implement llGetUnixTime, llGetTimestamp, llGetGMTclock, llGetWallclock — time functions
+- [x] Implement llGenerateKey — generate new UUID
+- [x] Implement llMD5String, llSHA1String, llSHA256String — crypto hashes
+- [x] Implement llBase64ToString, llStringToBase64, llXorBase64, llIntegerToBase64 — encoding
 
 ### Land/Parcel
-- [ ] Implement llGetParcelDetails, llGetParcelFlags, llGetParcelMaxPrims, llGetParcelPrimCount — parcel queries
-- [ ] Implement llOverMyLand, llGetLandOwnerAt — land ownership checks
-- [ ] Implement llSetParcelMusicURL, llSetParcelMediaURL — parcel media control
+- [x] Implement llGetParcelDetails, llGetParcelFlags, llGetParcelMaxPrims, llGetParcelPrimCount — parcel queries
+- [x] Implement llOverMyLand, llGetLandOwnerAt — land ownership checks
+- [x] Implement llSetParcelMusicURL, llSetParcelMediaURL — parcel media control

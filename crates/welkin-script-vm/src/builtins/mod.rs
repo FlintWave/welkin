@@ -6,7 +6,10 @@
 //! fully implemented; communication, physics and object functions are stubs
 //! that log via [`tracing`] and return sensible defaults.
 
+pub mod avatar;
 pub mod communication;
+pub mod inventory;
+pub mod land;
 pub mod list;
 pub mod math;
 pub mod object;
@@ -20,10 +23,40 @@ use uuid::Uuid;
 
 use crate::VmError;
 
+pub const INVENTORY_TEXTURE: i32 = 0;
+pub const INVENTORY_SOUND: i32 = 1;
+pub const INVENTORY_LANDMARK: i32 = 3;
+pub const INVENTORY_CLOTHING: i32 = 5;
+pub const INVENTORY_OBJECT: i32 = 6;
+pub const INVENTORY_NOTECARD: i32 = 7;
+pub const INVENTORY_SCRIPT: i32 = 10;
+pub const INVENTORY_BODYPART: i32 = 13;
+pub const INVENTORY_ANIMATION: i32 = 20;
+pub const INVENTORY_GESTURE: i32 = 21;
+pub const INVENTORY_ALL: i32 = -1;
+pub const INVENTORY_NONE: i32 = -1;
+
+#[derive(Debug, Clone)]
+pub struct InventoryItem {
+    pub name: String,
+    pub item_type: i32,
+    pub asset_id: Uuid,
+}
+
+#[derive(Debug, Clone)]
+pub struct ListenFilter {
+    pub handle: i32,
+    pub channel: i32,
+    pub name: String,
+    pub id: String,
+    pub msg: String,
+    pub active: bool,
+}
+
 /// Shared context available to every ll* function closure.
 ///
 /// Wrapped in `Arc<RwLock<..>>` and cloned into each registered closure so
-/// that stubs can read prim identity, position, etc.
+/// that builtins can read prim identity, position, etc.
 pub struct ScriptContext {
     pub script_id: Uuid,
     pub prim_id: Uuid,
@@ -34,7 +67,29 @@ pub struct ScriptContext {
     pub rotation: [f64; 4],
     pub scale: [f64; 3],
     pub link_num: i32,
+    pub color: [f64; 3],
+    pub alpha: f64,
+    pub creator_id: Uuid,
+    pub texture: Uuid,
+    pub permissions_granted: u32,
+    pub sit_target_pos: [f64; 3],
+    pub sit_target_rot: [f64; 4],
+    pub sitting_avatar: Option<Uuid>,
+    pub inventory: Vec<InventoryItem>,
+    pub allow_inventory_drop: bool,
+    pub parcel_name: String,
+    pub parcel_description: String,
+    pub parcel_owner: Uuid,
+    pub parcel_area: i32,
+    pub parcel_flags: u32,
     pub event_sender: Option<std::sync::mpsc::Sender<(Uuid, crate::ScriptEvent)>>,
+    pub chat_sender: Option<std::sync::mpsc::Sender<crate::ChatMessage>>,
+    pub listen_handles: Vec<ListenFilter>,
+    pub next_listen_handle: i32,
+    pub physics_sender: Option<std::sync::mpsc::Sender<(Uuid, crate::PhysicsCommand)>>,
+    pub velocity: [f64; 3],
+    pub angular_velocity: [f64; 3],
+    pub acceleration: [f64; 3],
 }
 
 impl Default for ScriptContext {
@@ -49,7 +104,29 @@ impl Default for ScriptContext {
             rotation: [0.0, 0.0, 0.0, 1.0],
             scale: [1.0, 1.0, 1.0],
             link_num: 0,
+            color: [1.0, 1.0, 1.0],
+            alpha: 1.0,
+            creator_id: Uuid::nil(),
+            texture: Uuid::nil(),
+            permissions_granted: 0,
+            sit_target_pos: [0.0; 3],
+            sit_target_rot: [0.0, 0.0, 0.0, 1.0],
+            sitting_avatar: None,
+            inventory: Vec::new(),
+            allow_inventory_drop: false,
+            parcel_name: String::new(),
+            parcel_description: String::new(),
+            parcel_owner: Uuid::nil(),
+            parcel_area: 256,
+            parcel_flags: 0,
             event_sender: None,
+            chat_sender: None,
+            listen_handles: Vec::new(),
+            next_listen_handle: 1,
+            physics_sender: None,
+            velocity: [0.0; 3],
+            angular_velocity: [0.0; 3],
+            acceleration: [0.0; 3],
         }
     }
 }
@@ -65,6 +142,9 @@ pub fn register_all(lua: &mlua::Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result
     communication::register_communication(lua, ctx)?;
     physics::register_physics(lua, ctx)?;
     object::register_object(lua, ctx)?;
+    avatar::register_avatar(lua, ctx)?;
+    inventory::register_inventory(lua, ctx)?;
+    land::register_land(lua, ctx)?;
     Ok(())
 }
 
@@ -82,10 +162,7 @@ mod tests {
             prim_desc: "A test prim".into(),
             owner_id: Uuid::new_v4(),
             position: [128.0, 128.0, 25.0],
-            rotation: [0.0, 0.0, 0.0, 1.0],
-            scale: [1.0, 1.0, 1.0],
-            link_num: 0,
-            event_sender: None,
+            ..Default::default()
         }));
         register_all(&lua, &ctx).expect("register_all should succeed");
         (lua, ctx)
@@ -117,7 +194,6 @@ mod tests {
     fn end_to_end_communication_stub() {
         let (lua, _ctx) = vm_with_builtins();
 
-        // Should not panic — just logs.
         lua.load(r#"llSay(0, "Hello from test!")"#)
             .exec()
             .expect("llSay should not error");

@@ -52,6 +52,7 @@ pub enum ScriptEvent {
         body: String,
     },
     Money { agent_id: Uuid, amount: i32 },
+    RunTimePermissions { permissions: u32 },
     Custom {
         name: String,
         args: Vec<serde_json::Value>,
@@ -76,6 +77,7 @@ impl ScriptEvent {
             ScriptEvent::HttpResponse { .. } => "http_response",
             ScriptEvent::HttpRequest { .. } => "http_request",
             ScriptEvent::Money { .. } => "money",
+            ScriptEvent::RunTimePermissions { .. } => "run_time_permissions",
             ScriptEvent::Custom { name, .. } => name.as_str(),
         }
     }
@@ -271,6 +273,9 @@ impl ScriptInstance {
             ScriptEvent::Money { agent_id, amount } => {
                 args.push(mlua::Value::String(self.vm.create_string(agent_id.to_string())?));
                 args.push(mlua::Value::Integer(i64::from(*amount)));
+            }
+            ScriptEvent::RunTimePermissions { permissions } => {
+                args.push(mlua::Value::Integer(i64::from(*permissions)));
             }
             ScriptEvent::Custom { args: json_args, .. } => {
                 use mlua::LuaSerdeExt;

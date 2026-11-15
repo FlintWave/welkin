@@ -20,6 +20,42 @@ pub use instance::{ScriptEvent, ScriptInstance, ScriptInstanceState};
 pub use scheduler::{ScriptScheduler, TimerEntry};
 pub use transfer::RegionTransferBundle;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChatType {
+    Whisper,
+    Say,
+    Shout,
+    Region,
+    Owner,
+    Direct,
+    IM,
+}
+
+#[derive(Debug, Clone)]
+pub struct ChatMessage {
+    pub source_id: uuid::Uuid,
+    pub source_name: String,
+    pub source_pos: [f64; 3],
+    pub owner_id: uuid::Uuid,
+    pub channel: i32,
+    pub message: String,
+    pub chat_type: ChatType,
+    pub target_id: Option<uuid::Uuid>,
+}
+
+#[derive(Debug, Clone)]
+pub enum PhysicsCommand {
+    SetForce { force: [f64; 3], local: bool },
+    SetTorque { torque: [f64; 3], local: bool },
+    ApplyImpulse { impulse: [f64; 3], local: bool },
+    ApplyRotationalImpulse { impulse: [f64; 3], local: bool },
+    SetBuoyancy { buoyancy: f64 },
+    SetStatus { status: i32, value: bool },
+    MoveToTarget { target: [f64; 3], tau: f64 },
+    StopMoveToTarget,
+    SetHoverHeight { height: f64, water: i32, tau: f64 },
+}
+
 /// Errors returned by the script VM.
 #[derive(Debug, thiserror::Error)]
 pub enum VmError {

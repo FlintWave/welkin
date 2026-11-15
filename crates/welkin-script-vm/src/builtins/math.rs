@@ -250,6 +250,164 @@ pub fn register_math(lua: &Lua) -> Result<(), crate::VmError> {
     })?;
     g.set("llAngleBetween", f)?;
 
+    // llRot2Angle — angle of rotation in radians
+    let f = lua.create_function(|_, r: LuaValue| {
+        let [_, _, _, w] = get_rot(&r)?;
+        Ok(2.0 * w.abs().min(1.0).acos())
+    })?;
+    g.set("llRot2Angle", f)?;
+
+    // llRot2Axis — axis of rotation as a unit vector
+    let f = lua.create_function(|lua, r: LuaValue| {
+        let [x, y, z, w] = get_rot(&r)?;
+        let angle = 2.0 * w.abs().min(1.0).acos();
+        let s = (angle / 2.0).sin();
+        if s.abs() < 1e-10 {
+            make_vec3(lua, [0.0, 0.0, 1.0])
+        } else {
+            let sign = if w < 0.0 { -1.0 } else { 1.0 };
+            make_vec3(lua, [sign * x / s, sign * y / s, sign * z / s])
+        }
+    })?;
+    g.set("llRot2Axis", f)?;
+
+    // llRotBetween — quaternion that rotates v1 to v2
+    let f = lua.create_function(|lua, (v1, v2): (LuaValue, LuaValue)| {
+        let a = get_vec3(&v1)?;
+        let b = get_vec3(&v2)?;
+        let mag_a = (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt();
+        let mag_b = (b[0] * b[0] + b[1] * b[1] + b[2] * b[2]).sqrt();
+        if mag_a < 1e-10 || mag_b < 1e-10 {
+            return make_rot(lua, [0.0, 0.0, 0.0, 1.0]);
+        }
+        let an = [a[0] / mag_a, a[1] / mag_a, a[2] / mag_a];
+        let bn = [b[0] / mag_b, b[1] / mag_b, b[2] / mag_b];
+        let dot = an[0] * bn[0] + an[1] * bn[1] + an[2] * bn[2];
+        let cross = [
+            an[1] * bn[2] - an[2] * bn[1],
+            an[2] * bn[0] - an[0] * bn[2],
+            an[0] * bn[1] - an[1] * bn[0],
+        ];
+        if dot < -0.999999 {
+            // Antiparallel — pick a perpendicular axis
+            let perp = if an[0].abs() < 0.9 {
+                [0.0, -an[2], an[1]]
+            } else {
+                [an[2], 0.0, -an[0]]
+            };
+            let mag = (perp[0] * perp[0] + perp[1] * perp[1] + perp[2] * perp[2]).sqrt();
+            return make_rot(lua, [perp[0] / mag, perp[1] / mag, perp[2] / mag, 0.0]);
+        }
+        let w = (1.0 + dot).sqrt() * 0.5;
+        let s = 1.0 / (4.0 * w);
+        let qx = cross[0] * s;
+        let qy = cross[1] * s;
+        let qz = cross[2] * s;
+        let mag = (qx * qx + qy * qy + qz * qz + w * w).sqrt();
+        make_rot(lua, [qx / mag, qy / mag, qz / mag, w / mag])
+    })?;
+    g.set("llRotBetween", f)?;
+
+    // llGetUnixTime — seconds since Unix epoch
+    let f = lua.create_function(|_, ()| {
+        use chrono::Utc;
+        Ok(Utc::now().timestamp())
+    })?;
+    g.set("llGetUnixTime", f)?;
+
+    // llGetTimestamp — UTC timestamp string
+    let f = lua.create_function(|_, ()| {
+        use chrono::Utc;
+        Ok(Utc::now().format("%Y-%m-%dT%H:%M:%S.%6fZ").to_string())
+    })?;
+    g.set("llGetTimestamp", f)?;
+
+    // llGetGMTclock — seconds since midnight UTC
+    let f = lua.create_function(|_, ()| {
+        use chrono::{Timelike, Utc};
+        let now = Utc::now();
+        Ok((now.hour() * 3600 + now.minute() * 60 + now.second()) as f64)
+    })?;
+    g.set("llGetGMTclock", f)?;
+
+    // llGetWallclock — same as GMTclock in LSL (no timezone)
+    let f = lua.create_function(|_, ()| {
+        use chrono::{Timelike, Utc};
+        let now = Utc::now();
+        Ok((now.hour() * 3600 + now.minute() * 60 + now.second()) as f64)
+    })?;
+    g.set("llGetWallclock", f)?;
+
+    // llGenerateKey — new random UUID
+    let f = lua.create_function(|_, ()| Ok(uuid::Uuid::new_v4().to_string()))?;
+    g.set("llGenerateKey", f)?;
+
+    // -- LIST_STAT_* constants ------------------------------------------------
+    g.set("LIST_STAT_RANGE", 0i64)?;
+    g.set("LIST_STAT_MIN", 1i64)?;
+    g.set("LIST_STAT_MAX", 2i64)?;
+    g.set("LIST_STAT_MEAN", 3i64)?;
+    g.set("LIST_STAT_MEDIAN", 4i64)?;
+    g.set("LIST_STAT_STD_DEV", 5i64)?;
+    g.set("LIST_STAT_SUM", 6i64)?;
+    g.set("LIST_STAT_SUM_SQUARES", 7i64)?;
+    g.set("LIST_STAT_NUM_COUNT", 8i64)?;
+    g.set("LIST_STAT_GEOMETRIC_MEAN", 9i64)?;
+
+    // llListStatistics(operation, list) -> float
+    let f = lua.create_function(|_, (op, list): (i64, LuaTable)| {
+        let mut nums: Vec<f64> = Vec::new();
+        for pair in list.sequence_values::<LuaValue>() {
+            match pair? {
+                LuaValue::Integer(i) => nums.push(i as f64),
+                LuaValue::Number(n) => nums.push(n),
+                _ => {}
+            }
+        }
+        if nums.is_empty() {
+            return Ok(0.0);
+        }
+        let result = match op {
+            0 => {
+                // RANGE
+                let min = nums.iter().cloned().fold(f64::INFINITY, f64::min);
+                let max = nums.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+                max - min
+            }
+            1 => nums.iter().cloned().fold(f64::INFINITY, f64::min),       // MIN
+            2 => nums.iter().cloned().fold(f64::NEG_INFINITY, f64::max),   // MAX
+            3 => nums.iter().sum::<f64>() / nums.len() as f64,            // MEAN
+            4 => {
+                // MEDIAN
+                let mut sorted = nums.clone();
+                sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+                let mid = sorted.len() / 2;
+                if sorted.len() % 2 == 0 {
+                    (sorted[mid - 1] + sorted[mid]) / 2.0
+                } else {
+                    sorted[mid]
+                }
+            }
+            5 => {
+                // STD_DEV
+                let mean = nums.iter().sum::<f64>() / nums.len() as f64;
+                let variance = nums.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / nums.len() as f64;
+                variance.sqrt()
+            }
+            6 => nums.iter().sum(),                                        // SUM
+            7 => nums.iter().map(|v| v * v).sum(),                         // SUM_SQUARES
+            8 => nums.len() as f64,                                        // NUM_COUNT
+            9 => {
+                // GEOMETRIC_MEAN
+                let product: f64 = nums.iter().product();
+                product.powf(1.0 / nums.len() as f64)
+            }
+            _ => 0.0,
+        };
+        Ok(result)
+    })?;
+    g.set("llListStatistics", f)?;
+
     Ok(())
 }
 
@@ -408,5 +566,146 @@ mod tests {
             r.abs() < 1e-12,
             "angle between identical rotations should be 0, got {r}"
         );
+    }
+
+    #[test]
+    fn test_rot2_angle_identity() {
+        let lua = setup();
+        let r: f64 = lua
+            .load("return llRot2Angle({x=0,y=0,z=0,w=1})")
+            .eval()
+            .unwrap();
+        assert!(r.abs() < 1e-12, "identity rotation angle should be 0, got {r}");
+    }
+
+    #[test]
+    fn test_rot2_axis_identity() {
+        let lua = setup();
+        let z: f64 = lua
+            .load("return llRot2Axis({x=0,y=0,z=0,w=1}).z")
+            .eval()
+            .unwrap();
+        assert!((z - 1.0).abs() < 1e-12, "identity axis z should be 1, got {z}");
+    }
+
+    #[test]
+    fn test_rot_between() {
+        let lua = setup();
+        let angle: f64 = lua
+            .load(
+                r#"
+                local q = llRotBetween({x=1,y=0,z=0}, {x=0,y=1,z=0})
+                return llRot2Angle(q)
+            "#,
+            )
+            .eval()
+            .unwrap();
+        assert!(
+            (angle - std::f64::consts::FRAC_PI_2).abs() < 1e-6,
+            "rotation from x to y should be pi/2, got {angle}"
+        );
+    }
+
+    #[test]
+    fn test_get_unix_time() {
+        let lua = setup();
+        let t: i64 = lua.load("return llGetUnixTime()").eval().unwrap();
+        assert!(t > 1_700_000_000, "unix time should be recent, got {t}");
+    }
+
+    #[test]
+    fn test_get_timestamp() {
+        let lua = setup();
+        let s: String = lua.load("return llGetTimestamp()").eval().unwrap();
+        assert!(s.contains('T'), "timestamp should contain T: {s}");
+        assert!(s.ends_with('Z'), "timestamp should end with Z: {s}");
+    }
+
+    #[test]
+    fn test_get_gmt_clock() {
+        let lua = setup();
+        let r: f64 = lua.load("return llGetGMTclock()").eval().unwrap();
+        assert!(r >= 0.0 && r < 86400.0, "GMTclock should be 0..86400, got {r}");
+    }
+
+    #[test]
+    fn test_generate_key() {
+        let lua = setup();
+        let s: String = lua.load("return llGenerateKey()").eval().unwrap();
+        assert_eq!(s.len(), 36, "UUID should be 36 chars, got {}", s.len());
+    }
+
+    #[test]
+    fn test_axes2rot_identity() {
+        let lua = setup();
+        let script = r#"
+            local q = llAxes2Rot({x=1,y=0,z=0}, {x=0,y=1,z=0}, {x=0,y=0,z=1})
+            return q.x, q.y, q.z, q.w
+        "#;
+        let (x, y, z, w): (f64, f64, f64, f64) = lua.load(script).eval().unwrap();
+        assert!(x.abs() < 1e-10, "identity x should be ~0, got {x}");
+        assert!(y.abs() < 1e-10, "identity y should be ~0, got {y}");
+        assert!(z.abs() < 1e-10, "identity z should be ~0, got {z}");
+        assert!((w - 1.0).abs() < 1e-10, "identity w should be ~1, got {w}");
+    }
+
+    #[test]
+    fn test_list_statistics_mean() {
+        let lua = setup();
+        let r: f64 = lua
+            .load("return llListStatistics(LIST_STAT_MEAN, {10, 20, 30})")
+            .eval()
+            .unwrap();
+        assert!((r - 20.0).abs() < 1e-10, "mean of 10,20,30 should be 20, got {r}");
+    }
+
+    #[test]
+    fn test_list_statistics_sum() {
+        let lua = setup();
+        let r: f64 = lua
+            .load("return llListStatistics(LIST_STAT_SUM, {1, 2, 3, 4})")
+            .eval()
+            .unwrap();
+        assert!((r - 10.0).abs() < 1e-10, "sum should be 10, got {r}");
+    }
+
+    #[test]
+    fn test_list_statistics_min() {
+        let lua = setup();
+        let r: f64 = lua
+            .load("return llListStatistics(LIST_STAT_MIN, {5, 2, 8})")
+            .eval()
+            .unwrap();
+        assert!((r - 2.0).abs() < 1e-10, "min should be 2, got {r}");
+    }
+
+    #[test]
+    fn test_list_statistics_max() {
+        let lua = setup();
+        let r: f64 = lua
+            .load("return llListStatistics(LIST_STAT_MAX, {5, 2, 8})")
+            .eval()
+            .unwrap();
+        assert!((r - 8.0).abs() < 1e-10, "max should be 8, got {r}");
+    }
+
+    #[test]
+    fn test_list_statistics_median_odd() {
+        let lua = setup();
+        let r: f64 = lua
+            .load("return llListStatistics(LIST_STAT_MEDIAN, {3, 1, 2})")
+            .eval()
+            .unwrap();
+        assert!((r - 2.0).abs() < 1e-10, "median of 1,2,3 should be 2, got {r}");
+    }
+
+    #[test]
+    fn test_list_statistics_std_dev() {
+        let lua = setup();
+        let r: f64 = lua
+            .load("return llListStatistics(LIST_STAT_STD_DEV, {2, 4, 4, 4, 5, 5, 7, 9})")
+            .eval()
+            .unwrap();
+        assert!((r - 2.0).abs() < 1e-10, "std dev should be 2.0, got {r}");
     }
 }

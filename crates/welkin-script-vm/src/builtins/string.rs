@@ -150,6 +150,50 @@ pub fn register_string(lua: &Lua) -> Result<(), crate::VmError> {
     })?;
     g.set("llStringToBase64", f)?;
 
+    // llSHA256String(s, nonce) — SHA-256 of "{s}:{nonce}" as lowercase hex
+    let f = lua.create_function(|_, (s, nonce): (String, i64)| {
+        use sha2::{Digest as _, Sha256};
+        let mut h = Sha256::new();
+        h.update(format!("{}:{}", s, nonce));
+        Ok(h.finalize().iter().map(|b| format!("{:02x}", b)).collect::<String>())
+    })?;
+    g.set("llSHA256String", f)?;
+
+    // llXorBase64(s1, s2) — XOR two base64 strings, cycling shorter
+    let f = lua.create_function(|_, (s1, s2): (String, String)| {
+        use base64::Engine;
+        let b1 = base64::engine::general_purpose::STANDARD.decode(&s1).unwrap_or_default();
+        let b2 = base64::engine::general_purpose::STANDARD.decode(&s2).unwrap_or_default();
+        let (long, short) = if b1.len() >= b2.len() { (b1, b2) } else { (b2, b1) };
+        let result: Vec<u8> = if short.is_empty() {
+            long
+        } else {
+            long.iter().enumerate().map(|(i, b)| b ^ short[i % short.len()]).collect()
+        };
+        Ok(base64::engine::general_purpose::STANDARD.encode(&result))
+    })?;
+    g.set("llXorBase64", f)?;
+
+    // llIntegerToBase64(val) — 4 big-endian bytes, base64-encoded
+    let f = lua.create_function(|_, val: i64| {
+        use base64::Engine;
+        let bytes = (val as i32).to_be_bytes();
+        Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+    })?;
+    g.set("llIntegerToBase64", f)?;
+
+    // llBase64ToInteger(s) — base64-decode, first 4 bytes as big-endian i32
+    let f = lua.create_function(|_, s: String| {
+        use base64::Engine;
+        let bytes = base64::engine::general_purpose::STANDARD.decode(&s).unwrap_or_default();
+        let mut buf = [0u8; 4];
+        for (i, &b) in bytes.iter().take(4).enumerate() {
+            buf[i] = b;
+        }
+        Ok(i32::from_be_bytes(buf) as i64)
+    })?;
+    g.set("llBase64ToInteger", f)?;
+
     Ok(())
 }
 
@@ -295,5 +339,67 @@ mod tests {
             .eval()
             .unwrap();
         assert_eq!(decoded, "Hello World");
+    }
+
+    #[test]
+    fn sha256_string() {
+        let lua = vm();
+        let r: String = lua
+            .load(r#"return llSHA256String("Hello", 0)"#)
+            .eval()
+            .unwrap();
+        let expected = {
+            use sha2::{Digest as _, Sha256};
+            let mut h = Sha256::new();
+            h.update("Hello:0");
+            h.finalize().iter().map(|b| format!("{:02x}", b)).collect::<String>()
+        };
+        assert_eq!(r, expected);
+    }
+
+    #[test]
+    fn xor_base64_round_trip() {
+        let lua = vm();
+        // XOR "AAAA" with itself should give all zeros (base64 of 3 zero bytes = "AAAA")
+        let r: String = lua
+            .load(r#"return llXorBase64("AAAA", "AAAA")"#)
+            .eval()
+            .unwrap();
+        assert_eq!(r, "AAAA"); // 0 XOR 0 = 0
+
+        // XOR with non-trivial values
+        let r2: String = lua
+            .load(r#"return llXorBase64("AQID", "AwIB")"#)
+            .eval()
+            .unwrap();
+        // [1,2,3] XOR [3,2,1] = [2,0,2]
+        assert_eq!(r2, "AgAC");
+    }
+
+    #[test]
+    fn integer_to_base64_round_trip() {
+        let lua = vm();
+        let encoded: String = lua
+            .load("return llIntegerToBase64(1)")
+            .eval()
+            .unwrap();
+        // 1 as big-endian i32 = [0,0,0,1], base64 = "AAAAAQ=="
+        assert_eq!(encoded, "AAAAAQ==");
+
+        let decoded: i64 = lua
+            .load(r#"return llBase64ToInteger("AAAAAQ==")"#)
+            .eval()
+            .unwrap();
+        assert_eq!(decoded, 1);
+    }
+
+    #[test]
+    fn base64_to_integer_empty() {
+        let lua = vm();
+        let r: i64 = lua
+            .load(r#"return llBase64ToInteger("")"#)
+            .eval()
+            .unwrap();
+        assert_eq!(r, 0);
     }
 }

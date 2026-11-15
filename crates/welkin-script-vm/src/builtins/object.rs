@@ -179,6 +179,172 @@ pub fn register_object(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
         lua.globals().set("llGetKey", f)?;
     }
 
+    // llGetOwner() -> string
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, ()| {
+            let ctx = ctx.read();
+            Ok(ctx.owner_id.to_string())
+        })?;
+        lua.globals().set("llGetOwner", f)?;
+    }
+
+    // llGetCreator() -> string
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, ()| {
+            let ctx = ctx.read();
+            Ok(ctx.creator_id.to_string())
+        })?;
+        lua.globals().set("llGetCreator", f)?;
+    }
+
+    // llGetNumberOfPrims() -> integer
+    {
+        let f = lua.create_function(|_, ()| Ok(1i64))?;
+        lua.globals().set("llGetNumberOfPrims", f)?;
+    }
+
+    // llGetLinkNumber() -> integer
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, ()| {
+            let ctx = ctx.read();
+            Ok(ctx.link_num as i64)
+        })?;
+        lua.globals().set("llGetLinkNumber", f)?;
+    }
+
+    // llGetLinkKey(link_num) -> string
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, link: i64| {
+            let ctx = ctx.read();
+            if link == 0 || link == 1 {
+                Ok(ctx.prim_id.to_string())
+            } else {
+                Ok(uuid::Uuid::nil().to_string())
+            }
+        })?;
+        lua.globals().set("llGetLinkKey", f)?;
+    }
+
+    // llDie() -> void
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, ()| {
+            let ctx = ctx.read();
+            tracing::warn!(prim = %ctx.prim_id, "llDie: script requested object deletion");
+            Ok(())
+        })?;
+        lua.globals().set("llDie", f)?;
+    }
+
+    // llGetColor(face) -> vector
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |lua, _face: i64| {
+            let ctx = ctx.read();
+            make_vec3(lua, ctx.color)
+        })?;
+        lua.globals().set("llGetColor", f)?;
+    }
+
+    // llSetColor(color, face)
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, (color, _face): (LuaTable, i64)| {
+            let v = get_vec3_from_table(&color)?;
+            let mut ctx = ctx.write();
+            ctx.color = v;
+            Ok(())
+        })?;
+        lua.globals().set("llSetColor", f)?;
+    }
+
+    // llGetAlpha(face) -> float
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, _face: i64| {
+            let ctx = ctx.read();
+            Ok(ctx.alpha)
+        })?;
+        lua.globals().set("llGetAlpha", f)?;
+    }
+
+    // llSetAlpha(alpha, face)
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, (alpha, _face): (f64, i64)| {
+            let mut ctx = ctx.write();
+            ctx.alpha = alpha.clamp(0.0, 1.0);
+            Ok(())
+        })?;
+        lua.globals().set("llSetAlpha", f)?;
+    }
+
+    // llGetTexture(face) -> string
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, _face: i64| {
+            let ctx = ctx.read();
+            Ok(ctx.texture.to_string())
+        })?;
+        lua.globals().set("llGetTexture", f)?;
+    }
+
+    // llSetTexture(texture, face)
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |_, (texture, _face): (String, i64)| {
+            let mut ctx = ctx.write();
+            ctx.texture = uuid::Uuid::parse_str(&texture).unwrap_or(uuid::Uuid::nil());
+            Ok(())
+        })?;
+        lua.globals().set("llSetTexture", f)?;
+    }
+
+    // OBJECT_* constants for llGetObjectDetails
+    lua.globals().set("OBJECT_NAME", 1i64)?;
+    lua.globals().set("OBJECT_DESC", 2i64)?;
+    lua.globals().set("OBJECT_POS", 3i64)?;
+    lua.globals().set("OBJECT_ROT", 4i64)?;
+    lua.globals().set("OBJECT_VELOCITY", 5i64)?;
+    lua.globals().set("OBJECT_OWNER", 6i64)?;
+    lua.globals().set("OBJECT_GROUP", 7i64)?;
+    lua.globals().set("OBJECT_CREATOR", 8i64)?;
+
+    // llGetObjectDetails(id, params) -> list
+    {
+        let ctx = Arc::clone(ctx);
+        let f = lua.create_function(move |lua, (id, params): (String, LuaTable)| {
+            let ctx = ctx.read();
+            let result = lua.create_table()?;
+            let prim_id_str = ctx.prim_id.to_string();
+            if id != prim_id_str {
+                return Ok(result);
+            }
+            let mut idx = 1i64;
+            for pair in params.pairs::<i64, i64>() {
+                let (_, param) = pair?;
+                match param {
+                    1 => { result.set(idx, ctx.prim_name.clone())?; }
+                    2 => { result.set(idx, ctx.prim_desc.clone())?; }
+                    3 => { result.set(idx, make_vec3(lua, ctx.position)?)?; }
+                    4 => { result.set(idx, make_rot4(lua, ctx.rotation)?)?; }
+                    5 => { result.set(idx, make_vec3(lua, [0.0, 0.0, 0.0])?)?; }
+                    6 => { result.set(idx, ctx.owner_id.to_string())?; }
+                    7 => { result.set(idx, uuid::Uuid::nil().to_string())?; }
+                    8 => { result.set(idx, ctx.creator_id.to_string())?; }
+                    _ => { result.set(idx, mlua::Value::Nil)?; }
+                }
+                idx += 1;
+            }
+            Ok(result)
+        })?;
+        lua.globals().set("llGetObjectDetails", f)?;
+    }
+
     Ok(())
 }
 
@@ -305,5 +471,177 @@ mod tests {
         assert!((y - 0.0).abs() < f64::EPSILON);
         assert!((z - 0.0).abs() < f64::EPSILON);
         assert!((w - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn ll_get_owner() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        register_object(&lua, &ctx).unwrap();
+        let owner: String = lua.load("return llGetOwner()").eval().unwrap();
+        assert_eq!(owner, Uuid::nil().to_string());
+    }
+
+    #[test]
+    fn ll_get_creator() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        register_object(&lua, &ctx).unwrap();
+        let creator: String = lua.load("return llGetCreator()").eval().unwrap();
+        assert_eq!(creator, Uuid::nil().to_string());
+    }
+
+    #[test]
+    fn ll_get_number_of_prims() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        register_object(&lua, &ctx).unwrap();
+        let n: i64 = lua.load("return llGetNumberOfPrims()").eval().unwrap();
+        assert_eq!(n, 1);
+    }
+
+    #[test]
+    fn ll_get_link_number() {
+        let lua = Lua::new();
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            link_num: 3,
+            ..Default::default()
+        }));
+        register_object(&lua, &ctx).unwrap();
+        let n: i64 = lua.load("return llGetLinkNumber()").eval().unwrap();
+        assert_eq!(n, 3);
+    }
+
+    #[test]
+    fn ll_get_link_key_root() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        register_object(&lua, &ctx).unwrap();
+        let key: String = lua.load("return llGetLinkKey(0)").eval().unwrap();
+        assert_eq!(key, Uuid::from_u128(0xdead_beef).to_string());
+    }
+
+    #[test]
+    fn ll_get_link_key_other() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        register_object(&lua, &ctx).unwrap();
+        let key: String = lua.load("return llGetLinkKey(5)").eval().unwrap();
+        assert_eq!(key, Uuid::nil().to_string());
+    }
+
+    #[test]
+    fn ll_die_does_not_panic() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        register_object(&lua, &ctx).unwrap();
+        lua.load("llDie()").exec().unwrap();
+    }
+
+    #[test]
+    fn ll_get_color() {
+        let lua = Lua::new();
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            color: [0.5, 0.6, 0.7],
+            ..Default::default()
+        }));
+        register_object(&lua, &ctx).unwrap();
+        let (r, g, b): (f64, f64, f64) = lua
+            .load("local c = llGetColor(0); return c.x, c.y, c.z")
+            .eval()
+            .unwrap();
+        assert!((r - 0.5).abs() < f64::EPSILON);
+        assert!((g - 0.6).abs() < f64::EPSILON);
+        assert!((b - 0.7).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn ll_set_color_updates_context() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        register_object(&lua, &ctx).unwrap();
+        lua.load("llSetColor({x=0.1, y=0.2, z=0.3}, 0)")
+            .exec()
+            .unwrap();
+        let c = ctx.read().color;
+        assert!((c[0] - 0.1).abs() < f64::EPSILON);
+        assert!((c[1] - 0.2).abs() < f64::EPSILON);
+        assert!((c[2] - 0.3).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn ll_get_alpha() {
+        let lua = Lua::new();
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            alpha: 0.75,
+            ..Default::default()
+        }));
+        register_object(&lua, &ctx).unwrap();
+        let a: f64 = lua.load("return llGetAlpha(0)").eval().unwrap();
+        assert!((a - 0.75).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn ll_set_alpha_clamps() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        register_object(&lua, &ctx).unwrap();
+        lua.load("llSetAlpha(1.5, 0)").exec().unwrap();
+        assert!((ctx.read().alpha - 1.0).abs() < f64::EPSILON);
+        lua.load("llSetAlpha(-0.5, 0)").exec().unwrap();
+        assert!((ctx.read().alpha - 0.0).abs() < f64::EPSILON);
+        lua.load("llSetAlpha(0.5, 0)").exec().unwrap();
+        assert!((ctx.read().alpha - 0.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn ll_get_texture() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        register_object(&lua, &ctx).unwrap();
+        let tex: String = lua.load("return llGetTexture(0)").eval().unwrap();
+        assert_eq!(tex, Uuid::nil().to_string());
+    }
+
+    #[test]
+    fn ll_set_texture_updates() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        register_object(&lua, &ctx).unwrap();
+        let test_uuid = "12345678-1234-1234-1234-123456789abc";
+        lua.load(&format!(r#"llSetTexture("{test_uuid}", 0)"#))
+            .exec()
+            .unwrap();
+        assert_eq!(ctx.read().texture.to_string(), test_uuid);
+    }
+
+    #[test]
+    fn ll_get_object_details_known_prim() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        register_object(&lua, &ctx).unwrap();
+        let prim_id = ctx.read().prim_id.to_string();
+        let script = format!(
+            r#"
+            local d = llGetObjectDetails("{prim_id}", {{OBJECT_NAME, OBJECT_DESC}})
+            return d[1], d[2]
+        "#
+        );
+        let (name, desc): (String, String) = lua.load(&script).eval().unwrap();
+        assert_eq!(name, "My Prim");
+        assert_eq!(desc, "A test prim");
+    }
+
+    #[test]
+    fn ll_get_object_details_unknown_returns_empty() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        register_object(&lua, &ctx).unwrap();
+        let script = r#"
+            local d = llGetObjectDetails("00000000-0000-0000-0000-ffffffffffff", {OBJECT_NAME})
+            return #d
+        "#;
+        let count: i64 = lua.load(script).eval().unwrap();
+        assert_eq!(count, 0);
     }
 }
