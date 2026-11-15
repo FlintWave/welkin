@@ -563,15 +563,39 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         std::sync::mpsc::channel::<(Uuid, ScriptEvent)>();
     let _link_msg_tx = Arc::new(link_msg_tx);
 
+    // --- Timer command channel: scripts → scheduler set_timer ---
+    let (timer_cmd_tx, timer_cmd_rx) =
+        std::sync::mpsc::channel::<(Uuid, f64)>();
+    let _timer_cmd_tx = Arc::new(timer_cmd_tx);
+
+    // --- Script chat channel: scripts → clients + listen events ---
+    let (script_chat_tx, script_chat_rx) =
+        std::sync::mpsc::channel::<welkin_script_vm::ChatMessage>();
+    let _script_chat_tx = Arc::new(script_chat_tx);
+
+    // --- Sensor request channel: scripts → heartbeat sensor scan ---
+    let (sensor_cmd_tx, sensor_cmd_rx) =
+        std::sync::mpsc::channel::<welkin_script_vm::SensorRequest>();
+    let _sensor_cmd_tx = Arc::new(sensor_cmd_tx);
+
+    // --- Control request channel: scripts → control event tracking ---
+    let (control_cmd_tx, control_cmd_rx) =
+        std::sync::mpsc::channel::<welkin_script_vm::ControlRequest>();
+    let _control_cmd_tx = Arc::new(control_cmd_tx);
+
     // --- Heartbeat loop ---
     let heartbeat_cancel = cancel.clone();
     let heartbeat_scene = Arc::clone(&scene);
     let heartbeat_scheduler = Arc::clone(&script_scheduler);
+    let heartbeat_socket = udp_socket.clone();
+    let heartbeat_clients = udp_clients.clone();
     let frame_time_ms = (frame_time * 1000.0) as u64;
     let heartbeat_handle = tokio::spawn(async move {
         let mut interval =
             tokio::time::interval(std::time::Duration::from_millis(frame_time_ms.max(50)));
         let mut prev_colliding: HashSet<u32> = HashSet::new();
+        let mut sensor_repeats: HashMap<Uuid, (welkin_script_vm::SensorRequest, std::time::Instant, std::time::Duration)> = HashMap::new();
+        let mut control_registrations: HashMap<Uuid, (Uuid, u32, bool, bool)> = HashMap::new();
         loop {
             tokio::select! {
                 _ = heartbeat_cancel.cancelled() => break,
@@ -582,6 +606,125 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         while let Ok((target_prim, event)) = link_msg_rx.try_recv() {
                             heartbeat_scheduler.lock().post_event_to_prim(target_prim, event);
                         }
+
+                        // Drain timer commands from scripts
+                        while let Ok((script_id, interval_secs)) = timer_cmd_rx.try_recv() {
+                            if interval_secs > 0.0 {
+                                heartbeat_scheduler.lock().set_timer(
+                                    script_id,
+                                    std::time::Duration::from_secs_f64(interval_secs),
+                                );
+                            } else {
+                                heartbeat_scheduler.lock().clear_timer(script_id);
+                            }
+                        }
+
+                        // Drain script chat messages → trigger listen events + collect for client relay
+                        let mut pending_chat: Vec<welkin_script_vm::ChatMessage> = Vec::new();
+                        while let Ok(chat_msg) = script_chat_rx.try_recv() {
+                            // Route to script listen events
+                            heartbeat_scheduler.lock().broadcast_event(ScriptEvent::Listen {
+                                channel: chat_msg.channel,
+                                name: chat_msg.source_name.clone(),
+                                id: chat_msg.source_id,
+                                message: chat_msg.message.clone(),
+                            });
+                            if chat_msg.channel == 0 {
+                                pending_chat.push(chat_msg);
+                            }
+                        }
+                        // Relay channel-0 script chat to connected clients
+                        if !pending_chat.is_empty() {
+                            let clients_map = heartbeat_clients.read().await;
+                            for chat_msg in &pending_chat {
+                                let chat_type_num: u8 = match chat_msg.chat_type {
+                                    welkin_script_vm::ChatType::Whisper => 0,
+                                    welkin_script_vm::ChatType::Say => 1,
+                                    welkin_script_vm::ChatType::Shout => 2,
+                                    _ => 1,
+                                };
+                                let range_sq: f32 = match chat_type_num {
+                                    0 => 10.0 * 10.0,
+                                    2 => 100.0 * 100.0,
+                                    _ => 20.0 * 20.0,
+                                };
+                                let sender_pos = glam::Vec3::new(
+                                    chat_msg.source_pos[0] as f32,
+                                    chat_msg.source_pos[1] as f32,
+                                    chat_msg.source_pos[2] as f32,
+                                );
+                                let mut name_bytes = chat_msg.source_name.clone().into_bytes();
+                                name_bytes.push(0);
+                                let relay = ChatFromSimulator {
+                                    chat_data: chat_from_simulator::ChatData {
+                                        from_name: name_bytes,
+                                        source_id: chat_msg.source_id,
+                                        owner_id: chat_msg.owner_id,
+                                        source_type: 2, // object
+                                        chat_type: chat_type_num,
+                                        audible: 1,
+                                        position: sender_pos,
+                                        message: chat_msg.message.clone().into_bytes(),
+                                    },
+                                };
+                                for (peer_addr, peer_client) in clients_map.iter() {
+                                    let mut peer = peer_client.lock().await;
+                                    if let Some(presence) = heartbeat_scene.get_presence(&peer.agent_id) {
+                                        if sender_pos.distance_squared(presence.position) <= range_sq {
+                                            let (pkt_bytes, _) = peer.circuit.send_msg(&relay, true);
+                                            let _ = heartbeat_socket.send_to(&pkt_bytes, *peer_addr).await;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Drain sensor requests
+                        while let Ok(req) = sensor_cmd_rx.try_recv() {
+                            match req {
+                                welkin_script_vm::SensorRequest::Scan { script_id, .. } => {
+                                    // One-shot sensor: fire sensor event with 0 detected (simplified)
+                                    heartbeat_scheduler.lock().post_event(
+                                        script_id,
+                                        ScriptEvent::Sensor { num_detected: 0 },
+                                    );
+                                }
+                                welkin_script_vm::SensorRequest::Repeat { ref script_id, ref rate, .. } => {
+                                    let dur = std::time::Duration::from_secs_f64(*rate);
+                                    sensor_repeats.insert(*script_id, (req, std::time::Instant::now(), dur));
+                                }
+                                welkin_script_vm::SensorRequest::Remove { script_id } => {
+                                    sensor_repeats.remove(&script_id);
+                                }
+                            }
+                        }
+
+                        // Fire repeating sensor events
+                        let now = std::time::Instant::now();
+                        for (_sid, (req, last_fire, interval_dur)) in sensor_repeats.iter_mut() {
+                            if now.duration_since(*last_fire) >= *interval_dur {
+                                *last_fire = now;
+                                if let welkin_script_vm::SensorRequest::Repeat { script_id, .. } = req {
+                                    heartbeat_scheduler.lock().post_event(
+                                        *script_id,
+                                        ScriptEvent::Sensor { num_detected: 0 },
+                                    );
+                                }
+                            }
+                        }
+
+                        // Drain control registration requests
+                        while let Ok(req) = control_cmd_rx.try_recv() {
+                            match req {
+                                welkin_script_vm::ControlRequest::Take { script_id, controls, accept, pass_on } => {
+                                    control_registrations.insert(script_id, (Uuid::nil(), controls, accept, pass_on));
+                                }
+                                welkin_script_vm::ControlRequest::Release { script_id } => {
+                                    control_registrations.remove(&script_id);
+                                }
+                            }
+                        }
+
                         let errors = heartbeat_scheduler.lock().tick();
                         for (script_id, err) in errors {
                             tracing::warn!(script = %script_id, error = %err, "script execution error");

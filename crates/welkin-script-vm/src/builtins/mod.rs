@@ -17,8 +17,11 @@ pub mod list;
 pub mod math;
 pub mod object;
 pub mod physics;
+pub mod control;
 pub mod prim_params;
+pub mod sensor;
 pub mod string;
+pub mod timer;
 pub mod vehicle;
 
 use std::collections::{HashMap, VecDeque};
@@ -248,6 +251,10 @@ pub struct ScriptContext {
     pub npc_sender: Option<std::sync::mpsc::Sender<NpcCommand>>,
     pub teleport_sender: Option<std::sync::mpsc::Sender<TeleportRequest>>,
     pub dynamic_texture_sender: Option<std::sync::mpsc::Sender<DynamicTextureCommand>>,
+    pub timer_sender: Option<std::sync::mpsc::Sender<(uuid::Uuid, f64)>>,
+    pub start_time: std::time::Instant,
+    pub sensor_sender: Option<std::sync::mpsc::Sender<sensor::SensorRequest>>,
+    pub control_sender: Option<std::sync::mpsc::Sender<control::ControlRequest>>,
 }
 
 impl Default for ScriptContext {
@@ -328,6 +335,10 @@ impl Default for ScriptContext {
             npc_sender: None,
             teleport_sender: None,
             dynamic_texture_sender: None,
+            timer_sender: None,
+            start_time: std::time::Instant::now(),
+            sensor_sender: None,
+            control_sender: None,
         }
     }
 }
@@ -351,6 +362,9 @@ pub fn register_all(lua: &mlua::Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result
     email::register_email(lua, ctx)?;
     cap_url::register_cap_url(lua, ctx)?;
     http::register_http(lua, ctx)?;
+    timer::register_timer(lua, ctx)?;
+    sensor::register_sensor(lua, ctx)?;
+    control::register_control(lua, ctx)?;
     Ok(())
 }
 
