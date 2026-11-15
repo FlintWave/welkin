@@ -1,6 +1,6 @@
 # Welkin
 
-![License](https://img.shields.io/badge/license-Apache--2.0-blue)
+![License](https://img.shields.io/badge/license-LGPL--3.0-blue)
 ![Rust](https://img.shields.io/badge/rust-edition%202024-orange)
 ![Tests](https://img.shields.io/badge/tests-2%2C353%20passing-brightgreen)
 
@@ -69,7 +69,7 @@ tests:
 | Scripting | XEngine (C# codegen) or YEngine | LSL-to-Luau transpiler (mlua) |
 | Voice | Vivox / FreeSWITCH | WebRTC (wolfvoice) |
 | Admin | Region console + ROBUST web | Web portal with first-run wizard |
-| License | BSD-3-Clause | Apache-2.0 |
+| License | BSD-3-Clause | LGPL-3.0 |
 
 Welkin is an alternative to OpenSimulator, not a replacement. Both projects
 serve the same community.
@@ -147,7 +147,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-Apache-2.0. See [LICENSE](LICENSE) for the full text.
+LGPL-3.0-or-later. See [LICENSE](LICENSE) for the full text.
 
 Welkin is a clean-room implementation. No code from OpenSimulator or any
 GPL-licensed viewer was copied into this repository. The C# OpenSimulator

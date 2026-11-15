@@ -4,7 +4,7 @@ Contributions are welcome. This document covers the basics.
 
 ## License
 
-Welkin is Apache-2.0. By submitting a pull request you agree that your
+Welkin is LGPL-3.0-or-later. By submitting a pull request you agree that your
 contribution is licensed under the same terms.
 
 **Important**: Welkin is a clean-room Rust port of OpenSimulator. You may
