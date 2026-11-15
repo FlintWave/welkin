@@ -1,0 +1,20 @@
+[book]
+title = "Welkin"
+description = "Documentation for the Welkin virtual-world server"
+authors = ["FlintWave"]
+language = "en"
+src = "."
+
+[build]
+build-dir = "book"
+create-missing = false
+
+[output.html]
+default-theme = "rust"
+preferred-dark-theme = "ayu"
+git-repository-url = "https://github.com/FlintWave/welkin"
+edit-url-template = "https://github.com/FlintWave/welkin/edit/main/docs/{path}"
+
+[output.html.fold]
+enable = true
+level = 1
