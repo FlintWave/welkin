@@ -110,8 +110,9 @@ Work through this checklist after first login:
 
 ### Scripting
 
-- [ ] Create a prim, add a script with `default { touch_start(integer n) { llSay(0, "touched"); } }`
-- [ ] Touch the prim; "touched" appears in chat
+- [ ] Create a prim, add a script with `default { state_entry() { llSay(0, "ALIVE"); } touch_start(integer n) { llSay(0, "touched"); } }`
+- [ ] "ALIVE" appears in chat when the script loads (state_entry fires llSay)
+- [ ] Touch the prim; "touched" appears in chat (touch_start fires llSay)
 - [ ] Script state survives region restart (checkpoint/restore)
 
 ### Voice
@@ -192,9 +193,11 @@ podman-compose down -v
 - **All security reviews carry a CONDITIONAL PASS.** The tracked findings
   must be resolved before any deployment that faces untrusted users or grids.
 - **Pathfinding is not implemented.** Decision R9 deferred it.
-- **LSL transpiler is a skeleton.** Scripts written directly in Luau work;
-  the LSL-to-Luau transpiler (`welkin-script-compiler`) is not yet
-  functional. Hand-written Luau scripts can be used for testing.
+- **LSL coverage is partial.** The LSL-to-Luau compiler handles the core
+  language (types, control flow, states, events, casts) and 68% of real-world
+  scripts parse and compile. 206 ll\* builtins and 231 os\* functions are
+  registered and functional. Remaining SL-spec ll\* functions are not yet
+  bound.
 - **osim-conform live attach is deferred.** Conformance replay from recorded
   fixtures works; live-attach to a running C# server is a Phase 7 task.
 - **Single architecture.** Container images target `x86_64-unknown-linux-musl`

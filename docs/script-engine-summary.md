@@ -77,11 +77,13 @@ functions registered.
 
 ## Known gaps
 
-- The `os*` functions are stubs with threat-level gating (no inventory or file I/O yet), and 33 `ll*` functions are stubs (inventory, HTTP, sensors, permissions, land and
-  others). Roughly 370 of the 454 C# `ll*` functions are not bound yet.
+- 206 ll\* functions are registered and functional. Roughly 250 SL-spec ll\*
+  functions are not yet bound (some permissions, land and sensor operations).
+- 231 os\* functions are registered; some still return stub defaults where the
+  backing service isn't wired.
+- The LSL-to-Luau compiler (`welkin-script-compiler`) compiles 68% of
+  real-world scripts. 32% fail on unsupported syntax or missing builtins.
 - A coroutine stack cannot be serialised; mid-event state is lost on transfer
   unless the script uses the checkpoint pattern.
-- The LSL-to-Luau transpiler (`welkin-script-compiler`) is not written.
-- No scene integration: `ScriptContext` is not yet wired to `welkin-scene`.
 - Both HIGH findings must be fixed before production use.
 - YEngine script state cannot be read; scripts restart once at migration.

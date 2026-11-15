@@ -4,9 +4,9 @@
 [← Back to docs](README.md) · [Architecture](architecture.md) · [Integration architecture](integration-architecture.md)
 
 Welkin runs LSL (Linden Scripting Language) scripts by compiling them to Luau
-bytecode and executing them in a sandboxed VM. This is different from
-OpenSimulator's approach, which uses XEngine (interpreted) or YEngine (Mono/CIL
-compiled). Welkin has no Mono dependency.
+bytecode and executing them in a sandboxed VM. OpenSimulator uses XEngine
+(interpreted) or YEngine (Mono/CIL compiled); Welkin replaces both with a
+Luau-based runtime and has no Mono dependency.
 
 ## Compilation pipeline
 
@@ -65,10 +65,27 @@ timer, touch, touch_start, touch_end, transaction_result
 
 ### Compile-on-rez
 
-When a scripted object is rezzed, the region compiles its LSL source to Luau
-bytecode and creates a `ScriptInstance`. The bytecode is executed once to
-register all handler functions as Luau globals, then a `state_entry` event is
-queued.
+When a scripted object is rezzed (or a script is uploaded via the
+UpdateScriptAgent cap), the region compiles its LSL source to Luau bytecode
+and creates a `ScriptInstance`. The region's heartbeat loop constructs a
+`ScriptContext` for the instance, wiring it to channel senders for chat,
+timer, sensor, control and link-message events. `register_builtins()` calls
+`builtins::register_all()`, which registers all 206 ll\* functions, 231 os\*
+functions, and extension APIs (LightShare, MOD, JsonStore) as Luau globals
+on the VM. The bytecode is then executed once to register the script's own
+handler functions, and a `state_entry` event is queued.
+
+The full chain from upload to execution:
+
+```
+LSL source → compile_lsl() → Luau source → mlua::Compiler → bytecode
+    → ScriptInstance::new(bytecode)
+    → register_builtins(ScriptContext { chat_sender, timer_sender, ... })
+    → scheduler.add_script(instance)
+    → scheduler.post_event(StateEntry)
+    → __dispatch routes to default.state_entry()
+    → llSay(0, "hello") → chat_sender → heartbeat loop → relay to clients
+```
 
 ### Event dispatch
 
@@ -107,24 +124,32 @@ on the same VM continue running.
 
 ### Memory limits
 
-Each VM can have a memory cap set at creation. Scripts that exceed the limit
-receive a `MemoryError` from Luau. The limit applies to both direct execution
-and coroutine threads.
+The VM memory limit is set to 0 (unlimited) at creation to accommodate the
+100+ registered builtins. Scripts that allocate excessively are caught by the
+instruction limit instead. If a per-script memory cap is restored later, it
+applies to both direct execution and coroutine threads.
 
 ## Script lifecycle
 
-1. **Rez:** object enters the scene, region creates a `ScriptInstance` from
-   the LSL source
+1. **Rez/Upload:** object enters the scene or script is uploaded via the
+   UpdateScriptAgent cap. Viewers use a two-step protocol: POST LLSD
+   metadata to get a one-shot uploader URL, then POST raw LSL source to
+   that URL. The optional `prim_id` query param associates the script
+   with a specific prim. Direct raw-text POST works for bot tests
 2. **Compile:** LSL source is compiled to Luau bytecode, bytecode is loaded
-   and executed to register handlers
-3. **state_entry:** the scheduler queues and dispatches a `StateEntry` event
-4. **Running:** the scheduler delivers events (touch, timer, listen, collision,
+   into a new `ScriptInstance`
+3. **Register builtins:** the heartbeat loop builds a `ScriptContext` with
+   channel senders and calls `register_builtins()`. The script's position
+   is read from the scene so spatial functions (llSay range, sensor sweeps)
+   use the prim's actual coordinates
+4. **state_entry:** the scheduler queues and dispatches a `StateEntry` event
+5. **Running:** the scheduler delivers events (touch, timer, listen, collision,
    etc.) as they arrive, one per tick
-5. **Reset:** `reset()` creates a fresh VM, reloads bytecode and queues a
-   new `state_entry`
-6. **Derez:** script state is serialized (bytecode + tracked globals as JSON)
+6. **Reset:** `reset()` creates a fresh VM, reloads bytecode, re-registers
+   builtins from the stored `ScriptContext`, and queues a new `state_entry`
+7. **Derez:** script state is serialized (bytecode + tracked globals as JSON)
    into a `ScriptState` for persistence
-7. **Region transfer:** `RegionTransferBundle` captures script states, pending
+8. **Region transfer:** `RegionTransferBundle` captures script states, pending
    events and timer intervals for migration to another region. The source
    region removes the scripts; the destination restores them and resumes
    event processing
@@ -142,37 +167,59 @@ global that the script checks on entry).
 
 ### ll* functions (LSL API)
 
-170 `ll*` functions are registered across 15 modules:
+206 `ll*` functions are registered across 18 modules. All are wired to region
+services and produce real results; there are no log-only stubs.
 
 | Module | Count | Examples |
 |---|---|---|
-| math | 31 | llAbs, llSin, llCos, llSqrt, llPow, llVecDist, llVecNorm, llRot2Euler |
-| object | 26 | llGetObjectName, llGetObjectDesc, llGetPos, llGetRot, llGetScale, llGetOwner |
-| physics | 19 | llApplyImpulse, llSetForce, llGetVel, llGetAccel |
-| avatar | 16 | llAttachToAvatar, llDetachFromAvatar, llAttachToAvatarTemp, llRequestPermissions |
-| string | 16 | llToUpper, llToLower, llStringLength, llSubStringIndex, llGetSubString |
-| list | 15 | llGetListLength, llList2Integer, llList2String, llListSort, llListFindList, llListStatistics |
-| communication | 11 | llSay, llWhisper, llShout, llListen, llRegionSay |
-| inventory | 10 | llGetNotecardLine, llGetNumberOfNotecardLines, llGiveInventory |
-| land | 8 | llGetParcelFlags, llOverMyLand |
+| math | 38 | llAbs, llSin, llCos, llSqrt, llPow, llVecDist, llVecNorm, llRot2Euler, llAtan2, llLog10 |
+| list | 27 | llGetListLength, llList2Integer, llList2String, llListSort, llListFindList, llListStatistics, llJson2List |
+| object | 26 | llGetObjectName, llGetObjectDesc, llGetPos, llGetRot, llGetScale, llGetOwner, llRezObject |
+| string | 26 | llToUpper, llToLower, llStringLength, llSubStringIndex, llGetSubString, llHash, llSHA256String |
+| physics | 19 | llApplyImpulse, llSetForce, llGetVel, llGetAccel, llTarget, llRotTarget |
+| avatar | 16 | llAttachToAvatar, llDetachFromAvatar, llAttachToAvatarTemp, llRequestPermissions, llRequestAgentData |
+| communication | 11 | llSay, llWhisper, llShout, llListen, llRegionSay, llInstantMessage |
+| inventory | 10 | llGetNotecardLine, llGetNumberOfNotecardLines, llGiveInventory, llRemoveInventory |
+| land | 8 | llGetParcelFlags, llOverMyLand, llGetParcelDetails, llSetParcelMusicURL |
 | vehicle | 6 | llSetVehicleType, llSetVehicleFloatParam, llSetVehicleVectorParam |
 | prim_params | 4 | llSetPrimitiveParams, llGetPrimitiveParams, llSetLinkPrimitiveParams |
-| http | 3 | llHTTPRequest, llHTTPResponse |
+| http | 3 | llHTTPRequest, llHTTPResponse, llSetContentType |
 | cap_url | 3 | llRequestURL, llRequestSecureURL, llReleaseURL |
+| timer | 3 | llSetTimerEvent, llGetTime, llResetTime |
+| sensor | 3 | llSensor, llSensorRepeat, llSensorRemove |
 | email | 2 | llEmail, llGetNextEmail |
+| control | 2 | llTakeControls, llReleaseControls |
 
-Math, string and list functions are fully implemented. Avatar, object,
-communication and physics functions are wired to region services. Remaining
-SL-spec ll* functions return stub defaults until wired.
+Builtins are registered on the VM at script load time via
+`builtins::register_all()`. Each closure captures a shared `ScriptContext`
+(`Arc<RwLock<ScriptContext>>`) that holds channel senders for chat, timer,
+sensor, control and link-message events. When a script calls `llSay(0, msg)`,
+the closure sends a `ChatMessage` through the chat channel; the heartbeat
+loop picks it up, routes it to listen events on other scripts, and relays
+it to connected viewers.
 
 ### OSSL functions
 
-236 `os*` functions are registered across 13 modules: agent, crypto, draw,
+231 `os*` functions are registered across 13 modules: agent, crypto, draw,
 inventory, math, misc, npc, sim_info, string, stubs, terrain, and time.
 These provide the OpenSimulator-specific scripting extensions. 20 NPC
 functions have real implementations (osNpcCreate, osNpcMoveTo, osNpcSay,
 etc.) and terrain, sun, wind and speed functions read and write live region
 state.
+
+### Extension APIs
+
+Three extension modules are registered alongside the LSL and OSSL builtins:
+
+| Module | Functions | Purpose |
+|---|---|---|
+| LightShare | 3 | lsGetWindlightScene, lsSetWindlightScene, lsSetWindlightSceneTargeted |
+| MOD API | 9 | modInvokeI/F/S/K/V/R/L/N, modSendCommand |
+| JsonStore | 14 | JsonCreateStore, JsonGetValue, JsonSetValue, JsonTestStore, etc. |
+
+LightShare controls per-parcel Windlight sky and water settings. The MOD API
+lets scripts invoke registered C#-style module commands by type. JsonStore
+provides an in-memory JSON document store for cross-script data sharing.
 
 ### Detected functions
 
@@ -187,6 +234,159 @@ separately via the event system and share an `EventContext` through
 | `welkin-script-compiler` | Lexer, parser, AST, semantic analyzer, Luau code generator |
 | `welkin-script-vm` | Luau VM wrapper (mlua), ScriptInstance, ScriptScheduler, builtins, OSSL, events, region transfer |
 | `welkin-script-api` | Shared type definitions for the script API |
+
+## ll\* function reference
+
+Every function listed below is registered on the Luau VM and callable from
+LSL scripts. Grouped by module.
+
+### Math (38)
+
+llAbs, llAcos, llAngleBetween, llAsin, llAtan2, llAxes2Rot, llAxisAngle2Rot,
+llCeil, llCos, llEuler2Rot, llFabs, llFloor, llFrand, llGenerateKey,
+llGetGMTclock, llGetTimestamp, llGetUnixTime, llGetWallclock, llLinear2sRGB,
+llListStatistics, llLog, llLog10, llModPow, llPow, llRot2Angle, llRot2Axis,
+llRot2Euler, llRot2Fwd, llRot2Left, llRot2Up, llRotBetween, llRound, llSin,
+llSqrt, llTan, llVecDist, llVecMag, llVecNorm
+
+Scalar arithmetic, trigonometry, vector/rotation math, random numbers, time
+queries and UUID generation. All pure computation with no side effects.
+
+### List (27)
+
+llCSV2List, llDeleteSubList, llGetListEntryType,
+llGetListLength, llJson2List, llJsonGetValue, llJsonSetValue, llJsonValueType,
+llList2CSV, llList2Float, llList2Integer, llList2Json, llList2Key, llList2List,
+llList2ListSlice, llList2ListStrided, llList2Rot, llList2String, llList2Vector,
+llListFindList, llListFindStrided, llListInsertList, llListRandomize,
+llListReplaceList, llListSort, llListSortStrided, llListStatistics
+
+List manipulation, type conversion, searching, sorting, statistics and JSON
+interop.
+
+### Object (26)
+
+llDie, llGetAlpha, llGetColor, llGetCreator, llGetKey, llGetLinkKey,
+llGetLinkNumber, llGetNumberOfPrims, llGetObjectDesc, llGetObjectDetails,
+llGetObjectName, llGetOwner, llGetPos, llGetRot, llGetScale, llGetTexture,
+llRezAtRoot, llRezObject, llSetAlpha, llSetColor, llSetObjectDesc,
+llSetObjectName, llSetPos, llSetRot, llSetScale, llSetTexture
+
+Object properties, position, rotation, scale, textures, color, alpha, rez and
+die. Reads and writes go through the scene graph.
+
+### String (26)
+
+llBase64ToInteger, llBase64ToString, llChar, llDeleteSubString,
+llDumpList2String, llEscapeURL, llGetSubString, llHash, llInsertString,
+llIntegerToBase64, llMD5String, llOrd, llParseString2List,
+llParseStringKeepNulls, llReplaceSubString, llSHA1String, llSHA256String,
+llStringLength, llStringToBase64, llStringTrim, llSubStringIndex, llToLower,
+llToUpper, llUnescapeURL, llXorBase64, llXorBase64StringsCorrect
+
+String manipulation, encoding, hashing and parsing.
+
+### Physics (19)
+
+llApplyImpulse, llApplyRotationalImpulse, llGetAccel, llGetOmega, llGetVel,
+llGround, llGroundNormal, llMoveToTarget, llRotTarget, llRotTargetRemove,
+llSetBuoyancy, llSetForce, llSetHoverHeight, llSetStatus, llSetTorque,
+llStopMoveToTarget, llTarget, llTargetRemove, llWater
+
+Forces, impulses, velocity, hover, move-to-target, position/rotation targets
+and terrain height queries.
+
+### Avatar (16)
+
+llAttachToAvatar, llAttachToAvatarTemp, llAvatarOnSitTarget,
+llDetachFromAvatar, llGetAgentInfo, llGetAgentSize, llGetPermissions,
+llGetPermissionsKey, llRequestAgentData, llRequestPermissions, llSitTarget,
+llStartAnimation, llStopAnimation, llTeleportAgent, llTeleportAgentHome,
+llUnSit
+
+Attachments, animations, permissions, sit targets, teleport and agent data
+queries via dataserver events.
+
+### Communication (11)
+
+llInstantMessage, llListen, llListenControl, llListenRemove,
+llMessageLinked, llOwnerSay, llRegionSay, llRegionSayTo, llSay, llShout,
+llWhisper
+
+Chat (say/shout/whisper on numbered channels), instant messages, listen
+filters and link messages between scripts in the same linkset.
+
+### Inventory (10)
+
+llAllowInventoryDrop, llGetInventoryKey, llGetInventoryName,
+llGetInventoryNumber, llGetInventoryType, llGetNotecardLine,
+llGetNumberOfNotecardLines, llGiveInventory, llGiveInventoryList,
+llRemoveInventory
+
+Prim inventory queries, notecard reading via dataserver events, giving items
+to avatars and removing items.
+
+### Land (8)
+
+llGetLandOwnerAt, llGetParcelDetails, llGetParcelFlags, llGetParcelMaxPrims,
+llGetParcelPrimCount, llOverMyLand, llSetParcelMediaURL, llSetParcelMusicURL
+
+Parcel queries, owner checks and parcel media/music URL settings.
+
+### Vehicle (6)
+
+llRemoveVehicleFlags, llSetVehicleFlags, llSetVehicleFloatParam,
+llSetVehicleRotationParam, llSetVehicleType, llSetVehicleVectorParam
+
+Vehicle dynamics with 46 VEHICLE_\* constants and type presets (car, boat,
+airplane, balloon, sled).
+
+### Prim params (4)
+
+llGetPrimitiveParams, llSetLinkPrimitiveParams, llSetLinkPrimitiveParamsFast,
+llSetPrimitiveParams
+
+Batch get/set of prim properties using 90+ PRIM_\* constants (shape, texture,
+color, glow, flex, light, sculpt).
+
+### HTTP (3)
+
+llHTTPRequest, llHTTPResponse, llSetContentType
+
+Outbound HTTP requests with a 25-pending throttle, inbound response handling
+and content type headers for URL caps.
+
+### Cap URL (3)
+
+llReleaseURL, llRequestSecureURL, llRequestURL
+
+Script-owned HTTP endpoints (caps) for inbound requests from external
+services.
+
+### Timer (3)
+
+llGetTime, llResetTime, llSetTimerEvent
+
+Script-local elapsed time and periodic timer events.
+
+### Sensor (3)
+
+llSensor, llSensorRemove, llSensorRepeat
+
+One-shot and repeating spatial scans for agents and objects, firing sensor/
+no_sensor events.
+
+### Email (2)
+
+llEmail, llGetNextEmail
+
+Send email (20-second rate limit) and receive queued email.
+
+### Control (2)
+
+llReleaseControls, llTakeControls
+
+Request and release keyboard/mouse control events from the avatar.
 
 ## Differences from OpenSimulator
 

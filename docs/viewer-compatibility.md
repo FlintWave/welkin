@@ -11,7 +11,7 @@ Current viewer compatibility status, updated as live testing progresses.
 |---|---|---|---|
 | Aurora Viewer | Yes | Partial | First connected 2026-11-14 |
 | Firestorm (OpenSim build) | Yes | Working | Tested 2026-11-14 |
-| LibreMetaverse bot | Yes | 13/13 tests pass | Automated test client |
+| LibreMetaverse bot | Yes | 10/10 steps pass | Automated test client |
 
 ## Firestorm session (2026-11-14)
 
@@ -121,9 +121,22 @@ described below.
 - DTL/NSL currency proxy mode
 - Gloebit REST client
 
+### Scripting pipeline (verified end-to-end)
+
+Viewer script uploads use a two-step protocol: the viewer POSTs LLSD metadata
+to UpdateScriptAgent, which returns a one-shot uploader URL with
+`state: "upload"`. The viewer then POSTs raw LSL source to that URL; the
+server compiles it, loads it into the VM, and returns `state: "complete"`.
+Upload tokens are single-use (replay returns 404). Direct raw-text POST
+still works for bot tests and automation.
+
+The bot test validates the full scripting chain: rez a prim, upload LSL,
+confirm state_entry fires llSay, send ObjectGrab, confirm touch_start fires
+llSay. All 10 bot test steps pass (login, region connect, chat send, chat
+echo, movement, rez prim, script upload, script alive, touch event, logout).
+
 ### Known limitations
 
-- 170 ll* functions registered with real implementations; remaining SL-spec ll* functions return stub defaults until wired to region services
 - Full DCT terrain compression (field-order fix pending)
 - Avatar animations on Aurora Viewer (needs AgentAnimation packet)
 
@@ -213,10 +226,10 @@ without manual intervention.
 | UpdateGestureTaskInventory | Working |
 | UpdateNotecardAgentInventory | Working |
 | UpdateNotecardTaskInventory | Working |
-| UpdateScriptAgent | Working |
+| UpdateScriptAgent | Two-step LLSD upload (like bake textures); raw POST fallback for bots |
 | UpdateScriptTask | Working |
 | UploadBakedTexture | Two-phase, stores in ROBUST |
-| ViewerAsset | Working |
+| ViewerAsset | Working (all asset type query params: texture_id, bodypart_id, clothing_id, etc.) |
 | ViewerMetrics | Working |
 | ViewerStats | Working |
 
@@ -247,3 +260,7 @@ without manual intervention.
 | `1dd1302` | 19 new HTTP capability handlers (42 total routes) |
 | `fa8de4d` | Estate admin, cross-region teleport, region crossing, HG teleport |
 | `cfd4cae` | Physics verification, 20 NPC functions, os* teleport, dynamic textures, 100+ os* functions |
+| `e94f119` | Register LSL builtins on VM so scripts actually execute (ScriptContext wiring) |
+| `c707f3b` | Bot test: script upload, execution and touch interaction (10 steps) |
+| `56d05a3` | ViewerAsset: support all asset type query params (bodypart_id, clothing_id, etc.) |
+| `3d68f07` | UpdateScriptAgent: two-step LLSD upload protocol (fixes viewer-initiated uploads) |
