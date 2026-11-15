@@ -1,0 +1,455 @@
+{
+  "selected_scripts": [
+    {
+      "filename": "Ao-seal.lsl",
+      "source_path": "AO/AO/AO/Ao-seal.lsl",
+      "categories": [
+        "animations",
+        "chat",
+        "inventory",
+        "link_messages",
+        "movement",
+        "notecard",
+        "permissions",
+        "prim_params",
+        "sensors",
+        "textures",
+        "timers"
+      ],
+      "function_count": 27,
+      "has_ossl": false,
+      "line_count": 464,
+      "selection_reason": "high coverage (11 categories); large, feature-rich"
+    },
+    {
+      "filename": "MMR_PARTIAL_ENGINE_1.lsl",
+      "source_path": "MMR_PARTIAL_ENGINE/MMR_PARTIAL_ENGINE/Object/MMR_PARTIAL_ENGINE_1.lsl",
+      "categories": [
+        "animations",
+        "chat",
+        "collision",
+        "link_messages",
+        "movement",
+        "permissions",
+        "physics",
+        "prim_params",
+        "sensors",
+        "timers",
+        "vehicles"
+      ],
+      "function_count": 61,
+      "has_ossl": false,
+      "line_count": 1543,
+      "selection_reason": "high coverage (11 categories); large, feature-rich"
+    },
+    {
+      "filename": "Map_on_a_Prim_1.lsl",
+      "source_path": "Map_on_a_Prim/Map_on_a_Prim/Object/Map_on_a_Prim_1.lsl",
+      "categories": [
+        "chat",
+        "http",
+        "inventory",
+        "link_messages",
+        "prim_params",
+        "sensors",
+        "textures",
+        "timers",
+        "touch"
+      ],
+      "function_count": 43,
+      "has_ossl": false,
+      "line_count": 934,
+      "selection_reason": "high coverage (9 categories); covers sparse: http+touch; large, feature-rich"
+    },
+    {
+      "filename": "Script.lsl",
+      "source_path": "OpenSim Boat/OpenSim Boat/Object/Script.lsl",
+      "categories": [
+        "animations",
+        "chat",
+        "link_messages",
+        "movement",
+        "particles",
+        "permissions",
+        "physics",
+        "prim_params",
+        "timers",
+        "vehicles"
+      ],
+      "function_count": 42,
+      "has_ossl": false,
+      "line_count": 746,
+      "selection_reason": "high coverage (10 categories); large, feature-rich"
+    },
+    {
+      "filename": "HS9_7Updates__DON'T_RESET_.lsl",
+      "source_path": "Security Orb/Security Orb/Orb/HS9 7Updates _DON'T RESET_.lsl",
+      "categories": [
+        "chat",
+        "email",
+        "inventory",
+        "link_messages",
+        "notecard",
+        "prim_params",
+        "textures",
+        "timers"
+      ],
+      "function_count": 34,
+      "has_ossl": false,
+      "line_count": 242,
+      "selection_reason": "high coverage (8 categories); covers sparse: email; moderate size"
+    },
+    {
+      "filename": "Animal_Script.lsl",
+      "source_path": "mooFerd/mooFerd/Animal/Script.lsl",
+      "categories": [
+        "chat",
+        "collision",
+        "inventory",
+        "movement",
+        "physics",
+        "prim_params",
+        "sensors",
+        "timers"
+      ],
+      "function_count": 36,
+      "has_ossl": false,
+      "line_count": 288,
+      "selection_reason": "high coverage (8 categories); moderate size"
+    },
+    {
+      "filename": "Object_Script.lsl",
+      "source_path": "Magic Sensor/Magic Sensor/Object/Script.lsl",
+      "categories": [
+        "chat",
+        "movement",
+        "particles",
+        "physics",
+        "prim_params",
+        "sensors",
+        "timers"
+      ],
+      "function_count": 27,
+      "has_ossl": false,
+      "line_count": 260,
+      "selection_reason": "good coverage (7 categories); moderate size"
+    },
+    {
+      "filename": "Survey_1_1.lsl",
+      "source_path": "Survey_1/Survey_1/Object/Survey_1_1.lsl",
+      "categories": [
+        "chat",
+        "email",
+        "inventory",
+        "notecard",
+        "prim_params",
+        "sensors",
+        "timers"
+      ],
+      "function_count": 23,
+      "has_ossl": false,
+      "line_count": 227,
+      "selection_reason": "good coverage (7 categories); covers sparse: email; moderate size"
+    },
+    {
+      "filename": "Mapmaker_1.lsl",
+      "source_path": "Mapmaker/Mapmaker/Object/Mapmaker_1.lsl",
+      "categories": [
+        "chat",
+        "http",
+        "prim_params",
+        "sensors",
+        "textures",
+        "timers"
+      ],
+      "function_count": 17,
+      "has_ossl": false,
+      "line_count": 283,
+      "selection_reason": "good coverage (6 categories); covers sparse: http; moderate size"
+    },
+    {
+      "filename": "Super_Collider_1.lsl",
+      "source_path": "Super_Collider/Super_Collider/Object/Super_Collider_1.lsl",
+      "categories": [
+        "animations",
+        "chat",
+        "link_messages",
+        "movement",
+        "permissions",
+        "physics",
+        "prim_params",
+        "sensors",
+        "timers"
+      ],
+      "function_count": 30,
+      "has_ossl": false,
+      "line_count": 299,
+      "selection_reason": "high coverage (9 categories); moderate size"
+    },
+    {
+      "filename": "Hover_Disk_Script_1.lsl",
+      "source_path": "Hover_Disk_Script/Hover_Disk_Script/Object/Hover_Disk_Script_1.lsl",
+      "categories": [
+        "animations",
+        "chat",
+        "link_messages",
+        "permissions",
+        "physics",
+        "prim_params",
+        "sensors",
+        "timers",
+        "vehicles"
+      ],
+      "function_count": 29,
+      "has_ossl": false,
+      "line_count": 293,
+      "selection_reason": "high coverage (9 categories); moderate size"
+    },
+    {
+      "filename": "vehicle.lsl",
+      "source_path": "LandRover/LandRover/root/vehicle.lsl",
+      "categories": [
+        "chat",
+        "link_messages",
+        "movement",
+        "permissions",
+        "physics",
+        "prim_params",
+        "sensors",
+        "timers",
+        "vehicles"
+      ],
+      "function_count": 26,
+      "has_ossl": false,
+      "line_count": 291,
+      "selection_reason": "high coverage (9 categories); moderate size"
+    },
+    {
+      "filename": "Object_vehicle.lsl",
+      "source_path": "Vehicle/Vehicle/Object/vehicle.lsl",
+      "categories": [
+        "collision",
+        "link_messages",
+        "movement",
+        "permissions",
+        "physics",
+        "prim_params",
+        "timers",
+        "vehicles"
+      ],
+      "function_count": 31,
+      "has_ossl": false,
+      "line_count": 179,
+      "selection_reason": "high coverage (8 categories); moderate size"
+    },
+    {
+      "filename": "moving_prim_for_door.lsl",
+      "source_path": "Magic Door/Magic Door/Object/moving prim for door.lsl",
+      "categories": [
+        "animations",
+        "chat",
+        "inventory",
+        "link_messages",
+        "movement",
+        "permissions",
+        "prim_params",
+        "timers"
+      ],
+      "function_count": 28,
+      "has_ossl": false,
+      "line_count": 151,
+      "selection_reason": "high coverage (8 categories); moderate size"
+    },
+    {
+      "filename": "Jukebox_Track_WAV_1.lsl",
+      "source_path": "Jukebox_Track_WAV/Jukebox_Track_WAV/Object/Jukebox_Track_WAV_1.lsl",
+      "categories": [
+        "chat",
+        "inventory",
+        "link_messages",
+        "permissions",
+        "prim_params",
+        "sensors",
+        "textures",
+        "timers"
+      ],
+      "function_count": 25,
+      "has_ossl": false,
+      "line_count": 260,
+      "selection_reason": "high coverage (8 categories); moderate size"
+    },
+    {
+      "filename": "flight.lsl",
+      "source_path": "Broomsticks/Broomsticks/Broom/flight.lsl",
+      "categories": [
+        "animations",
+        "chat",
+        "collision",
+        "link_messages",
+        "permissions",
+        "physics",
+        "timers",
+        "vehicles"
+      ],
+      "function_count": 24,
+      "has_ossl": false,
+      "line_count": 254,
+      "selection_reason": "high coverage (8 categories); moderate size"
+    },
+    {
+      "filename": "TipJarClub_1.lsl",
+      "source_path": "TipJarClub/TipJarClub/Object/TipJarClub_1.lsl",
+      "categories": [
+        "chat",
+        "notecard",
+        "particles",
+        "permissions",
+        "prim_params",
+        "sensors",
+        "timers"
+      ],
+      "function_count": 21,
+      "has_ossl": false,
+      "line_count": 276,
+      "selection_reason": "good coverage (7 categories); moderate size"
+    },
+    {
+      "filename": "SignChanger_Object_Script.lsl",
+      "source_path": "SignChanger/SignChanger/Object/Script.lsl",
+      "categories": [
+        "chat",
+        "inventory",
+        "prim_params",
+        "timers",
+        "touch"
+      ],
+      "function_count": 7,
+      "has_ossl": false,
+      "line_count": 56,
+      "selection_reason": "good coverage (5 categories); covers sparse: touch; moderate size"
+    },
+    {
+      "filename": "HUD_Script.lsl",
+      "source_path": "HUD Color Picker/HUD Color Picker/HUD Prim/HUD Script.lsl",
+      "categories": [
+        "chat",
+        "prim_params",
+        "textures",
+        "touch"
+      ],
+      "function_count": 8,
+      "has_ossl": false,
+      "line_count": 132,
+      "selection_reason": "covers sparse: touch; moderate size"
+    },
+    {
+      "filename": "HotTubEngine-v1.0.lsl",
+      "source_path": "HotTub/HotTubEngine-v1.0.lsl",
+      "categories": [
+        "chat",
+        "link_messages",
+        "particles",
+        "prim_params",
+        "sensors",
+        "timers"
+      ],
+      "function_count": 15,
+      "has_ossl": false,
+      "line_count": 271,
+      "selection_reason": "good coverage (6 categories); moderate size"
+    },
+    {
+      "filename": "Car_Script_1.lsl",
+      "source_path": "Car_Script/Car_Script/Object/Car_Script_1.lsl",
+      "categories": [
+        "chat",
+        "collision",
+        "movement",
+        "permissions",
+        "physics",
+        "sensors",
+        "timers"
+      ],
+      "function_count": 28,
+      "has_ossl": false,
+      "line_count": 299,
+      "selection_reason": "good coverage (7 categories); moderate size"
+    },
+    {
+      "filename": "Sequencer.lsl",
+      "source_path": "Hypergrid Story One/HyperGrid Story One/Object/Sequencer.lsl",
+      "categories": [
+        "animations",
+        "chat",
+        "collision",
+        "link_messages",
+        "physics",
+        "prim_params",
+        "sensors",
+        "timers"
+      ],
+      "function_count": 46,
+      "has_ossl": true,
+      "line_count": 395,
+      "selection_reason": "high coverage (8 categories); tests OSSL detection; large, feature-rich"
+    },
+    {
+      "filename": "Mirror_IV.lsl",
+      "source_path": "TrueMirror/TrueMirror/Mirror/Mirror IV.lsl",
+      "categories": [
+        "animations",
+        "chat",
+        "inventory",
+        "link_messages",
+        "movement",
+        "prim_params",
+        "sensors",
+        "timers"
+      ],
+      "function_count": 40,
+      "has_ossl": true,
+      "line_count": 322,
+      "selection_reason": "high coverage (8 categories); tests OSSL detection; large, feature-rich"
+    },
+    {
+      "filename": "Chatbot_Controller.lsl",
+      "source_path": "NPC Chatbot for Opensim/NPC Chatbot for Opensim/Object/Chatbot Controller.lsl",
+      "categories": [
+        "chat",
+        "http",
+        "inventory",
+        "link_messages",
+        "movement",
+        "prim_params",
+        "sensors",
+        "timers"
+      ],
+      "function_count": 37,
+      "has_ossl": true,
+      "line_count": 307,
+      "selection_reason": "high coverage (8 categories); covers sparse: http; tests OSSL detection; large, feature-rich"
+    },
+    {
+      "filename": "Hyperica_Hypergate_Script_CC0_LL_v2.0.lsl",
+      "source_path": "Hyperica Hypergate/Hyperica Hypergate/Gate/Hyperica Hypergate Script CC0 LL v2.0.lsl",
+      "categories": [
+        "chat",
+        "collision",
+        "particles",
+        "prim_params",
+        "sensors",
+        "textures",
+        "timers"
+      ],
+      "function_count": 28,
+      "has_ossl": true,
+      "line_count": 230,
+      "selection_reason": "good coverage (7 categories); tests OSSL detection; moderate size"
+    }
+  ],
+  "coverage": {
+    "categories_covered": 18,
+    "total_scripts": 25,
+    "ossl_scripts": 4
+  }
+}
