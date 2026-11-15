@@ -16,7 +16,7 @@ Current viewer compatibility status, updated as live testing progresses.
 ## Firestorm session (2026-11-14)
 
 Tested with the Firestorm OpenSim build against a local Welkin grid
-(ROBUST + one region). Commits 053b903 through cc9520a cover all work
+(ROBUST + one region). Commits 053b903 through cfd4cae cover all work
 described below.
 
 ### Login and connection
@@ -32,6 +32,9 @@ described below.
 - WASD movement with walk, run and fly transitions
 - Map and minimap via MapLayer cap (POST and GET)
 - Local teleport via map
+- Cross-region teleport via EntityTransferModule (FSM flow, distance validation up to 4095m)
+- Region crossing with child agent handoff
+- Hypergrid teleport via gatekeeper resolution and UserAgentService verification
 - Sit and stand on objects
 
 ### Object interaction
@@ -43,6 +46,12 @@ described below.
 - Property editing: name, description, shape, permissions, sale info, extra params
 - RezObject, DeRezObject
 - ObjectLink, ObjectDelink, ObjectDuplicate
+- llSetPrimitiveParams/llGetPrimitiveParams with 90+ PRIM_* constants (shape, texture, color, glow, flex, light, sculpt)
+- llSetLinkPrimitiveParams/llSetLinkPrimitiveParamsFast
+- Vehicle dynamics: llSetVehicleType plus 6 vehicle functions with 46 VEHICLE_* constants and type presets (car, boat, airplane, balloon, sled)
+- llRezObject/llRezAtRoot with inventory validation and rez channel
+- Attachments: llAttachToAvatar, llDetachFromAvatar, llAttachToAvatarTemp with 38 ATTACH_* constants
+- Position and rotation targets: llTarget, llRotTarget with at_target/not_at_target events
 
 ### Inventory
 
@@ -61,6 +70,11 @@ described below.
 - ViewerEffect relay to other clients
 - UUIDNameRequest
 - ScriptDialogReply
+- llHTTPRequest with 25-pending throttle, config parsing, response channel
+- llRequestURL/llRequestSecureURL/llReleaseURL for inbound HTTP caps from scripts
+- llEmail/llGetNextEmail with 20s rate limiting and email queue
+- llGetNotecardLine/llGetNumberOfNotecardLines via dataserver events
+- llRequestAgentData with DATA_* constants via dataserver events
 
 ### Avatar and presence
 
@@ -68,6 +82,35 @@ described below.
 - Multi-user presence (new users see existing avatars)
 - AgentUpdate and ViewerEffect flowing
 - 53 region modules loaded
+- 20 NPC functions: osNpcCreate/Remove, osNpcMoveToTarget, osNpcSit/Stand/Touch, osNpcSay/Shout/Whisper, osNpcPlayAnimation/StopAnimation, osNpcSaveAppearance/LoadAppearance
+- osTeleportAgent/osTeleportOwner
+- osGetAvatarList, osKickAvatar, osForceOtherSit
+- osSetSpeed/osGetSpeed with per-avatar speed multiplier
+- SetDisplayName cap
+
+### Estate administration
+
+- EstateOwnerMessage dispatch with 11 sub-commands (setregioninfo, setregionterrain, restart, estateaccessdelta, simulatormessage and others)
+- FreezeUser: freeze/unfreeze target avatar with alert
+- EjectUser via TeleportFailed, remove presence, optional ban
+- GodUpdateRegionInfo for god-mode region settings
+- RequestRegionInfo with full RegionInfo reply
+
+### Physics
+
+- Rapier physics step running at 11ms (90fps)
+- Collision events (collision_start, collision, collision_end) flowing to scripts with per-frame diffing
+- Terrain heightfield collision via Scene::set_terrain()
+
+### World and environment
+
+- osSetDynamicTextureURL/osSetDynamicTextureData for runtime texture rendering
+- osSetRegionWaterHeight, osSetRegionSunSettings, osSetSunParam/osGetSunParam
+- osGetCurrentSunHour
+- osSetTerrainHeight/osGetTerrainHeight, osSetTerrainTexture/osSetTerrainTextureHeight
+- osTerrainFlush, osSetWindParam/osGetWindParam
+- osGetSimulatorMemory (reads /proc/self/status VmRSS)
+- osGetRegionSize, osGetRegionStats, osRegionNotice
 
 ### Economy
 
@@ -80,9 +123,9 @@ described below.
 
 ### Known limitations
 
-- LSL compilation pipeline runs (lexer, parser, analyzer, Luau codegen) but ~387 ll* functions still need region wiring
-- Physics step integration not yet wired
-- Cross-region teleport
+- 170 ll* functions registered with real implementations; remaining SL-spec ll* functions return stub defaults until wired to region services
+- Full DCT terrain compression (field-order fix pending)
+- Avatar animations on Aurora Viewer (needs AgentAnimation packet)
 
 ### Known viewer messages
 
@@ -120,12 +163,18 @@ The server handles both layouts via the `aurora-msg` crate.
 
 ## Capabilities
 
-22 capability handlers implemented:
+42 capability route entries implemented:
 
 | Cap | Status |
 |---|---|
 | AgentPreferences | Working |
+| AvatarPickerSearch | Working |
+| ChatSessionRequest | Working |
+| CopyInventoryFromNotecard | Working |
 | CreateInventoryCategory | Working |
+| DispatchRegionInfo | Working |
+| EnvironmentSettings | Working (GET and POST) |
+| EstateChangeInfo | Working |
 | EventQueueGet | Working (25s long-poll) |
 | FetchInventory2 | Wired to ROBUST xinventory |
 | FetchInventoryDescendents2 | Wired to ROBUST xinventory |
@@ -134,17 +183,30 @@ The server handles both layouts via the `aurora-msg` crate.
 | GetMesh | Proxied to ROBUST asset service |
 | GetMesh2 | Proxied to ROBUST asset service |
 | GetTexture | Proxied to ROBUST asset service |
+| GroupMemberData | Working |
 | HomeLocation | Working |
+| LandResources | Working |
 | MapLayer | Working (POST and GET) |
+| MeshUploadFlag | Working |
 | NewFileAgentInventory | Working |
 | RegionInfo | Working |
+| RemoteParcelRequest | Working |
+| SearchStatRequest | Working |
+| ServerReleaseNotes | Working |
+| SetDisplayName | Working |
+| SimConsoleAsync | Working |
 | SimulatorFeatures | Working |
 | UpdateAgentInformation | Working |
 | UpdateAgentLanguage | Working |
+| UpdateGestureAgentInventory | Working |
+| UpdateGestureTaskInventory | Working |
 | UpdateNotecardAgentInventory | Working |
+| UpdateNotecardTaskInventory | Working |
 | UpdateScriptAgent | Working |
+| UpdateScriptTask | Working |
 | UploadBakedTexture | Two-phase, stores in ROBUST |
 | ViewerAsset | Working |
+| ViewerMetrics | Working |
 | ViewerStats | Working |
 
 ## Protocol notes
@@ -170,3 +232,7 @@ The server handles both layouts via the `aurora-msg` crate.
 | `3b7c2d8` .. `368e61d` | Module activation: 9 to 53 region modules |
 | `c6834aa` .. `afdecf9` | Viewer messaging: IM dispatch, groups, friends, effects |
 | `dcc3e8b` .. `cc9520a` | Currency: MoneyModule, economy packets, Gloebit client |
+| `14d769f` | Infrastructure builtins: llHTTPRequest, llSetPrimitiveParams, vehicle, email, attachments, targets, notecard reading |
+| `1dd1302` | 19 new HTTP capability handlers (42 total routes) |
+| `fa8de4d` | Estate admin, cross-region teleport, region crossing, HG teleport |
+| `cfd4cae` | Physics verification, 20 NPC functions, os* teleport, dynamic textures, 100+ os* functions |

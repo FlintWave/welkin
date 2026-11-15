@@ -142,26 +142,37 @@ global that the script checks on entry).
 
 ### ll* functions (LSL API)
 
-83 `ll*` functions are registered across six modules:
+170 `ll*` functions are registered across 15 modules:
 
 | Module | Count | Examples |
 |---|---|---|
-| math | 22 | llAbs, llSin, llCos, llSqrt, llPow, llVecDist, llVecNorm, llRot2Euler |
-| string | varies | llToUpper, llToLower, llStringLength, llSubStringIndex, llGetSubString |
+| math | 31 | llAbs, llSin, llCos, llSqrt, llPow, llVecDist, llVecNorm, llRot2Euler |
+| object | 26 | llGetObjectName, llGetObjectDesc, llGetPos, llGetRot, llGetScale, llGetOwner |
+| physics | 19 | llApplyImpulse, llSetForce, llGetVel, llGetAccel |
+| avatar | 16 | llAttachToAvatar, llDetachFromAvatar, llAttachToAvatarTemp, llRequestPermissions |
+| string | 16 | llToUpper, llToLower, llStringLength, llSubStringIndex, llGetSubString |
 | list | 15 | llGetListLength, llList2Integer, llList2String, llListSort, llListFindList, llListStatistics |
-| communication | varies | llSay, llWhisper, llShout, llListen, llRegionSay |
-| object | varies | llGetObjectName, llGetObjectDesc, llGetPos, llGetRot, llGetScale, llGetOwner |
-| physics | varies | llApplyImpulse, llSetForce, llGetVel, llGetAccel |
+| communication | 11 | llSay, llWhisper, llShout, llListen, llRegionSay |
+| inventory | 10 | llGetNotecardLine, llGetNumberOfNotecardLines, llGiveInventory |
+| land | 8 | llGetParcelFlags, llOverMyLand |
+| vehicle | 6 | llSetVehicleType, llSetVehicleFloatParam, llSetVehicleVectorParam |
+| prim_params | 4 | llSetPrimitiveParams, llGetPrimitiveParams, llSetLinkPrimitiveParams |
+| http | 3 | llHTTPRequest, llHTTPResponse |
+| cap_url | 3 | llRequestURL, llRequestSecureURL, llReleaseURL |
+| email | 2 | llEmail, llGetNextEmail |
 
-Pure-math and string functions are fully implemented. Communication, physics and
-object functions that need region integration log the call and return sensible
-defaults until the wiring is complete.
+Math, string and list functions are fully implemented. Avatar, object,
+communication and physics functions are wired to region services. Remaining
+SL-spec ll* functions return stub defaults until wired.
 
 ### OSSL functions
 
-232 `os*` functions are registered across 13 modules: agent, crypto, draw,
+236 `os*` functions are registered across 13 modules: agent, crypto, draw,
 inventory, math, misc, npc, sim_info, string, stubs, terrain, and time.
-These provide the OpenSimulator-specific scripting extensions.
+These provide the OpenSimulator-specific scripting extensions. 20 NPC
+functions have real implementations (osNpcCreate, osNpcMoveTo, osNpcSay,
+etc.) and terrain, sun, wind and speed functions read and write live region
+state.
 
 ### Detected functions
 
