@@ -182,7 +182,11 @@ impl Scene {
     }
 
     pub fn get_object_by_local_id(&self, local_id: u32) -> Option<Uuid> {
-        self.objects_by_local_id.read().unwrap().get(&local_id).copied()
+        self.objects_by_local_id
+            .read()
+            .unwrap()
+            .get(&local_id)
+            .copied()
     }
 
     pub fn with_object<F, R>(&self, uuid: &Uuid, f: F) -> Option<R>
@@ -224,13 +228,18 @@ impl Scene {
             presence.local_id = self.allocate_local_id();
         }
 
-        self.presences_by_local_id
-            .write()
-            .unwrap()
-            .insert(presence.local_id, uuid);
+        let mut by_local = self.presences_by_local_id.write().unwrap();
+        let mut presences = self.presences.write().unwrap();
 
-        self.presences.write().unwrap().insert(uuid, presence);
-        self.presence_count.fetch_add(1, Ordering::Relaxed);
+        if presences.remove(&uuid).is_some() {
+            by_local.retain(|_, v| *v != uuid);
+            tracing::debug!(region = %self.region_info.region_name, avatar = %uuid, "evicted stale presence before re-add");
+        } else {
+            self.presence_count.fetch_add(1, Ordering::Relaxed);
+        }
+
+        by_local.insert(presence.local_id, uuid);
+        presences.insert(uuid, presence);
 
         tracing::debug!(region = %self.region_info.region_name, avatar = %uuid, "presence added to scene");
         uuid
@@ -277,7 +286,12 @@ impl Scene {
         }
     }
 
-    pub fn update_presence_appearance(&self, uuid: &Uuid, texture_entry: Vec<u8>, visual_params: Vec<u8>) -> bool {
+    pub fn update_presence_appearance(
+        &self,
+        uuid: &Uuid,
+        texture_entry: Vec<u8>,
+        visual_params: Vec<u8>,
+    ) -> bool {
         if let Some(p) = self.presences.write().unwrap().get_mut(uuid) {
             p.texture_entry = texture_entry;
             p.visual_params = visual_params;
@@ -357,12 +371,11 @@ impl Scene {
     pub fn tick(&self) -> FrameStats {
         let frame_number = self.frame.fetch_add(1, Ordering::Relaxed) + 1;
 
-        if self.config.physics_enabled {
-            if let Ok(mut guard) = self.physics.lock() {
-                if let Some(ref mut physics) = *guard {
-                    physics.simulate(self.config.frame_time);
-                }
-            }
+        if self.config.physics_enabled
+            && let Ok(mut guard) = self.physics.lock()
+            && let Some(ref mut physics) = *guard
+        {
+            physics.simulate(self.config.frame_time);
         }
 
         let mut dirty_objects = 0u32;
@@ -500,8 +513,7 @@ mod tests {
     fn add_remove_presence() {
         let scene = test_scene();
         let avatar_uuid = Uuid::new_v4();
-        let presence =
-            ScenePresence::new(avatar_uuid, "Test", "User", PresenceType::User);
+        let presence = ScenePresence::new(avatar_uuid, "Test", "User", PresenceType::User);
 
         let returned = scene.add_presence(presence);
         assert_eq!(returned, avatar_uuid);

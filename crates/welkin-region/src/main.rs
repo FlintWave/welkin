@@ -8,8 +8,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use clap::Parser;
 use tokio::net::UdpSocket;
 use tokio::sync::{Mutex, RwLock};
-use tracing::{error, info, warn};
 use tokio_util::sync::CancellationToken;
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use axum::body::Bytes;
@@ -18,22 +18,21 @@ use axum::response::IntoResponse;
 
 use welkin_config::Config;
 use welkin_data::DataPool;
-use welkin_llsd::{from_xml, to_xml_string, Llsd, Map};
-use welkin_msg::msgs::*;
+use welkin_llsd::{Llsd, Map, from_xml, to_xml_string};
+use welkin_modules::{
+    AttachmentsModule, AvatarFactoryModule, CapsModule, ChatModule, DefaultPermissionsModule,
+    DynAttrsModule, EstateManagementModule, LandManagementModule, ModuleConfig, SceneRef,
+    ServiceThrottleModule,
+};
 use welkin_msg::Msg;
+use welkin_msg::msgs::*;
+use welkin_msg::objects::{FullObjectUpdate, encode_terse};
 use welkin_net::dispatch::{HandleError, PacketContext, PacketDispatcher};
 use welkin_net::server::ClientSession;
-use welkin_scene::scene::{RegionInfo, Scene, SceneConfig};
-use welkin_scene::presence::{ScenePresence, PresenceType};
 use welkin_scene::group::SceneObjectGroup;
 use welkin_scene::part::SceneObjectPart;
-use welkin_msg::objects::{FullObjectUpdate, encode_terse};
-use welkin_modules::{
-    ModuleConfig, SceneRef,
-    ChatModule, DefaultPermissionsModule, AvatarFactoryModule,
-    AttachmentsModule, EstateManagementModule, LandManagementModule,
-    CapsModule, DynAttrsModule, ServiceThrottleModule,
-};
+use welkin_scene::presence::{PresenceType, ScenePresence};
+use welkin_scene::scene::{RegionInfo, Scene, SceneConfig};
 
 /// OpenSimulator Region Simulator
 #[derive(Parser, Debug)]
@@ -63,16 +62,14 @@ struct RegionConfig {
 
 impl RegionConfig {
     fn from_config(config: &Config) -> Self {
-        let region_name = config
-            .get_string_or("Region", "RegionName", "My Region");
+        let region_name = config.get_string_or("Region", "RegionName", "My Region");
         let region_loc_x = config.get_i64_or("Region", "RegionLocX", 1000) as u32;
         let region_loc_y = config.get_i64_or("Region", "RegionLocY", 1000) as u32;
-        let external_host_name = config
-            .get_string_or("Network", "ExternalHostName", "127.0.0.1");
+        let external_host_name = config.get_string_or("Network", "ExternalHostName", "127.0.0.1");
         let internal_port = config.get_i64_or("Network", "InternalPort", 9000) as u16;
 
-        let database_url = config
-            .get_string_or("DatabaseService", "ConnectionString", "sqlite:region.db");
+        let database_url =
+            config.get_string_or("DatabaseService", "ConnectionString", "sqlite:region.db");
 
         let grid_service_url = config
             .get_string("GridService", "GridServerURI")
@@ -87,16 +84,28 @@ impl RegionConfig {
             config.get_bool_or("Scene", "PhysicalPrims", scene_config.physical_prims);
         scene_config.collidable_prims =
             config.get_bool_or("Scene", "CollidablePrims", scene_config.collidable_prims);
-        scene_config.max_nonphys_size =
-            config.get_f64_or("Scene", "MaxNonPhysSize", scene_config.max_nonphys_size as f64) as f32;
+        scene_config.max_nonphys_size = config.get_f64_or(
+            "Scene",
+            "MaxNonPhysSize",
+            scene_config.max_nonphys_size as f64,
+        ) as f32;
         scene_config.max_phys_size =
             config.get_f64_or("Scene", "MaxPhysSize", scene_config.max_phys_size as f64) as f32;
-        scene_config.max_prims_per_frame =
-            config.get_i64_or("Scene", "MaxPrimsPerFrame", scene_config.max_prims_per_frame as i64) as i32;
-        scene_config.default_draw_distance =
-            config.get_f64_or("Scene", "DefaultDrawDistance", scene_config.default_draw_distance as f64) as f32;
-        scene_config.max_draw_distance =
-            config.get_f64_or("Scene", "MaxDrawDistance", scene_config.max_draw_distance as f64) as f32;
+        scene_config.max_prims_per_frame = config.get_i64_or(
+            "Scene",
+            "MaxPrimsPerFrame",
+            scene_config.max_prims_per_frame as i64,
+        ) as i32;
+        scene_config.default_draw_distance = config.get_f64_or(
+            "Scene",
+            "DefaultDrawDistance",
+            scene_config.default_draw_distance as f64,
+        ) as f32;
+        scene_config.max_draw_distance = config.get_f64_or(
+            "Scene",
+            "MaxDrawDistance",
+            scene_config.max_draw_distance as f64,
+        ) as f32;
         scene_config.frame_time =
             config.get_f64_or("Scene", "FrameTime", scene_config.frame_time as f64) as f32;
 
@@ -193,13 +202,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     scene.start();
 
     if physics_enabled {
-        let physics = welkin_physics_rapier::RapierPhysicsScene::new(&scene.region_info.region_name);
+        let physics =
+            welkin_physics_rapier::RapierPhysicsScene::new(&scene.region_info.region_name);
         scene.set_physics(Box::new(physics));
         info!("Physics engine (Rapier) initialised");
     }
 
     // --- Module system ---
-    let scene_ref = SceneRef::new(scene.region_info.region_id, scene.region_info.region_name.clone());
+    let scene_ref = SceneRef::new(
+        scene.region_info.region_id,
+        scene.region_info.region_name.clone(),
+    );
     {
         let mut registry = scene_ref.registry.write();
         registry.register(ChatModule::new());
@@ -224,10 +237,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let grid_reg = match region_config.grid_service_url {
         Some(ref url) => {
             let caps_port = region_config.internal_port.wrapping_add(1);
-            let server_uri = format!(
-                "http://{}:{}/",
-                region_config.external_host_name, caps_port
-            );
+            let server_uri = format!("http://{}:{}/", region_config.external_host_name, caps_port);
             let zero_uuid = "00000000-0000-0000-0000-000000000000";
             let loc_x = (region_config.region_loc_x * 256) as i32;
             let loc_y = (region_config.region_loc_y * 256) as i32;
@@ -259,9 +269,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 parcel_map_texture: zero_uuid.to_string(),
             };
 
-            let connector = Arc::new(
-                welkin_services::remote::grid::RemoteGridConnector::new(url),
-            );
+            let connector = Arc::new(welkin_services::remote::grid::RemoteGridConnector::new(url));
             let registration = welkin_services::registration::GridRegistration::new(
                 connector,
                 region_row,
@@ -303,10 +311,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // --- Caps base URL (used by both process_messages and the caps server) ---
     let caps_port = region_config.internal_port.wrapping_add(1);
     let caps_addr = SocketAddr::from(([0, 0, 0, 0], caps_port));
-    let caps_base = format!(
-        "http://{}:{}",
-        region_config.external_host_name, caps_port
-    );
+    let caps_base = format!("http://{}:{}", region_config.external_host_name, caps_port);
 
     // --- Message processing loop ---
     let mut dispatcher = PacketDispatcher::new();
@@ -334,7 +339,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let cap_server = welkin_caps::server::CapabilityServer::new();
 
-    let asset_url = region_config.grid_service_url.as_deref().unwrap_or("http://localhost:8003");
+    let asset_url = region_config
+        .grid_service_url
+        .as_deref()
+        .unwrap_or("http://localhost:8003");
     let http_client = reqwest::Client::new();
     let asset_state = welkin_caps::handlers::AssetServiceState {
         client: http_client.clone(),
@@ -352,7 +360,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let mut caps_router = cap_server.into_router();
-    for (name, method_router) in welkin_caps::handlers::cap_routes(asset_state, inv_state, bake_state.clone()) {
+    for (name, method_router) in
+        welkin_caps::handlers::cap_routes(asset_state, inv_state, bake_state.clone())
+    {
         caps_router = caps_router.route(&format!("/{name}"), method_router);
     }
     caps_router = caps_router.merge(welkin_caps::handlers::bake_upload_route(bake_state));
@@ -384,9 +394,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let heartbeat_scene = Arc::clone(&scene);
     let frame_time_ms = (frame_time * 1000.0) as u64;
     let heartbeat_handle = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(
-            std::time::Duration::from_millis(frame_time_ms.max(50)),
-        );
+        let mut interval =
+            tokio::time::interval(std::time::Duration::from_millis(frame_time_ms.max(50)));
         loop {
             tokio::select! {
                 _ = heartbeat_cancel.cancelled() => break,
@@ -490,10 +499,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let _ = coarse_handle.await;
     let _ = timeout_handle.await;
 
-    if let Some(ref reg) = grid_reg {
-        if let Err(e) = reg.shutdown().await {
-            warn!(error = %e, "Failed to deregister from grid");
-        }
+    if let Some(ref reg) = grid_reg
+        && let Err(e) = reg.shutdown().await
+    {
+        warn!(error = %e, "Failed to deregister from grid");
     }
 
     {
@@ -592,353 +601,459 @@ async fn process_messages(
             }
         }
 
-        if msg_id == CompleteAgentMovement::ID {
-            if let Some(client) = &client {
-                send_movement_complete(&socket, client, src, &scene.region_info, &scene, &event_queues, &caps_base).await;
-            }
-        }
-
-        if msg_id == StartPingCheck::ID {
-            if let Some(client) = &client {
-                if let Ok(ping) = StartPingCheck::decode(&pkt.body) {
-                    let reply = CompletePingCheck {
-                        ping_id: complete_ping_check::PingID {
-                            ping_id: ping.ping_id.ping_id,
-                        },
-                    };
-                    let mut session = client.lock().await;
-                    let (pkt_bytes, _) = session.circuit.send_msg(&reply, false);
-                    let _ = socket.send_to(&pkt_bytes, src).await;
+        if msg_id == CompleteAgentMovement::ID
+            && let Some(client) = &client
+        {
+            {
+                let mut cmap = clients.write().await;
+                let stale: Vec<SocketAddr> = cmap
+                    .iter()
+                    .filter(|(addr, _)| **addr != src)
+                    .filter(|(_, c)| {
+                        if let Ok(s) = c.try_lock() {
+                            s.agent_id == agent_id
+                        } else {
+                            false
+                        }
+                    })
+                    .map(|(addr, _)| *addr)
+                    .collect();
+                for addr in &stale {
+                    cmap.remove(addr);
+                    info!(agent = %agent_id, old_addr = %addr, "evicted stale client session on reconnect");
                 }
             }
+            send_movement_complete(
+                &socket,
+                client,
+                src,
+                &scene.region_info,
+                &scene,
+                &event_queues,
+                &caps_base,
+            )
+            .await;
         }
 
-        if msg_id == AgentCachedTexture::ID {
-            if let Some(client) = &client {
-                let mut session = client.lock().await;
-                let reply = AgentCachedTextureResponse {
-                    agent_data: agent_cached_texture_response::AgentData {
-                        agent_id: session.agent_id,
-                        session_id: session.session_id,
-                        serial_num: 0,
-                    },
-                    wearable_data: Vec::new(),
-                };
-                let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
-                let _ = socket.send_to(&pkt_bytes, src).await;
+        if msg_id == StartPingCheck::ID
+            && let Some(client) = &client
+            && let Ok(ping) = StartPingCheck::decode(&pkt.body)
+        {
+            let reply = CompletePingCheck {
+                ping_id: complete_ping_check::PingID {
+                    ping_id: ping.ping_id.ping_id,
+                },
+            };
+            let mut session = client.lock().await;
+            let (pkt_bytes, _) = session.circuit.send_msg(&reply, false);
+            let _ = socket.send_to(&pkt_bytes, src).await;
+        }
+
+        if msg_id == AgentCachedTexture::ID
+            && let Some(client) = &client
+        {
+            let mut session = client.lock().await;
+            let reply = AgentCachedTextureResponse {
+                agent_data: agent_cached_texture_response::AgentData {
+                    agent_id: session.agent_id,
+                    session_id: session.session_id,
+                    serial_num: 0,
+                },
+                wearable_data: Vec::new(),
+            };
+            let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+            let _ = socket.send_to(&pkt_bytes, src).await;
+        }
+
+        if msg_id == AgentWearablesRequest::ID
+            && let Some(client) = &client
+        {
+            let mut session = client.lock().await;
+            let reply = AgentWearablesUpdate {
+                agent_data: agent_wearables_update::AgentData {
+                    agent_id: session.agent_id,
+                    session_id: session.session_id,
+                    serial_num: 1,
+                },
+                wearable_data: default_wearables(),
+            };
+            let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+            let _ = socket.send_to(&pkt_bytes, src).await;
+        }
+
+        if msg_id == LogoutRequest::ID
+            && let Some(client) = &client
+        {
+            let mut session = client.lock().await;
+            let reply = LogoutReply {
+                agent_data: logout_reply::AgentData {
+                    agent_id: session.agent_id,
+                    session_id: session.session_id,
+                },
+                inventory_data: Vec::new(),
+            };
+            let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+            let _ = socket.send_to(&pkt_bytes, src).await;
+            scene.remove_presence(&session.agent_id);
+            event_queues.write().await.remove(&session.agent_id);
+            clients.write().await.remove(&src);
+            info!(agent = %session.agent_id, "logout acknowledged, presence and client removed");
+        }
+
+        if msg_id == EconomyDataRequest::ID
+            && let Some(client) = &client
+        {
+            let mut session = client.lock().await;
+            let reply = EconomyData {
+                info: economy_data::Info {
+                    object_capacity: 15000,
+                    object_count: 0,
+                    price_energy_unit: 0,
+                    price_object_claim: 0,
+                    price_public_object_decay: 0,
+                    price_public_object_delete: 0,
+                    price_parcel_claim: 0,
+                    price_parcel_claim_factor: 0.0,
+                    price_upload: 0,
+                    price_rent_light: 0,
+                    teleport_min_price: 0,
+                    teleport_price_exponent: 0.0,
+                    energy_efficiency: 0.0,
+                    price_object_rent: 0.0,
+                    price_object_scale_factor: 0.0,
+                    price_parcel_rent: 0,
+                    price_group_create: 0,
+                },
+            };
+            let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+            let _ = socket.send_to(&pkt_bytes, src).await;
+        }
+
+        if msg_id == AgentUpdate::ID
+            && let Ok(update) = AgentUpdate::decode(&pkt.body)
+        {
+            let flags = update.agent_data.control_flags;
+            let rot = update.agent_data.body_rotation;
+            let speed = 3.0f32;
+
+            let forward = rot * glam::Vec3::new(0.0, 1.0, 0.0);
+            let left = rot * glam::Vec3::new(-1.0, 0.0, 0.0);
+            let mut vel = glam::Vec3::ZERO;
+            if flags & 0x0001 != 0 {
+                vel += forward * speed;
+            } // AGENT_CONTROL_AT_POS (forward)
+            if flags & 0x0002 != 0 {
+                vel -= forward * speed;
+            } // AGENT_CONTROL_AT_NEG (back)
+            if flags & 0x0004 != 0 {
+                vel += left * speed;
+            } // AGENT_CONTROL_LEFT_POS
+            if flags & 0x0008 != 0 {
+                vel -= left * speed;
+            } // AGENT_CONTROL_LEFT_NEG (right)
+            if flags & 0x0010 != 0 {
+                vel.z += speed;
+            } // AGENT_CONTROL_UP_POS
+            if flags & 0x0020 != 0 {
+                vel.z -= speed;
+            } // AGENT_CONTROL_UP_NEG
+
+            let prev_pos = scene
+                .get_presence(&update.agent_data.agent_id)
+                .map(|p| p.position)
+                .unwrap_or(glam::Vec3::new(128.0, 128.0, 22.0));
+            let dt = 0.1f32;
+            let mut new_pos = prev_pos + vel * dt;
+            new_pos.x = new_pos.x.clamp(0.0, 256.0);
+            new_pos.y = new_pos.y.clamp(0.0, 256.0);
+            if new_pos.z < 22.0 {
+                new_pos.z = 22.0;
             }
-        }
 
-        if msg_id == AgentWearablesRequest::ID {
+            scene.update_presence_position(&update.agent_data.agent_id, new_pos, rot);
+
             if let Some(client) = &client {
-                let mut session = client.lock().await;
-                let reply = AgentWearablesUpdate {
-                    agent_data: agent_wearables_update::AgentData {
-                        agent_id: session.agent_id,
-                        session_id: session.session_id,
-                        serial_num: 1,
-                    },
-                    wearable_data: default_wearables(),
-                };
-                let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
-                let _ = socket.send_to(&pkt_bytes, src).await;
-            }
-        }
-
-        if msg_id == LogoutRequest::ID {
-            if let Some(client) = &client {
-                let mut session = client.lock().await;
-                let reply = LogoutReply {
-                    agent_data: logout_reply::AgentData {
-                        agent_id: session.agent_id,
-                        session_id: session.session_id,
-                    },
-                    inventory_data: Vec::new(),
-                };
-                let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
-                let _ = socket.send_to(&pkt_bytes, src).await;
-                scene.remove_presence(&session.agent_id);
-                event_queues.write().await.remove(&session.agent_id);
-                info!(agent = %session.agent_id, "logout acknowledged, presence removed");
-            }
-        }
-
-        if msg_id == EconomyDataRequest::ID {
-            if let Some(client) = &client {
-                let mut session = client.lock().await;
-                let reply = EconomyData {
-                    info: economy_data::Info {
-                        object_capacity: 15000,
-                        object_count: 0,
-                        price_energy_unit: 0,
-                        price_object_claim: 0,
-                        price_public_object_decay: 0,
-                        price_public_object_delete: 0,
-                        price_parcel_claim: 0,
-                        price_parcel_claim_factor: 0.0,
-                        price_upload: 0,
-                        price_rent_light: 0,
-                        teleport_min_price: 0,
-                        teleport_price_exponent: 0.0,
-                        energy_efficiency: 0.0,
-                        price_object_rent: 0.0,
-                        price_object_scale_factor: 0.0,
-                        price_parcel_rent: 0,
-                        price_group_create: 0,
-                    },
-                };
-                let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
-                let _ = socket.send_to(&pkt_bytes, src).await;
-            }
-        }
-
-        if msg_id == AgentUpdate::ID {
-            if let Ok(update) = AgentUpdate::decode(&pkt.body) {
-                let flags = update.agent_data.control_flags;
-                let rot = update.agent_data.body_rotation;
-                let speed = 3.0f32;
-
-                let forward = rot * glam::Vec3::new(0.0, 1.0, 0.0);
-                let left = rot * glam::Vec3::new(-1.0, 0.0, 0.0);
-                let mut vel = glam::Vec3::ZERO;
-                if flags & 0x0001 != 0 { vel += forward * speed; }   // AGENT_CONTROL_AT_POS (forward)
-                if flags & 0x0002 != 0 { vel -= forward * speed; }   // AGENT_CONTROL_AT_NEG (back)
-                if flags & 0x0004 != 0 { vel += left * speed; }      // AGENT_CONTROL_LEFT_POS
-                if flags & 0x0008 != 0 { vel -= left * speed; }      // AGENT_CONTROL_LEFT_NEG (right)
-                if flags & 0x0010 != 0 { vel.z += speed; }           // AGENT_CONTROL_UP_POS
-                if flags & 0x0020 != 0 { vel.z -= speed; }           // AGENT_CONTROL_UP_NEG
-
-                let prev_pos = scene.get_presence(&update.agent_data.agent_id)
-                    .map(|p| p.position)
-                    .unwrap_or(glam::Vec3::new(128.0, 128.0, 22.0));
-                let dt = 0.1f32;
-                let mut new_pos = prev_pos + vel * dt;
-                new_pos.x = new_pos.x.clamp(0.0, 256.0);
-                new_pos.y = new_pos.y.clamp(0.0, 256.0);
-                if new_pos.z < 22.0 { new_pos.z = 22.0; }
-
-                scene.update_presence_position(
-                    &update.agent_data.agent_id,
+                let terse_data = encode_terse(
+                    1, // local_id of avatar
+                    0,
+                    true,
+                    Some(glam::Vec4::new(0.0, 0.0, 1.0, -new_pos.z)),
                     new_pos,
+                    vel,
+                    glam::Vec3::ZERO,
                     rot,
+                    glam::Vec3::ZERO,
                 );
+                let terse_msg = ImprovedTerseObjectUpdate {
+                    region_data: improved_terse_object_update::RegionData {
+                        region_handle: scene.region_info.region_handle,
+                        time_dilation: 65535,
+                    },
+                    object_data: vec![improved_terse_object_update::ObjectData {
+                        data: terse_data,
+                        texture_entry: Vec::new(),
+                    }],
+                };
+                let mut session = client.lock().await;
+                let (pkt_bytes, _) = session.circuit.send_msg(&terse_msg, false);
+                let _ = socket.send_to(&pkt_bytes, src).await;
+            }
+        }
 
+        if msg_id == MapBlockRequest::ID
+            && let Ok(req) = MapBlockRequest::decode(&pkt.body)
+        {
+            let ri = &scene.region_info;
+            let gx = ri.region_loc_x as u16;
+            let gy = ri.region_loc_y as u16;
+            let pd = &req.position_data;
+            if gx >= pd.min_x && gx <= pd.max_x && gy >= pd.min_y && gy <= pd.max_y {
+                let reply = MapBlockReply {
+                    agent_data: map_block_reply::AgentData {
+                        agent_id,
+                        flags: req.agent_data.flags,
+                    },
+                    data: vec![map_block_reply::Data {
+                        x: gx,
+                        y: gy,
+                        name: ri.region_name.clone().into_bytes(),
+                        access: 21,
+                        region_flags: 0,
+                        water_height: 20,
+                        agents: 0,
+                        map_image_id: Uuid::nil(),
+                    }],
+                    size: vec![map_block_reply::Size {
+                        size_x: ri.region_size_x as u16,
+                        size_y: ri.region_size_y as u16,
+                    }],
+                };
                 if let Some(client) = &client {
-                    let terse_data = encode_terse(
-                        1, // local_id of avatar
-                        0,
-                        true,
-                        Some(glam::Vec4::new(0.0, 0.0, 1.0, -new_pos.z)),
-                        new_pos,
-                        vel,
-                        glam::Vec3::ZERO,
-                        rot,
-                        glam::Vec3::ZERO,
-                    );
-                    let terse_msg = ImprovedTerseObjectUpdate {
-                        region_data: improved_terse_object_update::RegionData {
-                            region_handle: scene.region_info.region_handle,
-                            time_dilation: 65535,
-                        },
-                        object_data: vec![improved_terse_object_update::ObjectData {
-                            data: terse_data,
-                            texture_entry: Vec::new(),
-                        }],
-                    };
                     let mut session = client.lock().await;
-                    let (pkt_bytes, _) = session.circuit.send_msg(&terse_msg, false);
+                    let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
                     let _ = socket.send_to(&pkt_bytes, src).await;
                 }
             }
         }
 
-        if msg_id == MapBlockRequest::ID {
-            if let Ok(req) = MapBlockRequest::decode(&pkt.body) {
-                let ri = &scene.region_info;
-                let gx = ri.region_loc_x as u16;
-                let gy = ri.region_loc_y as u16;
-                let pd = &req.position_data;
-                if gx >= pd.min_x && gx <= pd.max_x && gy >= pd.min_y && gy <= pd.max_y {
-                    let reply = MapBlockReply {
-                        agent_data: map_block_reply::AgentData {
-                            agent_id,
-                            flags: req.agent_data.flags,
-                        },
-                        data: vec![map_block_reply::Data {
-                            x: gx,
-                            y: gy,
-                            name: ri.region_name.clone().into_bytes(),
-                            access: 21,
-                            region_flags: 0,
-                            water_height: 20,
-                            agents: 0,
-                            map_image_id: Uuid::nil(),
-                        }],
-                        size: vec![map_block_reply::Size {
-                            size_x: ri.region_size_x as u16,
-                            size_y: ri.region_size_y as u16,
-                        }],
-                    };
+        if msg_id == ChatFromViewer::ID
+            && let Ok(chat) = ChatFromViewer::decode(&pkt.body)
+        {
+            let text = String::from_utf8_lossy(&chat.chat_data.message).to_string();
+            info!(
+                agent = %agent_id,
+                channel = chat.chat_data.channel,
+                chat_type = chat.chat_data.type_,
+                "chat: {}",
+                text
+            );
+            let sender_name = {
+                let mut name = String::new();
+                scene.for_each_presence(|p| {
+                    if p.uuid == agent_id {
+                        name = p.full_name();
+                    }
+                });
+                if name.is_empty() {
+                    "Unknown".to_string()
+                } else {
+                    name
+                }
+            };
+            let sender_pos = scene
+                .get_presence(&agent_id)
+                .map(|p| p.position)
+                .unwrap_or(glam::Vec3::ZERO);
+            let mut name_bytes = sender_name.into_bytes();
+            name_bytes.push(0);
+            let relay = ChatFromSimulator {
+                chat_data: chat_from_simulator::ChatData {
+                    from_name: name_bytes,
+                    source_id: agent_id,
+                    owner_id: agent_id,
+                    source_type: 1,
+                    chat_type: chat.chat_data.type_,
+                    audible: 1,
+                    position: sender_pos,
+                    message: chat.chat_data.message.clone(),
+                },
+            };
+            let clients_map = clients.read().await;
+            for (peer_addr, peer_client) in clients_map.iter() {
+                let mut peer = peer_client.lock().await;
+                let (pkt_bytes, _) = peer.circuit.send_msg(&relay, true);
+                let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+            }
+        }
+
+        if msg_id == ObjectAdd::ID
+            && let Ok(add) = ObjectAdd::decode(&pkt.body)
+        {
+            let mut root = SceneObjectPart::default();
+            root.uuid = Uuid::new_v4();
+            root.owner_id = add.agent_data.agent_id;
+            root.group_position = add.object_data.ray_end;
+            root.scale = add.object_data.scale;
+            root.rotation_offset = add.object_data.rotation;
+            root.name = "Object".to_string();
+            let group = SceneObjectGroup::new(root);
+            let obj_id = scene.add_object(group);
+            info!(agent = %add.agent_data.agent_id, object = %obj_id, "ObjectAdd: created in scene");
+        }
+
+        if msg_id == ObjectDelete::ID
+            && let Ok(del) = ObjectDelete::decode(&pkt.body)
+        {
+            for obj_data in &del.object_data {
+                if let Some(uuid) = scene.get_object_by_local_id(obj_data.object_local_id) {
+                    scene.remove_object(&uuid);
+                    info!(agent = %agent_id, local_id = obj_data.object_local_id, "ObjectDelete: removed");
+                }
+            }
+        }
+
+        if msg_id == AgentThrottle::ID
+            && let Ok(throttle_msg) = AgentThrottle::decode(&pkt.body)
+            && let Some(client) = &client
+        {
+            let mut session = client.lock().await;
+            session
+                .throttle
+                .set_from_viewer(&throttle_msg.throttle.throttles);
+            tracing::debug!(agent = %agent_id, "throttle updated from viewer");
+        }
+
+        if msg_id == RequestImage::ID
+            && let Ok(req) = RequestImage::decode(&pkt.body)
+            && let Some(client) = &client
+        {
+            let mut session = client.lock().await;
+            for img in &req.request_image {
+                let reply = ImageNotInDatabase {
+                    image_id: image_not_in_database::ImageID { id: img.image },
+                };
+                let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                let _ = socket.send_to(&pkt_bytes, src).await;
+            }
+            tracing::debug!(agent = %agent_id, count = req.request_image.len(), "RequestImage: replied ImageNotInDatabase");
+        }
+
+        if msg_id == AgentDataUpdateRequest::ID
+            && let Some(client) = &client
+        {
+            let mut session = client.lock().await;
+            let name = scene
+                .get_presence(&session.agent_id)
+                .map(|p| (p.first_name.clone(), p.last_name.clone()))
+                .unwrap_or_else(|| ("Test".to_string(), "User".to_string()));
+            let reply = AgentDataUpdate {
+                agent_data: agent_data_update::AgentData {
+                    agent_id: session.agent_id,
+                    first_name: name.0.into_bytes(),
+                    last_name: name.1.into_bytes(),
+                    group_title: Vec::new(),
+                    active_group_id: Uuid::nil(),
+                    group_powers: 0,
+                    group_name: Vec::new(),
+                },
+            };
+            let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+            let _ = socket.send_to(&pkt_bytes, src).await;
+        }
+
+        if msg_id == AgentSetAppearance::ID
+            && let Ok(appearance) = AgentSetAppearance::decode(&pkt.body)
+        {
+            let texture_entry = appearance.object_data.texture_entry.clone();
+            let visual_params: Vec<u8> = appearance
+                .visual_param
+                .iter()
+                .map(|vp| vp.param_value)
+                .collect();
+            scene.update_presence_appearance(
+                &agent_id,
+                texture_entry.clone(),
+                visual_params.clone(),
+            );
+            info!(agent = %agent_id, params = visual_params.len(), tex_len = texture_entry.len(), "AgentSetAppearance: stored and broadcasting");
+
+            let visual_param_blocks: Vec<avatar_appearance::VisualParam> = visual_params
+                .iter()
+                .map(|&v| avatar_appearance::VisualParam { param_value: v })
+                .collect();
+            let broadcast = AvatarAppearance {
+                sender: avatar_appearance::Sender {
+                    id: agent_id,
+                    is_trial: false,
+                },
+                object_data: avatar_appearance::ObjectData { texture_entry },
+                visual_param: visual_param_blocks,
+                appearance_data: vec![avatar_appearance::AppearanceData {
+                    appearance_version: 1,
+                    cof_version: 0,
+                    flags: 0,
+                }],
+                appearance_hover: Vec::new(),
+                attachment_block: Vec::new(),
+            };
+            let clients_map = clients.read().await;
+            for (peer_addr, peer_client) in clients_map.iter() {
+                let mut peer = peer_client.lock().await;
+                let (pkt_bytes, _) = peer.circuit.send_msg(&broadcast, true);
+                let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+            }
+        }
+
+        if msg_id == TeleportLocationRequest::ID {
+            if let Ok(req) = TeleportLocationRequest::decode(&pkt.body) {
+                if req.info.region_handle == scene.region_info.region_handle {
                     if let Some(client) = &client {
                         let mut session = client.lock().await;
-                        let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
-                        let _ = socket.send_to(&pkt_bytes, src).await;
-                    }
-                }
-            }
-        }
 
-        if msg_id == ChatFromViewer::ID {
-            if let Ok(chat) = ChatFromViewer::decode(&pkt.body) {
-                let text = String::from_utf8_lossy(&chat.chat_data.message).to_string();
-                info!(
-                    agent = %agent_id,
-                    channel = chat.chat_data.channel,
-                    chat_type = chat.chat_data.type_,
-                    "chat: {}",
-                    text
-                );
-                let sender_name = {
-                    let mut name = String::new();
-                    scene.for_each_presence(|p| {
-                        if p.uuid == agent_id { name = p.full_name(); }
-                    });
-                    if name.is_empty() { "Unknown".to_string() } else { name }
-                };
-                let sender_pos = scene.get_presence(&agent_id)
-                    .map(|p| p.position)
-                    .unwrap_or(glam::Vec3::ZERO);
-                let mut name_bytes = sender_name.into_bytes();
-                name_bytes.push(0);
-                let relay = ChatFromSimulator {
-                    chat_data: chat_from_simulator::ChatData {
-                        from_name: name_bytes,
-                        source_id: agent_id,
-                        owner_id: agent_id,
-                        source_type: 1,
-                        chat_type: chat.chat_data.type_,
-                        audible: 1,
-                        position: sender_pos,
-                        message: chat.chat_data.message.clone(),
-                    },
-                };
-                let clients_map = clients.read().await;
-                for (peer_addr, peer_client) in clients_map.iter() {
-                    let mut peer = peer_client.lock().await;
-                    let (pkt_bytes, _) = peer.circuit.send_msg(&relay, true);
-                    let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
-                }
-            }
-        }
-
-        if msg_id == ObjectAdd::ID {
-            if let Ok(add) = ObjectAdd::decode(&pkt.body) {
-                let mut root = SceneObjectPart::default();
-                root.uuid = Uuid::new_v4();
-                root.owner_id = add.agent_data.agent_id;
-                root.group_position = add.object_data.ray_end;
-                root.scale = add.object_data.scale;
-                root.rotation_offset = add.object_data.rotation;
-                root.name = "Object".to_string();
-                let group = SceneObjectGroup::new(root);
-                let obj_id = scene.add_object(group);
-                info!(agent = %add.agent_data.agent_id, object = %obj_id, "ObjectAdd: created in scene");
-            }
-        }
-
-        if msg_id == ObjectDelete::ID {
-            if let Ok(del) = ObjectDelete::decode(&pkt.body) {
-                for obj_data in &del.object_data {
-                    if let Some(uuid) = scene.get_object_by_local_id(obj_data.object_local_id) {
-                        scene.remove_object(&uuid);
-                        info!(agent = %agent_id, local_id = obj_data.object_local_id, "ObjectDelete: removed");
-                    }
-                }
-            }
-        }
-
-        if msg_id == AgentThrottle::ID {
-            if let Ok(throttle_msg) = AgentThrottle::decode(&pkt.body) {
-                if let Some(client) = &client {
-                    let mut session = client.lock().await;
-                    session.throttle.set_from_viewer(&throttle_msg.throttle.throttles);
-                    tracing::debug!(agent = %agent_id, "throttle updated from viewer");
-                }
-            }
-        }
-
-        if msg_id == RequestImage::ID {
-            if let Ok(req) = RequestImage::decode(&pkt.body) {
-                if let Some(client) = &client {
-                    let mut session = client.lock().await;
-                    for img in &req.request_image {
-                        let reply = ImageNotInDatabase {
-                            image_id: image_not_in_database::ImageID { id: img.image },
+                        let start_msg = TeleportStart {
+                            info: teleport_start::Info { teleport_flags: 0 },
                         };
-                        let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                        let (pkt_bytes, _) = session.circuit.send_msg(&start_msg, true);
+                        let _ = socket.send_to(&pkt_bytes, src).await;
+
+                        let look_rot = if req.info.look_at.length() < 0.001 {
+                            glam::Quat::IDENTITY
+                        } else {
+                            glam::Quat::from_rotation_arc(
+                                glam::Vec3::Y,
+                                req.info.look_at.normalize(),
+                            )
+                        };
+                        scene.update_presence_position(&agent_id, req.info.position, look_rot);
+
+                        let local_msg = TeleportLocal {
+                            info: teleport_local::Info {
+                                agent_id,
+                                location_id: 0,
+                                position: req.info.position,
+                                look_at: req.info.look_at,
+                                teleport_flags: 0,
+                            },
+                        };
+                        let (pkt_bytes, _) = session.circuit.send_msg(&local_msg, true);
+                        let _ = socket.send_to(&pkt_bytes, src).await;
+
+                        info!(agent = %agent_id, pos = ?req.info.position, "local teleport complete");
+                    }
+                } else {
+                    if let Some(client) = &client {
+                        let mut session = client.lock().await;
+                        let fail_msg = TeleportFailed {
+                            info: teleport_failed::Info {
+                                agent_id,
+                                reason: b"Cross-region teleport not supported".to_vec(),
+                            },
+                            alert_info: Vec::new(),
+                        };
+                        let (pkt_bytes, _) = session.circuit.send_msg(&fail_msg, true);
                         let _ = socket.send_to(&pkt_bytes, src).await;
                     }
-                    tracing::debug!(agent = %agent_id, count = req.request_image.len(), "RequestImage: replied ImageNotInDatabase");
-                }
-            }
-        }
-
-        if msg_id == AgentDataUpdateRequest::ID {
-            if let Some(client) = &client {
-                let mut session = client.lock().await;
-                let name = scene.get_presence(&session.agent_id)
-                    .map(|p| (p.first_name.clone(), p.last_name.clone()))
-                    .unwrap_or_else(|| ("Test".to_string(), "User".to_string()));
-                let reply = AgentDataUpdate {
-                    agent_data: agent_data_update::AgentData {
-                        agent_id: session.agent_id,
-                        first_name: name.0.into_bytes(),
-                        last_name: name.1.into_bytes(),
-                        group_title: Vec::new(),
-                        active_group_id: Uuid::nil(),
-                        group_powers: 0,
-                        group_name: Vec::new(),
-                    },
-                };
-                let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
-                let _ = socket.send_to(&pkt_bytes, src).await;
-            }
-        }
-
-        if msg_id == AgentSetAppearance::ID {
-            if let Ok(appearance) = AgentSetAppearance::decode(&pkt.body) {
-                let texture_entry = appearance.object_data.texture_entry.clone();
-                let visual_params: Vec<u8> = appearance.visual_param.iter()
-                    .map(|vp| vp.param_value)
-                    .collect();
-                scene.update_presence_appearance(&agent_id, texture_entry.clone(), visual_params.clone());
-                info!(agent = %agent_id, params = visual_params.len(), tex_len = texture_entry.len(), "AgentSetAppearance: stored and broadcasting");
-
-                let visual_param_blocks: Vec<avatar_appearance::VisualParam> = visual_params.iter()
-                    .map(|&v| avatar_appearance::VisualParam { param_value: v })
-                    .collect();
-                let broadcast = AvatarAppearance {
-                    sender: avatar_appearance::Sender {
-                        id: agent_id,
-                        is_trial: false,
-                    },
-                    object_data: avatar_appearance::ObjectData {
-                        texture_entry,
-                    },
-                    visual_param: visual_param_blocks,
-                    appearance_data: vec![avatar_appearance::AppearanceData {
-                        appearance_version: 1,
-                        cof_version: 0,
-                        flags: 0,
-                    }],
-                    appearance_hover: Vec::new(),
-                    attachment_block: Vec::new(),
-                };
-                let clients_map = clients.read().await;
-                for (peer_addr, peer_client) in clients_map.iter() {
-                    let mut peer = peer_client.lock().await;
-                    let (pkt_bytes, _) = peer.circuit.send_msg(&broadcast, true);
-                    let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                    warn!(agent = %agent_id, handle = req.info.region_handle, "cross-region teleport not yet supported");
                 }
             }
         }
@@ -1053,8 +1168,13 @@ async fn send_movement_complete(
     }
     info!(agent = %session.agent_id, "sent terrain LayerData (256 flat patches)");
 
-    let (obj_pkt, wear_pkt, app_pkt) = build_avatar_packets(&mut session, region_info.region_handle);
-    for (pkt, name) in [(obj_pkt, "ObjectUpdate"), (wear_pkt, "AgentWearablesUpdate"), (app_pkt, "AvatarAppearance")] {
+    let (obj_pkt, wear_pkt, app_pkt) =
+        build_avatar_packets(&mut session, region_info.region_handle);
+    for (pkt, name) in [
+        (obj_pkt, "ObjectUpdate"),
+        (wear_pkt, "AgentWearablesUpdate"),
+        (app_pkt, "AvatarAppearance"),
+    ] {
         if let Err(e) = socket.send_to(&pkt, addr).await {
             tracing::warn!(error = %e, msg = name, "failed to send avatar packet");
             return;
@@ -1097,12 +1217,7 @@ async fn send_movement_complete(
     }
     info!(agent = %session.agent_id, "sent AgentDataUpdate");
 
-    let mut presence = ScenePresence::new(
-        session.agent_id,
-        "Test",
-        "User",
-        PresenceType::User,
-    );
+    let mut presence = ScenePresence::new(session.agent_id, "Test", "User", PresenceType::User);
     presence.position = glam::Vec3::new(128.0, 128.0, 22.0);
     presence.region_handle = region_info.region_handle;
     scene.add_presence(presence);
@@ -1111,16 +1226,23 @@ async fn send_movement_complete(
     let eq = Arc::new(welkin_caps::event_queue::EventQueue::new());
     {
         let mut eq_body = Map::new();
-        eq_body.insert("agent-id".into(), Llsd::String(session.agent_id.to_string()));
+        eq_body.insert(
+            "agent-id".into(),
+            Llsd::String(session.agent_id.to_string()),
+        );
         eq_body.insert(
             "sim-ip-and-port".into(),
-            Llsd::String(format!("{}:{}", region_info.external_host_name, region_info.internal_port)),
+            Llsd::String(format!(
+                "{}:{}",
+                region_info.external_host_name, region_info.internal_port
+            )),
         );
         eq_body.insert(
             "seed-capability".into(),
             Llsd::String(format!("{}/CAPS/seed", caps_base)),
         );
-        eq.enqueue("EstablishAgentCommunication", Llsd::Map(eq_body)).await;
+        eq.enqueue("EstablishAgentCommunication", Llsd::Map(eq_body))
+            .await;
     }
     event_queues.write().await.insert(session.agent_id, eq);
     info!(agent = %session.agent_id, "event queue created with initial event");
@@ -1200,8 +1322,9 @@ fn build_avatar_packets(
     };
     let (wear_pkt, _) = session.circuit.send_msg(&wearables_msg, true);
 
-    let visual_params: Vec<avatar_appearance::VisualParam> =
-        (0..218).map(|_| avatar_appearance::VisualParam { param_value: 128 }).collect();
+    let visual_params: Vec<avatar_appearance::VisualParam> = (0..218)
+        .map(|_| avatar_appearance::VisualParam { param_value: 128 })
+        .collect();
     let appearance_msg = AvatarAppearance {
         sender: avatar_appearance::Sender {
             id: session.agent_id,
@@ -1242,9 +1365,9 @@ fn build_flat_terrain_data(height: f32, patches: &[(u32, u32)]) -> Vec<u8> {
     };
 
     // Group header
-    push(&mut bits, 264, 16);   // stride
-    push(&mut bits, 16, 8);     // patch_size
-    push(&mut bits, 0x4C, 8);   // type = 'L'
+    push(&mut bits, 264, 16); // stride
+    push(&mut bits, 16, 8); // patch_size
+    push(&mut bits, 0x4C, 8); // type = 'L'
 
     for &(px, py) in patches {
         let patch_id = (px << 5) | (py & 0x1F);
@@ -1269,8 +1392,8 @@ fn build_flat_terrain_data(height: f32, patches: &[(u32, u32)]) -> Vec<u8> {
 
 fn build_layer_data_raw(terrain_data: &[u8]) -> Vec<u8> {
     let mut payload = Vec::with_capacity(terrain_data.len() + 4);
-    payload.push(11);     // LayerData High msg ID
-    payload.push(0x4C);   // LayerID.Type = 'L' (land)
+    payload.push(11); // LayerData High msg ID
+    payload.push(0x4C); // LayerID.Type = 'L' (land)
     let len = terrain_data.len() as u16;
     payload.extend_from_slice(&len.to_le_bytes());
     payload.extend_from_slice(terrain_data);
@@ -1299,10 +1422,7 @@ const KNOWN_CAPS: &[&str] = &[
     "UploadBakedTexture",
 ];
 
-async fn seed_caps_handler(
-    State(base_url): State<String>,
-    body: Bytes,
-) -> impl IntoResponse {
+async fn seed_caps_handler(State(base_url): State<String>, body: Bytes) -> impl IntoResponse {
     let requested = from_xml(&body).unwrap_or(Llsd::Array(Vec::new()));
     let names: Vec<String> = match &requested {
         Llsd::Array(arr) => arr.iter().map(|v| v.as_str().to_string()).collect(),
@@ -1326,10 +1446,10 @@ async fn seed_caps_handler(
 
 /// Redacts credentials from a connection string for safe logging.
 fn redact_connection_string(url: &str) -> String {
-    if let Some(at) = url.find('@') {
-        if let Some(scheme_end) = url.find("://") {
-            return format!("{}://***@{}", &url[..scheme_end], &url[at + 1..]);
-        }
+    if let Some(at) = url.find('@')
+        && let Some(scheme_end) = url.find("://")
+    {
+        return format!("{}://***@{}", &url[..scheme_end], &url[at + 1..]);
     }
     url.to_string()
 }
@@ -1370,8 +1490,8 @@ mod tests {
     #[test]
     fn test_config_database_default() {
         let config = Config::default();
-        let db_url = config
-            .get_string_or("DatabaseService", "ConnectionString", "sqlite:region.db");
+        let db_url =
+            config.get_string_or("DatabaseService", "ConnectionString", "sqlite:region.db");
         assert_eq!(db_url, "sqlite:region.db");
     }
 
