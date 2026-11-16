@@ -1175,6 +1175,9 @@ async fn handle_set_active(store: &GroupsStore, form: &HashMap<String, String>) 
         }
     } else if op == "ROLE" {
         let role_id = form_str(form, "RoleID");
+        if role_id != ZERO_UUID && store.retrieve_role_member(group_id, role_id, agent_id).await.ok().flatten().is_none() {
+            return bool_result(false);
+        }
         if let Ok(Some(mut member)) = store.retrieve_member(group_id, agent_id).await {
             member.selected_role_id = role_id.to_string();
             let _ = store.store_member(&member).await;
