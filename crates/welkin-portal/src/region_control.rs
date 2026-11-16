@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use axum::Json;
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
 
@@ -56,30 +55,12 @@ pub async fn handle_list_regions(
 }
 
 pub async fn handle_create_region(
-    State(state): State<PortalState>,
+    State(_state): State<PortalState>,
     staff: RequireStaff,
-    Json(req): Json<CreateRegionRequest>,
+    Json(_req): Json<CreateRegionRequest>,
 ) -> Result<impl IntoResponse, PortalError> {
     require_operator(&staff)?;
-
-    let region = RegionStatus {
-        region_id: uuid::Uuid::new_v4().to_string(),
-        name: req.name.clone(),
-        status: "stopped".into(),
-        agents: 0,
-        uptime_secs: 0,
-    };
-
-    state.audit_log.log_action(
-        &staff.0.staff_id,
-        "create_region",
-        &region.region_id,
-        &format!("name={} loc=({},{})", req.name, req.loc_x, req.loc_y),
-        "",
-    );
-
-    state.region_statuses.lock().unwrap().push(region.clone());
-    Ok((StatusCode::CREATED, Json(region)))
+    Ok(crate::error::not_implemented("creating regions is not implemented yet"))
 }
 
 // TODO: start/stop/snapshot need region-simulator-core process management
@@ -111,19 +92,11 @@ pub async fn handle_snapshot_region(
 }
 
 pub async fn handle_remove_region(
-    State(state): State<PortalState>,
+    State(_state): State<PortalState>,
     staff: RequireStaff,
-    Path(id): Path<String>,
+    Path(_id): Path<String>,
 ) -> Result<impl IntoResponse, PortalError> {
     require_operator(&staff)?;
-    let mut regions = state.region_statuses.lock().unwrap();
-    let idx = regions
-        .iter()
-        .position(|r| r.region_id == id)
-        .ok_or(PortalError::NotFound)?;
-    regions.remove(idx);
-    state
-        .audit_log
-        .log_action(&staff.0.staff_id, "remove_region", &id, "", "");
-    Ok(StatusCode::NO_CONTENT)
+    Ok(crate::error::not_implemented("removing regions is not implemented yet"))
 }
+

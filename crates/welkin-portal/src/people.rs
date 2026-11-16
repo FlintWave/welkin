@@ -268,8 +268,8 @@ where
 
 async fn handle_approve<S>(
     staff: RequireStaff,
-    State(state): State<S>,
-    Path(id): Path<String>,
+    State(_state): State<S>,
+    Path(_id): Path<String>,
 ) -> Response
 where
     S: Clone + Send + Sync + 'static + AsRef<SignUpStore>,
@@ -277,14 +277,7 @@ where
     if let Err(e) = require_admin(&staff) {
         return e.into_response();
     }
-    let store: &SignUpStore = state.as_ref();
-    if store.update_status(&id, SignUpStatus::Approved) {
-        // TODO: create UserAccount via welkin-data, send welcome email
-        tracing::info!(signup_id = %id, "sign-up approved; account creation not yet wired");
-        (StatusCode::OK, Json(serde_json::json!({ "success": true }))).into_response()
-    } else {
-        PortalError::NotFound.into_response()
-    }
+    return crate::error::not_implemented("approving a sign-up and creating the account is not implemented yet");
 }
 
 async fn handle_reject<S>(

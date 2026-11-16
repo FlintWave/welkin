@@ -90,6 +90,14 @@ async fn post_empty_auth(app: &Router, path: &str, token: &str) -> (StatusCode, 
     json_resp(app.clone().oneshot(req).await.unwrap()).await
 }
 
+async fn delete_auth(app: &Router, path: &str, token: &str) -> (StatusCode, serde_json::Value) {
+    let req = Request::delete(path)
+        .header("authorization", format!("Bearer {token}"))
+        .body(Body::empty())
+        .unwrap();
+    json_resp(app.clone().oneshot(req).await.unwrap()).await
+}
+
 #[tokio::test]
 async fn full_portal_flow() {
     let app = build_full_router();
@@ -198,6 +206,7 @@ async fn full_portal_flow() {
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 
     // ── 5. Region creation ──
+    let made_up_region_id = "00000000-0000-0000-0000-000000000000";
     let (status, json) = post_auth(
         &app,
         "/portal/api/regions",
@@ -211,28 +220,24 @@ async fn full_portal_flow() {
         &token,
     )
     .await;
-    assert_eq!(status, StatusCode::CREATED);
-    let region_id = json["region_id"]
-        .as_str()
-        .expect("region must have id")
-        .to_string();
+    assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
+    assert_eq!(json["error"], "not_implemented");
 
     // ── 6. Region start ──
     let (status, json) = post_empty_auth(
         &app,
-        &format!("/portal/api/regions/{region_id}/start"),
+        &format!("/portal/api/regions/{made_up_region_id}/start"),
         &token,
     )
     .await;
     assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
     assert_eq!(json["error"], "not_implemented");
 
-    // ── 7. Verify region appears in list ──
+    // ── 7. Verify region list stays empty ──
     let (status, json) = get_auth(&app, "/portal/api/regions", &token).await;
     assert_eq!(status, StatusCode::OK);
     let regions = json.as_array().expect("regions list");
-    assert_eq!(regions.len(), 1);
-    assert_eq!(regions[0]["name"], "Welcome");
+    assert!(regions.is_empty());
 
     // ── 8. Map endpoints (not implemented) ──
     let (status, json) = get_auth(&app, "/portal/api/map/regions", &token).await;
@@ -286,13 +291,8 @@ async fn full_portal_flow() {
         &token,
     )
     .await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(json["success"], true);
-
-    // After approval, pending list should be empty
-    let (status, json) = get_auth(&app, "/portal/api/people/signups", &token).await;
-    assert_eq!(status, StatusCode::OK);
-    assert!(json["signups"].as_array().unwrap().is_empty());
+    assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
+    assert_eq!(json["error"], "not_implemented");
 
     // ── 10. Portal pages (authenticated) ──
     let (status, _) = get_auth(&app, "/portal/api/logs", &token).await;
@@ -325,7 +325,7 @@ async fn full_portal_flow() {
     // ── 13. Region snapshot + stop + remove ──
     let (status, json) = post_empty_auth(
         &app,
-        &format!("/portal/api/regions/{region_id}/snapshot"),
+        &format!("/portal/api/regions/{made_up_region_id}/snapshot"),
         &token,
     )
     .await;
@@ -334,7 +334,16 @@ async fn full_portal_flow() {
 
     let (status, json) = post_empty_auth(
         &app,
-        &format!("/portal/api/regions/{region_id}/stop"),
+        &format!("/portal/api/regions/{made_up_region_id}/stop"),
+        &token,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
+    assert_eq!(json["error"], "not_implemented");
+
+    let (status, json) = delete_auth(
+        &app,
+        &format!("/portal/api/regions/{made_up_region_id}"),
         &token,
     )
     .await;
