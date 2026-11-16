@@ -160,7 +160,10 @@ pub async fn process_invite_reply(
         .await
     {
         Ok(InviteResult::Invite(Some(invite))) => invite,
-        _ => return Vec::new(),
+        other => {
+            tracing::warn!(%invite_id, result = ?other, "group invite reply: invite lookup failed");
+            return Vec::new();
+        }
     };
 
     if invite.agent_id != agent {

@@ -199,7 +199,7 @@ class Program
                 bool cOk = await WaitFor(() => created, 10000);
 
                 bool inviteSeen = false; UUID inviteTx = UUID.Zero;
-                bravo.Client.Groups.GroupInvitation += (s, e) => { if (!inviteSeen) inviteSeen = true; };
+                bravo.Client.Groups.GroupInvitation += (s, e) => { e.Accept = true; if (!inviteSeen) inviteSeen = true; }; // the library declines unless Accept is set
                 bravo.Client.Self.IM += (s, e) =>
                 {
                     if (e.IM.Dialog == InstantMessageDialog.GroupInvitation)
@@ -221,7 +221,7 @@ class Program
                 Console.WriteLine($"[GROUP] invite tx={inviteTx} seen={inviteSeen}");
                 if (invOk)
                 {
-                    try { bravo.Client.Self.GroupInviteRespond(groupId, inviteTx, true); accepted = true; } catch (Exception ex) { Console.WriteLine(ex); }
+                    accepted = true; // accepted by the GroupInvitation handler (e.Accept)
                 }
                 bool joined = false;
                 if (accepted)
@@ -236,13 +236,13 @@ class Program
                 bool chatA = false, chatB = false;
                 alpha.Client.Self.GroupChatJoined += (s, e) => { if (e.Success) chatA = true; };
                 bravo.Client.Self.GroupChatJoined += (s, e) => { if (e.Success) chatB = true; };
-                if (joined)
+                if (accepted)
                 {
                     try { alpha.Client.Self.RequestJoinGroupChat(groupId); } catch (Exception ex) { Console.WriteLine(ex); }
                     try { bravo.Client.Self.RequestJoinGroupChat(groupId); } catch (Exception ex) { Console.WriteLine(ex); }
                 }
                 bool chatOkA = false, chatOkB = false;
-                if (joined)
+                if (accepted)
                 {
                     chatOkA = await WaitFor(() => chatA, 8000);
                     chatOkB = await WaitFor(() => chatB, 8000);
