@@ -6,6 +6,7 @@
 //! ones.  The Rust port exposes only the methods that [`super::NPCModule`]
 //! actually calls, plus minimal getters.
 
+use crate::egress::EgressEvent;
 use uuid::Uuid;
 
 use crate::chat::ChatType;
@@ -165,17 +166,27 @@ impl NPCAvatar {
 
     /// Deliver an instant message from this NPC.
     ///
-    /// Stub: in a full implementation this would route through the
-    /// `MessageTransferModule`.  Returns `true` on success.
+    /// Reports the message through the scene egress as an `Im` event directed at
+    /// `im.to_agent_id`. Returns `true` when the NPC is connected to a scene and
+    /// the egress accepts the message; NPC and scene state is unchanged otherwise.
     pub fn send_instant_message(&self, im: &GridInstantMessage) -> bool {
-        tracing::debug!(
-            from = %self.agent_id,
-            to = %im.to_agent_id,
-            dialog = ?im.dialog,
-            "NPCAvatar: sending instant message"
-        );
-        // Stub — no real message transport.
-        true
+        if self.disconnected {
+            return false;
+        }
+
+        let Some(scene) = self.scene.as_ref() else {
+            return false;
+        };
+
+        scene.egress.send(EgressEvent::Im {
+            to: im.to_agent_id,
+            from: self.agent_id,
+            from_name: format!("{} {}", self.first_name, self.last_name),
+            dialog: im.dialog as u8,
+            session_id: im.im_session_id,
+            message: im.message.clone(),
+            offline: im.offline != 0,
+        })
     }
 
     /// Make the NPC say a chat message, broadcasting it on the scene event bus.
@@ -227,10 +238,37 @@ impl NPCAvatar {
 
     // -- Stubs for unused IClientAPI methods ---------------------------------
 
-    /// Stub: no-op.
-    pub fn send_kill_object(&self, _local_ids: &[u32]) {}
-    /// Stub: no-op.
-    pub fn send_avatar_data_immediate(&self) {}
+    /// Notify viewers that the supplied local object IDs are being removed.
+    ///
+    /// An NPC has no viewer packet stream in this crate, so the validated request
+    /// is traced locally. No egress event is emitted and no NPC state changes.
+    pub fn send_kill_object(&self, local_ids: &[u32]) {
+        if self.disconnected || self.scene.is_none() {
+            return;
+        }
+
+        tracing::debug!(
+            agent = %self.agent_id,
+            count = local_ids.len(),
+            "NPCAvatar: sending kill object"
+        );
+    }
+    /// Request an immediate avatar appearance/data update for this NPC.
+    ///
+    /// Reports the request through the scene egress as an `AppearanceUpdate` for
+    /// this NPC. The method does nothing when the NPC is disconnected or has no
+    /// scene.
+    pub fn send_avatar_data_immediate(&self) {
+        if self.disconnected {
+            return;
+        }
+
+        if let Some(scene) = self.scene.as_ref() {
+            let _ = scene.egress.send(EgressEvent::AppearanceUpdate {
+                agent: self.agent_id,
+            });
+        }
+    }
     /// Stub: no-op.
     pub fn send_entity_update(&self, _entity_id: Uuid) {}
     /// Stub: no-op.
@@ -243,4 +281,248 @@ impl NPCAvatar {
     pub fn stop_animation(&self, _anim_id: Uuid) {}
     /// Stub: no-op.
     pub fn send_coarse_location_update(&self, _users: &[Uuid], _positions: &[[f32; 3]]) {}
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_c_avatar_rs_npcavatar_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn send_instant_message_success_reports_event() {
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+
+        let agent = Uuid::new_v4();
+        let recipient = Uuid::new_v4();
+        rec.connect(recipient);
+
+        let npc = NPCAvatar {
+            first_name: "Test".to_string(),
+            last_name: "Avatar".to_string(),
+            agent_id: agent,
+            owner_id: Uuid::new_v4(),
+            start_pos: [0.0, 0.0, 0.0],
+            position: [0.0, 0.0, 0.0],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            sense_as_agent: false,
+            scene: Some(scene),
+            active_group_id: Uuid::nil(),
+            active_group_name: String::new(),
+            active_group_powers: 0,
+            disconnected: false,
+            sitting: false,
+            sit_target: None,
+        };
+
+        let session_id = Uuid::new_v4();
+        let im = crate::messaging::GridInstantMessage {
+            from_agent_id: Uuid::nil(),
+            to_agent_id: recipient,
+            im_session_id: session_id,
+            timestamp: 0,
+            from_agent_name: String::new(),
+            message: "hello".to_string(),
+            dialog: crate::messaging::IMDialog::MessageFromAgent,
+            from_group: false,
+            offline: 0,
+            parent_estate_id: 0,
+            position: [0.0, 0.0, 0.0],
+            binary_bucket: Vec::new(),
+            region_id: Uuid::nil(),
+        };
+
+        assert!(npc.send_instant_message(&im));
+
+        let events = rec.take();
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            crate::egress::EgressEvent::Im {
+                to,
+                from,
+                from_name,
+                dialog,
+                session_id: observed_session,
+                message,
+                offline,
+            } => {
+                assert_eq!(*to, recipient);
+                assert_eq!(*from, agent);
+                assert_eq!(from_name, "Test Avatar");
+                assert_eq!(*dialog, 0);
+                assert_eq!(*observed_session, session_id);
+                assert_eq!(message, "hello");
+                assert!(!*offline);
+            }
+            _ => panic!("expected Im egress event"),
+        }
+    }
+
+    #[test]
+    fn send_instant_message_disconnected_returns_false() {
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+
+        let npc = NPCAvatar {
+            first_name: "Test".to_string(),
+            last_name: "Avatar".to_string(),
+            agent_id: Uuid::new_v4(),
+            owner_id: Uuid::new_v4(),
+            start_pos: [0.0, 0.0, 0.0],
+            position: [0.0, 0.0, 0.0],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            sense_as_agent: false,
+            scene: Some(scene),
+            active_group_id: Uuid::nil(),
+            active_group_name: String::new(),
+            active_group_powers: 0,
+            disconnected: true,
+            sitting: false,
+            sit_target: None,
+        };
+
+        let im = crate::messaging::GridInstantMessage {
+            from_agent_id: Uuid::nil(),
+            to_agent_id: Uuid::new_v4(),
+            im_session_id: Uuid::new_v4(),
+            timestamp: 0,
+            from_agent_name: String::new(),
+            message: "hello".to_string(),
+            dialog: crate::messaging::IMDialog::MessageFromAgent,
+            from_group: false,
+            offline: 0,
+            parent_estate_id: 0,
+            position: [0.0, 0.0, 0.0],
+            binary_bucket: Vec::new(),
+            region_id: Uuid::nil(),
+        };
+
+        assert!(!npc.send_instant_message(&im));
+        assert!(rec.take().is_empty());
+    }
+
+    #[test]
+    fn send_kill_object_does_not_emit_egress_events() {
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+
+        let npc = NPCAvatar {
+            first_name: "Test".to_string(),
+            last_name: "Avatar".to_string(),
+            agent_id: Uuid::new_v4(),
+            owner_id: Uuid::new_v4(),
+            start_pos: [0.0, 0.0, 0.0],
+            position: [0.0, 0.0, 0.0],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            sense_as_agent: false,
+            scene: Some(scene),
+            active_group_id: Uuid::nil(),
+            active_group_name: String::new(),
+            active_group_powers: 0,
+            disconnected: false,
+            sitting: false,
+            sit_target: None,
+        };
+
+        npc.send_kill_object(&[1, 2, 3]);
+        assert!(rec.take().is_empty());
+    }
+
+    #[test]
+    fn send_kill_object_disconnected_is_noop() {
+        let npc = NPCAvatar {
+            first_name: "Test".to_string(),
+            last_name: "Avatar".to_string(),
+            agent_id: Uuid::new_v4(),
+            owner_id: Uuid::new_v4(),
+            start_pos: [0.0, 0.0, 0.0],
+            position: [0.0, 0.0, 0.0],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            sense_as_agent: false,
+            scene: None,
+            active_group_id: Uuid::nil(),
+            active_group_name: String::new(),
+            active_group_powers: 0,
+            disconnected: true,
+            sitting: false,
+            sit_target: None,
+        };
+
+        npc.send_kill_object(&[9]);
+    }
+
+    #[test]
+    fn send_avatar_data_immediate_success_reports_event() {
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+
+        let agent = Uuid::new_v4();
+        rec.connect(agent);
+
+        let npc = NPCAvatar {
+            first_name: "Test".to_string(),
+            last_name: "Avatar".to_string(),
+            agent_id: agent,
+            owner_id: Uuid::new_v4(),
+            start_pos: [0.0, 0.0, 0.0],
+            position: [0.0, 0.0, 0.0],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            sense_as_agent: false,
+            scene: Some(scene),
+            active_group_id: Uuid::nil(),
+            active_group_name: String::new(),
+            active_group_powers: 0,
+            disconnected: false,
+            sitting: false,
+            sit_target: None,
+        };
+
+        npc.send_avatar_data_immediate();
+
+        let events = rec.take();
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            crate::egress::EgressEvent::AppearanceUpdate { agent: observed } => {
+                assert_eq!(*observed, agent);
+            }
+            _ => panic!("expected AppearanceUpdate egress event"),
+        }
+    }
+
+    #[test]
+    fn send_avatar_data_immediate_disconnected_does_not_report() {
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+
+        let agent = Uuid::new_v4();
+        rec.connect(agent);
+
+        let npc = NPCAvatar {
+            first_name: "Test".to_string(),
+            last_name: "Avatar".to_string(),
+            agent_id: agent,
+            owner_id: Uuid::new_v4(),
+            start_pos: [0.0, 0.0, 0.0],
+            position: [0.0, 0.0, 0.0],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            sense_as_agent: false,
+            scene: Some(scene),
+            active_group_id: Uuid::nil(),
+            active_group_name: String::new(),
+            active_group_powers: 0,
+            disconnected: true,
+            sitting: false,
+            sit_target: None,
+        };
+
+        npc.send_avatar_data_immediate();
+        assert!(rec.take().is_empty());
+    }
 }
