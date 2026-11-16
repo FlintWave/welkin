@@ -135,16 +135,59 @@ impl Config {
             .unwrap_or_else(|| default.to_string())
     }
 
+    /// Boolean value, or `default` when the key is absent. A key that is present
+    /// with the wrong type (for example the string "false") is logged as an error
+    /// and the default is used, so a typo cannot silently change behaviour.
     pub fn get_bool_or(&self, section: &str, key: &str, default: bool) -> bool {
-        self.get_bool(section, key).unwrap_or(default)
+        match self.get_value(section, key) {
+            None => default,
+            Some(toml::Value::Boolean(b)) => *b,
+            Some(other) => {
+                tracing::error!(
+                    section,
+                    key,
+                    value = %other,
+                    default,
+                    "config value is not a boolean; using the default"
+                );
+                default
+            }
+        }
     }
 
     pub fn get_i64_or(&self, section: &str, key: &str, default: i64) -> i64 {
-        self.get_i64(section, key).unwrap_or(default)
+        match self.get_value(section, key) {
+            None => default,
+            Some(toml::Value::Integer(i)) => *i,
+            Some(other) => {
+                tracing::error!(
+                    section,
+                    key,
+                    value = %other,
+                    default,
+                    "config value is not an integer; using the default"
+                );
+                default
+            }
+        }
     }
 
     pub fn get_f64_or(&self, section: &str, key: &str, default: f64) -> f64 {
-        self.get_f64(section, key).unwrap_or(default)
+        match self.get_value(section, key) {
+            None => default,
+            Some(toml::Value::Float(f)) => *f,
+            Some(toml::Value::Integer(i)) => *i as f64,
+            Some(other) => {
+                tracing::error!(
+                    section,
+                    key,
+                    value = %other,
+                    default,
+                    "config value is not a number; using the default"
+                );
+                default
+            }
+        }
     }
 
     pub fn sections(&self) -> impl Iterator<Item = &str> + '_ {
@@ -283,4 +326,40 @@ fn is_bare_key(s: &str) -> bool {
     !s.is_empty()
         && s.chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+#[cfg(test)]
+mod typed_getter_tests {
+    use super::*;
+
+    fn cfg(toml_text: &str) -> Config {
+        let dir = std::env::temp_dir().join(format!("welkin-cfg-{}", uuid_like()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("c.toml");
+        std::fs::write(&path, toml_text).unwrap();
+        Config::from_toml_file(&path).unwrap()
+    }
+
+    fn uuid_like() -> String {
+        format!("{:?}-{}", std::thread::current().id(), std::process::id())
+    }
+
+    #[test]
+    fn bool_string_falls_back_to_default() {
+        let c = cfg("[S]\nFlag = \"false\"\nReal = true\n");
+        assert!(c.get_bool_or("S", "Flag", true));
+        assert!(!c.get_bool_or("S", "Flag", false));
+        assert!(c.get_bool_or("S", "Real", false));
+        assert!(!c.get_bool_or("S", "Missing", false));
+    }
+
+    #[test]
+    fn integer_accepted_as_float_and_wrong_types_use_default() {
+        let c = cfg("[S]\nN = 10\nBad = \"x\"\nF = 1.5\n");
+        assert_eq!(c.get_f64_or("S", "N", 0.0), 10.0);
+        assert_eq!(c.get_f64_or("S", "F", 0.0), 1.5);
+        assert_eq!(c.get_f64_or("S", "Bad", 7.0), 7.0);
+        assert_eq!(c.get_i64_or("S", "Bad", 3), 3);
+        assert_eq!(c.get_i64_or("S", "N", 3), 10);
+    }
 }
