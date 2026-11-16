@@ -56,7 +56,7 @@ impl UserAccountStore {
         first: &str,
         last: &str,
     ) -> Result<Option<UserAccountRow>, DataError> {
-        let sql = format!("SELECT {COLS} FROM UserAccounts WHERE FirstName = $1 AND LastName = $2");
+        let sql = format!("SELECT {COLS} FROM UserAccounts WHERE LOWER(FirstName) = LOWER($1) AND LOWER(LastName) = LOWER($2)");
         Ok(sqlx::query_as::<_, UserAccountRow>(&sql)
             .bind(first)
             .bind(last)
