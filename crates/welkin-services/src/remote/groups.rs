@@ -470,6 +470,10 @@ impl RemoteGroupsConnector {
                 result_node(&nodes).ok_or_else(|| RemoteError::Parse("missing RESULT".to_string()))?;
             Ok(Some(parse_membership(result)?))
         } else {
+            // The service answers ROLE with a bool; false means the agent does not hold that role.
+            if result_text(&nodes).eq_ignore_ascii_case("false") {
+                return Err(RemoteError::Server("You do not hold that role.".to_string()));
+            }
             Ok(None)
         }
     }
@@ -1561,6 +1565,11 @@ mod tests {
             .unwrap();
         assert!(membership.is_some());
 
+        // A member may only select a role they hold.
+        assert!(conn
+            .agent_role(agent, agent, created.group_id, role_id, "ADD")
+            .await
+            .unwrap());
         conn.set_active(agent, agent, created.group_id, "ROLE", Some(role_id))
             .await
             .unwrap();
@@ -1784,7 +1793,11 @@ mod tests {
         let created = conn.create_group(founder, &group).await.unwrap();
         conn.add_agent_to_group(founder, member, created.group_id, Uuid::nil(), "").await.unwrap();
 
-        conn.set_active(member, member, created.group_id, "ROLE", Some(created.owner_role_id)).await.unwrap();
+        // Refused, and reported as an error so the region can tell the viewer.
+        assert!(matches!(
+            conn.set_active(member, member, created.group_id, "ROLE", Some(created.owner_role_id)).await,
+            Err(RemoteError::Server(_))
+        ));
         let memberships = conn.get_membership(member, Some(created.group_id)).await.unwrap();
         assert_eq!(memberships.len(), 1);
         assert_ne!(memberships[0].active_role, created.owner_role_id);
