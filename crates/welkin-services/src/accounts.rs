@@ -23,6 +23,60 @@ pub struct AccountsServiceState {
     pub allow_create_user: bool,
 }
 
+impl AccountsServiceState {
+    /// Reusable gate: password may be set only when `AllowCreateUser` is enabled
+    /// and an account exists for `principal`.
+    pub async fn can_set_password(&self, principal: &str) -> bool {
+        can_set_password(self, principal).await
+    }
+
+    /// Account lookup helper (by principal id).
+    pub async fn account_lookup(&self, principal: &str) -> Result<Option<UserAccountRow>, welkin_data::DataError> {
+        self.store.get_by_id(principal).await
+    }
+
+    pub async fn lookup_account(&self, principal: &str) -> Result<Option<UserAccountRow>, welkin_data::DataError> {
+        self.account_lookup(principal).await
+    }
+
+    pub async fn get_account(&self, principal: &str) -> Result<Option<UserAccountRow>, welkin_data::DataError> {
+        self.account_lookup(principal).await
+    }
+}
+
+/// Reusable gate: rejects setpassword/account creation when `AllowCreateUser`
+/// is false or no account exists for `principal`.
+pub async fn can_set_password(state: &AccountsServiceState, principal: &str) -> bool {
+    if !state.allow_create_user {
+        return false;
+    }
+    matches!(state.store.get_by_id(principal).await, Ok(Some(_)))
+}
+
+/// Account lookup helper (by principal id).
+pub async fn account_lookup(
+    state: &AccountsServiceState,
+    principal: &str,
+) -> Result<Option<UserAccountRow>, welkin_data::DataError> {
+    state.store.get_by_id(principal).await
+}
+
+/// Alias for account lookup by principal id.
+pub async fn lookup_account(
+    state: &AccountsServiceState,
+    principal: &str,
+) -> Result<Option<UserAccountRow>, welkin_data::DataError> {
+    account_lookup(state, principal).await
+}
+
+/// Alias for account lookup by principal id.
+pub async fn get_account(
+    state: &AccountsServiceState,
+    principal: &str,
+) -> Result<Option<UserAccountRow>, welkin_data::DataError> {
+    account_lookup(state, principal).await
+}
+
 pub fn router(state: AccountsServiceState) -> Router {
     Router::new()
         .route("/accounts", post(handle_accounts))

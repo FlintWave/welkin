@@ -5,6 +5,7 @@
 pub mod accounts;
 pub mod asset;
 pub mod avatar;
+pub mod gandalf;
 pub mod grid;
 pub mod friends;
 pub mod groups;

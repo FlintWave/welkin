@@ -15,6 +15,7 @@ pub mod email;
 pub mod http;
 pub mod inventory;
 pub mod land;
+pub mod money;
 pub mod list;
 pub mod math;
 pub mod object;
@@ -945,6 +946,7 @@ pub fn register_all(lua: &mlua::Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result
     avatar::register_avatar(lua, ctx)?;
     inventory::register_inventory(lua, ctx)?;
     land::register_land(lua, ctx)?;
+    money::register_money(lua, ctx)?;
     vehicle::register_vehicle(lua, ctx)?;
     prim_params::register_prim_params(lua, ctx)?;
     email::register_email(lua, ctx)?;
