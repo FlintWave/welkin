@@ -299,7 +299,9 @@ confirmed in a live viewer session.
 
 - A viewer will not let an avatar fly in a region unless it receives a parcel
   with the AllowFly flag. The region now sends `ParcelProperties` when an avatar
-  enters and in reply to every `ParcelPropertiesRequest`.
+  enters and in reply to every `ParcelPropertiesRequest`. It sends the data both
+  over UDP and through the event queue, because modern viewers read it from the
+  event queue.
 - The region has one parcel that covers the whole region: local ID 1, named "Your
   Parcel", owned by the estate owner, with room for 15,000 prims and OpenSimulator's
   default parcel flags (flying allowed).
