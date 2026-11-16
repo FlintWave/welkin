@@ -35,6 +35,16 @@ Not covered by this work: group roles and role editing, member lists, group
 notices and group proposals. The region code has no handlers for the role and
 member requests. Treat those as missing until a later change adds them.
 
+Limits to know about:
+
+- Groups are grid-only. Hypergrid avatar IDs are not supported.
+- There is no notice or invite handling yet (planned as later milestones).
+  Joining a group with closed enrollment is refused until invites exist.
+- Only SQLite has been used, as with the rest of Welkin.
+- The tests ran in process against the groups router, not against a launched
+  `welkin-robust` binary, so the full path from a viewer to a running grid is
+  unverified.
+
 ## Inventory objects and attachments
 
 These behaviours come from the region code and its end-to-end tests with real
