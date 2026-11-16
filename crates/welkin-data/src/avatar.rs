@@ -24,7 +24,7 @@ impl AvatarStore {
 
     pub async fn get(&self, principal_id: &str) -> Result<Vec<AvatarDataRow>, DataError> {
         let rows = sqlx::query_as::<_, AvatarDataRow>(
-            "SELECT PrincipalID, Name, Value FROM Avatars WHERE PrincipalID = $1",
+            &crate::portable::sql(&self.pool, "SELECT PrincipalID, Name, Value FROM Avatars WHERE PrincipalID = $1"),
         )
         .bind(principal_id.to_string())
         .fetch_all(&self.pool)
@@ -38,7 +38,7 @@ impl AvatarStore {
         name: &str,
     ) -> Result<Option<String>, DataError> {
         let row = sqlx::query_as::<_, AvatarDataRow>(
-            "SELECT PrincipalID, Name, Value FROM Avatars WHERE PrincipalID = $1 AND Name = $2",
+            &crate::portable::sql(&self.pool, "SELECT PrincipalID, Name, Value FROM Avatars WHERE PrincipalID = $1 AND Name = $2"),
         )
         .bind(principal_id.to_string())
         .bind(name.to_string())
@@ -53,12 +53,12 @@ impl AvatarStore {
         entries: &[(String, String)],
     ) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM Avatars WHERE PrincipalID = $1")
+        sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM Avatars WHERE PrincipalID = $1"))
             .bind(principal_id.to_string())
             .execute(&mut *tx)
             .await?;
         for (name, value) in entries {
-            sqlx::query("INSERT INTO Avatars (PrincipalID, Name, Value) VALUES ($1, $2, $3)")
+            sqlx::query(&crate::portable::sql(&self.pool, "INSERT INTO Avatars (PrincipalID, Name, Value) VALUES ($1, $2, $3)"))
                 .bind(principal_id.to_string())
                 .bind(name.clone())
                 .bind(value.clone())
@@ -70,7 +70,7 @@ impl AvatarStore {
     }
 
     pub async fn delete(&self, principal_id: &str) -> Result<bool, DataError> {
-        let res = sqlx::query("DELETE FROM Avatars WHERE PrincipalID = $1")
+        let res = sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM Avatars WHERE PrincipalID = $1"))
             .bind(principal_id.to_string())
             .execute(&self.pool)
             .await?;
@@ -84,12 +84,12 @@ impl AvatarStore {
         value: &str,
     ) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM Avatars WHERE PrincipalID = $1 AND Name = $2")
+        sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM Avatars WHERE PrincipalID = $1 AND Name = $2"))
             .bind(principal_id.to_string())
             .bind(name.to_string())
             .execute(&mut *tx)
             .await?;
-        sqlx::query("INSERT INTO Avatars (PrincipalID, Name, Value) VALUES ($1, $2, $3)")
+        sqlx::query(&crate::portable::sql(&self.pool, "INSERT INTO Avatars (PrincipalID, Name, Value) VALUES ($1, $2, $3)"))
             .bind(principal_id.to_string())
             .bind(name.to_string())
             .bind(value.to_string())
@@ -111,12 +111,12 @@ impl AvatarStore {
     ) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
         for (name, value) in names.iter().zip(values.iter()) {
-            sqlx::query("DELETE FROM Avatars WHERE PrincipalID = $1 AND Name = $2")
+            sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM Avatars WHERE PrincipalID = $1 AND Name = $2"))
                 .bind(principal_id.to_string())
                 .bind(name.to_string())
                 .execute(&mut *tx)
                 .await?;
-            sqlx::query("INSERT INTO Avatars (PrincipalID, Name, Value) VALUES ($1, $2, $3)")
+            sqlx::query(&crate::portable::sql(&self.pool, "INSERT INTO Avatars (PrincipalID, Name, Value) VALUES ($1, $2, $3)"))
                 .bind(principal_id.to_string())
                 .bind(name.to_string())
                 .bind(value.to_string())
@@ -130,7 +130,7 @@ impl AvatarStore {
     pub async fn remove_items(&self, principal_id: &str, names: &[&str]) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
         for name in names {
-            sqlx::query("DELETE FROM Avatars WHERE PrincipalID = $1 AND Name = $2")
+            sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM Avatars WHERE PrincipalID = $1 AND Name = $2"))
                 .bind(principal_id.to_string())
                 .bind(name.to_string())
                 .execute(&mut *tx)
