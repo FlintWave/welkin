@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
+//! groups are grid-only for now: Hypergrid agent ids of the form `uuid;http://home;First Last` are not parsed or supported by this connector.
+
 use quick_xml::{Reader, events::Event};
+use std::time::Duration;
 use uuid::Uuid;
 
 use super::RemoteError;
@@ -14,7 +17,11 @@ impl RemoteGroupsConnector {
     pub fn new(server_uri: &str) -> Self {
         let base = server_uri.trim_end_matches('/');
         Self {
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .timeout(Duration::from_secs(15))
+                .connect_timeout(Duration::from_secs(5))
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new()),
             groups_uri: format!("{base}/groups"),
         }
     }
@@ -45,7 +52,7 @@ impl RemoteGroupsConnector {
         }
 
         let result = result_node(&nodes).ok_or_else(|| RemoteError::Parse("missing RESULT".to_string()))?;
-        Ok(parse_group(result))
+        Ok(parse_group(result)?)
     }
 
     pub async fn update_group(
@@ -76,7 +83,7 @@ impl RemoteGroupsConnector {
             Some(node) => node,
             None => return Ok(None),
         };
-        Ok(Some(parse_group(result)))
+        Ok(Some(parse_group(result)?))
     }
 
     pub async fn get_group(
@@ -110,7 +117,7 @@ impl RemoteGroupsConnector {
             Some(node) => node,
             None => return Ok(None),
         };
-        Ok(Some(parse_group(result)))
+        Ok(Some(parse_group(result)?))
     }
 
     pub async fn add_agent_to_group(
@@ -136,7 +143,7 @@ impl RemoteGroupsConnector {
         }
 
         let result = result_node(&nodes).ok_or_else(|| RemoteError::Parse("missing RESULT".to_string()))?;
-        Ok(parse_membership(result))
+        Ok(parse_membership(result)?)
     }
 
     pub async fn remove_agent_from_group(
@@ -187,11 +194,11 @@ impl RemoteGroupsConnector {
         let items = prefixed_children(result, "m");
         if items.is_empty() {
             if field(result, "GroupID") != "" || field(result, "GroupName") != "" {
-                out.push(parse_membership(result));
+                out.push(parse_membership(result)?);
             }
         } else {
             for item in items {
-                out.push(parse_membership(item));
+                out.push(parse_membership(item)?);
             }
         }
         Ok(out)
@@ -222,7 +229,11 @@ impl RemoteGroupsConnector {
         if items.is_empty() {
             Ok(Vec::new())
         } else {
-            Ok(items.into_iter().map(parse_member).collect())
+            let mut out = Vec::new();
+            for item in items {
+                out.push(parse_member(item)?);
+            }
+            Ok(out)
         }
     }
 
@@ -253,7 +264,7 @@ impl RemoteGroupsConnector {
         if result_text(&nodes).eq_ignore_ascii_case("NULL") {
             return Ok(false);
         }
-        Ok(parse_bool(&result_text(&nodes)))
+        Ok(parse_bool(&result_text(&nodes))?)
     }
 
     pub async fn remove_role(
@@ -270,7 +281,10 @@ impl RemoteGroupsConnector {
         ];
 
         let nodes = self.call(&params).await?;
-        Ok(parse_bool(&result_text(&nodes)))
+        if result_text(&nodes).eq_ignore_ascii_case("NULL") {
+            return Ok(false);
+        }
+        Ok(parse_bool(&result_text(&nodes))?)
     }
 
     pub async fn get_group_roles(
@@ -295,7 +309,11 @@ impl RemoteGroupsConnector {
         };
 
         let items = prefixed_children(result, "r");
-        Ok(items.into_iter().map(parse_role).collect())
+        let mut out = Vec::new();
+        for item in items {
+            out.push(parse_role(item)?);
+        }
+        Ok(out)
     }
 
     pub async fn get_role_members(
@@ -320,7 +338,11 @@ impl RemoteGroupsConnector {
         };
 
         let items = prefixed_children(result, "rm");
-        Ok(items.into_iter().map(parse_role_member).collect())
+        let mut out = Vec::new();
+        for item in items {
+            out.push(parse_role_member(item)?);
+        }
+        Ok(out)
     }
 
     pub async fn agent_role(
@@ -341,7 +363,10 @@ impl RemoteGroupsConnector {
         ];
 
         let nodes = self.call(&params).await?;
-        Ok(parse_bool(&result_text(&nodes)))
+        if result_text(&nodes).eq_ignore_ascii_case("NULL") {
+            return Ok(false);
+        }
+        Ok(parse_bool(&result_text(&nodes))?)
     }
 
     pub async fn get_agent_roles(
@@ -368,7 +393,11 @@ impl RemoteGroupsConnector {
         };
 
         let items = prefixed_children(result, "r");
-        Ok(items.into_iter().map(parse_role).collect())
+        let mut out = Vec::new();
+        for item in items {
+            out.push(parse_role(item)?);
+        }
+        Ok(out)
     }
 
     pub async fn set_active(
@@ -401,7 +430,7 @@ impl RemoteGroupsConnector {
             }
             let result =
                 result_node(&nodes).ok_or_else(|| RemoteError::Parse("missing RESULT".to_string()))?;
-            Ok(Some(parse_membership(result)))
+            Ok(Some(parse_membership(result)?))
         } else {
             Ok(None)
         }
@@ -425,7 +454,10 @@ impl RemoteGroupsConnector {
         ];
 
         let nodes = self.call(&params).await?;
-        Ok(parse_bool(&result_text(&nodes)))
+        if result_text(&nodes).eq_ignore_ascii_case("NULL") {
+            return Ok(false);
+        }
+        Ok(parse_bool(&result_text(&nodes))?)
     }
 
     pub async fn invite(
@@ -459,7 +491,11 @@ impl RemoteGroupsConnector {
         let nodes = self.call(&params).await?;
 
         if op.eq_ignore_ascii_case("ADD") {
-            Ok(InviteResult::Added(parse_bool(&result_text(&nodes))))
+            if result_text(&nodes).eq_ignore_ascii_case("NULL") {
+                Ok(InviteResult::Added(false))
+            } else {
+                Ok(InviteResult::Added(parse_bool(&result_text(&nodes))?))
+            }
         } else if op.eq_ignore_ascii_case("GET") {
             if result_text(&nodes).eq_ignore_ascii_case("NULL") {
                 Ok(InviteResult::Invite(None))
@@ -468,7 +504,7 @@ impl RemoteGroupsConnector {
                     Some(node) => node,
                     None => return Ok(InviteResult::Invite(None)),
                 };
-                Ok(InviteResult::Invite(Some(parse_invite(result))))
+                Ok(InviteResult::Invite(Some(parse_invite(result)?)))
             }
         } else {
             Ok(InviteResult::Deleted)
@@ -511,7 +547,7 @@ impl RemoteGroupsConnector {
         if result_text(&nodes).eq_ignore_ascii_case("NULL") {
             return Ok(false);
         }
-        Ok(parse_bool(&result_text(&nodes)))
+        Ok(parse_bool(&result_text(&nodes))?)
     }
 
     pub async fn get_notices(
@@ -536,7 +572,11 @@ impl RemoteGroupsConnector {
         };
 
         let items = prefixed_children(result, "n");
-        Ok(items.into_iter().map(parse_notice).collect())
+        let mut out = Vec::new();
+        for item in items {
+            out.push(parse_notice(item)?);
+        }
+        Ok(out)
     }
 
     pub async fn get_notice(
@@ -560,7 +600,7 @@ impl RemoteGroupsConnector {
             None => return Ok(None),
         };
 
-        Ok(Some(parse_notice(result)))
+        Ok(Some(parse_notice(result)?))
     }
 
     pub async fn find_groups(
@@ -585,7 +625,11 @@ impl RemoteGroupsConnector {
         };
 
         let items = prefixed_children(result, "n");
-        Ok(items.into_iter().map(parse_dir_group).collect())
+        let mut out = Vec::new();
+        for item in items {
+            out.push(parse_dir_group(item)?);
+        }
+        Ok(out)
     }
 
     async fn call(&self, params: &[(&str, String)]) -> Result<Vec<Node>, RemoteError> {
@@ -598,7 +642,11 @@ impl RemoteGroupsConnector {
             .map_err(RemoteError::Http)?;
         let response = response.error_for_status().map_err(RemoteError::Http)?;
         let body = response.text().await.map_err(RemoteError::Http)?;
-        parse_xml(&body)
+        let nodes = parse_xml(&body)?;
+        if result_node(&nodes).is_none() {
+            return Err(RemoteError::Parse("missing RESULT".to_string()));
+        }
+        Ok(nodes)
     }
 }
 
@@ -752,6 +800,10 @@ impl Node {
 }
 
 fn parse_xml(input: &str) -> Result<Vec<Node>, RemoteError> {
+    if input.trim().is_empty() {
+        return Err(RemoteError::Parse("empty body".to_string()));
+    }
+
     let mut reader = Reader::from_str(input);
     reader.config_mut().trim_text(true);
 
@@ -813,8 +865,14 @@ fn parse_xml(input: &str) -> Result<Vec<Node>, RemoteError> {
                     }
                 }
             }
-            Ok(Event::End(_)) => {
+            Ok(Event::End(e)) => {
+                let end_name = String::from_utf8_lossy(e.local_name().as_ref()).to_string();
                 if let Some((name, attrs, children)) = stack.pop() {
+                    if name != end_name {
+                        return Err(RemoteError::Parse(format!(
+                            "mismatched end tag: expected </{name}>, found </{end_name}>"
+                        )));
+                    }
                     let node = Node::Element {
                         name,
                         attrs,
@@ -825,6 +883,10 @@ fn parse_xml(input: &str) -> Result<Vec<Node>, RemoteError> {
                     } else {
                         top.push(node);
                     }
+                } else {
+                    return Err(RemoteError::Parse(format!(
+                        "unexpected closing tag </{end_name}>"
+                    )));
                 }
             }
             Ok(Event::Eof) => break,
@@ -833,6 +895,10 @@ fn parse_xml(input: &str) -> Result<Vec<Node>, RemoteError> {
             }
             _ => {}
         }
+    }
+
+    if !stack.is_empty() {
+        return Err(RemoteError::Parse("unexpected EOF while parsing XML".to_string()));
     }
 
     if top.len() == 1 {
@@ -869,127 +935,185 @@ fn field(node: &Node, name: &str) -> String {
         .unwrap_or_default()
 }
 
-fn parse_bool(value: &str) -> bool {
-    value == "1" || value.eq_ignore_ascii_case("true")
+fn parse_bool(value: &str) -> Result<bool, RemoteError> {
+    if value.is_empty() {
+        Ok(false)
+    } else if value == "1" || value.eq_ignore_ascii_case("true") {
+        Ok(true)
+    } else if value == "0" || value.eq_ignore_ascii_case("false") {
+        Ok(false)
+    } else {
+        Err(RemoteError::Parse(format!("invalid bool value: {value}")))
+    }
 }
 
 fn parse_uuid(value: &str) -> Uuid {
-    Uuid::parse_str(value).unwrap_or_else(|_| Uuid::nil())
+    if value.is_empty() {
+        Uuid::nil()
+    } else {
+        Uuid::parse_str(value).unwrap_or_else(|_| Uuid::nil())
+    }
+}
+
+fn parse_required_uuid(value: &str, field: &str) -> Result<Uuid, RemoteError> {
+    if value.is_empty() {
+        return Err(RemoteError::Parse(format!("missing {field}")));
+    }
+    Uuid::parse_str(value).map_err(|_| RemoteError::Parse(format!("invalid {field}")))
+}
+
+fn parse_i32(value: &str, field: &str) -> Result<i32, RemoteError> {
+    if value.is_empty() {
+        Ok(0)
+    } else {
+        value.parse().map_err(|_| RemoteError::Parse(format!("invalid {field}")))
+    }
+}
+
+fn parse_i64(value: &str, field: &str) -> Result<i64, RemoteError> {
+    if value.is_empty() {
+        Ok(0)
+    } else {
+        value.parse().map_err(|_| RemoteError::Parse(format!("invalid {field}")))
+    }
+}
+
+fn parse_u64(value: &str, field: &str) -> Result<u64, RemoteError> {
+    if value.is_empty() {
+        Ok(0)
+    } else {
+        value.parse().map_err(|_| RemoteError::Parse(format!("invalid {field}")))
+    }
+}
+
+fn parse_u8(value: &str, field: &str) -> Result<u8, RemoteError> {
+    if value.is_empty() {
+        Ok(0)
+    } else {
+        value.parse().map_err(|_| RemoteError::Parse(format!("invalid {field}")))
+    }
 }
 
 fn prefixed_children<'a>(node: &'a Node, prefix: &str) -> Vec<&'a Node> {
+    let tag_prefix = format!("{prefix}-");
     node.children()
         .iter()
-        .filter(|child| child.name().starts_with(prefix))
+        .filter(|child| {
+            match child.name().strip_prefix(&tag_prefix) {
+                Some(rest) => !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit()),
+                None => false,
+            }
+        })
         .collect()
 }
 
-fn parse_group(node: &Node) -> GroupRecord {
-    GroupRecord {
-        group_id: parse_uuid(&field(node, "GroupID")),
+fn parse_group(node: &Node) -> Result<GroupRecord, RemoteError> {
+    Ok(GroupRecord {
+        group_id: parse_required_uuid(&field(node, "GroupID"), "GroupID")?,
         group_name: field(node, "GroupName"),
         charter: field(node, "Charter"),
         insignia_id: parse_uuid(&field(node, "InsigniaID")),
-        founder_id: parse_uuid(&field(node, "FounderID")),
-        membership_fee: field(node, "MembershipFee").parse().unwrap_or(0),
-        open_enrollment: parse_bool(&field(node, "OpenEnrollment")),
-        show_in_list: parse_bool(&field(node, "ShownInList")),
-        allow_publish: parse_bool(&field(node, "AllowPublish")),
-        mature_publish: parse_bool(&field(node, "MaturePublish")),
-        owner_role_id: parse_uuid(&field(node, "OwnerRoleID")),
-        member_count: field(node, "MemberCount").parse().unwrap_or(0),
-        role_count: field(node, "RoleCount").parse().unwrap_or(0),
-    }
+        founder_id: parse_required_uuid(&field(node, "FounderID"), "FounderID")?,
+        membership_fee: parse_i32(&field(node, "MembershipFee"), "MembershipFee")?,
+        open_enrollment: parse_bool(&field(node, "OpenEnrollment"))?,
+        show_in_list: parse_bool(&field(node, "ShownInList"))?,
+        allow_publish: parse_bool(&field(node, "AllowPublish"))?,
+        mature_publish: parse_bool(&field(node, "MaturePublish"))?,
+        owner_role_id: parse_required_uuid(&field(node, "OwnerRoleID"), "OwnerRoleID")?,
+        member_count: parse_i64(&field(node, "MemberCount"), "MemberCount")?,
+        role_count: parse_i64(&field(node, "RoleCount"), "RoleCount")?,
+    })
 }
 
-fn parse_membership(node: &Node) -> MembershipRecord {
-    MembershipRecord {
-        group_id: parse_uuid(&field(node, "GroupID")),
+fn parse_membership(node: &Node) -> Result<MembershipRecord, RemoteError> {
+    Ok(MembershipRecord {
+        group_id: parse_required_uuid(&field(node, "GroupID"), "GroupID")?,
         group_name: field(node, "GroupName"),
         group_picture: parse_uuid(&field(node, "GroupPicture")),
         group_title: field(node, "GroupTitle"),
-        group_powers: field(node, "GroupPowers").parse().unwrap_or(0),
-        accept_notices: parse_bool(&field(node, "AcceptNotices")),
-        list_in_profile: parse_bool(&field(node, "ListInProfile")),
-        contribution: field(node, "Contribution").parse().unwrap_or(0),
+        group_powers: parse_u64(&field(node, "GroupPowers"), "GroupPowers")?,
+        accept_notices: parse_bool(&field(node, "AcceptNotices"))?,
+        list_in_profile: parse_bool(&field(node, "ListInProfile"))?,
+        contribution: parse_i32(&field(node, "Contribution"), "Contribution")?,
         active_role: parse_uuid(&field(node, "ActiveRole")),
-        active: parse_bool(&field(node, "Active")),
-        open_enrollment: parse_bool(&field(node, "OpenEnrollment")),
-        membership_fee: field(node, "MembershipFee").parse().unwrap_or(0),
+        active: parse_bool(&field(node, "Active"))?,
+        open_enrollment: parse_bool(&field(node, "OpenEnrollment"))?,
+        membership_fee: parse_i32(&field(node, "MembershipFee"), "MembershipFee")?,
         charter: field(node, "Charter"),
-        allow_publish: parse_bool(&field(node, "AllowPublish")),
-        mature_publish: parse_bool(&field(node, "MaturePublish")),
-        show_in_list: parse_bool(&field(node, "ShowInList")),
+        allow_publish: parse_bool(&field(node, "AllowPublish"))?,
+        mature_publish: parse_bool(&field(node, "MaturePublish"))?,
+        show_in_list: parse_bool(&field(node, "ShowInList"))?,
         founder_id: parse_uuid(&field(node, "FounderID")),
-    }
+    })
 }
 
-fn parse_member(node: &Node) -> MemberRecord {
-    MemberRecord {
-        agent_id: parse_uuid(&field(node, "AgentID")),
-        is_owner: parse_bool(&field(node, "IsOwner")),
+fn parse_member(node: &Node) -> Result<MemberRecord, RemoteError> {
+    Ok(MemberRecord {
+        agent_id: parse_required_uuid(&field(node, "AgentID"), "AgentID")?,
+        is_owner: parse_bool(&field(node, "IsOwner"))?,
         title: field(node, "Title"),
-        agent_powers: field(node, "AgentPowers").parse().unwrap_or(0),
-        accept_notices: parse_bool(&field(node, "AcceptNotices")),
-        list_in_profile: parse_bool(&field(node, "ListInProfile")),
-        contribution: field(node, "Contribution").parse().unwrap_or(0),
-    }
+        agent_powers: parse_u64(&field(node, "AgentPowers"), "AgentPowers")?,
+        accept_notices: parse_bool(&field(node, "AcceptNotices"))?,
+        list_in_profile: parse_bool(&field(node, "ListInProfile"))?,
+        contribution: parse_i32(&field(node, "Contribution"), "Contribution")?,
+    })
 }
 
-fn parse_role(node: &Node) -> RoleRecord {
-    RoleRecord {
-        role_id: parse_uuid(&field(node, "RoleID")),
+fn parse_role(node: &Node) -> Result<RoleRecord, RemoteError> {
+    Ok(RoleRecord {
+        role_id: parse_required_uuid(&field(node, "RoleID"), "RoleID")?,
         name: field(node, "Name"),
         title: field(node, "Title"),
         description: field(node, "Description"),
-        powers: field(node, "Powers").parse().unwrap_or(0),
-        members: field(node, "Members").parse().unwrap_or(0),
-    }
+        powers: parse_u64(&field(node, "Powers"), "Powers")?,
+        members: parse_i64(&field(node, "Members"), "Members")?,
+    })
 }
 
-fn parse_role_member(node: &Node) -> RoleMemberRecord {
-    RoleMemberRecord {
+fn parse_role_member(node: &Node) -> Result<RoleMemberRecord, RemoteError> {
+    Ok(RoleMemberRecord {
+        role_id: parse_required_uuid(&field(node, "RoleID"), "RoleID")?,
+        member_id: parse_required_uuid(&field(node, "MemberID"), "MemberID")?,
+    })
+}
+
+fn parse_invite(node: &Node) -> Result<InviteRecord, RemoteError> {
+    Ok(InviteRecord {
+        invite_id: parse_required_uuid(&field(node, "InviteID"), "InviteID")?,
+        group_id: parse_required_uuid(&field(node, "GroupID"), "GroupID")?,
         role_id: parse_uuid(&field(node, "RoleID")),
-        member_id: parse_uuid(&field(node, "MemberID")),
-    }
+        agent_id: parse_required_uuid(&field(node, "AgentID"), "AgentID")?,
+    })
 }
 
-fn parse_invite(node: &Node) -> InviteRecord {
-    InviteRecord {
-        invite_id: parse_uuid(&field(node, "InviteID")),
-        group_id: parse_uuid(&field(node, "GroupID")),
-        role_id: parse_uuid(&field(node, "RoleID")),
-        agent_id: parse_uuid(&field(node, "AgentID")),
-    }
-}
-
-fn parse_notice(node: &Node) -> NoticeRecord {
-    NoticeRecord {
-        notice_id: parse_uuid(&field(node, "NoticeID")),
-        timestamp: field(node, "Timestamp").parse().unwrap_or(0),
+fn parse_notice(node: &Node) -> Result<NoticeRecord, RemoteError> {
+    Ok(NoticeRecord {
+        notice_id: parse_required_uuid(&field(node, "NoticeID"), "NoticeID")?,
+        timestamp: parse_i64(&field(node, "Timestamp"), "Timestamp")?,
         from_name: field(node, "FromName"),
         subject: field(node, "Subject"),
-        has_attachment: parse_bool(&field(node, "HasAttachment")),
+        has_attachment: parse_bool(&field(node, "HasAttachment"))?,
         attachment_item_id: parse_uuid(&field(node, "AttachmentItemID")),
         attachment_name: field(node, "AttachmentName"),
-        attachment_type: field(node, "AttachmentType").parse().unwrap_or(0),
+        attachment_type: parse_u8(&field(node, "AttachmentType"), "AttachmentType")?,
         attachment_owner_id: parse_uuid(&field(node, "AttachmentOwnerID")),
         group_id: parse_uuid(&field(node, "GroupID")),
         message: field(node, "Message"),
-    }
+    })
 }
 
-fn parse_dir_group(node: &Node) -> DirGroup {
-    DirGroup {
-        group_id: parse_uuid(&field(node, "GroupID")),
+fn parse_dir_group(node: &Node) -> Result<DirGroup, RemoteError> {
+    Ok(DirGroup {
+        group_id: parse_required_uuid(&field(node, "GroupID"), "GroupID")?,
         name: field(node, "Name"),
-        member_count: field(node, "NMembers").parse().unwrap_or(0),
-    }
+        member_count: parse_i64(&field(node, "NMembers"), "NMembers")?,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum;
     use std::path::PathBuf;
     use std::sync::Arc;
     use tempfile::NamedTempFile;
@@ -1458,5 +1582,57 @@ mod tests {
             .collect();
         assert_eq!(items.len(), 1);
         assert_eq!(field(items[0], "RoleID"), "12345678-1234-1234-1234-123456789abc");
+    }
+
+    async fn fixed_body_server(body: &'static str) -> RemoteGroupsConnector {
+        let app = axum::Router::new().route("/groups", axum::routing::post(move || async move { body }));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        RemoteGroupsConnector::new(&format!("http://{}", addr))
+    }
+
+    #[tokio::test]
+    async fn malformed_bodies_are_errors() {
+        let bodies = [
+            "<html><body>502 Bad Gateway</body></html>",
+            "",
+            "<?xml version=\"1.0\"?><ServerResponse><RESULT type=\"List\"><m-0 type=\"List\"><GroupID>",
+        ];
+
+        for body in bodies {
+            let conn = fixed_body_server(body).await;
+            assert!(conn.get_group(Uuid::new_v4(), Some(Uuid::new_v4()), None).await.is_err());
+            assert!(conn.get_membership(Uuid::new_v4(), None).await.is_err());
+            assert!(conn.get_group_members(Uuid::new_v4(), Uuid::new_v4()).await.is_err());
+            assert!(conn.find_groups(Uuid::new_v4(), "x").await.is_err());
+        }
+    }
+
+    #[tokio::test]
+    async fn null_result_is_none_and_empty() {
+        let body = "<?xml version=\"1.0\"?><ServerResponse><RESULT>NULL</RESULT><REASON>x</REASON></ServerResponse>";
+        let conn = fixed_body_server(body).await;
+        assert!(conn.get_group(Uuid::new_v4(), Some(Uuid::new_v4()), None).await.unwrap().is_none());
+        assert!(conn.get_group_members(Uuid::new_v4(), Uuid::new_v4()).await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn membership_without_group_id_is_error() {
+        let body = "<ServerResponse><RESULT type=\"List\"><GroupName>x</GroupName></RESULT></ServerResponse>";
+        let conn = fixed_body_server(body).await;
+        assert!(conn.get_membership(Uuid::new_v4(), None).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn membership_prefix_returns_one_record() {
+        let body = "<ServerResponse><RESULT type=\"List\"><members>x</members><m-0 type=\"List\"><GroupID>11111111-1111-1111-1111-111111111111</GroupID><GroupName>A</GroupName></m-0></RESULT></ServerResponse>";
+        let conn = fixed_body_server(body).await;
+        let records = conn.get_membership(Uuid::new_v4(), None).await.unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].group_id, Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap());
+        assert_eq!(records[0].group_name, "A");
     }
 }
