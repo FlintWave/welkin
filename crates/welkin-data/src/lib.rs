@@ -16,6 +16,7 @@ pub mod migrations;
 pub mod mute;
 pub mod offline_im;
 pub mod pool;
+pub mod portable;
 pub mod presence;
 pub mod profiles;
 pub mod simulation;
