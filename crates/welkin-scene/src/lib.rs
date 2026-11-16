@@ -11,4 +11,5 @@ pub mod terrain_brush;
 pub mod terrain_paint;
 pub mod terrain_compress;
 pub mod terrain_io;
+pub mod terrain_layer;
 pub mod xml2;
