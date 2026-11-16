@@ -11,7 +11,7 @@
 #   - welkin-portal   Web administration portal
 #   - osim-migrate     Database migration and configuration tool
 #
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: LGPL-3.0-or-later
 #
 # Usage:
 #   docker build -t welkin:latest .
@@ -160,7 +160,7 @@ LABEL maintainer="OpenSim Rust Contributors" \
       org.opencontainers.image.title="welkin" \
       org.opencontainers.image.description="OpenSim virtual world server (Rust implementation)" \
       org.opencontainers.image.version="${VERSION}" \
-      org.opencontainers.image.licenses="GPL-3.0-or-later" \
+      org.opencontainers.image.licenses="LGPL-3.0-or-later" \
       org.opencontainers.image.source="https://github.com/opensim-rust/opensim-rust" \
       org.opencontainers.image.vendor="OpenSim Rust Contributors"
 

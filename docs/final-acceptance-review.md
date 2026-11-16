@@ -312,7 +312,7 @@ issue, not a code issue.
 
 ### License
 
-LGPL-3.0-or-later -- confirmed via `LICENSE` file (GNU General Public License
+LGPL-3.0-or-later -- confirmed via `LICENSE` file (GNU Lesser General Public License
 Version 3) and all source files carry `// SPDX-License-Identifier:
 LGPL-3.0-or-later` headers.
 

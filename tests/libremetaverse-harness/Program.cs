@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: GPL-3.0-or-later
+﻿// SPDX-License-Identifier: LGPL-3.0-or-later
 // Automated test harness for welkin using LibreMetaverse 3.3.0
 
 using System;

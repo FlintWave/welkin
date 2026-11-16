@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: LGPL-3.0-or-later
 
 FROM docker.io/library/rust:1.87-slim AS builder
 
