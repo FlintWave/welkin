@@ -395,6 +395,9 @@ tests, not a live viewer run.
 - A copy sale gives the buyer a copy and the object stays in the scene. An
   original sale moves the object itself: it is saved into the buyer's inventory
   and removed from the scene. Contents sales are not supported and are refused.
+- When the region refuses a purchase, the buyer sees the alert "Unable to buy:
+  <reason>." (for example "not for sale" or "price changed"), and the region logs
+  the refusal.
 - No money moves. The sample economy charges nothing, so a purchase is free
   whatever the price.
 
