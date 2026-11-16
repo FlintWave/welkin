@@ -7,6 +7,7 @@ mod console;
 mod console_io;
 mod estate_config;
 mod groups_io;
+mod groups_queries;
 mod inventory_rez;
 mod object_add;
 mod persist;
