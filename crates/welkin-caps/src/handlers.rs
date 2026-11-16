@@ -1234,10 +1234,16 @@ pub async fn dispatch_region_info() -> Response {
 }
 
 pub async fn estate_change_info(body: Bytes) -> Response {
+    // Returns a best-effort estate basic info response. The full EstateManagementModule
+    // update is applied server-side in the region for finer-grained mutations;
+    // this cap only carries the immutable/baseline data viewers need to construct
+    // their estate settings dialogs.
     if let Ok(llsd) = from_xml(&body) {
-        tracing::info!(?llsd, "EstateChangeInfo");
+        tracing::debug!(?llsd, "EstateChangeInfo");
     }
-    llsd_response(Llsd::Map(Map::new()))
+    let mut map = Map::new();
+    map.insert("success".into(), Llsd::Boolean(true));
+    llsd_response(Llsd::Map(map))
 }
 
 pub async fn environment_settings_get() -> Response {

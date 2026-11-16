@@ -5564,6 +5564,7 @@ const KNOWN_CAPS: &[&str] = &[
     "UpdateAgentInformation",
     "ParcelVoiceInfoRequest",
     "ProvisionVoiceAccountRequest",
+    "EstateChangeInfo",
 ];
 
 async fn seed_caps_handler(
