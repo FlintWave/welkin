@@ -6,7 +6,7 @@ OpenSim 0.9.3.0 C# to Rust port. LGPL-3.0-or-later.
 
 Welkin builds, runs, and lets a viewer log in to a single-region grid on SQLite.
 Both programs, `welkin-robust` and `welkin-region`, come from `cargo build
---release`. The workspace has 2,652 passing tests, 0 failures and 2 ignored.
+--release`. The workspace has 2,688 passing tests, 0 failures and 2 ignored.
 
 What works in this release (see [viewer compatibility](docs/viewer-compatibility.md)
 for which parts were checked in a live viewer and which only in code):
@@ -22,10 +22,17 @@ for which parts were checked in a live viewer and which only in code):
   and physics calls work at runtime
 - Estate settings and object permissions, enforced by default, with a stable region UUID
 - Groups: create, join, leave, invitations, roles and powers, titles, eject, group chat
-- Sound, OAR and IAR archives, and account creation from the region console
+- Sound, buying objects, one whole-region parcel, loading an OAR from the console,
+  default avatar assets at start, and account creation from the region console
 
 Known limits of this release:
 
+- Stubs remain. A search of the Rust sources counts 233 lines that mention "stub"
+  (138 in `welkin-modules`, 53 in the script VM, 28 in `welkin-services`, 11 in the
+  conformance tool) and 24 `TODO` comments. Some are test helpers or comments, and
+  none has been sorted yet. The README lists examples.
+- The `ClientEgress` interface that modules use to message viewers is not connected
+  in the region yet, so those messages are dropped.
 - Run on a trusted network only. The authentication and account service endpoints
   have no access-control gates yet (no `AllowSetPassword` check), and the portal
   handlers do not validate input.
@@ -220,7 +227,7 @@ None of these is started. The task counts come from each change's `tasks.md`.
 
 ## Test Summary
 
-- **2,652 tests passing**, 0 failures, 2 ignored (`cargo test --workspace`)
+- **2,688 tests passing**, 0 failures, 2 ignored (`cargo test --workspace`)
 - 25 crates in the workspace, plus the Tauri companion app, which builds separately
 - Both `welkin-region` and `welkin-robust` build and start
 
