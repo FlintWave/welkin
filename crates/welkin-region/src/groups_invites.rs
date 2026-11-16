@@ -251,7 +251,8 @@ pub fn spawn_invite_packet(
     socket: Arc<tokio::net::UdpSocket>,
     addr: SocketAddr,
 ) {
-    tokio::spawn(async move {
+    let queue = ctx.queue().clone();
+    let _ = queue.submit(agent, async move {
         if let Some(outs) =
             process_invite_packet(&ctx, agent, &inviter_name, region_id, msg_id, &body).await
         {
@@ -272,7 +273,8 @@ pub fn spawn_invite_reply(
     socket: Arc<tokio::net::UdpSocket>,
     addr: SocketAddr,
 ) {
-    tokio::spawn(async move {
+    let queue = ctx.queue().clone();
+    let _ = queue.submit(agent, async move {
         let event_queue = {
             let guard = event_queues.read().await;
             guard.get(&agent).cloned()

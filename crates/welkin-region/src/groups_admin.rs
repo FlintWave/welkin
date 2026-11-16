@@ -74,7 +74,7 @@ pub async fn process_admin_packet(
             let group_id = m.agent_data.group_id;
             let mut out = Vec::new();
 
-            for rd in m.role_data {
+            for rd in m.role_data.into_iter().take(crate::groups_queue::MAX_ENTRIES_PER_PACKET) {
                 match rd.update_type {
                     4 => {
                         let name = groups_io::bytes_to_string(&rd.name);
@@ -147,7 +147,7 @@ pub async fn process_admin_packet(
             let group_id = m.agent_data.group_id;
             let mut out = Vec::new();
 
-            for rc in m.role_change {
+            for rc in m.role_change.into_iter().take(crate::groups_queue::MAX_ENTRIES_PER_PACKET) {
                 match rc.change {
                     0 => {
                         let ok = ctx
@@ -285,7 +285,8 @@ pub fn spawn_admin_packet(
     socket: Arc<tokio::net::UdpSocket>,
     addr: SocketAddr,
 ) {
-    tokio::spawn(async move {
+    let queue = ctx.queue().clone();
+    let _ = queue.submit(agent, async move {
         let eq_opt = {
             let guard = event_queues.read().await;
             guard.get(&agent).cloned()

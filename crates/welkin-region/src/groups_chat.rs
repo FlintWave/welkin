@@ -390,7 +390,8 @@ pub fn spawn_chat_im(
     socket: Arc<tokio::net::UdpSocket>,
     addr: SocketAddr,
 ) {
-    tokio::spawn(async move {
+    let queue = ctx.queue().clone();
+    let _ = queue.submit(agent, async move {
         let outputs = process_chat_im(&ctx, &chat, agent, &first, &last, region_id, &im).await;
         deliver(outputs, agent, clients, client, socket, addr).await;
     });

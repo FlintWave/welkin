@@ -41,8 +41,9 @@ pub fn spawn_group_packet(
     client: Arc<Mutex<ClientSession>>,
     socket: Arc<UdpSocket>,
     addr: SocketAddr,
-) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
+) -> bool {
+    let queue = ctx.queue().clone();
+    queue.submit(agent, async move {
         if let Some(outs) =
             process_group_packet(&ctx, agent, msg_id, &body, &first, &last, eq.as_deref()).await
         {

@@ -11,6 +11,7 @@ mod groups_io;
 mod groups_admin;
 mod groups_chat;
 mod groups_queries;
+mod groups_queue;
 mod groups_tasks;
 mod inventory_rez;
 mod object_add;
@@ -1987,6 +1988,7 @@ async fn process_messages(
             modify_throttle.forget(&agent_id);
             if let Some(g) = &groups {
                 g.sequencer().forget(agent_id);
+                g.queue().forget(agent_id);
             }
             let leaving = {
                 let mut session = client.lock().await;
@@ -4345,7 +4347,7 @@ async fn process_messages(
             && let Ok(req) = UUIDGroupNameRequest::decode(&pkt.body)
             && let Some(client) = &client
         {
-            let ids: Vec<Uuid> = req.uuid_name_block.iter().map(|b| b.id).collect();
+            let ids: Vec<Uuid> = req.uuid_name_block.iter().take(groups_queue::MAX_ENTRIES_PER_PACKET).map(|b| b.id).collect();
             groups_tasks::spawn_group_name_reply(g.clone(), ids, client.clone(), socket.clone(), src);
         }
 

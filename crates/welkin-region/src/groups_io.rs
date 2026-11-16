@@ -49,6 +49,7 @@ impl GroupDataSequencer {
 pub struct GroupsCtx {
     connector: Arc<RemoteGroupsConnector>,
     sequencer: GroupDataSequencer,
+    queue: crate::groups_queue::GroupTaskQueue,
 }
 
 impl GroupsCtx {
@@ -56,6 +57,7 @@ impl GroupsCtx {
         Self {
             connector: Arc::new(RemoteGroupsConnector::new(server_uri)),
             sequencer: GroupDataSequencer::default(),
+            queue: crate::groups_queue::GroupTaskQueue::default(),
         }
     }
 
@@ -65,6 +67,10 @@ impl GroupsCtx {
 
     pub fn sequencer(&self) -> &GroupDataSequencer {
         &self.sequencer
+    }
+
+    pub fn queue(&self) -> &crate::groups_queue::GroupTaskQueue {
+        &self.queue
     }
 }
 
