@@ -17,17 +17,33 @@ for which parts were checked in a live viewer and which only in code):
   and loaded again at start
 - Terraforming with real terrain data, saved across restarts
 - Rapier 3D physics, physical prims, script physics commands
-- LSL scripts compiled to Luau, with the `ll*` and `os*` function sets
+- LSL scripts compiled to Luau and run in a sandboxed VM; about 60% of a sample
+  of 25 real-world scripts compile. Chat, timer, event, sensor, control, sound
+  and physics calls work at runtime
 - Estate settings and object permissions, enforced by default, with a stable region UUID
 - Groups: create, join, leave, invitations, roles and powers, titles, eject, group chat
 - Sound, OAR and IAR archives, and account creation from the region console
 
 Known limits of this release:
 
+- Run on a trusted network only. The authentication and account service endpoints
+  have no access-control gates yet (no `AllowSetPassword` check), and the portal
+  handlers do not validate input.
 - SQLite is the only database that has been run. MariaDB and PostgreSQL are untested
   and have known problems.
 - The web portal is a scaffold: no binary mounts it and most handlers do nothing.
-- Group notices are not finished, and group proposals are out of scope.
+- Many LSL functions are registered in the VM but not connected to the running
+  region and do nothing: `llEmail`, `llHTTPRequest`, `llHTTPResponse`,
+  `llRequestURL`, `llRezObject`, `llRezAtRoot`, `llAttachToAvatar` and its detach
+  call. `llRequestAgentData` returns placeholder data. Teleport between regions,
+  NPC functions and dynamic textures are not wired either.
+- The LSL compiler rejects some valid scripts, such as a float literal that
+  starts with a dot (`.4`).
+- Group notices are not finished, and group proposals are out of scope. In group
+  chat, the event for a second avatar joining a session can arrive late.
+- Attachments are saved at logout, not on a timer, so a region crash loses
+  attachment changes made since login.
+- No 10-minute soak test and no recorded Aurora session are on record.
 - PBR, Bakes on Mesh, Animesh, EEP day cycles, viewer search and media on a prim
   are not implemented.
 - The grid's private port binds to `127.0.0.1`, so a region on another machine

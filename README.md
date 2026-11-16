@@ -32,9 +32,11 @@ firmament."
 The release build produces both binaries, and the workspace test suite passes:
 2,652 tests, 0 failures, 2 ignored.
 
-Login, movement, chat and scripting were checked in live sessions with
-[Aurora Viewer](https://aurora-viewer.org) and Firestorm. The features below that
-came later are tested in code, including end-to-end tests against real services,
+Login, movement, chat and basic scripting were tried in a live session with the
+Firestorm OpenSim build and with a LibreMetaverse bot. An
+[Aurora Viewer](https://aurora-viewer.org) connection is reported, but no
+recording or log of it is on record. The features below that came later are
+tested in code, including end-to-end tests against real services,
 but have not been through a live viewer session. The
 [viewer compatibility page](docs/viewer-compatibility.md) says which is which.
 
@@ -46,23 +48,38 @@ but have not been through a live viewer session. The
 - Terraforming with the viewer's land tools, with real terrain data sent to
   viewers and saved across restarts
 - Physics with Rapier 3D, including physical prims and script physics commands
-- Scripts: LSL compiled to Luau, with the `ll*` and `os*` function sets and a
-  threat-level model for `os*` functions
+- Scripts: LSL compiled to Luau and run in a sandboxed VM. The compiler handles
+  the common LSL patterns; in a sample of 25 real-world scripts, about 60% (15)
+  compile. Chat, timers, events, sensors, controls, sound and physics calls work
+  at runtime. A threat-level model gates the `os*` functions.
 - Estate settings and object permissions, enforced by default
 - Groups: create, join, leave, invitations, roles and powers, titles, eject, and
   group chat (group notices are not finished)
 - OAR and IAR archive import and export
 - Account creation from the region console (`create-user`)
 
-Also implemented but not yet checked in a live session: Hypergrid teleport and
-friends, cross-region teleport, WebRTC voice through the `wolfvoice` sidecar,
-the currency module with Gloebit, and NPC functions.
+Also implemented in code but not yet checked in a live session: Hypergrid
+friends, WebRTC voice through the `wolfvoice` sidecar, and the currency module
+with Gloebit.
 
 ## What does not work yet
 
 - **The web portal is a scaffold.** Most handlers do nothing and no binary
   mounts it. There is no first-run wizard. Create accounts with the console.
-- Group notices. Group proposals and votes are out of scope.
+- **Many LSL functions exist in the VM but are not connected to the running
+  region, so they do nothing at runtime:** `llEmail` (no mail sender),
+  `llHTTPRequest`, `llHTTPResponse` and `llRequestURL`, `llRezObject` and
+  `llRezAtRoot`, and `llAttachToAvatar` and its detach call. `llRequestAgentData`
+  returns fixed placeholder data, not real account data, and `llSetHTTPBody` does
+  not exist. A script that calls these runs without an error and gets no result.
+- Teleport between regions and Hypergrid teleport, NPC functions and dynamic
+  textures are not wired into the running region.
+- The LSL compiler fails on some valid scripts. For example, the lexer rejects a
+  float literal that starts with a dot, such as `.4`.
+- Group notices. Group proposals and votes are out of scope. In group chat, the
+  event for a second avatar that joins a session can arrive late.
+- Attachments are saved when an avatar logs out, not on a timer, so a region crash
+  loses attachment changes made since login.
 - PBR materials, Bakes on Mesh, Animesh, Extended Environment (EEP) day cycles,
   viewer search, and media on a prim.
 - Separate-host setups: the grid's private service port listens on `127.0.0.1`
@@ -71,6 +88,12 @@ the currency module with Gloebit, and NPC functions.
 
 ## Known limits
 
+- **Run Welkin on a trusted network only.** The grid's authentication and account
+  service endpoints have no access-control gates yet. For example, there is no
+  `AllowSetPassword` check, so anyone who can reach the private service port can
+  change account data. The portal handlers do not validate their input. Keep the
+  private port on `127.0.0.1` (the default) or behind a firewall, and do not put
+  an alpha grid on the open internet.
 - **SQLite is the only database that has been run.** MariaDB and PostgreSQL are
   supported in the code but have never been tried, and some SQL is known to need
   work. See [Database setup](docs/database-setup.md).

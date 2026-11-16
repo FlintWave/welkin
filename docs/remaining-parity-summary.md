@@ -74,9 +74,9 @@ not yet user-tested:
 - Real attachments from inventory (forced attachments work, viewer-initiated pending)
 - Groups database persistence (in-memory only)
 - Script state checkpoint and restore across region restarts
-- Some LSL functions that need external service wiring: llEmail delivery (rate-limited stub), llHTTPRequest outbound (throttled stub)
+- Some LSL functions are not wired into the running region: llEmail, llHTTPRequest, llRezObject, llAttachToAvatar and others (see the README)
 - Full Firestorm re-test after chat/map/stub fixes
-- 10-minute Firestorm soak test (Aurora soak passed)
+- A 10-minute soak test on either viewer (no completed run is on record)
 - Local teleport between regions (code exists, not user-tested)
 
 ### Feature comparison vs OpenSimulator 0.9.3.0

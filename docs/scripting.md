@@ -173,8 +173,14 @@ longer exists and deletes the saved copy.
 
 ### ll* functions (LSL API)
 
-206 `ll*` functions are registered across 18 modules. All are wired to region
-services and produce real results; there are no log-only stubs.
+206 `ll*` functions are registered in the VM across 18 modules. Registered does
+not mean connected to the running region. Chat, timer, event, sensor, control,
+sound and physics functions are connected and work. These are registered but not
+connected, so they do nothing at runtime: `llEmail` (no mail sender),
+`llHTTPRequest`, `llHTTPResponse` and `llRequestURL`, `llRezObject` and
+`llRezAtRoot`, and `llAttachToAvatar` with its detach call. `llRequestAgentData`
+returns fixed placeholder data, and `llSetHTTPBody` does not exist. The tables
+below list the registered functions.
 
 | Module | Count | Examples |
 |---|---|---|

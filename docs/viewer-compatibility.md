@@ -279,7 +279,7 @@ These features are implemented and code-verified but have not been validated
 by a user in a live viewer session:
 
 - Local teleport between regions
-- 10-minute soak test on Firestorm (Aurora soak test passed)
+- A 10-minute soak test on either viewer: no completed run is on record
 - Reconnection after viewer restart
 - Full Firestorm re-test after the chat/map/stub fixes
 
@@ -323,7 +323,8 @@ algorithm; they are not yet confirmed in a live viewer session.
 
 ## Aurora Viewer session (2026-11-14)
 
-First viewer connection to Welkin. Aurora uses a non-standard LLUDP flag
+First viewer connection to Welkin. No recording or log of this session is on
+record, so treat the notes below as unverified. Aurora uses a non-standard LLUDP flag
 layout: ZEROCODED=0x80, ACK=0x10 (swapped vs the Linden Lab specification).
 The server handles both layouts via the `aurora-msg` crate. Aurora connects
 via XMLRPC login on port 8002 using the `--loginuri` flag for grid selection.
@@ -349,7 +350,9 @@ without manual intervention.
 
 ### Soak test
 
-10+ minutes clean at 60fps with zero errors or disconnects.
+No completed soak test is on record. An earlier note here claimed a clean
+10-minute Aurora run at 60 fps, but no log or recording supports it, so the claim
+was removed. Treat long-session stability as untested.
 
 ### Known gaps
 
