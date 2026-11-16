@@ -4,6 +4,7 @@ mod logging;
 mod avatar_move;
 mod console;
 mod console_io;
+mod estate_config;
 mod object_add;
 mod persist;
 mod physics_cmd;
@@ -449,7 +450,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let process_caps_base = caps_base.clone();
     let process_scheduler = Arc::clone(&script_scheduler);
     let process_grid_connector = grid_connector.clone();
-    let perms = Arc::new(DefaultPermissionsModule::new());
+    let perms = Arc::new(estate_config::permissions_from_config(&config));
     let process_perms = Arc::clone(&perms);
     let accounts_url = region_config
         .grid_service_url
@@ -1534,6 +1535,7 @@ async fn process_messages(
                 &event_queues,
                 &caps_base,
                 &accounts_connector,
+                &perms,
             )
             .await;
 
@@ -4452,6 +4454,7 @@ async fn send_movement_complete(
     event_queues: &EventQueueMap,
     caps_base: &str,
     accounts: &Arc<welkin_services::remote::accounts::RemoteAccountsConnector>,
+    perms: &DefaultPermissionsModule,
 ) {
     let mut session = client.lock().await;
 
@@ -4494,8 +4497,8 @@ async fn send_movement_complete(
             region_flags: 0,
             sim_access: 13, // Mature
             sim_name: region_info.region_name.as_bytes().to_vec(),
-            sim_owner: Uuid::nil(),
-            is_estate_manager: false,
+            sim_owner: perms.estate_owner,
+            is_estate_manager: perms.is_estate_manager(session.agent_id),
             water_height: 20.0,
             billable_factor: 0.0,
             cache_id: Uuid::new_v4(),

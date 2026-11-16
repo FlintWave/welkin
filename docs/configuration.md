@@ -78,6 +78,14 @@ multi-region setups.
 | GridService | GridServerURI | string | (none) | URL of the ROBUST grid service private port |
 | Scene | PhysicsEnabled | bool | true | Run Rapier physics simulation |
 | Scene | ScriptsEnabled | bool | true | Run LSL/OSSL script execution |
+| Estate | EstateOwner | string | (none) | Avatar UUID of the estate owner. Only the owner and managers may terraform or use estate tools |
+| Estate | EstateManagers | string | (none) | Comma-separated avatar UUIDs with estate manager rights |
+| Permissions | serverside_object_permissions | bool | true | Set false to switch all permission checks off (development only) |
+| Permissions | region_owner_is_god | bool | true | Treat the estate owner as an administrator |
+
+Permission checks are on by default. Without `EstateOwner` nobody has estate
+rights; avatars can still edit, move and delete objects they own. The region
+logs a warning at start-up when no owner is configured.
 
 ## welkin-robust (grid services)
 
