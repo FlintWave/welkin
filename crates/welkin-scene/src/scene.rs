@@ -12,6 +12,7 @@ use welkin_physics::PhysicsScene;
 
 use crate::group::SceneObjectGroup;
 use crate::presence::ScenePresence;
+use crate::terrain::TerrainChannel;
 
 #[derive(Debug, Clone)]
 pub struct RegionInfo {
@@ -123,6 +124,8 @@ pub struct Scene {
 
     started_at: RwLock<Option<Instant>>,
     physics: Mutex<Option<Box<dyn PhysicsScene + Send>>>,
+    /// The region's height field: the single source for physics and ground queries.
+    terrain: RwLock<TerrainChannel>,
 }
 
 impl Scene {
@@ -142,6 +145,7 @@ impl Scene {
             presence_count: AtomicU32::new(0),
             started_at: RwLock::new(None),
             physics: Mutex::new(None),
+            terrain: RwLock::new(TerrainChannel::new_default()),
         }
     }
 
@@ -498,7 +502,41 @@ impl Scene {
         self.physics.lock().unwrap().is_some()
     }
 
+    /// Terrain height in metres at a region-local position (bilinear between the
+    /// four surrounding vertices; positions outside the region clamp to the edge).
+    pub fn terrain_height_at(&self, x: f32, y: f32) -> f32 {
+        let terrain = self.terrain.read().unwrap();
+        let max_x = (terrain.size_x() - 1) as f32;
+        let max_y = (terrain.size_y() - 1) as f32;
+        let x = x.clamp(0.0, max_x);
+        let y = y.clamp(0.0, max_y);
+        let (x0, y0) = (x.floor() as u32, y.floor() as u32);
+        let (x1, y1) = ((x0 + 1).min(terrain.size_x() - 1), (y0 + 1).min(terrain.size_y() - 1));
+        let (fx, fy) = (x - x0 as f32, y - y0 as f32);
+        let h00 = terrain.get(x0, y0);
+        let h10 = terrain.get(x1, y0);
+        let h01 = terrain.get(x0, y1);
+        let h11 = terrain.get(x1, y1);
+        let bottom = h00 + (h10 - h00) * fx;
+        let top = h01 + (h11 - h01) * fx;
+        bottom + (top - bottom) * fy
+    }
+
     pub fn set_terrain(&self, height_map: &[f32]) {
+        {
+            let mut terrain = self.terrain.write().unwrap();
+            let expected = (terrain.size_x() * terrain.size_y()) as usize;
+            if height_map.len() == expected {
+                terrain.heights_mut().copy_from_slice(height_map);
+                terrain.mark_all_dirty();
+            } else {
+                tracing::warn!(
+                    got = height_map.len(),
+                    expected,
+                    "set_terrain: height map size does not match the region; scene terrain unchanged"
+                );
+            }
+        }
         if let Ok(mut guard) = self.physics.lock()
             && let Some(ref mut physics) = *guard
         {
@@ -731,6 +769,30 @@ mod tests {
         scene.push_object_to_physics(&uuid);
         let p = scene.with_physics(|ph| ph.get_actor(local_id).unwrap().position()).unwrap();
         assert_eq!(p, Vec3::new(9.0, 9.0, 9.0));
+    }
+
+    #[test]
+    fn terrain_height_is_bilinear_clamped_and_follows_set_terrain() {
+        let scene = test_scene();
+        // Default region terrain is flat at 21 m.
+        assert_eq!(scene.terrain_height_at(100.5, 40.25), 21.0);
+
+        // h = 0.1 * x  (map index = y * 256 + x)
+        let mut map = vec![0.0f32; 256 * 256];
+        for y in 0..256 {
+            for x in 0..256 {
+                map[y * 256 + x] = x as f32 * 0.1;
+            }
+        }
+        scene.set_terrain(&map);
+        assert!((scene.terrain_height_at(10.0, 5.0) - 1.0).abs() < 1e-4);
+        assert!((scene.terrain_height_at(10.5, 5.0) - 1.05).abs() < 1e-4, "interpolates between vertices");
+        assert!((scene.terrain_height_at(-20.0, 5.0) - 0.0).abs() < 1e-4, "clamped at the west edge");
+        assert!((scene.terrain_height_at(400.0, 5.0) - 25.5).abs() < 1e-3, "clamped at the east edge");
+
+        // A map of the wrong size is rejected and leaves the terrain alone.
+        scene.set_terrain(&[5.0; 10]);
+        assert!((scene.terrain_height_at(10.0, 5.0) - 1.0).abs() < 1e-4);
     }
 
     #[test]

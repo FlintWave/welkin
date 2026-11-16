@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 mod logging;
+mod avatar_move;
 mod console;
 mod console_io;
 mod object_add;
@@ -240,18 +241,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         let physics =
             welkin_physics_rapier::RapierPhysicsScene::new(&scene.region_info.region_name);
         scene.set_physics(Box::new(physics));
-        let mut height_map: Vec<f32> = Vec::with_capacity(256 * 256);
-        for y in 0..256u32 {
-            for x in 0..256u32 {
-                let xf = x as f32;
-                let yf = y as f32;
-                let height = 21.0f32
-                    + 1.5f32 * (xf * 0.02).sin() * (yf * 0.03).cos()
-                    + 0.8f32 * (xf * 0.05 + 1.0).sin() * (yf * 0.04 + 0.5).sin()
-                    + 0.3f32 * (xf * 0.08 + yf * 0.06).cos();
-                height_map.push(height);
-            }
-        }
+        // Flat terrain at the default height: the same ground viewers are sent in
+        // `send_movement_complete`, so physics, avatars and the viewer agree.
+        let height_map = vec![welkin_scene::terrain::DEFAULT_TERRAIN_HEIGHT; 256 * 256];
         scene.set_terrain(&height_map);
         info!("Physics engine (Rapier) initialised with terrain heightfield");
     }
@@ -2096,12 +2088,9 @@ async fn process_messages(
                 .unwrap_or(1.0 / 30.0)
                 .min(0.5);
             last_agent_update.insert(update.agent_data.agent_id, now);
-            let mut new_pos = prev_pos + vel * dt;
-            new_pos.x = new_pos.x.clamp(0.0, 256.0);
-            new_pos.y = new_pos.y.clamp(0.0, 256.0);
-            if !flying && new_pos.z < 22.0 {
-                new_pos.z = 22.0;
-            }
+            let moved = prev_pos + vel * dt;
+            let ground_z = scene.terrain_height_at(moved.x, moved.y);
+            let new_pos = avatar_move::place_on_ground(moved, flying, ground_z, dt);
 
             scene.update_presence_position(&update.agent_data.agent_id, new_pos, rot);
 
