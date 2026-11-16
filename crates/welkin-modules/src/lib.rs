@@ -29,6 +29,7 @@ pub mod offline_im;
 pub mod permissions;
 pub mod profiles;
 pub mod registry;
+pub mod search;
 pub mod transfer;
 pub mod voice;
 pub mod world_map;

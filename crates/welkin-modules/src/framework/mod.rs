@@ -297,12 +297,23 @@ pub struct SearchResult {
 
 /// Basic directory search module (Shared).
 pub struct SearchModule {
-    // Stub: a real implementation would call the directory service.
+    pub index: crate::search::PlaceIndex,
 }
 
 impl SearchModule {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            index: crate::search::PlaceIndex::default(),
+        }
+    }
+
+    pub fn add_place(
+        &mut self,
+        name: impl Into<String>,
+        owner: impl Into<String>,
+        category: impl Into<String>,
+    ) -> Result<(), crate::search::SearchIndexError> {
+        self.index.add_place(name, owner, category)
     }
 
     /// Search for places matching `query` with the given flags.
@@ -310,8 +321,8 @@ impl SearchModule {
     /// OpenSim performs place search through an external directory service. This
     /// module does not hold such a client, so the local, self-contained behavior
     /// is to return no place results.
-    pub fn search_places(&self, _query: &str, _flags: u32) -> Vec<SearchResult> {
-        Vec::new()
+    pub fn search_places(&self, query: &str, flags: u32) -> Vec<SearchResult> {
+        self.index.search_places(query, flags)
     }
 
     /// Search for people matching `query`.
@@ -1344,13 +1355,13 @@ mod stub_tests_k_mod_rs_searchmodule_0 {
     use crate::module::RegionModule;
     #[test]
     fn search_places_returns_no_results() {
-        let module = SearchModule {};
+        let module = SearchModule::new();
         assert!(module.search_places("library", 0).is_empty());
     }
 
     #[test]
     fn search_places_ignores_query_and_flags() {
-        let module = SearchModule {};
+        let module = SearchModule::new();
         let results = module.search_places("   ", u32::MAX);
         assert_eq!(results.len(), 0);
     }

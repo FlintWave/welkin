@@ -882,6 +882,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         let backup_interval = Duration::from_secs(backup_interval_secs);
         let mut prev_colliding: HashSet<u32> = HashSet::new();
         let mut collision_sound_throttle = sound_io::CollisionSoundThrottle::new();
+        let mut last_viewer_time = Instant::now() - Duration::from_secs(10);
         let mut sensor_repeats: HashMap<Uuid, (welkin_script_vm::SensorRequest, std::time::Instant, std::time::Duration)> = HashMap::new();
         let mut control_registrations: HashMap<Uuid, (Uuid, u32, bool, bool)> = HashMap::new();
         // Everything a script needs to talk to the region (chat, timers, sound, physics, ...).
@@ -981,6 +982,49 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                             &heartbeat_clients,
                         )
                         .await;
+                    }
+                    if last_viewer_time.elapsed() >= Duration::from_secs(5) {
+                        last_viewer_time = Instant::now();
+                        let now_unix = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs() as i64)
+                            .unwrap_or(0);
+                        let state = welkin_modules::environment::day_cycle::DayCycleState::new_at(86400, 0, now_unix);
+                        let df = state.current_day_fraction();
+                        let sun = state.sun_direction();
+                        let msg = SimulatorViewerTimeMessage {
+                            time_info: simulator_viewer_time_message::TimeInfo {
+                                usec_since_start: (now_unix as u64).saturating_mul(1_000_000),
+                                sec_per_day: 86400,
+                                sec_per_year: 86400 * 365,
+                                sun_direction: glam::Vec3::new(sun[0] as f32, sun[1] as f32, sun[2] as f32),
+                                sun_phase: df as f32,
+                                sun_ang_velocity: glam::Vec3::new(0.0, (2.0 * std::f64::consts::PI / 86400.0) as f32, 0.0),
+                            },
+                        };
+                        let viewer_time_llsd = state.viewer_time_llsd();
+                        let generic = GenericMessage {
+                            agent_data: generic_message::AgentData {
+                                agent_id: Uuid::nil(),
+                                session_id: Uuid::nil(),
+                                transaction_id: Uuid::nil(),
+                            },
+                            method_data: generic_message::MethodData {
+                                method: b"Windlight".to_vec(),
+                                invoice: Uuid::new_v4(),
+                            },
+                            param_list: vec![generic_message::ParamList {
+                                parameter: viewer_time_llsd.into_bytes(),
+                            }],
+                        };
+                        let clients_map = heartbeat_clients.read().await;
+                        for (addr, client) in clients_map.iter() {
+                            let mut session = client.lock().await;
+                            let (bytes, _) = session.circuit.send_msg(&msg, true);
+                            let _ = heartbeat_socket.send_to(&bytes, *addr).await;
+                            let (bytes, _) = session.circuit.send_msg(&generic, true);
+                            let _ = heartbeat_socket.send_to(&bytes, *addr).await;
+                        }
                     }
                     let mut script_ms = 0.0f32;
                     if scripts_enabled {

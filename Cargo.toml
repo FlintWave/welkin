@@ -53,6 +53,7 @@ cbc = "0.1"
 pbkdf2 = "0.12"
 hmac = "0.12"
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+tantivy = "0.27"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "warn"
