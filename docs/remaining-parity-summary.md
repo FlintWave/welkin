@@ -83,8 +83,7 @@ not yet user-tested:
 An earlier version of this section gave a percentage for each subsystem and an
 overall parity figure of about 85%. Those numbers were not measured and
 overstated what runs (for example the portal, teleport and voice), so they are
-removed. See the [README](index.md) and the roadmap for what works and what does
-not.
+removed. See the repository README and the roadmap for what works and what does not.
 
 ---
 
