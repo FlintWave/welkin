@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
+use std::collections::HashSet;
+
 use welkin_msg::Msg;
 
 use tracing::warn;
@@ -7,6 +9,8 @@ use uuid::Uuid;
 
 use crate::groups_io::{GroupsCtx, name_bytes};
 use welkin_msg::msgs;
+
+const MEMBER_VISIBLE: u64 = 1 << 50;
 
 #[derive(Debug)]
 pub enum QueryOut {
@@ -78,15 +82,52 @@ pub async fn process_query_packet(
         let group_id = req.group_data.group_id;
         let request_id = req.group_data.request_id;
 
-        if !is_member(ctx, agent, group_id).await {
-            return Some(vec![]);
-        }
+        let members = if is_member(ctx, agent, group_id).await {
+            match ctx.connector().get_group_members(agent, group_id).await {
+                Ok(members) => members,
+                Err(err) => {
+                    warn!(error = %err, "failed to get group members");
+                    return Some(vec![]);
+                }
+            }
+        } else {
+            let roles = match ctx.connector().get_group_roles(agent, group_id).await {
+                Ok(roles) => roles,
+                Err(err) => {
+                    warn!(error = %err, "failed to get group roles");
+                    return Some(vec![]);
+                }
+            };
 
-        let members = match ctx.connector().get_group_members(agent, group_id).await {
-            Ok(members) => members,
-            Err(err) => {
-                warn!(error = %err, "failed to get group members");
-                return Some(vec![]);
+            let pairs = match ctx.connector().get_role_members(agent, group_id).await {
+                Ok(pairs) => pairs,
+                Err(err) => {
+                    warn!(error = %err, "failed to get role members");
+                    return Some(vec![]);
+                }
+            };
+
+            let visible_roles: HashSet<Uuid> = roles
+                .iter()
+                .filter(|role| role.powers & MEMBER_VISIBLE != 0)
+                .map(|role| role.role_id)
+                .collect();
+
+            let visible_members: HashSet<Uuid> = pairs
+                .iter()
+                .filter(|pair| visible_roles.contains(&pair.role_id))
+                .map(|pair| pair.member_id)
+                .collect();
+
+            match ctx.connector().get_group_members(agent, group_id).await {
+                Ok(members) => members
+                    .into_iter()
+                    .filter(|member| visible_members.contains(&member.agent_id))
+                    .collect(),
+                Err(err) => {
+                    warn!(error = %err, "failed to get group members");
+                    return Some(vec![]);
+                }
             }
         };
 
@@ -95,8 +136,22 @@ pub async fn process_query_packet(
         }
 
         let member_count = members.len() as i32;
+        let member_data_blocks: Vec<msgs::group_members_reply::MemberData> = members
+            .iter()
+            .map(|member| msgs::group_members_reply::MemberData {
+                agent_id: member.agent_id,
+                contribution: member.contribution,
+                online_status: name_bytes(""),
+                agent_powers: member.agent_powers,
+                title: name_bytes(&member.title),
+                is_owner: member.is_owner,
+            })
+            .collect();
+
         let mut out = Vec::new();
-        for chunk in members.chunks(25) {
+        for chunk in chunk_by_budget(member_data_blocks, 1000, |block| {
+            16 + 4 + (1 + block.online_status.len()) + 8 + (1 + block.title.len()) + 1
+        }) {
             let reply = msgs::GroupMembersReply {
                 agent_data: msgs::group_members_reply::AgentData {
                     agent_id: agent,
@@ -106,17 +161,7 @@ pub async fn process_query_packet(
                     request_id,
                     member_count,
                 },
-                member_data: chunk
-                    .iter()
-                    .map(|member| msgs::group_members_reply::MemberData {
-                        agent_id: member.agent_id,
-                        contribution: member.contribution,
-                        online_status: name_bytes(""),
-                        agent_powers: member.agent_powers,
-                        title: name_bytes(&member.title),
-                        is_owner: member.is_owner,
-                    })
-                    .collect(),
+                member_data: chunk,
             };
             out.push(QueryOut::Members(reply));
         }
@@ -231,7 +276,7 @@ pub async fn process_query_packet(
 
         let total_pairs = pairs.len() as u32;
         let mut out = Vec::new();
-        for chunk in pairs.chunks(32) {
+        for chunk in chunk_by_budget(pairs, 1000, |_| 32) {
             let reply = msgs::GroupRoleMembersReply {
                 agent_data: msgs::group_role_members_reply::AgentData {
                     agent_id: agent,
@@ -254,6 +299,29 @@ pub async fn process_query_packet(
     } else {
         None
     }
+}
+
+fn chunk_by_budget<T>(items: Vec<T>, budget: usize, size_of: impl Fn(&T) -> usize) -> Vec<Vec<T>> {
+    let mut chunks = Vec::new();
+    let mut current = Vec::new();
+    let mut current_size = 0usize;
+
+    for item in items {
+        let size = size_of(&item);
+        if !current.is_empty() && current_size + size > budget {
+            chunks.push(current);
+            current = Vec::new();
+            current_size = 0;
+        }
+        current.push(item);
+        current_size += size;
+    }
+
+    if !current.is_empty() {
+        chunks.push(current);
+    }
+
+    chunks
 }
 
 pub async fn send_query_out(
@@ -314,6 +382,7 @@ fn bytes_nul(s: &str, max: usize) -> Vec<u8> {
 mod tests {
     use super::*;
 
+    use std::collections::HashSet;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::Arc;
 
@@ -529,10 +598,157 @@ mod tests {
         let mut w = welkin_msg::Writer::new();
         req.encode_body(&mut w);
         let out = process_query_packet(&ctx, outsider, msgs::GroupMembersRequest::ID, &w.buf).await;
-        match out {
-            Some(v) => assert!(v.is_empty()),
-            _ => panic!("expected empty members reply"),
+        assert!(out.is_some());
+    }
+
+    #[tokio::test]
+    async fn members_nonmember_visible_filter() {
+        let (url, _guard) = start_service().await;
+        let ctx = GroupsCtx::new(&url);
+        let founder = Uuid::new_v4();
+        let group = create_test_group(&ctx, founder, "VisibleMembersGroup").await;
+
+        let second = Uuid::new_v4();
+        ctx.connector()
+            .add_agent_to_group(founder, second, group.group_id, Uuid::nil(), "")
+            .await
+            .expect("add second member");
+
+        let roles = ctx
+            .connector()
+            .get_group_roles(founder, group.group_id)
+            .await
+            .expect("get group roles");
+        let pairs = ctx
+            .connector()
+            .get_role_members(founder, group.group_id)
+            .await
+            .expect("get role members");
+
+        let visible_roles: HashSet<Uuid> = roles
+            .iter()
+            .filter(|role| role.powers & MEMBER_VISIBLE != 0)
+            .map(|role| role.role_id)
+            .collect();
+        let visible_members: HashSet<Uuid> = pairs
+            .iter()
+            .filter(|pair| visible_roles.contains(&pair.role_id))
+            .map(|pair| pair.member_id)
+            .collect();
+
+        let all_members = ctx
+            .connector()
+            .get_group_members(founder, group.group_id)
+            .await
+            .expect("get group members");
+        let expected: Vec<Uuid> = all_members
+            .iter()
+            .filter(|member| visible_members.contains(&member.agent_id))
+            .map(|member| member.agent_id)
+            .collect();
+
+        let request_id = Uuid::new_v4();
+        let outsider = Uuid::new_v4();
+        let req = msgs::GroupMembersRequest {
+            agent_data: msgs::group_members_request::AgentData {
+                agent_id: outsider,
+                session_id: Uuid::nil(),
+            },
+            group_data: msgs::group_members_request::GroupData {
+                group_id: group.group_id,
+                request_id,
+            },
+        };
+        let mut w = welkin_msg::Writer::new();
+        req.encode_body(&mut w);
+        let out = process_query_packet(&ctx, outsider, msgs::GroupMembersRequest::ID, &w.buf)
+            .await
+            .expect("visible members result");
+
+        let mut returned = Vec::new();
+        for query_out in &out {
+            if let QueryOut::Members(reply) = query_out {
+                assert_eq!(reply.group_data.member_count, expected.len() as i32);
+                assert_eq!(reply.group_data.request_id, request_id);
+                for member in &reply.member_data {
+                    returned.push(member.agent_id);
+                }
+            } else {
+                panic!("expected members reply");
+            }
         }
+
+        assert_eq!(returned.len(), expected.len());
+        for id in &expected {
+            assert!(returned.contains(id));
+        }
+        assert!(returned.contains(&founder));
+
+        let everyone = roles
+            .iter()
+            .find(|role| role.name.contains("Everyone"))
+            .expect("everyone role");
+        let everyone_visible = everyone.powers & MEMBER_VISIBLE != 0;
+        if everyone_visible {
+            assert!(returned.contains(&second));
+        } else {
+            assert!(!returned.contains(&second));
+        }
+    }
+
+    #[tokio::test]
+    async fn members_member_receives_all() {
+        let (url, _guard) = start_service().await;
+        let ctx = GroupsCtx::new(&url);
+        let founder = Uuid::new_v4();
+        let group = create_test_group(&ctx, founder, "AllMembersGroup").await;
+
+        let second = Uuid::new_v4();
+        ctx.connector()
+            .add_agent_to_group(founder, second, group.group_id, Uuid::nil(), "")
+            .await
+            .expect("add second member");
+
+        let request_id = Uuid::new_v4();
+        let req = msgs::GroupMembersRequest {
+            agent_data: msgs::group_members_request::AgentData {
+                agent_id: founder,
+                session_id: Uuid::nil(),
+            },
+            group_data: msgs::group_members_request::GroupData {
+                group_id: group.group_id,
+                request_id,
+            },
+        };
+        let mut w = welkin_msg::Writer::new();
+        req.encode_body(&mut w);
+        let out = process_query_packet(&ctx, founder, msgs::GroupMembersRequest::ID, &w.buf)
+            .await
+            .expect("all members result");
+
+        let expected_count = ctx
+            .connector()
+            .get_group_members(founder, group.group_id)
+            .await
+            .expect("get group members")
+            .len() as i32;
+
+        let mut returned = Vec::new();
+        for query_out in &out {
+            if let QueryOut::Members(reply) = query_out {
+                assert_eq!(reply.group_data.member_count, expected_count);
+                assert_eq!(reply.group_data.request_id, request_id);
+                for member in &reply.member_data {
+                    returned.push(member.agent_id);
+                }
+            } else {
+                panic!("expected members reply");
+            }
+        }
+
+        assert_eq!(returned.len(), expected_count as usize);
+        assert!(returned.contains(&founder));
+        assert!(returned.contains(&second));
     }
 
     #[tokio::test]
@@ -655,6 +871,64 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn title_heavy_members_packets() {
+        let (url, _guard) = start_service().await;
+        let ctx = GroupsCtx::new(&url);
+        let founder = Uuid::new_v4();
+        let group = create_test_group(&ctx, founder, "TitleHeavyGroup").await;
+
+        // The wire title comes from the role, so these are ordinary titles; the point is the byte budget.
+        let long_title = "a".repeat(200);
+        for _ in 0..30 {
+            let agent = Uuid::new_v4();
+            ctx.connector()
+                .add_agent_to_group(founder, agent, group.group_id, Uuid::nil(), &long_title)
+                .await
+                .expect("add titled member");
+        }
+
+        let request_id = Uuid::new_v4();
+        let req = msgs::GroupMembersRequest {
+            agent_data: msgs::group_members_request::AgentData {
+                agent_id: founder,
+                session_id: Uuid::nil(),
+            },
+            group_data: msgs::group_members_request::GroupData {
+                group_id: group.group_id,
+                request_id,
+            },
+        };
+        let mut w = welkin_msg::Writer::new();
+        req.encode_body(&mut w);
+        let out = process_query_packet(&ctx, founder, msgs::GroupMembersRequest::ID, &w.buf)
+            .await
+            .expect("title heavy members result");
+
+        let mut packets = 0usize;
+        let mut total_returned = 0usize;
+        for query_out in &out {
+            if let QueryOut::Members(reply) = query_out {
+                packets += 1;
+                total_returned += reply.member_data.len();
+                assert_eq!(reply.group_data.request_id, request_id);
+                let estimated: usize = reply
+                    .member_data
+                    .iter()
+                    .map(|member| {
+                        16 + 4 + (1 + member.online_status.len()) + 8 + (1 + member.title.len()) + 1
+                    })
+                    .sum();
+                assert!(estimated <= 1000);
+            } else {
+                panic!("expected members reply");
+            }
+        }
+
+        assert!(packets >= 2);
+        assert_eq!(total_returned, 31);
+    }
+
+    #[tokio::test]
     async fn authenticated_agent_overrides_packet_agent() {
         let (url, _guard) = start_service().await;
         let ctx = GroupsCtx::new(&url);
@@ -695,6 +969,43 @@ mod tests {
         let truncated = process_query_packet(&ctx, agent, msgs::GroupProfileRequest::ID, &[]).await;
         // An empty body decodes as a nil group id, which yields no reply.
         assert!(truncated.map_or(true, |out| out.is_empty()));
+    }
+
+    #[test]
+    fn chunk_by_budget_empty() {
+        let chunks = chunk_by_budget(Vec::<i32>::new(), 10, |_| 4);
+        assert!(chunks.is_empty());
+    }
+
+    #[test]
+    fn chunk_by_budget_exact_fit() {
+        let chunks = chunk_by_budget(vec![1, 2], 10, |_| 5);
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0], vec![1, 2]);
+    }
+
+    #[test]
+    fn chunk_by_budget_oversize_single_item() {
+        let chunks = chunk_by_budget(vec![42], 10, |_| 15);
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0], vec![42]);
+    }
+
+    #[test]
+    fn chunk_by_budget_many_small_and_one_oversized() {
+        let mut items = vec![5i32; 10];
+        items.push(100);
+        let chunks = chunk_by_budget(items, 10, |item| *item as usize);
+
+        for chunk in &chunks {
+            let total: usize = chunk.iter().map(|item| *item as usize).sum();
+            if chunk.len() == 1 && chunk[0] == 100 {
+                assert!(total > 10);
+            } else {
+                assert!(total <= 10);
+            }
+        }
+        assert_eq!(chunks.last().unwrap(), &vec![100]);
     }
 
     #[allow(dead_code)]
