@@ -289,9 +289,11 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>)
         .unwrap_or(0);
 
     let caps_path = Uuid::new_v4().to_string();
+    // The agent id in the seed path lets the region tell agents' capabilities apart.
     let seed_capability = format!(
-        "{}/CAPS/{}0000/",
+        "{}/CAPS/{}-{}/",
         region.server_uri.trim_end_matches('/'),
+        principal_id,
         caps_path
     );
 

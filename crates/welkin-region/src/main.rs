@@ -491,6 +491,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // --- Per-session EventQueue map ---
     let event_queues: EventQueueMap = Arc::new(RwLock::new(std::collections::HashMap::new()));
+    let cap_secrets: welkin_caps::handlers::CapSecrets =
+        Arc::new(RwLock::new(std::collections::HashMap::new()));
 
     // --- Caps base URL (used by both process_messages and the caps server) ---
     let caps_port = region_config.internal_port.wrapping_add(1);
@@ -599,8 +601,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             .with_state(event_queues.clone()),
     );
     caps_router = caps_router.route(
+        "/EventQueueGet/{token}",
+        axum::routing::post(welkin_caps::handlers::event_queue_get_for_agent).with_state(
+            welkin_caps::handlers::AgentEventQueueState {
+                queues: event_queues.clone(),
+                secrets: cap_secrets.clone(),
+            },
+        ),
+    );
+    caps_router = caps_router.route(
         "/CAPS/{*path}",
-        axum::routing::post(seed_caps_handler).with_state(caps_base.clone()),
+        axum::routing::post(seed_caps_handler).with_state((caps_base.clone(), cap_secrets.clone())),
     );
     caps_router = caps_router
         .route("/currency.php", axum::routing::post(currency_php_handler))
@@ -5460,7 +5471,17 @@ const KNOWN_CAPS: &[&str] = &[
     "ProvisionVoiceAccountRequest",
 ];
 
-async fn seed_caps_handler(State(base_url): State<String>, body: Bytes) -> impl IntoResponse {
+async fn seed_caps_handler(
+    State((base_url, secrets)): State<(String, welkin_caps::handlers::CapSecrets)>,
+    axum::extract::Path(path): axum::extract::Path<String>,
+    body: Bytes,
+) -> impl IntoResponse {
+    // The login service puts `<agent-uuid>-<secret>` in the seed path; the agent's event
+    // queue capability URL carries the same token so polls can be told apart.
+    let agent_token = welkin_caps::handlers::split_agent_token(&path);
+    if let Some((agent, secret)) = &agent_token {
+        secrets.write().await.insert(*agent, secret.clone());
+    }
     let requested = from_xml(&body).unwrap_or(Llsd::Array(Vec::new()));
     let names: Vec<String> = match &requested {
         Llsd::Array(arr) => arr.iter().map(|v| v.as_str().to_string()).collect(),
@@ -5470,7 +5491,13 @@ async fn seed_caps_handler(State(base_url): State<String>, body: Bytes) -> impl 
     let mut map = Map::new();
     for name in &names {
         if KNOWN_CAPS.contains(&name.as_str()) {
-            map.insert(name.clone(), Llsd::String(format!("{}/{}", base_url, name)));
+            let url = match (&agent_token, name.as_str()) {
+                (Some((agent, secret)), "EventQueueGet") => {
+                    format!("{}/EventQueueGet/{}-{}", base_url, agent, secret)
+                }
+                _ => format!("{}/{}", base_url, name),
+            };
+            map.insert(name.clone(), Llsd::String(url));
         }
     }
 
