@@ -550,8 +550,8 @@ mod tests {
 
     #[test]
     fn lex_float_literal() {
-        let tokens = lex("3.14").unwrap();
-        assert!(matches!(tokens[0].token, Token::FloatLit(v) if (v - 3.14).abs() < 0.001));
+        let tokens = lex("2.75").unwrap();
+        assert!(matches!(tokens[0].token, Token::FloatLit(v) if (v - 2.75).abs() < 0.001));
     }
 
     #[test]

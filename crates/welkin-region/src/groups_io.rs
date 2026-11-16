@@ -663,7 +663,7 @@ mod tests {
     use uuid::Uuid;
     use welkin_caps::event_queue::{EventQueue, EventQueueResponse};
     use welkin_data::groups::GroupsStore;
-    use welkin_llsd::{Llsd, Map};
+    use welkin_llsd::Llsd;
     use welkin_services::groups::{GroupsServiceState, router};
     use welkin_services::remote::groups::{GroupRecord, MembershipRecord};
 

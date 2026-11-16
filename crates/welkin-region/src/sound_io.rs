@@ -471,9 +471,6 @@ impl CollisionSoundThrottle {
         true
     }
 
-    pub fn forget(&mut self, object: &uuid::Uuid) {
-        self.last.remove(object);
-    }
 }
 
 pub async fn relay_collision_sound(

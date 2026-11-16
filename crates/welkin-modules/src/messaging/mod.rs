@@ -167,7 +167,6 @@ pub struct MuteEntry {
 /// Mirrors the C# `MessageTransferModule`.  Currently a stub: local delivery
 /// is logged but not wired to a real client connection.
 pub struct MessageTransferModule {
-    enabled: bool,
     scenes: Vec<String>,
     message_key: String,
     offline_queue: Vec<GridInstantMessage>,
@@ -176,7 +175,6 @@ pub struct MessageTransferModule {
 impl MessageTransferModule {
     pub fn new() -> Self {
         Self {
-            enabled: true,
             scenes: Vec::new(),
             message_key: String::new(),
             offline_queue: Vec::new(),
@@ -369,14 +367,12 @@ impl RegionModule for OfflineMessageModule {
 /// Mirrors the C# `MuteListModule`.  Mute entries are stored in memory;
 /// a real deployment would persist to a database via `IMuteListService`.
 pub struct MuteListModule {
-    enabled: bool,
     mutes: HashMap<Uuid, Vec<MuteEntry>>,
 }
 
 impl MuteListModule {
     pub fn new() -> Self {
         Self {
-            enabled: true,
             mutes: HashMap::new(),
         }
     }

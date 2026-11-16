@@ -66,6 +66,7 @@ pub struct BotScript {
 
 impl BotScript {
     /// Create an empty script with a name and description.
+    #[cfg(test)]
     pub fn new(name: &str, description: &str) -> Self {
         Self {
             name: name.to_string(),
@@ -84,6 +85,7 @@ pub fn load_script(path: &Path) -> Result<BotScript, Box<dyn std::error::Error>>
 }
 
 /// Save a script to a JSON file on disk.
+#[cfg(test)]
 pub fn save_script(path: &Path, script: &BotScript) -> Result<(), Box<dyn std::error::Error>> {
     let json = serde_json::to_string_pretty(script)?;
     std::fs::write(path, json)?;

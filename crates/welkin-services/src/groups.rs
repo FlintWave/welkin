@@ -610,7 +610,6 @@ async fn handle_put_group(store: &GroupsStore, form: &HashMap<String, String>) -
         // Add founder
         let founder_id = form_str(form, "FounderID");
         add_agent_to_group(store, founder_id, &group_id, &owner_role_id, "").await;
-        add_agent_to_group_role(store, founder_id, &group_id, &officers_role_id).await;
 
         // Return the group
         let mc = store.member_count(&group_id).await.unwrap_or(0);

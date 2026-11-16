@@ -21,3 +21,6 @@ open = "5"
 
 [build-dependencies]
 tauri-build = "2"
+
+[lints]
+workspace = true
