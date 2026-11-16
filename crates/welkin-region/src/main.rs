@@ -6,6 +6,7 @@ mod avatar_move;
 mod console;
 mod console_io;
 mod estate_config;
+mod groups_invites;
 mod groups_io;
 mod groups_admin;
 mod groups_queries;
@@ -4367,6 +4368,25 @@ async fn process_messages(
         }
 
         if let Some(g) = &groups
+            && groups_invites::is_invite_packet(pkt.id)
+            && let Some(client) = &client
+            && let Some(pres) = scene.get_presence(&agent_id)
+        {
+            groups_invites::spawn_invite_packet(
+                g.clone(),
+                agent_id,
+                format!("{} {}", pres.first_name, pres.last_name),
+                scene.region_info.region_id,
+                pkt.id,
+                pkt.body.clone(),
+                clients.clone(),
+                client.clone(),
+                socket.clone(),
+                src,
+            );
+        }
+
+        if let Some(g) = &groups
             && groups_admin::is_admin_packet(pkt.id)
             && let Some(client) = &client
             && let Some(pres) = scene.get_presence(&agent_id)
@@ -4531,6 +4551,26 @@ async fn process_messages(
                         info!(from = %agent_id, to = %to_agent, "IM: personal message relayed");
                     } else {
                         warn!(from = %agent_id, to = %to_agent, "IM: target not online in region, offline storage pending");
+                    }
+                }
+                // 35/36: GroupInvitationAccept / GroupInvitationDecline
+                35 | 36 => {
+                    if let Some(g) = &groups
+                        && let Some(client) = &client
+                        && let Some(pres) = scene.get_presence(&agent_id)
+                    {
+                        groups_invites::spawn_invite_reply(
+                            g.clone(),
+                            agent_id,
+                            pres.first_name.clone(),
+                            pres.last_name.clone(),
+                            im.clone(),
+                            event_queues.clone(),
+                            clients.clone(),
+                            client.clone(),
+                            socket.clone(),
+                            src,
+                        );
                     }
                 }
                 // 4: InventoryOffered
