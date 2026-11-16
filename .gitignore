@@ -36,3 +36,10 @@ tests/script-testing/runner/target/
 *~
 *.orig
 *.rej
+
+# Local agent tooling
+.claude/
+.macrokit/
+.opencode/
+opencode.json
+OPENCODE.md
