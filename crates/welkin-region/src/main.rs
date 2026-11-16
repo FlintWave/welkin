@@ -1168,6 +1168,22 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         let bind = config.get_string_or("Admin", "BindAddress", "127.0.0.1");
         let port = config.get_i64_or("Admin", "Port", 9100);
+        let is_loopback = bind
+            .parse::<std::net::IpAddr>()
+            .map(|ip| ip.is_loopback())
+            .unwrap_or(bind == "localhost");
+        let allow_remote = config.get_bool_or("Admin", "AllowRemoteBind", false);
+        if !is_loopback && !allow_remote {
+            error!(
+                %bind,
+                "admin REST API NOT started: it is plain HTTP and carries the bearer token and passwords \
+                 in cleartext. Bind to 127.0.0.1 (or front it with a TLS reverse proxy) and set \
+                 [Admin] AllowRemoteBind = true to accept the risk on a non-loopback address"
+            );
+        } else {
+            if !is_loopback {
+                warn!(%bind, "admin REST API bound to a non-loopback address over plain HTTP");
+            }
         match tokio::net::TcpListener::bind(format!("{bind}:{port}")).await {
             Ok(listener) => {
                 info!(%bind, port, "admin REST API listening");
@@ -1180,6 +1196,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 });
             }
             Err(e) => error!(%bind, port, error = %e, "admin REST API failed to bind"),
+        }
         }
     }
 
