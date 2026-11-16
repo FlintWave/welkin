@@ -490,12 +490,30 @@ impl FriendsModule {
         }
     }
 
-    /// Mark an agent as online and notify friends (stub notification).
+    /// Mark an agent as online/offline and notify each listed friend of the status change.
+    /// Notifications are delivered through the region egress; disconnected friends simply
+    /// have their event dropped by the connected-egress layer.
     pub fn status_notify(&mut self, agent_id: Uuid, is_online: bool) {
         if is_online {
             self.online.insert(agent_id);
         } else {
             self.online.remove(&agent_id);
+        }
+
+        let friends: Vec<Uuid> = self
+            .friends
+            .get(&agent_id)
+            .map(|list| list.iter().map(|friend| friend.friend_id).collect())
+            .unwrap_or_default();
+
+        if let Some(scene) = &self.scene {
+            for friend in friends {
+                let _ = scene.egress.send(EgressEvent::FriendOnline {
+                    agent: friend,
+                    friend: agent_id,
+                    online: is_online,
+                });
+            }
         }
     }
 
@@ -1405,5 +1423,48 @@ mod stub_tests_s_avatarfactorymodule_0 {
 
         assert!(!module.save_baked_textures(agent, HashMap::new()));
         assert!(module.bake_cache.is_empty());
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_mod_rs_friendsmodule_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn status_notify_updates_online_state() {
+        let mut module = FriendsModule {
+            friends: std::collections::HashMap::new(),
+            online: std::collections::HashSet::new(),
+            scene: None,
+        };
+        let agent = Uuid::new_v4();
+
+        module.status_notify(agent, true);
+        assert!(module.online.contains(&agent));
+
+        module.status_notify(agent, false);
+        assert!(!module.online.contains(&agent));
+    }
+
+    #[test]
+    fn status_notify_without_friends_emit_no_egress_events() {
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+
+        let mut module = FriendsModule {
+            friends: std::collections::HashMap::new(),
+            online: std::collections::HashSet::new(),
+            scene: Some(scene),
+        };
+        let agent = Uuid::new_v4();
+
+        module.status_notify(agent, true);
+
+        assert!(module.online.contains(&agent));
+        assert!(rec.take().is_empty());
     }
 }
