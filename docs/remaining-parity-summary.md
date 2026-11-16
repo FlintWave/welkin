@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Remaining parity summary
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Viewer compatibility](viewer-compatibility.md) · [Script engine](scripting.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Viewer compatibility](viewer-compatibility.md) · [Script engine](scripting.md)
 
 ## Current project state
 

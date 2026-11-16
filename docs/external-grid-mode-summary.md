@@ -1,6 +1,6 @@
 # external-grid-mode summary
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#e1) · Previous: [Archives](archives-summary.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Decisions](decisions.md#e1) · Previous: [Archives](archives-summary.md)
 
 Status: accepted (12/12 tasks checked in `openspec/changes/external-grid-mode/tasks.md`),
 with two live-grid tasks deferred to Phase 7 cutover. Commits `8f35477`,

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Quick start
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Configuration reference](configuration.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Configuration reference](configuration.md)
 
 ## Requirements
 

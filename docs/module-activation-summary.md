@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Module activation summary
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Region modules](region-modules-summary.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Region modules](region-modules-summary.md)
 
 Status: accepted (45 of 45 tasks, 3 phases). Change:
 `openspec/changes/module-activation/`.

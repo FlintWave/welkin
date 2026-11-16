@@ -2,7 +2,7 @@
 
 # Test grid deployment
 
-[<- Back to docs](README.md) | [Architecture](architecture.md) | [Operator guide](operator-guide.md) | [Migration guide](migration-guide.md)
+[<- Back to docs](index.md) | [Architecture](architecture.md) | [Operator guide](operator-guide.md) | [Migration guide](migration-guide.md)
 
 Deploy a self-contained test grid to verify that the Rust port works end to
 end: login, object creation, scripting, voice, and hypergrid. Everything runs
@@ -66,16 +66,11 @@ The first build compiles static musl-linked binaries inside the container
 
 ## Create an account
 
-Use the portal's first-run wizard to create the initial admin account:
-
-1. Open `http://localhost:9000/portal` in a browser.
-2. Follow the wizard: grid name, admin credentials, first region name and
-   coordinates.
-3. The wizard creates the estate, the default region, and an admin user with
-   the password you choose.
-
-If the portal is not reachable, create the account by connecting `osim-region`
-to the console (see the [operator guide](operator-guide.md)).
+> [!WARNING]
+> The portal and its first-run wizard are a scaffold and do not work. No
+> supported account-creation procedure is documented yet. Until one exists,
+> test logins need a user account that already exists in the grid database, for
+> example one migrated with the [migration guide](migration-guide.md).
 
 ## Importing OAR content
 
@@ -103,8 +98,8 @@ automatically using the coordinates stored in the archive.
    (pinned commit `3d523b14` for tested compatibility).
 2. Add a grid entry:
    - **Login URI:** `http://<host>:8003`
-   - **Grid name:** whatever you chose in the wizard
-3. Log in with the credentials from the wizard.
+   - **Grid name:** any name you like
+3. Log in with an account that exists in the grid database.
 
 The viewer should connect, rez your avatar, and display the region terrain.
 

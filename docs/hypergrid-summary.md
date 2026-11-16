@@ -1,6 +1,6 @@
 # Hypergrid summary
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#h1) · Previous: [Social Modules](social-modules-summary.md) · Next: [WebRTC Voice](webrtc-voice-summary.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Decisions](decisions.md#h1) · Previous: [Social Modules](social-modules-summary.md) · Next: [WebRTC Voice](webrtc-voice-summary.md)
 
 Status: accepted (20 of 20 tasks, 10 sections, 265 tests). Security review
 verdict: CONDITIONAL PASS (CRITICAL RISK). Change: `openspec/changes/hypergrid/`.

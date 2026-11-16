@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Script engine
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Integration architecture](integration-architecture.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Integration architecture](integration-architecture.md)
 
 Welkin runs LSL (Linden Scripting Language) scripts by compiling them to Luau
 bytecode and executing them in a sandboxed VM. OpenSimulator uses XEngine
@@ -163,6 +163,12 @@ created, globals are injected, and the bytecode is re-executed from the top.
 Scripts that need mid-function resume use a checkpoint pattern (a `_checkpoint`
 global that the script checks on entry).
 
+Restored scripts get the full set of ll* and os* functions and no absolute
+memory cap. An earlier version restored them without the functions, and the
+restore could fail with "not enough memory". Resetting a script uses the same
+headroom memory limit. At start the region skips a saved script whose object no
+longer exists and deletes the saved copy.
+
 ## Built-in functions
 
 ### ll* functions (LSL API)
@@ -296,6 +302,14 @@ llStopMoveToTarget, llTarget, llTargetRemove, llWater
 Forces, impulses, velocity, hover, move-to-target, position/rotation targets
 and terrain height queries.
 
+llApplyImpulse, llApplyRotationalImpulse, llSetForce, llSetTorque,
+llSetBuoyancy, llMoveToTarget and llStopMoveToTarget act on the physics body of
+the object that owns the script, including when the script sits in a child
+prim. llSetStatus handles STATUS_PHANTOM. Changing STATUS_PHYSICS at runtime,
+any other STATUS_* flag, and llSetHoverHeight are not supported by the physics
+backend yet; the region logs the reason instead of dropping the command
+silently.
+
 ### Avatar (16)
 
 llAttachToAvatar, llAttachToAvatarTemp, llAvatarOnSitTarget,
@@ -363,6 +377,33 @@ llReleaseURL, llRequestSecureURL, llRequestURL
 Script-owned HTTP endpoints (caps) for inbound requests from external
 services.
 
+### Sound
+
+llPlaySound, llLoopSound, llStopSound, llTriggerSound, llTriggerSoundLimited,
+llPreloadSound and llAdjustSoundVolume send the same viewer messages as
+OpenSimulator. The region relays them from `sound_io.rs`.
+
+- llPlaySound sends an AttachedSound message to every client, with flags 0, or
+  QUEUE (0x10) when the script has called llSetSoundQueueing(TRUE).
+- llTriggerSound sends a SoundTrigger message only to avatars within the
+  prim's sound radius. A radius of 0 means 100 m, and the prim keeps 100 m
+  from then on. llTriggerSoundLimited scales the volume down linearly with
+  distance, to silence at 100 m.
+- llPreloadSound reaches avatars within twice the sound radius, with the same
+  0 to 100 m default.
+- llLoopSound and llStopSound change the root prim's sound fields and then
+  broadcast a full object update, so avatars who arrive later still hear the
+  loop. Loop flags are LOOP (0x01), MASTER (0x02) and SLAVE (0x04), plus QUEUE
+  (0x10) when queueing is on. llStopSound sets STOP (0x20).
+- Scripts in child prims drive the one-shot and range sounds (play, trigger,
+  preload) through the prim's linkset root. llLoopSound and llStopSound on a
+  child prim are not supported yet: the region logs a warning and ignores the
+  command, so put looping sounds in the root prim.
+- A collision sound chosen with llCollisionSound plays when a collision
+  starts. The region allows one such sound per object every 200 ms and skips
+  collisions at a speed of 0.2 m/s or less. llCollisionSound with an empty
+  string disables the sound, as in OpenSimulator.
+
 ### Timer (3)
 
 llGetTime, llResetTime, llSetTimerEvent
@@ -387,6 +428,15 @@ Send email (20-second rate limit) and receive queued email.
 llReleaseControls, llTakeControls
 
 Request and release keyboard/mouse control events from the avatar.
+
+### Constants
+
+The VM defines the LSL constants as globals at runtime, because the compiler
+emits their names as they are. They include TRUE, FALSE, PI, NULL_KEY,
+ZERO_VECTOR, and the STATUS_*, CHANGED_*, PSYS_* and CAMERA_* families. The
+values come from the script API constants table, plus a generated table taken
+from OpenSimulator's `LSL_Constants.cs` for names the first table lacks
+(particles, camera, media, NPC and vectors).
 
 ## Differences from OpenSimulator
 

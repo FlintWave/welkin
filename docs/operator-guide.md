@@ -2,7 +2,7 @@
 
 # Operator guide
 
-[<- Back to docs](README.md) | [Architecture](architecture.md) | [Test grid deployment](test-grid-deployment.md) | [Migration guide](migration-guide.md)
+[<- Back to docs](index.md) | [Architecture](architecture.md) | [Test grid deployment](test-grid-deployment.md) | [Migration guide](migration-guide.md)
 
 Complete reference for installing, configuring, running, and maintaining an
 OpenSimulator grid using the Rust implementation. For a quick test deployment,
@@ -66,7 +66,8 @@ curl -sSf https://raw.githubusercontent.com/.../install/install.sh | bash
 ```
 
 The installer detects the distribution, sets up the database, writes
-configuration, creates the systemd unit, and runs the first-run wizard.
+configuration, and creates the systemd unit. The first-run wizard is part of the portal
+scaffold and does not run.
 `install/upgrade.sh` and `install/uninstall.sh` handle upgrades (preserving
 data) and removal.
 
@@ -284,8 +285,8 @@ OPENSIM__GridService__GridServerURI=http://localhost:8003 \
 ### Multi-region
 
 A single `welkin-region` process can host multiple regions. Each region needs
-a unique UDP port for LLUDP traffic. Configure additional regions through the
-portal or configuration.
+a unique UDP port for LLUDP traffic. Configure additional regions through
+configuration files.
 
 ### Docker Compose
 
@@ -548,7 +549,8 @@ LLUDP (UDP 9000) is not proxied; it must be reachable directly.
 
 ### Authentication
 
-- Portal staff passwords use Argon2id (decision G2)
+- Planned: portal staff passwords use Argon2id (decision G2); the portal is a
+  scaffold and not deployed
 - Grid user passwords are MD5 by default (C# compatibility); upgrade to
   Argon2id with `osim-migrate upgrade-passwords`
 - OSSL function access is gated by threat level with per-function overrides
@@ -559,7 +561,6 @@ Apply rate limiting at the reverse proxy layer. Key endpoints to protect:
 
 - `/login` (XML-RPC login)
 - `/assets` (asset upload/download)
-- `/portal` (staff portal)
 
 ### Firewall recommendations
 
@@ -576,6 +577,22 @@ Apply rate limiting at the reverse proxy layer. Key endpoints to protect:
 > Robust directly to the public internet without an access control layer.
 
 ---
+
+## What survives a restart
+
+A region saves its objects, terrain and estate settings to its database, and
+loads them again at start. Objects and terrain are written on the backup timer
+(`[Backup] IntervalSeconds`, 900 by default), so a crash can lose edits made
+since the last save. Avatars' worn attachments are remembered in the grid's
+avatar service and worn again at the next login. Scripts are saved and restored
+with their objects; a saved script whose object no longer exists is skipped and
+deleted at start.
+
+All of this is keyed by the region UUID. Leave `[Region] RegionUUID` unset to let
+the region generate one on its first start and keep it, or set it yourself. Do
+not rename a region or move it to another location without setting `RegionUUID`
+to the old value; the region would get a new UUID and would not find its data.
+See the [configuration reference](configuration.md#welkin-region-region-simulator).
 
 ## Upgrading
 
