@@ -24,8 +24,12 @@ impl GroupsCtx {
     }
 }
 
-pub fn groups_server_uri(groups_service: Option<&str>, grid_server: Option<&str>) -> Option<String> {
-    for candidate in [groups_service, grid_server] {
+pub fn groups_server_uri(
+    opensim_groups: Option<&str>,
+    groups_service: Option<&str>,
+    grid_server: Option<&str>,
+) -> Option<String> {
+    for candidate in [opensim_groups, groups_service, grid_server] {
         if let Some(value) = candidate {
             let trimmed = value.trim();
             if !trimmed.is_empty() {
@@ -281,15 +285,19 @@ mod tests {
     #[tokio::test]
     async fn groups_server_uri_precedence_cases() {
         assert_eq!(
-            groups_server_uri(Some(" http://groups "), Some("http://grid")),
+            groups_server_uri(None, Some(" http://groups "), Some("http://grid")),
             Some("http://groups".to_string())
         );
         assert_eq!(
-            groups_server_uri(Some("   "), Some("http://grid")),
+            groups_server_uri(None, Some("   "), Some("http://grid")),
             Some("http://grid".to_string())
         );
-        assert_eq!(groups_server_uri(None, Some("")), None);
-        assert_eq!(groups_server_uri(Some(""), None), None);
+        assert_eq!(groups_server_uri(None, None, Some("")), None);
+        assert_eq!(groups_server_uri(None, Some(""), None), None);
+        assert_eq!(
+            groups_server_uri(Some("http://os"), Some("http://groups"), Some("http://grid")),
+            Some("http://os".to_string())
+        );
     }
 
     #[tokio::test]

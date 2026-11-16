@@ -112,8 +112,9 @@ impl RegionConfig {
             .get_string("GridService", "GridServerURI")
             .map(|s| s.to_string());
 
-        let groups_server_uri = if config.get_bool_or("Groups", "Enabled", true) {
+        let groups_server_uri = if config.get_bool_or("Groups", "Enabled", false) {
             groups_io::groups_server_uri(
+                config.get_string("Groups", "GroupsServerURI"),
                 config.get_string("GroupsService", "ServerURI"),
                 config.get_string("GridService", "GridServerURI"),
             )
@@ -3801,15 +3802,15 @@ async fn process_messages(
         if msg_id == AgentDataUpdateRequest::ID
             && let Some(client) = &client
         {
+            let active = match &groups {
+                Some(g) => groups_io::active_group(g, agent_id).await,
+                None => groups_io::ActiveGroup::default(),
+            };
             let mut session = client.lock().await;
             let name = scene
                 .get_presence(&session.agent_id)
                 .map(|p| (p.first_name.clone(), p.last_name.clone()))
                 .unwrap_or_else(|| ("Unknown".to_string(), "User".to_string()));
-            let active = match &groups {
-                Some(g) => groups_io::active_group(g, session.agent_id).await,
-                None => groups_io::ActiveGroup::default(),
-            };
             let reply = AgentDataUpdate {
                 agent_data: agent_data_update::AgentData {
                     agent_id: session.agent_id,
@@ -4730,15 +4731,23 @@ async fn send_movement_complete(
     perms: &DefaultPermissionsModule,
     groups: Option<&groups_io::GroupsCtx>,
 ) {
-    let mut session = client.lock().await;
-
+    // All HTTP lookups happen before the session lock is taken.
+    let agent_id = client.lock().await.agent_id;
     let (first_name, last_name) = accounts
-        .get_name(&session.agent_id.to_string())
+        .get_name(&agent_id.to_string())
         .await
         .unwrap_or_else(|e| {
             tracing::warn!(error = %e, "failed to resolve avatar name from ROBUST");
             ("Unknown".to_string(), "User".to_string())
         });
+    let (active, memberships) = match groups {
+        Some(g) => (
+            groups_io::active_group(g, agent_id).await,
+            groups_io::agent_memberships(g, agent_id).await,
+        ),
+        None => (groups_io::ActiveGroup::default(), Vec::new()),
+    };
+    let mut session = client.lock().await;
 
     let movement = AgentMovementComplete {
         agent_data: agent_movement_complete::AgentData {
@@ -4860,10 +4869,6 @@ async fn send_movement_complete(
     }
     info!(agent = %session.agent_id, "sent default standing animation");
 
-    let active = match groups {
-        Some(g) => groups_io::active_group(g, session.agent_id).await,
-        None => groups_io::ActiveGroup::default(),
-    };
     let agent_data_msg = AgentDataUpdate {
         agent_data: agent_data_update::AgentData {
             agent_id: session.agent_id,
@@ -4910,8 +4915,12 @@ async fn send_movement_complete(
         eq.enqueue("EstablishAgentCommunication", Llsd::Map(eq_body))
             .await;
     }
-    if let Some(g) = groups {
-        groups_io::send_agent_group_data(g, session.agent_id, &eq).await;
+    if groups.is_some() {
+        eq.enqueue(
+            "AgentGroupDataUpdate",
+            groups_io::agent_group_data_event(session.agent_id, &memberships),
+        )
+        .await;
     }
     event_queues.write().await.insert(session.agent_id, eq);
     info!(agent = %session.agent_id, "event queue created with initial event");
