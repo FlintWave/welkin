@@ -10,7 +10,6 @@ publish.workspace = true
 welkin-types = { path = "../welkin-types" }
 welkin-llsd = { path = "../welkin-llsd" }
 welkin-data = { path = "../welkin-data" }
-welkin-caps = { path = "../welkin-caps" }
 axum = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }

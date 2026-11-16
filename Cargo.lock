@@ -5044,7 +5044,6 @@ dependencies = [
  "thiserror 2.0.21",
  "tracing",
  "welkin-script-compiler",
- "welkin-types",
 ]
 
 [[package]]
@@ -5103,7 +5102,6 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
- "welkin-caps",
  "welkin-data",
  "welkin-llsd",
  "welkin-types",
