@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Chat and IM helpers.
 //!
 //! Provides functions for sending and receiving chat messages and instant

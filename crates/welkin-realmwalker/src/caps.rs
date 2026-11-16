@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Capability URL management and EventQueueGet long-poll client.
 //!
 //! After login, the simulator provides a seed capability URL. POSTing an LLSD

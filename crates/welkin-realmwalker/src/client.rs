@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Top-level `RealmWalker` client that composes login, network, caps, and chat.
 //!
 //! Call [`RealmWalker::login`] to connect to a grid. The returned handle

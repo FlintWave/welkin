@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 use thiserror::Error;
 
 /// Top-level error type for RealmWalker operations.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! OSSL inventory, attachment, sound, and link/prim/object functions.
 //!
 //! Ported from `OpenSim/Region/ScriptEngine/Shared/Api/Implementation/OSSL_Api.cs`

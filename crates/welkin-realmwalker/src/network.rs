@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Raw UDP client for the OpenSim LLUDP protocol.
 //!
 //! This is a client-side circuit manager that connects to a region's simulator

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Agent movement, teleport, sit/stand, fly, and animation control.
 //!
 //! Provides functions for controlling the bot avatar's position and state

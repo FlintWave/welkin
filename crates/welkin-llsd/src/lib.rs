@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Server-side LLSD API for OpenSim.
 //!
 //! This crate wraps `aurora-llsd`, a viewer library, and is the only place in

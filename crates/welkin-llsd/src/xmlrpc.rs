@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Server-side XML-RPC codec mapping values to and from LLSD.
 //!
 //! The viewer sends a `methodCall` (for example `login_to_simulator`) and the

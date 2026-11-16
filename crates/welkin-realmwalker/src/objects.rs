@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Object interaction: inbound updates, rez/derez, selection, editing, linking.
 //!
 //! Provides functions for interacting with scene objects over the LLUDP

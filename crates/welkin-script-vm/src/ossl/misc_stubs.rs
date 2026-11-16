@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! OSSL miscellaneous functions: notecard extras, appearance, inertia, sit,
 //! particle systems, group management, console, URL requests, rotation,
 //! link colors, avatar name lookups, and regex listen.

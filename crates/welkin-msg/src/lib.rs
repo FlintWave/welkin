@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Server-side message codec facade over `aurora-msg`.
 //!
 //! Re-exports the packet framing, zerocoding, field reader/writer and typed

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 use axum::Router;
 use axum::routing::get;
 use metrics_exporter_prometheus::PrometheusHandle;

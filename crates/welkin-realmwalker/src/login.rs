@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! XMLRPC login to an OpenSimulator grid.
 //!
 //! Performs an HTTP POST to the grid's login URI with method

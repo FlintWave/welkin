@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Integration tests for welkin-realmwalker against a live OpenSimulator grid.
 //!
 //! Run with: cargo test -p welkin-realmwalker --features integration --test integration

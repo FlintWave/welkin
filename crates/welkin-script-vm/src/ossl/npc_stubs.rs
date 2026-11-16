@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! OSSL NPC functions -- interact with the NPC registry via ScriptContext.
 //!
 //! Each function validates the NPC exists and (where required by OpenSim

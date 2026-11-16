@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 //! Server-side prim API.
 //!
 //! Thin wrapper over `aurora-prim`: volume parameters, texture entries, extra

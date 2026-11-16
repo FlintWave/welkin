@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 use std::time::Duration;
 
 /// Configuration for connecting to an OpenSimulator grid.

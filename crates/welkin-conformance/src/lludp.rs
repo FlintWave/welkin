@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-3.0-or-later
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
