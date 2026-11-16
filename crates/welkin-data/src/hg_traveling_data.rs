@@ -26,7 +26,8 @@ impl HgTravelingDataStore {
     }
 
     pub async fn create_table(&self) -> Result<(), DataError> {
-        sqlx::query(
+        let q = crate::portable::sql(
+            &self.pool,
             "CREATE TABLE IF NOT EXISTS hg_traveling_data (\
                 SessionID VARCHAR(36) NOT NULL PRIMARY KEY, \
                 UserID VARCHAR(36) NOT NULL, \
@@ -34,9 +35,10 @@ impl HgTravelingDataStore {
                 ServiceToken VARCHAR(255) NOT NULL DEFAULT '', \
                 ClientIPAddress VARCHAR(64) NOT NULL DEFAULT '' \
             )",
-        )
-        .execute(&self.pool)
-        .await?;
+        );
+        sqlx::query(&q)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
@@ -44,22 +46,25 @@ impl HgTravelingDataStore {
     /// session ID (upsert via delete-then-insert inside a transaction).
     pub async fn store(&self, row: &HgTravelingDataRow) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM hg_traveling_data WHERE SessionID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM hg_traveling_data WHERE SessionID = $1");
+        sqlx::query(&q)
             .bind(row.session_id.to_string())
             .execute(&mut *tx)
             .await?;
-        sqlx::query(
+        let q = crate::portable::sql(
+            &self.pool,
             "INSERT INTO hg_traveling_data \
                 (SessionID, UserID, GridExternalName, ServiceToken, ClientIPAddress) \
                 VALUES ($1, $2, $3, $4, $5)",
-        )
-        .bind(row.session_id.to_string())
-        .bind(row.user_id.to_string())
-        .bind(row.grid_external_name.to_string())
-        .bind(row.service_token.to_string())
-        .bind(row.client_ip_address.to_string())
-        .execute(&mut *tx)
-        .await?;
+        );
+        sqlx::query(&q)
+            .bind(row.session_id.to_string())
+            .bind(row.user_id.to_string())
+            .bind(row.grid_external_name.to_string())
+            .bind(row.service_token.to_string())
+            .bind(row.client_ip_address.to_string())
+            .execute(&mut *tx)
+            .await?;
         tx.commit().await?;
         Ok(())
     }
@@ -68,29 +73,34 @@ impl HgTravelingDataStore {
         &self,
         session_id: &str,
     ) -> Result<Option<HgTravelingDataRow>, DataError> {
-        let row = sqlx::query_as::<_, HgTravelingDataRow>(
+        let q = crate::portable::sql(
+            &self.pool,
             "SELECT SessionID, UserID, GridExternalName, ServiceToken, ClientIPAddress \
              FROM hg_traveling_data WHERE SessionID = $1",
-        )
-        .bind(session_id.to_string())
-        .fetch_optional(&self.pool)
-        .await?;
+        );
+        let row = sqlx::query_as::<_, HgTravelingDataRow>(&q)
+            .bind(session_id.to_string())
+            .fetch_optional(&self.pool)
+            .await?;
         Ok(row)
     }
 
     pub async fn get_by_user(&self, user_id: &str) -> Result<Vec<HgTravelingDataRow>, DataError> {
-        let rows = sqlx::query_as::<_, HgTravelingDataRow>(
+        let q = crate::portable::sql(
+            &self.pool,
             "SELECT SessionID, UserID, GridExternalName, ServiceToken, ClientIPAddress \
              FROM hg_traveling_data WHERE UserID = $1",
-        )
-        .bind(user_id.to_string())
-        .fetch_all(&self.pool)
-        .await?;
+        );
+        let rows = sqlx::query_as::<_, HgTravelingDataRow>(&q)
+            .bind(user_id.to_string())
+            .fetch_all(&self.pool)
+            .await?;
         Ok(rows)
     }
 
     pub async fn delete(&self, session_id: &str) -> Result<bool, DataError> {
-        let res = sqlx::query("DELETE FROM hg_traveling_data WHERE SessionID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM hg_traveling_data WHERE SessionID = $1");
+        let res = sqlx::query(&q)
             .bind(session_id.to_string())
             .execute(&self.pool)
             .await?;
