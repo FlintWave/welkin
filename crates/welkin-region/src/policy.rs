@@ -10,7 +10,11 @@
 //!
 //! The helper is sync and pure: it never performs I/O and never panics.
 
+use std::collections::HashMap;
+use std::sync::{Arc, OnceLock};
+
 use uuid::Uuid;
+use welkin_caps::lru_cache::LruCache;
 use welkin_modules::DefaultPermissionsModule;
 use welkin_scene::scene::Scene;
 
@@ -103,6 +107,97 @@ pub fn apply_freeze(
     apply_freeze_policy(scene, perms, requester, target, freeze)
 }
 
+// --- In-process group-name lookup cache -----------------------------------
+
+/// Capacity of the region-global group-name cache.
+pub const GROUP_NAME_CACHE_DEFAULT_CAPACITY: usize = 1024;
+
+/// In-process cache type for group id -> group display name.
+///
+/// Backed by [`welkin_caps::lru_cache::LruCache`] so repeated
+/// `UUIDGroupNameRequest` handling does not re-query the groups connector/store
+/// for ids already resolved.
+pub type GroupNameCache = LruCache<Uuid, String>;
+
+/// Construct a fresh group-name cache with the default capacity.
+pub fn new_group_name_cache() -> Arc<GroupNameCache> {
+    Arc::new(GroupNameCache::new(GROUP_NAME_CACHE_DEFAULT_CAPACITY))
+}
+
+/// Construct a fresh group-name cache with an explicit capacity.
+pub fn new_group_name_cache_with_capacity(capacity: usize) -> Arc<GroupNameCache> {
+    Arc::new(GroupNameCache::new(capacity))
+}
+
+/// Region-global, lazily initialised group-name cache.
+///
+/// Exposed alongside the module registry so handlers can consult it before
+/// issuing connector calls.
+pub fn group_name_cache() -> &'static Arc<GroupNameCache> {
+    static CACHE: OnceLock<Arc<GroupNameCache>> = OnceLock::new();
+    CACHE.get_or_init(new_group_name_cache)
+}
+
+/// Alias matching the "registry at region" phrasing used by callers.
+pub fn region_group_name_cache() -> &'static Arc<GroupNameCache> {
+    group_name_cache()
+}
+
+/// Alias for tests/callers expecting a direct accessor.
+pub fn group_name_lookup_cache() -> &'static Arc<GroupNameCache> {
+    group_name_cache()
+}
+
+/// Resolve a single group name, consulting `cache` first.
+///
+/// Returns `"Unknown"` for a nil id or a missing lookup; callers may override.
+pub async fn resolve_group_name_cached(
+    cache: &GroupNameCache,
+    store: &welkin_data::groups::GroupsStore,
+    id: Uuid,
+) -> String {
+    if id.is_nil() {
+        return "Unknown".to_string();
+    }
+    if let Some(name) = cache.get(&id) {
+        return name;
+    }
+    let names = welkin_services::groups::resolve_group_names(store, &[id]).await;
+    let name = names.get(&id).cloned().unwrap_or_else(|| "Unknown".to_string());
+    cache.put(id, name.clone());
+    name
+}
+
+/// Resolve a batch of group names, consulting `cache` first and filling misses.
+pub async fn resolve_group_names_cached(
+    cache: &GroupNameCache,
+    store: &welkin_data::groups::GroupsStore,
+    ids: &[Uuid],
+) -> HashMap<Uuid, String> {
+    let mut out = HashMap::new();
+    let mut misses = Vec::new();
+    for id in ids {
+        if id.is_nil() {
+            out.insert(*id, "Unknown".to_string());
+            continue;
+        }
+        if let Some(name) = cache.get(id) {
+            out.insert(*id, name);
+        } else {
+            misses.push(*id);
+        }
+    }
+    if !misses.is_empty() {
+        let resolved = welkin_services::groups::resolve_group_names(store, &misses).await;
+        for id in &misses {
+            let name = resolved.get(id).cloned().unwrap_or_else(|| "Unknown".to_string());
+            cache.put(*id, name.clone());
+            out.insert(*id, name);
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -115,5 +210,14 @@ mod tests {
         // Cannot build Scene without config легко; check permission only.
         assert!(!can_freeze(&perms, requester));
         let _ = (target,);
+    }
+
+    #[test]
+    fn group_name_cache_put_get() {
+        let cache = new_group_name_cache_with_capacity(4);
+        let id = Uuid::new_v4();
+        cache.put(id, "Test Group".to_string());
+        assert_eq!(cache.get(&id), Some("Test Group".to_string()));
+        assert!(group_name_cache().len() <= group_name_cache().capacity());
     }
 }

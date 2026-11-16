@@ -95,6 +95,37 @@ impl AccountBalanceStore {
             .await?;
         Ok(())
     }
+
+    /// Return up to `limit` recently recorded transaction ids for `uuid`.
+    ///
+    /// The store persists only the latest transaction id (``last_tx``) per
+    /// account, so this surfaces that value (capped to ``limit``) rather
+    /// than a full history.
+    pub async fn recent_transactions<U: ToString + Send>(
+        &self,
+        uuid: U,
+        limit: usize,
+    ) -> Result<Vec<String>, DataError> {
+        self.ensure_table().await?;
+        if limit == 0 {
+            return Ok(Vec::new());
+        }
+        let uuid = uuid.to_string();
+        let q = crate::portable::sql(
+            &self.pool,
+            "SELECT last_tx FROM AccountBalance WHERE uuid = $1",
+        );
+        let row: Option<(Option<String>,)> = sqlx::query_as(&q)
+            .bind(&uuid)
+            .fetch_optional(&self.pool)
+            .await?;
+        let mut out = Vec::new();
+        if let Some((Some(tx),)) = row {
+            out.push(tx);
+        }
+        out.truncate(limit);
+        Ok(out)
+    }
 }
 
 pub type BalanceStore = AccountBalanceStore;
