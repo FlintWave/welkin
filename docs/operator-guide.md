@@ -555,6 +555,20 @@ LLUDP (UDP 9000) is not proxied; it must be reachable directly.
   Argon2id with `osim-migrate upgrade-passwords`
 - OSSL function access is gated by threat level with per-function overrides
 
+### Admin API
+
+The region simulator's admin REST API (`POST /admin/console`) is off until
+`[Admin] Token` is set. It authenticates with a bearer token over plain HTTP;
+it has no TLS of its own. The default `BindAddress` is `127.0.0.1`, which keeps
+the token on the local machine.
+
+If you bind it to `0.0.0.0` or another reachable address, anyone on the path
+can read the token and run console commands. Keep `BindAddress` at `127.0.0.1`,
+or place the API behind a reverse proxy with TLS (the nginx example above works
+with the port changed to 9100) and restrict it by firewall. Use a long random
+token and rotate it if it may have been exposed. See the
+[configuration reference](configuration.md#admin-api).
+
 ### Rate limiting
 
 Apply rate limiting at the reverse proxy layer. Key endpoints to protect:

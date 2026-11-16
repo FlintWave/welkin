@@ -34,9 +34,9 @@ cp .env.example .env
 # 2. Edit .env -- change every "change-me-*" value
 vi .env
 # 3. Start the production stack
-podman compose -f compose.prod.yaml up -d
+podman compose -f docker-compose.prod.yml up -d
 # 4. Check service health
-podman compose -f compose.prod.yaml ps
+podman compose -f docker-compose.prod.yml ps
 ```
 
 The production stack starts: MySQL 8.0, Robust (grid services), Region
@@ -65,7 +65,7 @@ Each region instance needs a unique UDP port for LLUDP viewer traffic:
 
 ```bash
 # Start three region instances
-podman compose -f compose.prod.yaml up -d --scale region=3
+podman compose -f docker-compose.prod.yml up -d --scale region=3
 ```
 
 When scaling beyond one region, you must assign distinct external UDP ports.
@@ -79,7 +79,7 @@ environment or a mounted config volume.
 
 ```bash
 # Dump the entire opensim database
-podman compose -f compose.prod.yaml exec db \
+podman compose -f docker-compose.prod.yml exec db \
   mysqldump -u opensim -p"$MYSQL_PASSWORD" opensim > backup-$(date +%F).sql
 ```
 
@@ -129,14 +129,14 @@ scrape_configs:
 
 ```bash
 # All services
-podman compose -f compose.prod.yaml logs -f
+podman compose -f docker-compose.prod.yml logs -f
 
 # Single service, last 100 lines
-podman compose -f compose.prod.yaml logs --tail=100 robust
+podman compose -f docker-compose.prod.yml logs --tail=100 robust
 
 # Enable debug logging for a single crate
 # Set in .env: RUST_LOG=welkin_robust=debug,info
-podman compose -f compose.prod.yaml up -d robust
+podman compose -f docker-compose.prod.yml up -d robust
 ```
 
 ### Health Checks

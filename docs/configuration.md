@@ -167,6 +167,34 @@ wall-clock time on purpose, so the save interval does not shift with the
 frame rate. If you are migrating, set `IntervalSeconds` for the delay you
 want and drop `UpdateStorageEveryNFrames`; Welkin ignores that key.
 
+## Admin API
+
+The region simulator can expose a small REST API for console commands. It
+stays off until you set a token.
+
+| Section | Key | Type | Default | Purpose |
+|---|---|---|---|---|
+| Admin | Token | string | (empty) | Bearer token; an empty value disables the API |
+| Admin | BindAddress | string | 127.0.0.1 | Interface the API listens on |
+| Admin | Port | int | 9100 | TCP port for the API |
+
+```toml
+[Admin]
+Token = "a-long-random-string"
+BindAddress = "127.0.0.1"
+Port = 9100
+```
+
+Clients call `POST /admin/console` with the header
+`Authorization: Bearer <token>`.
+
+> [!WARNING]
+> The admin API uses plain HTTP, with no TLS. If you set `BindAddress` to
+> `0.0.0.0` or a public address, the token and every command travel in
+> cleartext. Keep `BindAddress` at `127.0.0.1`, or put the API behind a
+> reverse proxy that terminates TLS. See the
+> [operator guide](operator-guide.md#admin-api).
+
 ## Module configuration
 
 Region modules read their settings through the `ModuleConfig` trait,
