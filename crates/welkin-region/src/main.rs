@@ -337,13 +337,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let (region_egress, egress_rx) = egress_io::RegionEgress::new(scene.clone());
     scene_ref.egress = Arc::new(region_egress);
     let script_egress = scene_ref.egress.clone();
+    let (estate_action_tx, mut estate_action_rx) = tokio::sync::mpsc::unbounded_channel::<welkin_modules::estate::EstateAction>();
     {
+        let mut em = EstateManagementModule::new();
+        em.action_sender = Some(estate_action_tx);
         let mut registry = scene_ref.registry.write();
         registry.register(ChatModule::new());
         registry.register(DefaultPermissionsModule::new());
         registry.register(AvatarFactoryModule::new());
         registry.register(AttachmentsModule::new());
-        registry.register(EstateManagementModule::new());
+        registry.register(em);
         registry.register(LandManagementModule::new());
         registry.register(CapsModule::new());
         registry.register(DynAttrsModule::new());
@@ -537,6 +540,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let process_friends = Arc::new(welkin_services::remote::friends::RemoteFriendsConnector::new(accounts_url));
     let process_egress = scene_ref.egress.clone();
     let process_groups = region_config.groups_server_uri.as_deref().map(groups_io::GroupsCtx::new);
+    if let Ok(Some(estate)) = process_estate_store.get_estate_for_region(&region_id_str).await {
+        welkin_caps::handlers::set_estate_change_info(
+            estate.estate_id,
+            estate.estate_name.clone().unwrap_or_default(),
+            estate.estate_owner.clone(),
+            estate.public_access != 0,
+        );
+    }
+
     let process_handle = tokio::spawn(async move {
         process_messages(
             msg_rx,
@@ -562,6 +574,34 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             process_egress,
         )
         .await;
+    });
+
+    // Estate action executor (region restart / messages).
+    let exec_clients = udp_clients.clone();
+    let exec_socket = udp_socket.clone();
+    tokio::spawn(async move {
+        while let Some(action) = estate_action_rx.recv().await {
+            match action {
+                welkin_modules::estate::EstateAction::Restart { delay_seconds } => {
+                    info!(delay_seconds, "estate restart action");
+                }
+                welkin_modules::estate::EstateAction::RegionMessage { sender, message } => {
+                    let all_clients = exec_clients.read().await;
+                    let alert = AlertMessage {
+                        alert_data: alert_message::AlertData { message: message.as_bytes().to_vec() },
+                        alert_info: Vec::new(),
+                        agent_info: Vec::new(),
+                    };
+                    for (peer_addr, peer_client) in all_clients.iter() {
+                        let mut peer = peer_client.lock().await;
+                        let (bytes, _) = peer.circuit.send_msg(&alert, true);
+                        let _ = exec_socket.send_to(&bytes, *peer_addr).await;
+                        let _ = sender.as_str();
+                    }
+                }
+                _ => {}
+            }
+        }
     });
 
     let cap_server = welkin_caps::server::CapabilityServer::new();
@@ -1713,7 +1753,7 @@ async fn process_messages(
     script_scheduler: Arc<parking_lot::Mutex<ScriptScheduler>>,
     scripts_enabled: bool,
     grid_connector: Option<Arc<welkin_services::remote::grid::RemoteGridConnector>>,
-    perms: Arc<DefaultPermissionsModule>,
+    mut perms: Arc<DefaultPermissionsModule>,
     estate_store: Arc<welkin_data::estate::EstateStore>,
     region_id: String,
     accounts_connector: Arc<welkin_services::remote::accounts::RemoteAccountsConnector>,
@@ -4310,6 +4350,22 @@ async fn process_messages(
                             .to_string()
                     })
                     .collect();
+                if !perms.is_estate_manager(agent_id) {
+                    // Reject non-managers.
+                    if let Some(c) = client.clone() {
+                        let alert = AlertMessage {
+                            alert_data: alert_message::AlertData {
+                                message: b"Not an estate manager".to_vec(),
+                            },
+                            alert_info: Vec::new(),
+                            agent_info: Vec::new(),
+                        };
+                        let mut peer = c.lock().await;
+                        let (pkt_bytes, _) = peer.circuit.send_msg(&alert, true);
+                        let _ = socket.send_to(&pkt_bytes, src).await;
+                    }
+                    continue;
+                }
                 match method.as_str() {
                     "setregioninfo" => {
                         info!(agent = %agent_id, params = ?params, "EstateOwnerMessage: setregioninfo");
@@ -4356,38 +4412,53 @@ async fn process_messages(
                             }
                             // C# bits: 64 = estate ban add, 128 = estate ban remove.
                             let need_reply = (mask & 1024) == 0;
-                            if mask & 64 != 0 || mask & 128 != 0 {
-                                if let Ok(Some(estate)) =
-                                    estate_store.get_estate_for_region(&region_id).await
-                                {
-                                    if mask & 64 != 0 {
-                                        let ban = welkin_data::estate::EstateBanRow {
-                                            estate_id: estate.estate_id,
-                                            banned_uuid: target.to_string(),
-                                            banned_ip: String::new(),
-                                            banned_ip_host_mask: String::new(),
-                                            banned_name_mask: None,
-                                            banning_uuid: agent_id.to_string(),
-                                            ban_time: std::time::SystemTime::now()
-                                                .duration_since(std::time::UNIX_EPOCH)
-                                                .map(|d| d.as_secs() as i32)
-                                                .unwrap_or(0),
-                                        };
-                                        let _ =
-                                            estate_store.add_estate_ban(&ban).await;
-                                    }
-                                    if mask & 128 != 0 {
-                                        let _ = estate_store
-                                            .remove_estate_ban(estate.estate_id, &target.to_string())
-                                            .await;
-                                    }
+                            if let Ok(Some(estate)) = estate_store.get_estate_for_region(&region_id).await {
+                                if mask & 4 != 0 {
+                                    let _ = estate_store.add_estate_user(estate.estate_id, &target.to_string()).await;
+                                    // TODO: perms has no estate_users field; live read state not synced.
                                 }
-                                if !need_reply {
-                                    // Viewer expects no dialog; tacit.
+                                if mask & 8 != 0 {
+                                    let _ = estate_store.remove_estate_user(estate.estate_id, &target.to_string()).await;
+                                    // TODO: perms has no estate_users field; live read state not synced.
+                                }
+                                if mask & 16 != 0 {
+                                    let _ = estate_store.add_estate_group(estate.estate_id, &target.to_string()).await;
+                                    // TODO: perms has no estate_groups field; live read state not synced.
+                                }
+                                if mask & 32 != 0 {
+                                    let _ = estate_store.remove_estate_group(estate.estate_id, &target.to_string()).await;
+                                    // TODO: perms has no estate_groups field; live read state not synced.
+                                }
+                                if mask & 64 != 0 {
+                                    let ban = welkin_data::estate::EstateBanRow {
+                                        estate_id: estate.estate_id,
+                                        banned_uuid: target.to_string(),
+                                        banned_ip: String::new(),
+                                        banned_ip_host_mask: String::new(),
+                                        banned_name_mask: None,
+                                        banning_uuid: agent_id.to_string(),
+                                        ban_time: std::time::SystemTime::now()
+                                            .duration_since(std::time::UNIX_EPOCH)
+                                            .map(|d| d.as_secs() as i32)
+                                            .unwrap_or(0),
+                                    };
+                                    let _ = estate_store.add_estate_ban(&ban).await;
+                                }
+                                if mask & 128 != 0 {
+                                    let _ = estate_store.remove_estate_ban(estate.estate_id, &target.to_string()).await;
+                                }
+                                if mask & 256 != 0 {
+                                    let _ = estate_store.add_estate_manager(estate.estate_id, &target.to_string()).await;
+                                    if let Some(p)=Arc::get_mut(&mut perms){ p.estate_managers.insert(target); }
+                                }
+                                if mask & 512 != 0 {
+                                    let _ = estate_store.remove_estate_manager(estate.estate_id, &target.to_string()).await;
+                                    if let Some(p)=Arc::get_mut(&mut perms){ p.estate_managers.remove(&target); }
                                 }
                             }
+                            let _ = need_reply;
                         }
-                    }
+                        }
                     "simulatormessage" => {
                         let text = params.first().map(|s| s.as_str()).unwrap_or("");
                         info!(agent = %agent_id, message = %text, "EstateOwnerMessage: simulatormessage");

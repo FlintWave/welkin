@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use axum::{
@@ -1233,16 +1233,29 @@ pub async fn dispatch_region_info() -> Response {
     llsd_response(Llsd::Map(map))
 }
 
+static ESTATE_INFO: Mutex<Option<(i32, String, String, bool)>> = Mutex::new(None);
+
+pub fn set_estate_change_info(estate_id: i32, estate_name: String, estate_owner: String, public_access: bool) {
+    if let Ok(mut g) = ESTATE_INFO.lock() {
+        *g = Some((estate_id, estate_name, estate_owner, public_access));
+    }
+}
+
 pub async fn estate_change_info(body: Bytes) -> Response {
-    // Returns a best-effort estate basic info response. The full EstateManagementModule
-    // update is applied server-side in the region for finer-grained mutations;
-    // this cap only carries the immutable/baseline data viewers need to construct
-    // their estate settings dialogs.
     if let Ok(llsd) = from_xml(&body) {
         tracing::debug!(?llsd, "EstateChangeInfo");
     }
+    let (estate_id, estate_name, estate_owner, public_access) = ESTATE_INFO
+        .lock()
+        .ok()
+        .and_then(|g| g.clone())
+        .unwrap_or((0, "My Estate".to_string(), String::new(), true));
     let mut map = Map::new();
     map.insert("success".into(), Llsd::Boolean(true));
+    map.insert("EstateID".into(), Llsd::Integer(estate_id));
+    map.insert("EstateName".into(), Llsd::String(estate_name));
+    map.insert("EstateOwner".into(), Llsd::String(estate_owner));
+    map.insert("public_access".into(), Llsd::Boolean(public_access));
     llsd_response(Llsd::Map(map))
 }
 
