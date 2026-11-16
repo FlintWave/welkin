@@ -177,6 +177,7 @@ stays off until you set a token.
 | Admin | Token | string | (empty) | Bearer token; an empty value disables the API |
 | Admin | BindAddress | string | 127.0.0.1 | Interface the API listens on |
 | Admin | Port | int | 9100 | TCP port for the API |
+| Admin | AllowRemoteBind | bool | false | Permit `BindAddress` to be a non-loopback address |
 
 ```toml
 [Admin]
@@ -189,11 +190,12 @@ Clients call `POST /admin/console` with the header
 `Authorization: Bearer <token>`.
 
 > [!WARNING]
-> The admin API uses plain HTTP, with no TLS. If you set `BindAddress` to
-> `0.0.0.0` or a public address, the token and every command travel in
-> cleartext. Keep `BindAddress` at `127.0.0.1`, or put the API behind a
-> reverse proxy that terminates TLS. See the
-> [operator guide](operator-guide.md#admin-api).
+> The admin API uses plain HTTP, with no TLS. The token and every command,
+> including passwords typed into `create-user`, travel in cleartext. For that
+> reason the region refuses to start the API on a non-loopback `BindAddress`
+> and logs an error, unless you also set `AllowRemoteBind = true`. Keep
+> `BindAddress` at `127.0.0.1`, or put the API behind a reverse proxy that
+> terminates TLS. See the [operator guide](operator-guide.md#admin-api).
 
 ## Module configuration
 

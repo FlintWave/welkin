@@ -562,9 +562,12 @@ The region simulator's admin REST API (`POST /admin/console`) is off until
 it has no TLS of its own. The default `BindAddress` is `127.0.0.1`, which keeps
 the token on the local machine.
 
-If you bind it to `0.0.0.0` or another reachable address, anyone on the path
-can read the token and run console commands. Keep `BindAddress` at `127.0.0.1`,
-or place the API behind a reverse proxy with TLS (the nginx example above works
+Welkin will not start the API on a non-loopback address unless
+`[Admin] AllowRemoteBind = true` is also set; without it the region logs an
+error and the API stays off. If you accept the risk and bind it to `0.0.0.0` or
+another reachable address, anyone on the path can read the token and run
+console commands, including `create-user` with its password. Keep
+`BindAddress` at `127.0.0.1`, or place the API behind a reverse proxy with TLS (the nginx example above works
 with the port changed to 9100) and restrict it by firewall. Use a long random
 token and rotate it if it may have been exposed. See the
 [configuration reference](configuration.md#admin-api).
