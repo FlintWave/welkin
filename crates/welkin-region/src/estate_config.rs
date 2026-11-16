@@ -78,6 +78,16 @@ pub fn permissions_from_config(config: &Config) -> DefaultPermissionsModule {
     perms
 }
 
+/// The region-wide parcel used until the region has real land data: owned by the
+/// estate owner with OpenSim's default parcel flags (everyone may rez objects).
+pub fn default_parcel(perms: &DefaultPermissionsModule) -> welkin_modules::land::LandData {
+    welkin_modules::land::LandData {
+        name: "Your Parcel".to_string(),
+        owner_id: perms.estate_owner,
+        ..Default::default()
+    }
+}
+
 fn default_estate(owner: Uuid) -> welkin_data::estate::EstateSettingsRow {
     // OpenSim's defaults for a new estate.
     welkin_data::estate::EstateSettingsRow {
@@ -305,5 +315,24 @@ mod tests {
         assert!(perms.estate_owner.is_nil());
         assert!(store.get_estate_for_region("33333333-3333-3333-3333-333333333333").await.unwrap().is_none());
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn rezzing_goes_through_the_permissions_module_with_the_default_parcel() {
+        let owner = Uuid::new_v4();
+        let stranger = Uuid::new_v4();
+        let mut perms = permissions_from_config(&config(""));
+        perms.estate_owner = owner;
+        let parcel = default_parcel(&perms);
+        assert_eq!(parcel.owner_id, owner);
+        // Enforcement on: the default parcel allows everyone to rez (OpenSim's default flags).
+        assert!(perms.can_create_object(stranger, (1.0, 2.0, 3.0), Some(&parcel)));
+        // Without any parcel the module refuses, so the call site must always pass one.
+        assert!(!perms.can_create_object(stranger, (1.0, 2.0, 3.0), None));
+        // A parcel with rezzing closed refuses strangers but not its owner.
+        let mut closed = parcel.clone();
+        closed.flags = 0;
+        assert!(!perms.can_create_object(stranger, (1.0, 2.0, 3.0), Some(&closed)));
+        assert!(perms.can_create_object(owner, (1.0, 2.0, 3.0), Some(&closed)));
     }
 }

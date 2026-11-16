@@ -5,6 +5,7 @@ mod avatar_move;
 mod console;
 mod console_io;
 mod estate_config;
+mod inventory_rez;
 mod object_add;
 mod persist;
 mod physics_cmd;
@@ -473,6 +474,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         welkin_services::remote::accounts::RemoteAccountsConnector::new(accounts_url),
     );
     let process_accounts = Arc::clone(&accounts_connector);
+    let process_inventory = Arc::new(welkin_services::remote::inventory::RemoteInventoryConnector::new(accounts_url));
+    let process_assets = Arc::new(welkin_services::remote::asset::RemoteAssetConnector::new(accounts_url));
     let process_handle = tokio::spawn(async move {
         process_messages(
             msg_rx,
@@ -488,6 +491,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             process_grid_connector,
             process_perms,
             process_accounts,
+            process_inventory,
+            process_assets,
         )
         .await;
     });
@@ -1523,6 +1528,8 @@ async fn process_messages(
     grid_connector: Option<Arc<welkin_services::remote::grid::RemoteGridConnector>>,
     perms: Arc<DefaultPermissionsModule>,
     accounts_connector: Arc<welkin_services::remote::accounts::RemoteAccountsConnector>,
+    inventory_connector: Arc<welkin_services::remote::inventory::RemoteInventoryConnector>,
+    asset_connector: Arc<welkin_services::remote::asset::RemoteAssetConnector>,
 ) {
     let mut last_agent_update: HashMap<Uuid, Instant> = HashMap::new();
     // Persistent vertical velocity per avatar (jumping and falling).
@@ -3133,39 +3140,35 @@ async fn process_messages(
         // ---- RezObject handler ----
         if msg_id == RezObject::ID
             && let Ok(msg) = RezObject::decode(&pkt.body)
+            && agent_id != Uuid::nil()
         {
-            let name = String::from_utf8_lossy(&msg.inventory_data.name).to_string();
             let item_id = msg.inventory_data.item_id;
             let position = msg.rez_data.ray_end;
-            let mut root = SceneObjectPart::new(&name, msg.agent_data.agent_id);
-            root.creator_id = msg.inventory_data.creator_id;
-            root.group_position = position;
-            root.group_id = msg.agent_data.group_id;
-            root.base_mask = PermissionMask::from_bits_truncate(msg.inventory_data.base_mask);
-            root.owner_mask = PermissionMask::from_bits_truncate(msg.inventory_data.owner_mask);
-            root.group_mask = PermissionMask::from_bits_truncate(msg.inventory_data.group_mask);
-            root.everyone_mask = PermissionMask::from_bits_truncate(msg.inventory_data.everyone_mask);
-            root.next_owner_mask = PermissionMask::from_bits_truncate(msg.inventory_data.next_owner_mask);
-            let obj_uuid = root.uuid;
-            let group = SceneObjectGroup::new(root);
-            scene.add_object(group);
-            if let Some(obj) = scene.get_object(&obj_uuid) {
-                broadcast_full_object_update(&obj, scene.region_info.region_handle, &socket, &clients).await;
+            // Rez rights come from the permissions module. Parcels do not exist yet, so the
+            // whole region counts as one parcel owned by the estate owner.
+            let parcel = estate_config::default_parcel(&perms);
+            if !perms.can_create_object(agent_id, (position.x, position.y, position.z), Some(&parcel)) {
+                warn!(agent = %agent_id, %item_id, "RezObject: permission denied");
+                continue;
             }
-            if scripts_enabled {
-                script_scheduler.lock().post_event_to_prim(
-                    obj_uuid,
-                    ScriptEvent::OnRez { start_param: 0 },
-                );
+            match inventory_rez::rez_from_inventory(&inventory_connector, &asset_connector, agent_id, item_id, position).await {
+                Ok((item, group)) => {
+                    let obj_uuid = scene.add_object(group);
+                    if let Some(obj) = scene.get_object(&obj_uuid) {
+                        broadcast_full_object_update(&obj, scene.region_info.region_handle, &socket, &clients).await;
+                    }
+                    if scripts_enabled {
+                        script_scheduler.lock().post_event_to_prim(
+                            obj_uuid,
+                            ScriptEvent::OnRez { start_param: 0 },
+                        );
+                    }
+                    info!(agent = %agent_id, object = %obj_uuid, %item_id, ?position, name = %item.inventory_name, "RezObject: rezzed from inventory");
+                }
+                Err(reason) => {
+                    warn!(agent = %agent_id, %item_id, %reason, "RezObject: could not rez from inventory");
+                }
             }
-            info!(
-                agent = %msg.agent_data.agent_id,
-                object = %obj_uuid,
-                %item_id,
-                ?position,
-                %name,
-                "RezObject: created prim in scene"
-            );
         }
 
         // ---- DeRezObject handler ----
