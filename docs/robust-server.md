@@ -110,7 +110,7 @@ ports for in-world traffic.
 ### With Podman Compose
 
 The repository's `compose.prod.yaml` starts the full stack (database,
-ROBUST, region, portal). See the [container guide](container-guide.md)
+ROBUST, region). See the [container guide](container-guide.md)
 for details.
 
 ### With systemd
