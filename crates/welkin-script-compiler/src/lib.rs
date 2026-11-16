@@ -177,7 +177,7 @@ mod tests {
     #[test]
     fn value_type_round_trip() {
         assert_eq!(LslValue::Integer(42).lsl_type(), LslType::Integer);
-        assert_eq!(LslValue::Float(3.14).lsl_type(), LslType::Float);
+        assert_eq!(LslValue::Float(2.75).lsl_type(), LslType::Float);
         assert_eq!(LslValue::String("hello".into()).lsl_type(), LslType::String);
         assert_eq!(
             LslValue::Key("00000000-0000-0000-0000-000000000000".into()).lsl_type(),

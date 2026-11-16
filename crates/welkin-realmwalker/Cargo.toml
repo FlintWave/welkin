@@ -26,3 +26,6 @@ glam = { workspace = true }
 
 [features]
 integration = []
+
+[lints]
+workspace = true

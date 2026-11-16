@@ -205,7 +205,7 @@ mod tests {
             let mut w = welkin_msg::Writer::new();
             create.encode_body(&mut w);
             let start = Instant::now();
-            let _ = spawn_group_packet(
+            spawn_group_packet(
                 ctx.clone(),
                 agent,
                 msgs::CreateGroupRequest::ID,
@@ -232,7 +232,7 @@ mod tests {
         // spawn_group_name_reply
         {
             let start = Instant::now();
-            let _ = spawn_group_name_reply(
+            spawn_group_name_reply(
                 ctx.clone(),
                 vec![Uuid::new_v4()],
                 client.clone(),
@@ -254,7 +254,7 @@ mod tests {
         // spawn_agent_data_update
         {
             let start = Instant::now();
-            let _ = spawn_agent_data_update(
+            spawn_agent_data_update(
                 ctx.clone(),
                 agent,
                 "First".into(),
@@ -278,7 +278,7 @@ mod tests {
         // spawn_login_group_data
         {
             let start = Instant::now();
-            let _ = spawn_login_group_data(
+            spawn_login_group_data(
                 ctx.clone(),
                 agent,
                 "First".into(),
