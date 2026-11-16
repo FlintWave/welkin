@@ -789,11 +789,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let prim_name = heartbeat_scene
                 .with_object(&prim_id, |g| g.root_part().name.clone())
                 .unwrap_or_default();
+            let owner_id = heartbeat_scene
+                .with_object(&prim_id, |g| g.root_part().owner_id)
+                .unwrap_or_default();
             std::sync::Arc::new(parking_lot::RwLock::new(
                 welkin_script_vm::builtins::ScriptContext {
                     script_id,
                     prim_id,
                     prim_name,
+                    owner_id,
                     position: [prim_pos.x as f64, prim_pos.y as f64, prim_pos.z as f64],
                     chat_sender: Some(heartbeat_chat_tx.clone()),
                     timer_sender: Some(heartbeat_timer_tx.clone()),
