@@ -29,9 +29,12 @@ Working:
   activate a group. The region replies with the viewer's usual reply messages and
   refreshes the avatar's group state after a change.
 - A viewer can open a group's profile and read its member list, its roles, the
-  titles the avatar may pick, and which members hold which role. The member list
-  goes out in replies of up to 25 members, and only to members of the group: a
-  request from an avatar that is not a member gets no reply.
+  titles the avatar may pick, and which members hold which role. Members see the
+  whole list. An avatar that is not a member sees only the members who hold a
+  role with the MemberVisible power (bit 50 of the role powers), as OpenSimulator
+  does; if the Everyone role has that power, every member is visible.
+- Member lists and role-member lists go out in several replies, each kept to a
+  budget of about 1000 bytes, so a large group does not overflow a UDP packet.
 - A member with the right to invite can invite another avatar to the group. The
   region stores the invitation in the groups database, so it survives a restart,
   and sends the invitee an instant message. The invitee can accept, which adds
