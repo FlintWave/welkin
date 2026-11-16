@@ -269,12 +269,58 @@ impl NPCAvatar {
             });
         }
     }
-    /// Stub: no-op.
-    pub fn send_entity_update(&self, _entity_id: Uuid) {}
-    /// Stub: no-op.
-    pub fn send_alert_message(&self, _message: &str) {}
-    /// Stub: no-op.
-    pub fn send_agent_alert_message(&self, _message: &str, _modal: bool) {}
+        /// Send an entity update for `entity_id` to the connected client.
+        ///
+        /// The simplified transport used by this module has no separate entity-update
+        /// queue, so there is no additional local state or client effect to produce here.
+        pub fn send_entity_update(&self, _entity_id: Uuid) {
+            if self.disconnected {
+                return;
+            }
+
+            // No client-visible egress event corresponds to a generic entity update.
+        }
+        /// Send a non-modal alert message to the connected client.
+        pub fn send_alert_message(&self, message: &str) {
+            if self.disconnected {
+                return;
+            }
+
+            if let Some(scene) = &self.scene {
+                let _ = scene.egress.send(crate::egress::EgressEvent::Alert {
+                    agent: self.agent_id,
+                    message: message.to_string(),
+                    modal: false,
+                });
+            }
+        }
+        /// Send an agent alert message to the connected client.
+        ///
+        /// A non-modal message receives the OpenSim slash prefix unless it uses one
+        /// of the recognised special message forms.
+        pub fn send_agent_alert_message(&self, message: &str, modal: bool) {
+            if self.disconnected {
+                return;
+            }
+
+            let mut message = message.to_string();
+            if !modal
+                && !message.starts_with("ALERT: ")
+                && !message.starts_with("NOTIFY: ")
+                && message != "Home position set."
+                && message != "You died and have been teleported to your home location"
+            {
+                message = format!("/{}", message);
+            }
+
+            if let Some(scene) = &self.scene {
+                let _ = scene.egress.send(crate::egress::EgressEvent::Alert {
+                    agent: self.agent_id,
+                    message,
+                    modal,
+                });
+            }
+        }
     /// Stub: no-op.
     pub fn send_animation(&self, _anim_id: Uuid, _sequence: i32) {}
     /// Stub: no-op.
@@ -524,5 +570,221 @@ mod stub_tests_c_avatar_rs_npcavatar_0 {
 
         npc.send_avatar_data_immediate();
         assert!(rec.take().is_empty());
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_c_avatar_rs_npcavatar_1 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn send_entity_update_emits_no_egress_events() {
+        let agent_id = Uuid::new_v4();
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        scene.egress = rec.clone();
+        rec.connect(agent_id);
+
+        let mut npc = NPCAvatar {
+            first_name: "Test".to_string(),
+            last_name: "Avatar".to_string(),
+            agent_id,
+            owner_id: Uuid::new_v4(),
+            start_pos: [0.0, 0.0, 0.0],
+            position: [0.0, 0.0, 0.0],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            sense_as_agent: true,
+            scene: Some(scene),
+            active_group_id: Uuid::nil(),
+            active_group_name: String::new(),
+            active_group_powers: 0,
+            disconnected: false,
+            sitting: false,
+            sit_target: None,
+        };
+
+        npc.send_entity_update(Uuid::new_v4());
+        assert!(rec.take().is_empty());
+    }
+
+    #[test]
+    fn send_entity_update_without_scene_is_safe() {
+        let npc = NPCAvatar {
+            first_name: "Test".to_string(),
+            last_name: "Avatar".to_string(),
+            agent_id: Uuid::new_v4(),
+            owner_id: Uuid::new_v4(),
+            start_pos: [0.0, 0.0, 0.0],
+            position: [0.0, 0.0, 0.0],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            sense_as_agent: true,
+            scene: None,
+            active_group_id: Uuid::nil(),
+            active_group_name: String::new(),
+            active_group_powers: 0,
+            disconnected: false,
+            sitting: false,
+            sit_target: None,
+        };
+
+        npc.send_entity_update(Uuid::new_v4());
+    }
+
+    #[test]
+    fn send_alert_message_emits_non_modal_alert() {
+        let agent_id = Uuid::new_v4();
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        scene.egress = rec.clone();
+        rec.connect(agent_id);
+
+        let mut npc = NPCAvatar {
+            first_name: "Test".to_string(),
+            last_name: "Avatar".to_string(),
+            agent_id,
+            owner_id: Uuid::new_v4(),
+            start_pos: [0.0, 0.0, 0.0],
+            position: [0.0, 0.0, 0.0],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            sense_as_agent: true,
+            scene: Some(scene),
+            active_group_id: Uuid::nil(),
+            active_group_name: String::new(),
+            active_group_powers: 0,
+            disconnected: false,
+            sitting: false,
+            sit_target: None,
+        };
+
+        npc.send_alert_message("hello");
+        let events = rec.take();
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            crate::egress::EgressEvent::Alert { agent, message, modal } => {
+                assert_eq!(*agent, agent_id);
+                assert_eq!(message, "hello");
+                assert!(!*modal);
+            }
+            _ => panic!("unexpected egress event"),
+        }
+    }
+
+    #[test]
+    fn send_alert_message_skips_disconnected_npc() {
+        let agent_id = Uuid::new_v4();
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        scene.egress = rec.clone();
+        rec.connect(agent_id);
+
+        let mut npc = NPCAvatar {
+            first_name: "Test".to_string(),
+            last_name: "Avatar".to_string(),
+            agent_id,
+            owner_id: Uuid::new_v4(),
+            start_pos: [0.0, 0.0, 0.0],
+            position: [0.0, 0.0, 0.0],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            sense_as_agent: true,
+            scene: Some(scene),
+            active_group_id: Uuid::nil(),
+            active_group_name: String::new(),
+            active_group_powers: 0,
+            disconnected: true,
+            sitting: false,
+            sit_target: None,
+        };
+
+        npc.send_alert_message("hello");
+        assert!(rec.take().is_empty());
+    }
+
+    #[test]
+    fn send_agent_alert_message_prefixes_non_modal_message() {
+        let agent_id = Uuid::new_v4();
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        scene.egress = rec.clone();
+        rec.connect(agent_id);
+
+        let mut npc = NPCAvatar {
+            first_name: "Test".to_string(),
+            last_name: "Avatar".to_string(),
+            agent_id,
+            owner_id: Uuid::new_v4(),
+            start_pos: [0.0, 0.0, 0.0],
+            position: [0.0, 0.0, 0.0],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            sense_as_agent: true,
+            scene: Some(scene),
+            active_group_id: Uuid::nil(),
+            active_group_name: String::new(),
+            active_group_powers: 0,
+            disconnected: false,
+            sitting: false,
+            sit_target: None,
+        };
+
+        npc.send_agent_alert_message("hello", false);
+        let events = rec.take();
+        assert_eq!(events.len(), 1);
+        match &events[0] {
+            crate::egress::EgressEvent::Alert { agent, message, modal } => {
+                assert_eq!(*agent, agent_id);
+                assert_eq!(message, "/hello");
+                assert!(!*modal);
+            }
+            _ => panic!("unexpected egress event"),
+        }
+    }
+
+    #[test]
+    fn send_agent_alert_message_respects_modal_and_special_forms() {
+        let agent_id = Uuid::new_v4();
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        scene.egress = rec.clone();
+        rec.connect(agent_id);
+
+        let mut npc = NPCAvatar {
+            first_name: "Test".to_string(),
+            last_name: "Avatar".to_string(),
+            agent_id,
+            owner_id: Uuid::new_v4(),
+            start_pos: [0.0, 0.0, 0.0],
+            position: [0.0, 0.0, 0.0],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            sense_as_agent: true,
+            scene: Some(scene),
+            active_group_id: Uuid::nil(),
+            active_group_name: String::new(),
+            active_group_powers: 0,
+            disconnected: false,
+            sitting: false,
+            sit_target: None,
+        };
+
+        npc.send_agent_alert_message("hello", true);
+        npc.send_agent_alert_message("ALERT: hello", false);
+
+        let events = rec.take();
+        assert_eq!(events.len(), 2);
+        match &events[0] {
+            crate::egress::EgressEvent::Alert { message, modal, .. } => {
+                assert_eq!(message, "hello");
+                assert!(*modal);
+            }
+            _ => panic!("unexpected egress event"),
+        }
+        match &events[1] {
+            crate::egress::EgressEvent::Alert { message, modal, .. } => {
+                assert_eq!(message, "ALERT: hello");
+                assert!(!*modal);
+            }
+            _ => panic!("unexpected egress event"),
+        }
     }
 }
