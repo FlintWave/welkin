@@ -4557,9 +4557,10 @@ async fn process_messages(
 
             let build_relay = |dlg: u8| -> ImprovedInstantMessage {
                 ImprovedInstantMessage {
+                    // Never forward the sender's secret circuit session id to the recipient.
                     agent_data: improved_instant_message::AgentData {
                         agent_id,
-                        session_id,
+                        session_id: Uuid::nil(),
                     },
                     message_block: improved_instant_message::MessageBlock {
                         from_group: mb.from_group,
@@ -4569,7 +4570,12 @@ async fn process_messages(
                         position: mb.position,
                         offline: 0,
                         dialog: dlg,
-                        id: im_session_id,
+                        // Person-to-person IM sessions are the XOR of both agent ids, as viewers compute them.
+                        id: if dlg == 0 {
+                            Uuid::from_u128(agent_id.as_u128() ^ to_agent.as_u128())
+                        } else {
+                            im_session_id
+                        },
                         timestamp: now_ts,
                         from_agent_name: mb.from_agent_name.clone(),
                         message: mb.message.clone(),
