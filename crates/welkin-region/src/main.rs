@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 mod logging;
+mod attachments_io;
 mod avatar_move;
 mod console;
 mod console_io;
@@ -14,6 +15,8 @@ mod physics_cmd;
 mod script_persist;
 mod scene_sync;
 mod sim_stats;
+#[cfg(test)]
+mod test_support;
 mod sound_io;
 mod terraform;
 
@@ -1238,6 +1241,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let timeout_scene = Arc::clone(&scene);
     let timeout_clients = udp_clients.clone();
     let timeout_eqs = event_queues.clone();
+    let timeout_socket = udp_socket.clone();
+    let timeout_perms = Arc::clone(&perms);
+    let timeout_inventory = Arc::new(welkin_services::remote::inventory::RemoteInventoryConnector::new(accounts_url));
+    let timeout_assets = Arc::new(welkin_services::remote::asset::RemoteAssetConnector::new(accounts_url));
     let timeout_handle = tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(5));
         loop {
@@ -1256,6 +1263,18 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     for (addr, agent) in &timed_out {
                         timeout_clients.write().await.remove(addr);
+                        attachments_io::remove_all_for_avatar(
+                            &attachments_io::AttachCtx {
+                                scene: &timeout_scene,
+                                perms: &timeout_perms,
+                                inventory: &timeout_inventory,
+                                assets: &timeout_assets,
+                                socket: timeout_socket.as_ref(),
+                                clients: &timeout_clients,
+                            },
+                            *agent,
+                        )
+                        .await;
                         timeout_scene.remove_presence(agent);
                         timeout_eqs.write().await.remove(agent);
                         info!(agent = %agent, addr = %addr, "client timed out, removed");
@@ -1915,20 +1934,37 @@ async fn process_messages(
         if msg_id == LogoutRequest::ID
             && let Some(client) = &client
         {
-            let mut session = client.lock().await;
-            let reply = LogoutReply {
-                agent_data: logout_reply::AgentData {
-                    agent_id: session.agent_id,
-                    session_id: session.session_id,
-                },
-                inventory_data: Vec::new(),
+            let leaving = {
+                let mut session = client.lock().await;
+                let reply = LogoutReply {
+                    agent_data: logout_reply::AgentData {
+                        agent_id: session.agent_id,
+                        session_id: session.session_id,
+                    },
+                    inventory_data: Vec::new(),
+                };
+                let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                let _ = socket.send_to(&pkt_bytes, src).await;
+                session.agent_id
             };
-            let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
-            let _ = socket.send_to(&pkt_bytes, src).await;
-            scene.remove_presence(&session.agent_id);
-            event_queues.write().await.remove(&session.agent_id);
+            // Attachments are saved into their inventory items and removed before the
+            // presence goes (the session lock is not held: this talks to every client).
+            attachments_io::remove_all_for_avatar(
+                &attachments_io::AttachCtx {
+                    scene: &scene,
+                    perms: &perms,
+                    inventory: &inventory_connector,
+                    assets: &asset_connector,
+                    socket: socket.as_ref(),
+                    clients: &clients,
+                },
+                leaving,
+            )
+            .await;
+            scene.remove_presence(&leaving);
+            event_queues.write().await.remove(&leaving);
             clients.write().await.remove(&src);
-            info!(agent = %session.agent_id, "logout acknowledged, presence and client removed");
+            info!(agent = %leaving, "logout acknowledged, presence and client removed");
         }
 
         if msg_id == EconomyDataRequest::ID
@@ -2118,6 +2154,74 @@ async fn process_messages(
             let mut session = client.lock().await;
             let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
             let _ = socket.send_to(&pkt_bytes, src).await;
+        }
+
+        // ---- Attachments ----
+        if agent_id != Uuid::nil() {
+            let actx = attachments_io::AttachCtx {
+                scene: &scene,
+                perms: &perms,
+                inventory: &inventory_connector,
+                assets: &asset_connector,
+                socket: socket.as_ref(),
+                clients: &clients,
+            };
+            if msg_id == RezSingleAttachmentFromInv::ID
+                && let Ok(msg) = RezSingleAttachmentFromInv::decode(&pkt.body)
+            {
+                let item_id = msg.object_data.item_id;
+                match attachments_io::rez_attachment_from_inventory(&actx, agent_id, item_id, msg.object_data.attachment_pt).await {
+                    Ok(point) => info!(agent = %agent_id, %item_id, point, "attachment worn"),
+                    Err(reason) => warn!(agent = %agent_id, %item_id, %reason, "RezSingleAttachmentFromInv: not worn"),
+                }
+            }
+            if msg_id == RezMultipleAttachmentsFromInv::ID
+                && let Ok(msg) = RezMultipleAttachmentsFromInv::decode(&pkt.body)
+            {
+                for entry in &msg.object_data {
+                    match attachments_io::rez_attachment_from_inventory(&actx, agent_id, entry.item_id, entry.attachment_pt).await {
+                        Ok(point) => info!(agent = %agent_id, item = %entry.item_id, point, "attachment worn"),
+                        Err(reason) => warn!(agent = %agent_id, item = %entry.item_id, %reason, "RezMultipleAttachmentsFromInv: not worn"),
+                    }
+                }
+            }
+            if msg_id == ObjectAttach::ID
+                && let Ok(msg) = ObjectAttach::decode(&pkt.body)
+            {
+                for entry in &msg.object_data {
+                    match attachments_io::attach_from_world(&actx, agent_id, entry.object_local_id, msg.agent_data.attachment_point).await {
+                        Ok(point) => info!(agent = %agent_id, local_id = entry.object_local_id, point, "object attached"),
+                        Err(reason) => warn!(agent = %agent_id, local_id = entry.object_local_id, %reason, "ObjectAttach: not attached"),
+                    }
+                }
+            }
+            if msg_id == ObjectDetach::ID
+                && let Ok(msg) = ObjectDetach::decode(&pkt.body)
+            {
+                for entry in &msg.object_data {
+                    let Some(group_id) = scene.get_object_by_local_id(entry.object_local_id) else { continue };
+                    if let Err(reason) = attachments_io::detach_to_inventory(&actx, agent_id, group_id).await {
+                        warn!(agent = %agent_id, local_id = entry.object_local_id, %reason, "ObjectDetach: not detached");
+                    }
+                }
+            }
+            if msg_id == DetachAttachmentIntoInv::ID
+                && let Ok(msg) = DetachAttachmentIntoInv::decode(&pkt.body)
+            {
+                let item_id = msg.object_data.item_id;
+                if let Err(reason) = attachments_io::detach_item_to_inventory(&actx, agent_id, item_id).await {
+                    warn!(agent = %agent_id, %item_id, %reason, "DetachAttachmentIntoInv: not detached");
+                }
+            }
+            if msg_id == ObjectDrop::ID
+                && let Ok(msg) = ObjectDrop::decode(&pkt.body)
+            {
+                for entry in &msg.object_data {
+                    if let Err(reason) = attachments_io::detach_to_ground(&actx, agent_id, entry.object_local_id).await {
+                        warn!(agent = %agent_id, local_id = entry.object_local_id, %reason, "ObjectDrop: not dropped");
+                    }
+                }
+            }
         }
 
         if msg_id == ModifyLand::ID
@@ -4051,6 +4155,18 @@ async fn process_messages(
                     }
                 }
                 drop(all_clients);
+                attachments_io::remove_all_for_avatar(
+                    &attachments_io::AttachCtx {
+                        scene: &scene,
+                        perms: &perms,
+                        inventory: &inventory_connector,
+                        assets: &asset_connector,
+                        socket: socket.as_ref(),
+                        clients: &clients,
+                    },
+                    target_id,
+                )
+                .await;
                 scene.remove_presence(&target_id);
                 info!(target = %target_id, "ejected user from region");
             }

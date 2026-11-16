@@ -751,6 +751,18 @@ impl Scene {
         out
     }
 
+    /// Remove one worn attachment from the scene entirely, keeping the avatar's
+    /// attachment list in step. Returns the removed object.
+    pub fn remove_attachment(&self, group_id: &Uuid) -> Option<SceneObjectGroup> {
+        let group = self.remove_object(group_id)?;
+        if group.is_attachment
+            && let Some(p) = self.presences.write().unwrap().get_mut(&group.attached_avatar)
+        {
+            p.attachments.retain(|(_, g)| g != group_id);
+        }
+        Some(group)
+    }
+
     /// Remove every attachment an avatar wears from the scene (logout) and return them,
     /// with their attachment points still set so callers can save them.
     pub fn take_attachments_of(&self, agent_id: &Uuid) -> Vec<SceneObjectGroup> {
@@ -1048,6 +1060,16 @@ mod tests {
         assert_eq!(scene.attach_object(&Uuid::new_v4(), &agent, 2, Uuid::nil()), Err(AttachError::NoObject));
         scene.attach_object(&obj, &agent, 2, Uuid::nil()).unwrap();
         assert_eq!(scene.attach_object(&obj, &agent, 3, Uuid::nil()), Err(AttachError::AlreadyAttached));
+    }
+
+    #[test]
+    fn remove_attachment_cleans_the_avatars_list() {
+        let (scene, agent, _) = scene_with_avatar();
+        let a = scene.add_object(test_group("A", agent, Vec3::ZERO));
+        scene.attach_object(&a, &agent, 2, Uuid::nil()).unwrap();
+        assert!(scene.remove_attachment(&a).is_some());
+        assert!(scene.get_object(&a).is_none());
+        assert!(scene.get_presence(&agent).unwrap().attachments.is_empty());
     }
 
     #[test]
