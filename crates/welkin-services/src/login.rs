@@ -771,7 +771,6 @@ fn convert_xmlrpc_to_llsd(xmlrpc: &str) -> String {
     let mut reader = Reader::from_str(xmlrpc);
     reader.config_mut().trim_text(true);
     let mut out = String::from("<?xml version=\"1.0\" encoding=\"utf-8\" ?><llsd>");
-    let mut skip_depth = 0u32;
 
     loop {
         match reader.read_event() {
@@ -779,9 +778,7 @@ fn convert_xmlrpc_to_llsd(xmlrpc: &str) -> String {
                 let tag = e.name();
                 let tag = tag.as_ref();
                 match tag {
-                    b"methodResponse" | b"params" | b"param" => {
-                        skip_depth += 1;
-                    }
+                    b"methodResponse" | b"params" | b"param" => {}
                     b"struct" => out.push_str("<map>"),
                     b"member" => {}
                     b"name" => out.push_str("<key>"),
@@ -799,9 +796,7 @@ fn convert_xmlrpc_to_llsd(xmlrpc: &str) -> String {
                 let tag = e.name();
                 let tag = tag.as_ref();
                 match tag {
-                    b"methodResponse" | b"params" | b"param" => {
-                        skip_depth -= 1;
-                    }
+                    b"methodResponse" | b"params" | b"param" => {}
                     b"struct" => out.push_str("</map>"),
                     b"member" => {}
                     b"name" => out.push_str("</key>"),

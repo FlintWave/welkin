@@ -6,7 +6,6 @@
 //! initial hyperlink handshake (`link_region` / `get_region` in XML-RPC) and
 //! the agent-login flow for incoming cross-grid teleports.
 
-use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use axum::{
@@ -362,40 +361,6 @@ pub fn router(state: GatekeeperHandlerState) -> Router {
         .with_state(state)
 }
 
-/// Parse a simple form-encoded POST body into a `HashMap`.
-fn parse_form(body: &[u8]) -> HashMap<String, String> {
-    let text = String::from_utf8_lossy(body);
-    let mut map = HashMap::new();
-    for pair in text.split('&').filter(|p| !p.is_empty()) {
-        let (k, v) = pair.split_once('=').unwrap_or((pair, ""));
-        map.insert(url_decode(k), url_decode(v));
-    }
-    map
-}
-
-fn url_decode(s: &str) -> String {
-    let bytes = s.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'+' => out.push(b' '),
-            b'%' if i + 2 < bytes.len() => {
-                let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or("");
-                if let Ok(b) = u8::from_str_radix(hex, 16) {
-                    out.push(b);
-                    i += 2;
-                } else {
-                    out.push(b'%');
-                }
-            }
-            b => out.push(b),
-        }
-        i += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
-
 fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -561,6 +526,7 @@ fn handle_get_region(state: &GatekeeperHandlerState, xml: &str) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     /// Helper: build a default config for testing.
     fn test_config() -> GatekeeperConfig {

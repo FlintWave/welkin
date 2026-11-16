@@ -30,7 +30,6 @@ struct FriendRecord {
     principal_id: Uuid,
     /// Full UUI string, e.g. `"uuid;homeuri;first last;secret"`.
     friend: String,
-    my_flags: i32,
     their_flags: i32,
 }
 
@@ -70,12 +69,11 @@ impl HGFriendsServiceImpl {
         Some((id, home_uri, name, secret))
     }
 
-    fn store_friend(&self, principal_id: Uuid, friend: &str, my_flags: i32) {
+    fn store_friend(&self, principal_id: Uuid, friend: &str, _my_flags: i32) {
         let mut friends = self.friends.write().unwrap();
         friends.push(FriendRecord {
             principal_id,
             friend: friend.to_string(),
-            my_flags,
             their_flags: -1,
         });
     }
@@ -93,19 +91,6 @@ impl HGFriendsServiceImpl {
             .filter(|r| r.principal_id == principal_id)
             .cloned()
             .collect()
-    }
-
-    /// Look up their_flags for a reverse friendship:
-    /// find records of `principal_id` where `friend` starts with `friend_id`.
-    fn lookup_their_flags(&self, principal_id: Uuid, friend_id: Uuid) -> i32 {
-        let friends = self.friends.read().unwrap();
-        let prefix = friend_id.to_string();
-        for r in friends.iter() {
-            if r.principal_id == principal_id && r.friend.starts_with(&prefix) {
-                return r.their_flags;
-            }
-        }
-        -1
     }
 }
 
