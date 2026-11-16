@@ -12,6 +12,7 @@ mod groups_admin;
 mod groups_chat;
 mod groups_queries;
 mod groups_queue;
+mod oar_load;
 mod object_buy;
 mod parcel_io;
 mod groups_tasks;
@@ -1336,6 +1337,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         udp_socket.clone(),
         udp_clients.clone(),
         console_shutdown.clone(),
+        scene.clone(),
+        Arc::new(welkin_services::remote::asset::RemoteAssetConnector::new(accounts_url)),
     ));
     let _repl_handle = console_io::spawn_repl(console_ctx.clone(), cancel.clone());
     let admin_token = config.get_string_or("Admin", "Token", "");
@@ -2213,6 +2216,10 @@ async fn process_messages(
             .await;
             for reason in &bought.errors {
                 warn!(agent = %agent_id, %reason, "ObjectBuy: purchase refused");
+                let alert = groups_io::alert_message(&format!("Unable to buy: {reason}."));
+                let mut sess = client.lock().await;
+                let (pkt_bytes, _) = sess.circuit.send_msg(&alert, true);
+                let _ = socket.send_to(&pkt_bytes, src).await;
             }
             for item in &bought.items {
                 info!(agent = %agent_id, item = %item.inventory_id, "ObjectBuy: delivered (sample economy)");
@@ -2355,6 +2362,7 @@ async fn process_messages(
                 scene.prim_stats().0 as i32,
             )
         {
+            info!(agent = %agent_id, seq = props.parcel_data.sequence_id, flags = props.parcel_data.parcel_flags, "ParcelProperties sent for request");
             let mut session = client.lock().await;
             let (parcel_bytes, _) = session.circuit.send_msg(&props, true);
             let _ = socket.send_to(&parcel_bytes, src).await;
@@ -2513,6 +2521,7 @@ async fn process_messages(
             let prev_anim = last_anim.get(&update.agent_data.agent_id).copied();
             if prev_anim != Some(desired_anim) {
                 last_anim.insert(update.agent_data.agent_id, desired_anim);
+                info!(agent = %update.agent_data.agent_id, flags, flying, anim = desired_anim, "avatar animation change");
                 let anim_msg = AvatarAnimation {
                     sender: avatar_animation::Sender {
                         id: update.agent_data.agent_id,

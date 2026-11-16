@@ -15,6 +15,7 @@ pub enum ConsoleAction {
         agent_id: Uuid,
         reason: String,
     },
+    LoadOar(String),
     Shutdown,
 }
 
@@ -57,6 +58,11 @@ enum Sub {
         reason: Vec<String>,
     },
     Shutdown,
+    /// `load oar <file>`: load an OpenSim region archive.
+    Load {
+        kind: String,
+        path: String,
+    },
     Quit,
     #[command(name = "create-user")]
     CreateUser {
@@ -343,6 +349,14 @@ pub async fn execute(ctx: &ConsoleContext, line: &str) -> String {
         Sub::Shutdown => {
             let _ = ctx.actions.send(ConsoleAction::Shutdown);
             "shutdown requested".to_string()
+        }
+        Sub::Load { kind, path } => {
+            if kind.eq_ignore_ascii_case("oar") {
+                let _ = ctx.actions.send(ConsoleAction::LoadOar(path.clone()));
+                format!("loading OAR {path} (progress is logged)")
+            } else {
+                format!("unknown load target '{kind}'; supported: oar")
+            }
         }
         Sub::Quit => "quit".to_string(),
         Sub::CreateUser {

@@ -242,6 +242,8 @@ pub async fn run_actions(
         >,
     >,
     shutdown: Arc<tokio::sync::Notify>,
+    scene: Arc<welkin_scene::scene::Scene>,
+    assets: Arc<welkin_services::remote::asset::RemoteAssetConnector>,
 ) {
     use welkin_msg::msgs::*;
 
@@ -316,6 +318,21 @@ pub async fn run_actions(
                         let _ = socket.send_to(&kick_packet, addr).await;
                         let _ = socket.send_to(&disable_packet, addr).await;
                     }
+                }
+            }
+            ConsoleAction::LoadOar(path) => {
+                tracing::info!(%path, "console action: load oar");
+                match crate::oar_load::load_oar(std::path::Path::new(&path), &scene, &assets).await {
+                    Ok(report) => {
+                        tracing::info!(?report, "OAR loaded");
+                        // Show the new objects to everyone already connected.
+                        let all = clients.read().await;
+                        for (addr, c) in all.iter() {
+                            let mut sess = c.lock().await;
+                            crate::scene_sync::send_scene_objects(&scene, &mut sess, &socket, *addr).await;
+                        }
+                    }
+                    Err(err) => tracing::warn!(%path, %err, "OAR load failed"),
                 }
             }
             ConsoleAction::Shutdown => {
