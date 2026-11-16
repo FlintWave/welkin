@@ -7,6 +7,7 @@ mod console;
 mod console_io;
 mod estate_config;
 mod groups_io;
+mod groups_admin;
 mod groups_queries;
 mod groups_tasks;
 mod inventory_rez;
@@ -4362,6 +4363,26 @@ async fn process_messages(
             let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
             let _ = socket.send_to(&pkt_bytes, src).await;
             info!(agent = %agent_id, count = req.uuid_name_block.len(), "UUIDGroupNameRequest: replied");
+        }
+
+        if let Some(g) = &groups
+            && groups_admin::is_admin_packet(pkt.id)
+            && let Some(client) = &client
+            && let Some(pres) = scene.get_presence(&agent_id)
+        {
+            groups_admin::spawn_admin_packet(
+                g.clone(),
+                agent_id,
+                pkt.id,
+                pkt.body.clone(),
+                pres.first_name.clone(),
+                pres.last_name.clone(),
+                event_queues.clone(),
+                clients.clone(),
+                client.clone(),
+                socket.clone(),
+                src,
+            );
         }
 
         if let Some(g) = &groups

@@ -159,7 +159,10 @@ impl RemoteGroupsConnector {
             ("GroupID", group_id.to_string()),
         ];
 
-        let _ = self.call(&params).await?;
+        let nodes = self.call(&params).await?;
+        if result_text(&nodes).eq_ignore_ascii_case("NULL") {
+            return Err(RemoteError::Server(reason_text(&nodes)));
+        }
         Ok(())
     }
 
