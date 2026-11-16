@@ -4580,6 +4580,13 @@ async fn process_messages(
                 continue;
             }
 
+            // Groups disabled: refuse group chat and notices instead of using the
+            // unchecked in-memory session arms below.
+            if groups.is_none() && groups_chat::is_chat_dialog(dialog, mb.from_group) {
+                warn!(from = %agent_id, dialog, "IM: group chat/notice refused, groups disabled");
+                continue;
+            }
+
             match dialog {
                 // 0: MessageFromAgent
                 0 => {
