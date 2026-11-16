@@ -66,6 +66,24 @@ movement echo. It returns an exit code and gives up after 30 seconds. Start
 `dotnet run` from that directory. `tests/bot-tests/libremetaverse/` holds a
 further bot test project.
 
+## Interactive bots
+
+Two more C# programs in `tests/bot-tests/libremetaverse/` log in as a real
+LibreMetaverse client so you can try a running grid by hand. Both read the same
+environment variables: `WELKIN_LOGIN_URI` (default `http://127.0.0.1:8002/`),
+`WELKIN_BOT_FIRST`, `WELKIN_BOT_LAST` and `WELKIN_BOT_PASSWORD`. Create the
+account first (see [Regions, estate and users](regions-estate-users.md)).
+
+- `WelkinCompanionBot` stays online, answers chat and instant messages, accepts
+  friend requests and wanders. Use it to give a second viewer someone to talk to.
+- `WelkinPuppetBot` is steered by hand. It reads commands from the file named in
+  `WELKIN_CMD_FILE` (default `puppet.cmd`) and understands `say`, `shout`,
+  `whisper`, `im`, `goto`, `follow`, `turn`, `face`, `walk`, `back`, `stop`,
+  `sit`, `stand`, `fly`, `up`, `jump`, `anim`, `accept`, `decline`, `where` and
+  `quit`. It prints the chat, instant messages and friend requests it receives.
+
+These are developer tools, not automated tests: nothing checks their output.
+
 ## LSL script corpus
 
 `tests/script-testing/` measures how many real-world LSL scripts the compiler
