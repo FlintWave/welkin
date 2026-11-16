@@ -234,6 +234,98 @@ without manual intervention.
 - Movement (needs position update echo)
 - Textures (asset service schema bug at time of test)
 
+## Inventory objects and attachments
+
+These behaviours come from the region code and its end-to-end tests with real
+grid services; they are not yet confirmed in a live viewer session.
+
+Taking and returning objects (`DeRezObject`): the region saves the object to
+inventory, as an asset and an inventory item, before it removes the object from
+the scene. The permissions module must allow the action.
+
+- Take and Take copy put the item in the folder the viewer chose, or the Objects
+  folder if it chose none.
+- Delete puts the item in Trash when the owner deletes it, and in Lost and
+  Found when someone else does.
+- Return puts the item in the owner's Lost and Found.
+- The item's permissions follow OpenSimulator's rules: the owner keeps the
+  object's permissions, and anyone else gets them cut down to the next-owner
+  permissions.
+
+Attachments: an attachment is an object worn by an avatar.
+
+- Viewers see a worn object in `ObjectUpdate` with the avatar as its parent, the
+  attachment point swapped into the position the viewer expects, and the
+  inventory item ID it came from. Attached objects leave the physics engine.
+- The region handles wearing an inventory object, one or several at a time,
+  attaching an object that lies in the world (a copy goes into inventory first,
+  so it can be taken off again), detaching to inventory, and dropping to the
+  ground.
+- An avatar can wear up to 38 attachments, as in OpenSimulator. The viewer's
+  append flag (0x80) adds to what is worn at a point instead of replacing it.
+  When the viewer names no point, the region picks the last point the object
+  used, or the left hand.
+- When an avatar logs out, times out or is ejected, the region saves each
+  attachment into its inventory item and removes it from the scene and from
+  every viewer.
+- The region checks that an attach can succeed before it copies a world object
+  into inventory, so a failed attach does not leave a stray inventory copy.
+- The region remembers what each avatar wears in the grid's avatar service, in
+  one `_ap_<point>` entry per attachment point, and wears the same items again at
+  the avatar's next login.
+
+## Avatar movement and physics
+
+These behaviours come from the region code and its tests; they are not yet
+confirmed in a live viewer session.
+
+- Avatars stand on the real terrain. The avatar movement code and the physics
+  engine read one terrain source, so an avatar and a dropped prim agree on where
+  the ground is. A standing avatar's centre sits 1.0 m above the ground.
+- A walking avatar can jump. Pressing jump (the UP_POS control while walking)
+  gives an upward speed of 5.0 m/s, about 1.3 m of height. An avatar that is in
+  the air, including one that stops flying, falls under gravity of 9.80665 m/s^2
+  (OpenSimulator's standard value) to a terminal speed of 54 m/s and lands on
+  the terrain. A flying avatar cannot go below the ground.
+- Each avatar keeps its vertical velocity between updates, and the region sends
+  it to viewers. Jump and fall are integrated in fixed 0.02 s sub-steps, so
+  jump height does not depend on how often the viewer sends AgentUpdate.
+- Physical prims move under the Rapier physics engine. The region copies the
+  simulated position and motion back into the scene and sends terse updates to
+  viewers, including a final update with zero velocity when an object comes to
+  rest. When a script or an edit moves an object, the move is pushed into the
+  physics engine so the collider follows.
+- The terrain collider is built at the full region size and orientation. An
+  earlier version covered only 1 m by 1 m and was transposed, so objects fell
+  through the ground.
+- Script physics commands reach the physics bodies; see the
+  [script engine](scripting.md#physics-19) page.
+
+## Scene delivery and object creation
+
+These behaviours come from the region code and its tests (including a UDP
+round trip that parses the sent datagrams); they are not yet confirmed in a
+live viewer session.
+
+- When a viewer arrives, the region sends it every object already in the scene.
+  The root prim and every linkset child are sent as full object updates, in
+  batched ObjectUpdate packets, with their sound fields and texture entry.
+- `ObjectAdd` builds the new prim from the shape the viewer sends: prim code,
+  state, scale, rotation, and every path and profile field (curve, begin, end,
+  scale, shear, twist, taper, revolutions, skew, radius offset, hollow). A
+  tube, torus or hollow prim made in the viewer keeps its shape. The state
+  value is also copied into the last attach point, as OpenSimulator does. The
+  texture entry is left empty, so the prim uses the default plywood texture.
+- A full object update, for example after a script changes a sound, sends the
+  root and every linkset child, batched. It no longer sends the root alone.
+- Rezzing an object from inventory (`RezObject`) fetches the inventory item and
+  its asset, reads the object XML, gives every part a new ID, and sets the
+  owner to the rezzing avatar and the permissions from the item. The
+  permissions module must allow the rez. Coalesced objects are not supported
+  yet.
+- All three paths build their updates through one function in `scene_sync.rs`,
+  so a prim looks the same whichever path sent it.
+
 ## Capabilities
 
 42 capability route entries implemented:
