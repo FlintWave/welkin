@@ -12,7 +12,7 @@ ones need a running server.
 cargo test --workspace
 ```
 
-At the v0.1.0-alpha release the workspace has 2,652 passing tests, 0 failures
+At commit 749d9ed the workspace has 2,688 passing tests, 0 failures
 and 2 ignored. Most are unit tests next to the code. Several are end-to-end tests
 that start real services on a local port and drive them over HTTP or UDP, for
 example the groups tests, which run against the grid groups router, and the
