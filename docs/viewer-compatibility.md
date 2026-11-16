@@ -13,6 +13,44 @@ Current viewer compatibility status, updated as live testing progresses.
 | Firestorm (OpenSim build) | Yes | Working | Tested 2026-11-14 |
 | LibreMetaverse bot | Yes | 10/10 steps pass | Automated test client |
 
+## Inventory objects and attachments
+
+These behaviours come from the region code and its end-to-end tests with real
+grid services; they are not yet confirmed in a live viewer session.
+
+Taking and returning objects (`DeRezObject`): the region saves the object to
+inventory, as an asset and an inventory item, before it removes the object from
+the scene. The permissions module must allow the action.
+
+- Take and Take copy put the item in the folder the viewer chose, or the Objects
+  folder if it chose none.
+- Delete puts the item in Trash when the owner deletes it, and in Lost and
+  Found when someone else does.
+- Return puts the item in the owner's Lost and Found.
+- The item's permissions follow OpenSimulator's rules: the owner keeps the
+  object's permissions, and anyone else gets them cut down to the next-owner
+  permissions.
+
+Attachments: an attachment is an object worn by an avatar.
+
+- Viewers see a worn object in `ObjectUpdate` with the avatar as its parent, the
+  attachment point swapped into the position the viewer expects, and the
+  inventory item ID it came from. Attached objects leave the physics engine.
+- The region handles wearing an inventory object, one or several at a time,
+  attaching an object that lies in the world (a copy goes into inventory first,
+  so it can be taken off again), detaching to inventory, and dropping to the
+  ground.
+- An avatar can wear up to 38 attachments, as in OpenSimulator. The viewer's
+  append flag (0x80) adds to what is worn at a point instead of replacing it.
+  When the viewer names no point, the region picks the last point the object
+  used, or the left hand.
+- When an avatar logs out, times out or is ejected, the region saves each
+  attachment into its inventory item and removes it from the scene and from
+  every viewer.
+- The region remembers what each avatar wears in the grid's avatar service, in
+  one `_ap_<point>` entry per attachment point, and wears the same items again at
+  the avatar's next login.
+
 ## Terraforming
 
 These behaviours come from the region code and its tests, including
