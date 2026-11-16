@@ -32,9 +32,8 @@ Working:
   lock, so a slow groups service does not freeze the avatar's connection.
 
 Not covered by this work: group roles and role editing, member lists, group
-notices and group proposals. I found no handlers for the role and member
-requests in the region code. Treat those as missing until a later change adds
-them.
+notices and group proposals. The region code has no handlers for the role and
+member requests. Treat those as missing until a later change adds them.
 
 ## Inventory objects and attachments
 
