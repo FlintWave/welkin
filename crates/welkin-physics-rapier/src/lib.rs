@@ -74,6 +74,10 @@ pub struct RapierActor {
     apid_strength: f32,
     apid_damping: f32,
     apid_active: bool,
+    /// Persistent world-space force set by scripts (llSetForce), applied every step.
+    force: Vec3,
+    /// Persistent world-space torque set by scripts (llSetTorque), applied every step.
+    torque: Vec3,
 }
 
 impl RapierActor {
@@ -124,6 +128,8 @@ impl RapierActor {
             apid_strength: 0.0,
             apid_damping: 0.0,
             apid_active: false,
+            force: Vec3::ZERO,
+            torque: Vec3::ZERO,
         }
     }
 }
@@ -176,16 +182,16 @@ impl PhysicsActor for RapierActor {
         self.dirty = true;
     }
     fn force(&self) -> Vec3 {
-        Vec3::ZERO
+        self.force
     }
-    fn set_force(&mut self, _force: Vec3) {
-        self.dirty = true;
+    fn set_force(&mut self, force: Vec3) {
+        self.force = force;
     }
     fn torque(&self) -> Vec3 {
-        Vec3::ZERO
+        self.torque
     }
-    fn set_torque(&mut self, _torque: Vec3) {
-        self.dirty = true;
+    fn set_torque(&mut self, torque: Vec3) {
+        self.torque = torque;
     }
     fn mass(&self) -> f32 {
         self.density * self.size.x * self.size.y * self.size.z
@@ -417,11 +423,15 @@ impl RapierPhysicsScene {
                     body.set_rotation(to_rapier_quat(ori), true);
                     body.set_gravity_scale(gravity_modifier, true);
                 }
-                for (f, _) in &forces {
-                    body.add_force(to_rapier(*f), true);
+                for (f, push) in &forces {
+                    if *push {
+                        body.apply_impulse(to_rapier(*f), true);
+                    }
                 }
-                for (t, _) in &torques {
-                    body.add_torque(to_rapier(*t), true);
+                for (t, push) in &torques {
+                    if *push {
+                        body.apply_torque_impulse(to_rapier(*t), true);
+                    }
                 }
             }
 
@@ -434,8 +444,78 @@ impl RapierPhysicsScene {
 
             if let Some(a) = self.actors.get_mut(&id) {
                 a.dirty = false;
-                a.pending_forces.clear();
-                a.pending_torques.clear();
+                a.pending_forces.retain(|(_, push)| !*push);
+                a.pending_torques.retain(|(_, push)| !*push);
+            }
+        }
+    }
+
+    fn apply_actor_dynamics(&mut self) {
+        let ids: Vec<u32> = self.actors.keys().copied().collect();
+        for id in ids {
+            let actor = match self.actors.get(&id) {
+                Some(a) => a,
+                None => continue,
+            };
+            if actor.actor_type != ActorType::Prim || !actor.is_physical || actor.phantom {
+                continue;
+            }
+
+            let body_handle = actor.body_handle;
+            let persistent_force = actor.force;
+            let persistent_torque = actor.torque;
+            let pending_forces = actor.pending_forces.clone();
+            let pending_torques = actor.pending_torques.clone();
+            let buoyancy = actor.buoyancy;
+            let pid_active = actor.pid_active;
+            let pid_target = actor.pid_target;
+            let pid_tau = actor.pid_tau;
+
+            let gravity = Vec3::new(self.gravity.x, self.gravity.y, self.gravity.z);
+
+            let Some(body) = self.bodies.get_mut(body_handle) else {
+                continue;
+            };
+
+            body.reset_forces(false);
+            body.reset_torques(false);
+
+            let mass = body.mass();
+            let pos = Vec3::new(body.translation().x, body.translation().y, body.translation().z);
+            let vel = Vec3::new(body.linvel().x, body.linvel().y, body.linvel().z);
+
+            let mut total_force = persistent_force;
+            for (f, push) in &pending_forces {
+                if !*push {
+                    total_force += *f;
+                }
+            }
+            total_force += -gravity * (mass * buoyancy);
+
+            if pid_active {
+                let tau = pid_tau.max(0.2);
+                let error = pid_target - pos;
+                total_force += (error / (tau * tau) - vel * (2.0 / tau)) * mass;
+                total_force += -gravity * mass;
+            }
+
+            let mut total_torque = persistent_torque;
+            for (t, push) in &pending_torques {
+                if !*push {
+                    total_torque += *t;
+                }
+            }
+
+            if total_force != Vec3::ZERO {
+                body.add_force(to_rapier(total_force), true);
+            }
+            if total_torque != Vec3::ZERO {
+                body.add_torque(to_rapier(total_torque), true);
+            }
+
+            if let Some(actor) = self.actors.get_mut(&id) {
+                actor.pending_forces.retain(|(_, push)| *push);
+                actor.pending_torques.retain(|(_, push)| *push);
             }
         }
     }
@@ -740,6 +820,7 @@ impl PhysicsScene for RapierPhysicsScene {
 
     fn simulate(&mut self, _time_step: f32) -> f32 {
         self.flush_dirty();
+        self.apply_actor_dynamics();
 
         self.pipeline.step(
             self.gravity,
