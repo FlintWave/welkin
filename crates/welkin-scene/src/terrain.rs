@@ -73,6 +73,9 @@ impl TerrainChannel {
             self.size_x,
             self.size_y,
         );
+        if !height.is_finite() {
+            return; // NaN/inf would poison the height field (and physics); keep the old value
+        }
         let clamped = height.clamp(0.0, REGION_HEIGHT_LIMIT);
         self.heights[(y * self.size_x + x) as usize] = clamped;
 
@@ -220,5 +223,17 @@ mod tests {
         t.mark_all_dirty();
         let patches = t.patches_x() * t.patches_y();
         assert_eq!(t.dirty_patches().len(), patches as usize);
+    }
+
+    #[test]
+    fn non_finite_heights_are_ignored() {
+        let mut t = TerrainChannel::new(16, 16);
+        t.set(3, 3, 7.0);
+        t.clear_dirty();
+        for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            t.set(3, 3, bad);
+        }
+        assert_eq!(t.get(3, 3), 7.0);
+        assert!(t.dirty_patches().is_empty());
     }
 }

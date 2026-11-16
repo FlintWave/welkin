@@ -93,7 +93,8 @@ pub fn paint_effect(
 ) {
     let width = terrain.size_x();
     let height = terrain.size_y();
-    if width == 0 || height == 0 || !(size > 0.0) {
+    let finite = [rx, ry, rz, size, strength].iter().all(|v| v.is_finite());
+    if width == 0 || height == 0 || !(size > 0.0) || !finite {
         return;
     }
 
@@ -310,7 +311,8 @@ pub fn flood_effect(
 ) {
     let width = terrain.size_x() as i32;
     let rows = terrain.size_y() as i32;
-    if width == 0 || rows == 0 {
+    let finite = [height, strength, west, south, east, north].iter().all(|v| v.is_finite());
+    if width == 0 || rows == 0 || !finite {
         return;
     }
     let clamp = |v: f32, max: i32| (v as i32).clamp(0, max - 1);

@@ -43,6 +43,33 @@ fn brush_size(msg: &ModifyLand, index: usize) -> f32 {
     }
 }
 
+/// Largest brush radius accepted (metres); a region is 256 m wide.
+const MAX_BRUSH_SIZE: f32 = 64.0;
+/// Largest `seconds` (strength) value accepted.
+const MAX_SECONDS: f32 = 1000.0;
+/// Positions may lie a little outside the region (clamped later) but not far.
+const MAX_COORD: f32 = 4096.0;
+
+/// A request whose numbers are NaN/infinite or absurd is dropped whole.
+fn modify_land_is_sane(msg: &ModifyLand) -> bool {
+    let b = &msg.modify_block;
+    if !(b.height.is_finite() && (0.0..=4096.0).contains(&b.height))
+        || !(b.seconds.is_finite() && (-MAX_SECONDS..=MAX_SECONDS).contains(&b.seconds))
+    {
+        return false;
+    }
+    let coords_ok = msg.parcel_data.iter().all(|p| {
+        [p.west, p.south, p.east, p.north]
+            .iter()
+            .all(|v| v.is_finite() && v.abs() <= MAX_COORD)
+    });
+    let brushes_ok = msg
+        .modify_block_extended
+        .iter()
+        .all(|e| e.brush_size.is_finite() && (0.0..=MAX_BRUSH_SIZE).contains(&e.brush_size));
+    coords_ok && brushes_ok
+}
+
 /// Apply a `ModifyLand` request. Returns the patches that changed. `allowed` is the
 /// requester's terraform permission.
 pub fn apply_modify_land(scene: &Scene, allowed: bool, msg: &ModifyLand) -> Vec<(u32, u32)> {
@@ -53,6 +80,10 @@ pub fn apply_modify_land(scene: &Scene, allowed: bool, msg: &ModifyLand) -> Vec<
         tracing::debug!(action = msg.modify_block.action, "ModifyLand: unknown brush action");
         return Vec::new();
     };
+    if !modify_land_is_sane(msg) {
+        tracing::debug!("ModifyLand rejected: non-finite or out-of-range value");
+        return Vec::new();
+    }
     let (height, seconds) = (msg.modify_block.height, msg.modify_block.seconds);
     let mut changed: Vec<(u32, u32)> = Vec::new();
     for (i, parcel) in msg.parcel_data.iter().enumerate() {
@@ -127,6 +158,35 @@ mod tests {
         let changed = apply_modify_land(&scene, false, &click(1, 100.0, 100.0, 3.0, 1.5));
         assert!(changed.is_empty());
         assert_eq!(scene.terrain_height_at(100.0, 100.0), 21.0);
+    }
+
+    #[test]
+    fn non_finite_or_absurd_values_are_rejected_and_terrain_stays_clean() {
+        let scene = scene();
+        let bad: Vec<ModifyLand> = {
+            let mut v = Vec::new();
+            for action in 0..6u8 {
+                for x in [f32::NAN, f32::INFINITY, 1e9] {
+                    v.push(click(action, 100.0, 100.0, x, 1.0)); // brush size
+                    v.push(click(action, x, 100.0, 3.0, 1.0)); // position
+                    v.push(click(action, 100.0, 100.0, 3.0, x)); // seconds
+                    let mut m = click(action, 100.0, 100.0, 3.0, 1.0);
+                    m.modify_block.height = x;
+                    v.push(m);
+                }
+            }
+            v
+        };
+        for msg in &bad {
+            assert!(apply_modify_land(&scene, true, msg).is_empty());
+        }
+        for y in 0..256 {
+            for x in 0..256 {
+                assert_eq!(scene.terrain_height_at(x as f32, y as f32), 21.0);
+            }
+        }
+        // A good request still works afterwards.
+        assert!(!apply_modify_land(&scene, true, &click(1, 100.0, 100.0, 3.0, 1.0)).is_empty());
     }
 
     #[test]
