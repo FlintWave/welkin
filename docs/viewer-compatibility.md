@@ -13,6 +13,52 @@ Current viewer compatibility status, updated as live testing progresses.
 | Firestorm (OpenSim build) | Yes | Working | Tested 2026-11-14 |
 | LibreMetaverse bot | Yes | 10/10 steps pass | Automated test client |
 
+## Groups
+
+Groups are off by default; turn them on with `[Groups] Enabled = true` (see the
+[configuration reference](configuration.md#groups)). The region talks to the
+grid's groups service, which `welkin-robust` provides. These behaviours come from
+the code and its tests, not from a live viewer run.
+
+Working:
+
+- Group data is sent at login, so the viewer shows the avatar's groups with
+  their real names.
+- The active group appears in `AgentDataUpdate`.
+- A viewer can create a group, join one, leave one, update a group's info and
+  activate a group. The region replies with the viewer's usual reply messages and
+  refreshes the avatar's group state after a change.
+
+How it differs from OpenSimulator:
+
+- The region refuses a join request for a group with closed enrollment and shows
+  the viewer "This group is not open for enrollment." OpenSimulator does not
+  check this and relies on the viewer to hide the Join button. This is a
+  deliberate improvement.
+- Every group handler acts for the authenticated avatar of the connection and
+  never reads the agent ID that a packet claims, so one avatar cannot create,
+  join, leave or change groups in another avatar's name.
+- `GroupPowers` in the login group data is an 8-byte big-endian binary value,
+  the same encoding OpenSimulator uses.
+- The region makes its calls to the groups service without holding the session
+  lock, so a slow groups service does not freeze the avatar's connection. The
+  connector times out a request after 15 seconds and a connection attempt after
+  5 seconds, and speaks the XML protocol that ROBUST's groups service uses.
+
+Not covered by this work: group roles and role editing, member lists, group
+notices and group proposals. The region code has no handlers for the role and
+member requests. Treat those as missing until a later change adds them.
+
+Limits to know about:
+
+- Groups are grid-only. Hypergrid avatar IDs are not supported.
+- There is no notice or invite handling yet (planned as later milestones), so a
+  closed-enrollment group cannot be joined until invites exist.
+- Only SQLite has been used, as with the rest of Welkin.
+- The tests ran in process against the groups router, not against a launched
+  `welkin-robust` binary, so the full path from a viewer to a running grid is
+  unverified.
+
 ## Firestorm session (2026-11-14)
 
 Tested with the Firestorm OpenSim build against a local Welkin grid
