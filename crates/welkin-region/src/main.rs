@@ -514,13 +514,15 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let process_caps_base = caps_base.clone();
     let process_scheduler = Arc::clone(&script_scheduler);
     let process_grid_connector = grid_connector.clone();
+    let process_estate_store = welkin_data::estate::EstateStore::new(pool.inner().clone());
+    let process_region_id = region_id_str.clone();
     let perms = {
         let mut perms = estate_config::permissions_from_config(&config);
-        let estate_store = welkin_data::estate::EstateStore::new(pool.inner().clone());
-        estate_config::apply_estate_data(&mut perms, &estate_store, &region_id_str).await;
+        estate_config::apply_estate_data(&mut perms, &process_estate_store, &region_id_str).await;
         Arc::new(perms)
     };
     let process_perms = Arc::clone(&perms);
+    let process_estate_store = Arc::new(process_estate_store);
     let accounts_url = region_config
         .grid_service_url
         .as_deref()
@@ -549,6 +551,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             scripts_enabled,
             process_grid_connector,
             process_perms,
+            process_estate_store,
+            process_region_id,
             process_accounts,
             process_inventory,
             process_assets,
@@ -1710,6 +1714,8 @@ async fn process_messages(
     scripts_enabled: bool,
     grid_connector: Option<Arc<welkin_services::remote::grid::RemoteGridConnector>>,
     perms: Arc<DefaultPermissionsModule>,
+    estate_store: Arc<welkin_data::estate::EstateStore>,
+    region_id: String,
     accounts_connector: Arc<welkin_services::remote::accounts::RemoteAccountsConnector>,
     inventory_connector: Arc<welkin_services::remote::inventory::RemoteInventoryConnector>,
     asset_connector: Arc<welkin_services::remote::asset::RemoteAssetConnector>,
@@ -4307,6 +4313,18 @@ async fn process_messages(
                 match method.as_str() {
                     "setregioninfo" => {
                         info!(agent = %agent_id, params = ?params, "EstateOwnerMessage: setregioninfo");
+                        if let Some(estate) = estate_store.get_estate_for_region(&region_id).await.ok().flatten()
+                        {
+                            let mut updated = estate.clone();
+                            // OpenSim sends: region name, estate name, east conc, ..., abuse email.
+                            // We persist the estate name if provided.
+                            if params.len() >= 2 && !params[1].trim().is_empty() {
+                                updated.estate_name = Some(params[1].trim().to_string());
+                            }
+                            if let Err(e) = estate_store.store_estate(&updated).await {
+                                warn!(agent = %agent_id, error = %e, "estate store update failed");
+                            }
+                        }
                     }
                     "setregionterrain" => {
                         info!(agent = %agent_id, params = ?params, "EstateOwnerMessage: setregionterrain");
