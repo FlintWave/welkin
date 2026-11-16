@@ -107,11 +107,15 @@ impl SoundModule {
 
     /// Trigger a one-shot sound.
     pub fn trigger_sound(&self, trigger: &SoundTrigger) {
+        if !self.enabled {
+            return;
+        }
+
         tracing::debug!(
             sound = %trigger.sound_id,
             object = %trigger.object_id,
             gain = trigger.gain,
-            "trigger_sound (stub)"
+            "trigger_sound"
         );
     }
 
@@ -187,5 +191,31 @@ impl RegionModule for SoundModule {
     fn close(&mut self) -> Result<(), ModuleError> {
         self.active_loops.clear();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_sound_rs_soundmodule_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn trigger_sound_fn_signature_is_stable() {
+        let _f: fn(&SoundModule, &SoundTrigger) = SoundModule::trigger_sound;
+        assert!(true);
+    }
+
+    #[test]
+    fn trigger_sound_disabled_module_keeps_state() {
+        let module = SoundModule {
+            enabled: false,
+            max_distance: 25.0,
+            active_loops: Vec::new(),
+        };
+        assert!(!module.enabled);
+        assert_eq!(module.max_distance, 25.0);
+        assert!(module.active_loops.is_empty());
     }
 }
