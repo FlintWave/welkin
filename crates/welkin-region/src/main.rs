@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 mod logging;
+mod console;
 mod persist;
 mod script_persist;
 mod sim_stats;
