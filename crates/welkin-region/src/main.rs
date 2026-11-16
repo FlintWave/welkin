@@ -1516,6 +1516,7 @@ async fn process_messages(
     let mut last_agent_update: HashMap<Uuid, Instant> = HashMap::new();
     // Persistent vertical velocity per avatar (jumping and falling).
     let mut avatar_vertical: HashMap<Uuid, f32> = HashMap::new();
+    let mut modify_throttle = terraform::ModifyThrottle::default();
     let mut last_anim: HashMap<Uuid, &'static str> = HashMap::new();
     let mut always_run: HashSet<Uuid> = HashSet::new();
     let mut group_sessions = ChatSessionState::new();
@@ -2080,7 +2081,11 @@ async fn process_messages(
             && let Ok(modify) = ModifyLand::decode(&pkt.body)
         {
             let allowed = perms.can_edit_terrain(agent_id);
-            let changed = terraform::apply_modify_land(&scene, allowed, &modify);
+            let changed = if modify_throttle.allow(agent_id, Instant::now()) {
+                terraform::apply_modify_land(&scene, allowed, &modify)
+            } else {
+                Vec::new() // too soon after this avatar's previous edit
+            };
             if !allowed {
                 tracing::debug!(agent = %agent_id, "ModifyLand refused: no terraform permission");
             }

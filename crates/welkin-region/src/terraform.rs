@@ -43,6 +43,34 @@ fn brush_size(msg: &ModifyLand, index: usize) -> f32 {
     }
 }
 
+/// Minimum time between terrain edits from one avatar (OpenSim waits 20 ms after each
+/// `ModifyLand`); requests that arrive sooner are dropped.
+pub const MODIFY_COOLDOWN: std::time::Duration = std::time::Duration::from_millis(20);
+
+/// Per-avatar rate limit for `ModifyLand`.
+#[derive(Default)]
+pub struct ModifyThrottle {
+    next_allowed: std::collections::HashMap<uuid::Uuid, std::time::Instant>,
+}
+
+impl ModifyThrottle {
+    /// True if `agent` may edit now; records the edit time when it may.
+    pub fn allow(&mut self, agent: uuid::Uuid, now: std::time::Instant) -> bool {
+        if let Some(next) = self.next_allowed.get(&agent)
+            && now < *next
+        {
+            return false;
+        }
+        self.next_allowed.insert(agent, now + MODIFY_COOLDOWN);
+        true
+    }
+
+    /// Forget an avatar that left.
+    pub fn forget(&mut self, agent: &uuid::Uuid) {
+        self.next_allowed.remove(agent);
+    }
+}
+
 /// Largest brush radius accepted (metres); a region is 256 m wide.
 const MAX_BRUSH_SIZE: f32 = 64.0;
 /// Largest `seconds` (strength) value accepted.
@@ -187,6 +215,19 @@ mod tests {
         }
         // A good request still works afterwards.
         assert!(!apply_modify_land(&scene, true, &click(1, 100.0, 100.0, 3.0, 1.0)).is_empty());
+    }
+
+    #[test]
+    fn throttle_drops_requests_inside_the_cooldown_per_avatar() {
+        let mut t = ModifyThrottle::default();
+        let (a, b) = (uuid::Uuid::new_v4(), uuid::Uuid::new_v4());
+        let t0 = std::time::Instant::now();
+        assert!(t.allow(a, t0));
+        assert!(!t.allow(a, t0 + std::time::Duration::from_millis(10)));
+        assert!(t.allow(b, t0 + std::time::Duration::from_millis(10)), "other avatars are independent");
+        assert!(t.allow(a, t0 + MODIFY_COOLDOWN));
+        t.forget(&a);
+        assert!(t.allow(a, t0 + MODIFY_COOLDOWN));
     }
 
     #[test]
