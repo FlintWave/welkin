@@ -4351,6 +4351,41 @@ async fn process_messages(
                                 target = %target,
                                 "EstateOwnerMessage: estateaccessdelta"
                             );
+                            if target.is_nil() {
+                                continue;
+                            }
+                            // C# bits: 64 = estate ban add, 128 = estate ban remove.
+                            let need_reply = (mask & 1024) == 0;
+                            if mask & 64 != 0 || mask & 128 != 0 {
+                                if let Ok(Some(estate)) =
+                                    estate_store.get_estate_for_region(&region_id).await
+                                {
+                                    if mask & 64 != 0 {
+                                        let ban = welkin_data::estate::EstateBanRow {
+                                            estate_id: estate.estate_id,
+                                            banned_uuid: target.to_string(),
+                                            banned_ip: String::new(),
+                                            banned_ip_host_mask: String::new(),
+                                            banned_name_mask: None,
+                                            banning_uuid: agent_id.to_string(),
+                                            ban_time: std::time::SystemTime::now()
+                                                .duration_since(std::time::UNIX_EPOCH)
+                                                .map(|d| d.as_secs() as i32)
+                                                .unwrap_or(0),
+                                        };
+                                        let _ =
+                                            estate_store.add_estate_ban(&ban).await;
+                                    }
+                                    if mask & 128 != 0 {
+                                        let _ = estate_store
+                                            .remove_estate_ban(estate.estate_id, &target.to_string())
+                                            .await;
+                                    }
+                                }
+                                if !need_reply {
+                                    // Viewer expects no dialog; tacit.
+                                }
+                            }
                         }
                     }
                     "simulatormessage" => {
