@@ -81,7 +81,7 @@ pub use messaging::{
 };
 pub use module::{ModuleConfig, ModuleError, ModuleType, RegionModule};
 pub use offline_im::OfflineIMModule;
-pub use permissions::{DefaultPermissionsModule, PermissionsConfig, UserSet, checks::ObjectPerms};
+pub use permissions::{AbuseGuard, DefaultPermissionsModule, PermissionsConfig, UserSet, checks::ObjectPerms};
 pub use profiles::{
     AvatarProperties, BasicProfileModule, ClassifiedSummary, PickSummary, UserNote,
 };

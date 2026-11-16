@@ -1272,6 +1272,53 @@ pub async fn environment_settings_post(body: Bytes) -> Response {
     llsd_response(Llsd::Map(map))
 }
 
+pub async fn ext_environment_settings_get() -> Response {
+    llsd_response(default_ext_environment_settings())
+}
+
+pub async fn ext_environment_settings_post(body: Bytes) -> Response {
+    log_upload_body("ExtEnvironment", &body);
+    let mut map = Map::new();
+    map.insert("success".into(), Llsd::Boolean(true));
+    llsd_response(Llsd::Map(map))
+}
+
+// Extended-environment aliases (historical handler names).
+pub async fn ext_environment_get() -> Response {
+    ext_environment_settings_get().await
+}
+pub async fn ext_environment_post(body: Bytes) -> Response {
+    ext_environment_settings_post(body).await
+}
+pub async fn extended_environment_settings_get() -> Response {
+    ext_environment_settings_get().await
+}
+pub async fn extended_environment_settings_post(body: Bytes) -> Response {
+    ext_environment_settings_post(body).await
+}
+
+// Environment aliases (historical handler names).
+pub async fn environment_settings() -> Response {
+    environment_settings_get().await
+}
+pub async fn environment_get() -> Response {
+    environment_settings_get().await
+}
+pub async fn environment_post(body: Bytes) -> Response {
+    environment_settings_post(body).await
+}
+
+// Healthcheck helper (capability-style).
+pub async fn healthcheck() -> Response {
+    llsd_response(Llsd::String("ok".into()))
+}
+pub async fn health_check() -> Response {
+    healthcheck().await
+}
+pub async fn health() -> Response {
+    healthcheck().await
+}
+
 pub async fn land_resources(_body: Bytes) -> Response {
     let mut avail_entry = Map::new();
     avail_entry.insert("type".into(), Llsd::String("urls".into()));
@@ -1426,7 +1473,7 @@ pub fn cap_routes(
         ),
         (
             "ExtEnvironment",
-            get(environment_settings_get).post(environment_settings_post),
+            get(ext_environment_settings_get).post(ext_environment_settings_post),
         ),
         ("LandResources", post(land_resources)),
         (

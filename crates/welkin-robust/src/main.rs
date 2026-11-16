@@ -18,6 +18,8 @@ use tracing::{error, info};
 use welkin_config::Config;
 use welkin_data::DataPool;
 
+mod gatekeeper_create_agent;
+
 #[derive(Parser, Debug)]
 #[command(name = "robust", about = "OpenSimulator ROBUST grid services server")]
 struct Cli {
@@ -282,9 +284,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     })
     .layer(middleware::from_fn(get_only_filter));
 
+    let create_agent_router = gatekeeper_create_agent::router(gatekeeper_create_agent::CreateAgentState::default());
+
     let public_router = Router::new()
         .merge(welkin_services::login::router(login_state))
         .merge(public_map)
+        .merge(create_agent_router)
         .route(
             "/get_grid_info",
             get({

@@ -487,6 +487,85 @@ impl ProfilesStore {
         self.get_avatar_properties(uuid).await
     }
 
+    // ---- avatar profile text/image/partner update via data store ----
+
+    pub async fn update_avatar_profile_text_image_partner(
+        &self,
+        user_uuid: &str,
+        about_text: &str,
+        first_life_text: &str,
+        image_id: &str,
+        first_life_image_id: &str,
+        partner_id: &str,
+    ) -> Result<(), DataError> {
+        let mut profile = match self.get_profile(user_uuid).await? {
+            Some(p) => p,
+            None => ProfileRow {
+                user_uuid: user_uuid.to_string(),
+                profile_partner: "00000000-0000-0000-0000-000000000000".to_string(),
+                profile_allow_publish: vec![0],
+                profile_mature_publish: vec![0],
+                profile_url: String::new(),
+                profile_want_to_mask: 0,
+                profile_want_to_text: String::new(),
+                profile_skills_mask: 0,
+                profile_skills_text: String::new(),
+                profile_languages: String::new(),
+                profile_image: "00000000-0000-0000-0000-000000000000".to_string(),
+                profile_about_text: String::new(),
+                profile_first_image: "00000000-0000-0000-0000-000000000000".to_string(),
+                profile_first_text: String::new(),
+            },
+        };
+        profile.profile_about_text = about_text.to_string();
+        profile.profile_first_text = first_life_text.to_string();
+        profile.profile_image = image_id.to_string();
+        profile.profile_first_image = first_life_image_id.to_string();
+        profile.profile_partner = partner_id.to_string();
+        self.store_profile(&profile).await
+    }
+
+    // Aliases for discoverability.
+    pub async fn update_avatar_profile(
+        &self,
+        user_uuid: &str,
+        about_text: &str,
+        first_life_text: &str,
+        image_id: &str,
+        first_life_image_id: &str,
+        partner_id: &str,
+    ) -> Result<(), DataError> {
+        self.update_avatar_profile_text_image_partner(
+            user_uuid,
+            about_text,
+            first_life_text,
+            image_id,
+            first_life_image_id,
+            partner_id,
+        )
+        .await
+    }
+
+    pub async fn store_avatar_profile(
+        &self,
+        user_uuid: &str,
+        about_text: &str,
+        first_life_text: &str,
+        image_id: &str,
+        first_life_image_id: &str,
+        partner_id: &str,
+    ) -> Result<(), DataError> {
+        self.update_avatar_profile_text_image_partner(
+            user_uuid,
+            about_text,
+            first_life_text,
+            image_id,
+            first_life_image_id,
+            partner_id,
+        )
+        .await
+    }
+
     // ---- notes ----
 
     pub async fn get_note(
@@ -702,5 +781,60 @@ mod tests {
             .await
             .unwrap();
         assert!(missing.is_none());
+    }
+
+    #[tokio::test]
+    async fn avatar_profile_text_image_partner_update() {
+        let p = pool().await;
+        let store = ProfilesStore::new(p.clone());
+        let uuid = "11111111-2222-3333-4444-555555555555";
+        // base row
+        let row = ProfileRow {
+            user_uuid: uuid.to_string(),
+            profile_partner: "00000000-0000-0000-0000-000000000000".to_string(),
+            profile_allow_publish: vec![1],
+            profile_mature_publish: vec![0],
+            profile_url: "http://example".to_string(),
+            profile_want_to_mask: 3,
+            profile_want_to_text: "fun".to_string(),
+            profile_skills_mask: 4,
+            profile_skills_text: "rust".to_string(),
+            profile_languages: "en".to_string(),
+            profile_image: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee".to_string(),
+            profile_about_text: "old about".to_string(),
+            profile_first_image: "11111111-2222-3333-4444-555555555555".to_string(),
+            profile_first_text: "old first".to_string(),
+        };
+        store.store_profile(&row).await.unwrap();
+        let partner = "22222222-3333-4444-5555-666666666666";
+        store
+            .update_avatar_profile_text_image_partner(
+                uuid,
+                "new about",
+                "new first",
+                "cccccccc-dddd-eeee-ffff-000000000000",
+                "dddddddd-eeee-ffff-0000-111111111111",
+                partner,
+            )
+            .await
+            .unwrap();
+        let got = store.get_profile(uuid).await.unwrap().unwrap();
+        assert_eq!(got.profile_about_text, "new about");
+        assert_eq!(got.profile_first_text, "new first");
+        assert_eq!(got.profile_image, "cccccccc-dddd-eeee-ffff-000000000000");
+        assert_eq!(got.profile_first_image, "dddddddd-eeee-ffff-0000-111111111111");
+        assert_eq!(got.profile_partner, partner);
+        // other fields preserved
+        assert_eq!(got.profile_want_to_text, "fun");
+        assert_eq!(got.profile_url, "http://example");
+
+        // Non-existent user path
+        let u2 = "99999999-8888-7777-6666-555555555555";
+        store
+            .update_avatar_profile(u2, "about2", "first2", "img2", "firstimg2", "00000000-0000-0000-0000-000000000000")
+            .await
+            .unwrap();
+        let got2 = store.get_profile(u2).await.unwrap().unwrap();
+        assert_eq!(got2.profile_about_text, "about2");
     }
 }

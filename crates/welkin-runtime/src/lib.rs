@@ -37,6 +37,18 @@ pub fn health_router(metrics_handle: PrometheusHandle) -> Router {
         )
 }
 
+pub fn healthcheck_router(metrics_handle: PrometheusHandle) -> Router {
+    health_router(metrics_handle)
+}
+
+pub async fn healthcheck() -> &'static str {
+    "ok"
+}
+
+pub async fn health() -> &'static str {
+    "ok"
+}
+
 pub async fn shutdown_signal() {
     #[cfg(unix)]
     {

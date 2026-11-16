@@ -66,6 +66,27 @@ pub fn cap_environment_settings_default() -> Llsd {
     default_environment_settings()
 }
 
+// Extended environment capability aliases (ExtEnvironment).
+pub fn default_ext_environment_settings() -> Llsd {
+    default_environment_settings()
+}
+
+pub fn default_ext_environment_settings_for_region(region_id: Uuid) -> Llsd {
+    default_environment_settings_for_region(region_id)
+}
+
+pub fn ext_environment_settings_defaults() -> Llsd {
+    default_environment_settings()
+}
+
+pub fn cap_ext_environment_settings_default() -> Llsd {
+    default_environment_settings()
+}
+
+pub fn ext_environment_defaults() -> Llsd {
+    default_environment_settings()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -16,6 +16,8 @@ use std::sync::{Arc, OnceLock};
 use uuid::Uuid;
 use welkin_caps::lru_cache::LruCache;
 use welkin_modules::DefaultPermissionsModule;
+#[allow(unused_imports)]
+pub use welkin_modules::permissions::AbuseGuard;
 use welkin_scene::scene::Scene;
 
 /// Why a freeze/unfreeze request was rejected.

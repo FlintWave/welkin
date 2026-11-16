@@ -6,7 +6,10 @@
 //! administrator detection, and all per-action permission checks (objects,
 //! scripts, terrain, parcels, estate).
 
+pub mod abuse_guard;
 pub mod checks;
+
+pub use abuse_guard::AbuseGuard;
 
 use std::collections::HashSet;
 
