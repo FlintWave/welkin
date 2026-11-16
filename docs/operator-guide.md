@@ -577,6 +577,22 @@ Apply rate limiting at the reverse proxy layer. Key endpoints to protect:
 
 ---
 
+## What survives a restart
+
+A region saves its objects, terrain and estate settings to its database, and
+loads them again at start. Objects and terrain are written on the backup timer
+(`[Backup] IntervalSeconds`, 900 by default), so a crash can lose edits made
+since the last save. Avatars' worn attachments are remembered in the grid's
+avatar service and worn again at the next login. Scripts are saved and restored
+with their objects; a saved script whose object no longer exists is skipped and
+deleted at start.
+
+All of this is keyed by the region UUID. Leave `[Region] RegionUUID` unset to let
+the region generate one on its first start and keep it, or set it yourself. Do
+not rename a region or move it to another location without setting `RegionUUID`
+to the old value; the region would get a new UUID and would not find its data.
+See the [configuration reference](configuration.md#welkin-region-region-simulator).
+
 ## Upgrading
 
 ### Version compatibility
