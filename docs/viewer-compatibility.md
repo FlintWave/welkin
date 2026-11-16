@@ -13,6 +13,94 @@ Current viewer compatibility status, updated as live testing progresses.
 | Firestorm (OpenSim build) | Yes | Working | Tested 2026-11-14 |
 | LibreMetaverse bot | Yes | 10/10 steps pass | Automated test client |
 
+## Groups
+
+Groups are off by default; turn them on with `[Groups] Enabled = true` (see the
+[configuration reference](configuration.md#groups)). The region talks to the
+grid's groups service, which `welkin-robust` provides. These behaviours come from
+the code and its tests, not from a live viewer run.
+
+Working:
+
+- Group data is sent at login, so the viewer shows the avatar's groups with
+  their real names.
+- The active group appears in `AgentDataUpdate`.
+- A viewer can create a group, join one, leave one, update a group's info and
+  activate a group. The region replies with the viewer's usual reply messages and
+  refreshes the avatar's group state after a change.
+- A viewer can open a group's profile and read its member list, its roles, the
+  titles the avatar may pick, and which members hold which role. Members see the
+  whole list. An avatar that is not a member sees only the members who hold a
+  role with the MemberVisible power (bit 50 of the role powers), as OpenSimulator
+  does; if the Everyone role has that power, every member is visible.
+- Member lists and role-member lists go out in several replies, each kept to a
+  budget of about 1000 bytes, so a large group does not overflow a UDP packet.
+- A member with the right to invite can invite another avatar to the group. The
+  region stores the invitation in the groups database, so it survives a restart,
+  and sends the invitee an instant message. The invitee can accept, which adds
+  them to the group and refreshes their group state, or decline. A refused
+  invitation shows the inviter "Unable to invite that agent (no permission, or
+  already a member)."
+- The group founder holds the Owner role only, not Owner and Officer both.
+- Members can manage the group from the viewer's group window: create, update
+  and delete roles (including their powers), assign members to roles or remove
+  them, change the avatar's own title, set whether the avatar accepts group
+  notices, and eject a member. An ejected member's viewer drops the group, and a
+  request from an avatar that is not allowed to make the change is refused with
+  an alert message.
+
+How it differs from OpenSimulator:
+
+- The region refuses a join request for a group with closed enrollment and shows
+  the viewer "This group is not open for enrollment." OpenSimulator does not
+  check this and relies on the viewer to hide the Join button. This is a
+  deliberate improvement.
+- Every group handler acts for the authenticated avatar of the connection and
+  never reads the agent ID that a packet claims, so one avatar cannot create,
+  join, leave or change groups in another avatar's name.
+- `GroupPowers` in the login group data is an 8-byte big-endian binary value,
+  the same encoding OpenSimulator uses.
+- The region makes its calls to the groups service without holding the session
+  lock, and runs each group request in its own task. A slow or hung groups
+  service therefore does not stall the region's packet loop or the avatar's
+  other traffic; a test with a hung service covers this. The connector times out
+  a request after 15 seconds and a connection attempt after 5 seconds, and
+  speaks the XML protocol that ROBUST's groups service uses.
+
+Who may do what: the grid groups service (`welkin-services`) checks each change
+against the powers of the roles the requesting avatar holds. The region relays
+the request using the authenticated avatar as the requester. An avatar with no
+role in the group has no powers, so its requests are refused.
+
+| Action | Power required |
+|---|---|
+| Create a role | CREATE_ROLE |
+| Update a role | CHANGE_ACTIONS |
+| Delete a role | DELETE_ROLE |
+| Update group info (charter, fee, enrollment) | CHANGE_ACTIONS |
+| Assign or remove another member's role | ASSIGN_MEMBER, or ASSIGN_MEMBER_LIMITED, which also requires holding the role being assigned or removed; group owners always pass |
+| Eject a member | EJECT, unless the avatar ejects itself |
+| Invite | INVITE; the region also limits the inviter to offering the Everyone role or a role the inviter holds |
+| Send a notice | SEND_NOTICES |
+
+Choosing the avatar's own active role (its title) needs no power. The check that
+the avatar actually holds the role it selects is not enforced yet.
+
+Not covered yet: group notices, which are queued as the next milestone.
+Group proposals and votes are out of scope: they belong to a separate
+OpenSimulator module that has no service support in `welkin-robust`, and the
+approved design leaves them out.
+
+Limits to know about:
+
+- Groups are grid-only. Hypergrid avatar IDs are not supported.
+- There is no notice handling yet (a planned milestone). A group with closed
+  enrollment can be joined only by accepting an invitation.
+- Only SQLite has been used, as with the rest of Welkin.
+- The tests ran in process against the groups router, not against a launched
+  `welkin-robust` binary, so the full path from a viewer to a running grid is
+  unverified.
+
 ## Firestorm session (2026-11-14)
 
 Tested with the Firestorm OpenSim build against a local Welkin grid
