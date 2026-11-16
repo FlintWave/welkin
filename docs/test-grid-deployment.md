@@ -80,6 +80,12 @@ For example, `create-user Alice Smith correct-horse-battery`.
 - The email is optional.
 - The grid rejects a name or ID that already exists.
 
+The grid refuses the request unless `welkin-robust` has `AllowCreateUser = true`
+under `[UserAccountService]` in `robust.toml`. It defaults to false. The
+development `robust.toml` in the repository turns it on; for a grid you build
+yourself, add it while you create accounts and remove it afterwards. See the
+[configuration reference](configuration.md#welkin-robust-grid-services).
+
 The command sends the request to the grid service at `GridServerURI` in the
 `[GridService]` section of `welkin.toml`, so ROBUST must be running and
 reachable from the region. On success the console prints
