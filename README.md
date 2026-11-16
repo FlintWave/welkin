@@ -47,7 +47,6 @@ tests:
 - 20 NPC functions with real implementations
 - Economy: currency module with Gloebit integration
 - WebRTC voice via wolfvoice sidecar
-- Web-based grid portal with staff auth, RBAC, and first-run wizard
 - Avatar name resolution from ROBUST UserAccountService
 
 ### Still in progress
@@ -56,6 +55,7 @@ tests:
 - Extended Environment (EEP) day cycles
 - Viewer search, media on a prim, animation overrides
 - Avatar physics controller (built, not yet wired into the main loop)
+- Web-based grid portal (scaffold: most handlers return fake success, and no binary mounts it)
 - Terrain brush editing and DCT compression
 - Several dozen built-and-tested subsystems still need wiring into the
   running server. The [ROADMAP](ROADMAP.md) tracks every one of them.
@@ -69,7 +69,7 @@ tests:
 | Physics | ODE / BulletSim | Rapier 3D |
 | Scripting | XEngine (C# codegen) or YEngine | LSL-to-Luau transpiler (mlua) |
 | Voice | Vivox / FreeSWITCH | WebRTC (wolfvoice) |
-| Admin | Region console + ROBUST web | Web portal with first-run wizard |
+| Admin | Region console + ROBUST web | Web portal (scaffold, not working yet) |
 | License | BSD-3-Clause | LGPL-3.0 |
 
 Welkin is an alternative to OpenSimulator, not a replacement. Both projects
@@ -120,8 +120,8 @@ cargo build --workspace --release
 ./target/release/welkin-region --config welkin.toml
 ```
 
-The web portal at `http://localhost:9000/` walks you through initial setup:
-database connection, first user account, and region placement.
+The web portal and first-run wizard are not working yet. See the
+[docs](docs/quick-start.md) for current setup steps.
 
 ## Project structure
 

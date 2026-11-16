@@ -42,7 +42,7 @@ crates are prefixed `opensim-`.
 | `welkin-script-compiler`, `-api` | LSL-to-Luau transpiler; scene-bound script API | implemented |
 | `welkin-realmwalker` | Rust-native bot/client SDK: async login, UDP circuit, chat, movement, objects. BSD 3-Clause (ported from LibreMetaverse). See `docs/realmwalker.md` | implemented (84 tests) |
 | `welkin-migration` | C# OpenSim to Welkin migration tool: config converter, DB validator, password upgrade (Argon2id) | implemented |
-| `welkin-portal` | Grid portal: staff auth (argon2), sessions, RBAC roles, audit log, region control, pages, grid map, people/sign-up, first-run wizard, content/catalogue | implemented |
+| `welkin-portal` | Grid portal: staff auth (argon2), sessions, RBAC roles, audit log, region control, pages, grid map, people/sign-up, first-run wizard, content/catalogue | scaffold: handlers exist but most return fake success; not wired into any binary |
 | `welkin-companion` | Tauri 2 desktop app: tray icon, service start/stop, log viewer, notifications, remote grid connect. **Standalone**: excluded from workspace (`Cargo.toml` exclude) | implemented |
 | `welkin-robust` | Binary: grid services | skeleton (`main.rs`) |
 | `welkin-region` | Binary: region simulator (config, multi-region, LLUDP and caps startup, graceful shutdown) | implemented |
@@ -234,8 +234,14 @@ Details in `docs/region-simulator-core-summary.md`.
 
 ## Grid Portal
 
-The portal is served by the `robust` binary via `axum`, with GridGate's page set
-as the model. It is the single management interface for the grid.
+> [!WARNING]
+> The portal is a scaffold. The crate has about 30 TODOs, and roughly 20 handlers
+> return success without doing anything, including suspend, unsuspend and password
+> reset. No binary mounts the portal router yet, so the description below is the
+> design, not the running behaviour.
+
+The portal is designed to be served by the `robust` binary via `axum`, with GridGate's
+page set as the model, as the single management interface for the grid.
 
 ### welkin-portal crate (2,084 lines, 12 source files)
 

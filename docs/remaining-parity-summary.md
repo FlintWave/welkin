@@ -53,7 +53,6 @@ Verified through viewer sessions (Aurora, Firestorm) and the 10-step bot test:
 - Estate administration (11 sub-commands, freeze, eject, god mode)
 - Cross-region teleport, hypergrid teleport
 - Instant messaging, groups, friends, profiles
-- Grid portal with first-run wizard, staff auth, RBAC
 - Tauri 2 desktop companion app
 - WebRTC voice via wolfvoice sidecar
 - Economy: MoneyModule, EconomyData, Gloebit REST client
@@ -70,6 +69,7 @@ not yet user-tested:
 - Extended Environment (EEP) settings (Windlight partial only)
 - SearchModule (viewer search for places, people, groups, events)
 - Media on a Prim (MOAP / shared media)
+- Grid portal (scaffold only: the first-run wizard, staff auth and RBAC have code, but most handlers return fake success and the portal is not wired into any binary)
 - Animation overrides (viewer-driven animation replacement)
 - Real attachments from inventory (forced attachments work, viewer-initiated pending)
 - Groups database persistence (in-memory only)
