@@ -97,6 +97,33 @@ Group proposals and votes are out of scope: they belong to a separate
 OpenSimulator module that has no service support in `welkin-robust`, and the
 approved design leaves them out.
 
+Group chat: members can chat in a group's chat session from the viewer.
+
+- Starting the session (instant message dialog 15) adds the avatar to the group's
+  chat roster if it is a member. The region answers through the event queue with
+  `ChatterBoxSessionStartReply`, as OpenSimulator's groups messaging module does,
+  and sends `ChatterBoxSessionAgentListUpdates` when someone joins, is added or
+  leaves, so the viewer's participant list stays current.
+- A message (dialog 17) goes to the members currently in the roster. The sender
+  must be in the roster or be a member of the group. Leaving the session is
+  dialog 18. The roster is held in memory and an entry counts as current for 30
+  seconds.
+- The dialog numbers are pinned by a test. An earlier version used the wrong
+  numbers for session start, send and drop (17, 20 and 14).
+- With groups turned off, the region refuses group chat and notice instant
+  messages instead of handling them.
+
+Hardening:
+
+- The region refuses instant messages of dialog 3 (group invitation) and 33
+  (notice attachment accepted) when a viewer sends them. Only the server
+  creates those, so a client-sent copy is a forgery. This stops one avatar from
+  sending another a fake invitation.
+- Group packets from one avatar run one at a time, in the order they arrive,
+  through a queue that holds 64 packets. Packets beyond that are dropped with a
+  warning, and the queue is cleared at logout. Role updates, role changes and
+  group name requests process at most 64 entries per packet.
+
 Limits to know about:
 
 - Groups are grid-only. Hypergrid avatar IDs are not supported.
