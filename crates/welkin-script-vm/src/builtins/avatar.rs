@@ -414,6 +414,23 @@ pub fn register_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
             let agent_uuid =
                 uuid::Uuid::parse_str(&agent_id).unwrap_or(uuid::Uuid::nil());
             let presence = ctx.presence_list.iter().find(|p| p.uuid == agent_uuid);
+            // Names of agents elsewhere and birth dates come from the account service;
+            // the answer arrives later as a dataserver event, as in OpenSim.
+            let dt = data_type as i32;
+            let remote = crate::builtins::agent_data::needs_lookup(dt)
+                && (presence.is_none() || dt == crate::builtins::agent_data::DATA_BORN);
+            if remote
+                && !agent_uuid.is_nil()
+                && let Some(ref tx) = ctx.agent_data_sender
+            {
+                let _ = tx.send(crate::builtins::agent_data::AgentDataRequest {
+                    prim_id: ctx.prim_id,
+                    request_id: request_id.clone(),
+                    agent_id: agent_uuid,
+                    data_type: dt,
+                });
+                return Ok(request_id);
+            }
             let data = match data_type as i32 {
                 DATA_ONLINE => {
                     if presence.is_some() {

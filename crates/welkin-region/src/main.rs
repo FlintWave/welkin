@@ -8,6 +8,7 @@ mod console_io;
 mod estate_config;
 mod groups_invites;
 mod groups_io;
+mod agent_data_io;
 mod egress_io;
 mod friends_notify;
 mod groups_admin;
@@ -755,6 +756,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let heartbeat_ui_tx = ui_cmd_tx.clone();
     let _ui_cmd_tx = Arc::new(ui_cmd_tx);
     let heartbeat_egress = script_egress.clone();
+    let (agent_data_tx, agent_data_rx) =
+        std::sync::mpsc::channel::<welkin_script_vm::builtins::agent_data::AgentDataRequest>();
+    let heartbeat_agent_data_tx = agent_data_tx.clone();
+    let _agent_data_tx = Arc::new(agent_data_tx);
+    let heartbeat_accounts = Arc::new(welkin_services::remote::accounts::RemoteAccountsConnector::new(
+        region_config.grid_service_url.as_deref().unwrap_or("http://localhost:8003"),
+    ));
 
     // --- Physics command channel: scripts (llApplyImpulse, llSetForce, ...) -> physics ---
     let (physics_cmd_tx, physics_cmd_rx) =
@@ -811,6 +819,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     control_sender: Some(heartbeat_control_tx.clone()),
                     sound_sender: Some(heartbeat_sound_tx.clone()),
                     ui_sender: Some(heartbeat_ui_tx.clone()),
+                    agent_data_sender: Some(heartbeat_agent_data_tx.clone()),
                     physics_sender: Some(heartbeat_physics_tx.clone()),
                     ..Default::default()
                 },
@@ -1015,6 +1024,20 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
                         // Drain script sound commands → viewer sound packets
                         let mut pending_sounds: Vec<welkin_script_vm::builtins::SoundCommand> = Vec::new();
+                        // llRequestAgentData lookups → account service → dataserver event
+                        while let Ok(req) = agent_data_rx.try_recv() {
+                            let accounts = heartbeat_accounts.clone();
+                            let scheduler = heartbeat_scheduler.clone();
+                            tokio::spawn(async move {
+                                if let Some(data) = agent_data_io::resolve(&accounts, &req).await {
+                                    scheduler.lock().post_event_to_prim(
+                                        req.prim_id,
+                                        ScriptEvent::Dataserver { request_id: req.request_id, data },
+                                    );
+                                }
+                            });
+                        }
+
                         // Script dialogs, URLs and text boxes → egress
                         while let Ok(cmd) = ui_cmd_rx.try_recv() {
                             heartbeat_egress.send(egress_io::script_ui_event(cmd));

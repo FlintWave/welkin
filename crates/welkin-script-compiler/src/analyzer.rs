@@ -403,7 +403,14 @@ impl Analyzer {
                 let lt = self.check_expr(lhs, scope);
                 let rt = self.check_expr(rhs, scope);
                 match (lt, rt) {
-                    (Some(lt), Some(rt)) => self.check_binary_op(*op, lt, rt, lhs, rhs, *span),
+                    (Some(lt), Some(rt)) => {
+                        let result = self.check_binary_op(*op, lt, rt, lhs, rhs, *span);
+                        // LSL `+` on strings is concatenation; Lua needs `..` for that.
+                        if *op == BinOp::Add && result == Some(LslType::String) {
+                            *op = BinOp::Concat;
+                        }
+                        result
+                    }
                     _ => None,
                 }
             }
@@ -444,7 +451,11 @@ impl Analyzer {
                             }
                         } else {
                             let bin_op = compound_to_binop(*op);
-                            self.check_binary_op(bin_op, tt, vt, target, value, *span)
+                            let result = self.check_binary_op(bin_op, tt, vt, target, value, *span);
+                            if *op == AssignOp::AddAssign && result == Some(LslType::String) {
+                                *op = AssignOp::ConcatAssign;
+                            }
+                            result
                         }
                     }
                     _ => None,
@@ -593,7 +604,7 @@ impl Analyzer {
     ) -> Option<LslType> {
         use BinOp::*;
         match op {
-            Add => match (lt, rt) {
+            Add | Concat => match (lt, rt) {
                 (LslType::Integer, LslType::Integer) => Some(LslType::Integer),
                 (LslType::Float, LslType::Float) => Some(LslType::Float),
                 (LslType::Integer, LslType::Float) => {
@@ -869,7 +880,7 @@ fn promote_equality(a: LslType, b: LslType) -> (LslType, LslType) {
 
 fn compound_to_binop(op: AssignOp) -> BinOp {
     match op {
-        AssignOp::AddAssign => BinOp::Add,
+        AssignOp::AddAssign | AssignOp::ConcatAssign => BinOp::Add,
         AssignOp::SubAssign => BinOp::Sub,
         AssignOp::MulAssign => BinOp::Mul,
         AssignOp::DivAssign => BinOp::Div,

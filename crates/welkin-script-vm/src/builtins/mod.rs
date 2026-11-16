@@ -22,6 +22,7 @@ pub mod physics;
 pub mod control;
 pub mod prim_params;
 pub mod sensor;
+pub mod agent_data;
 pub mod dialogs;
 pub mod sound;
 pub mod string;
@@ -692,6 +693,8 @@ pub struct ScriptContext {
     pub sound_sender: Option<std::sync::mpsc::Sender<SoundCommand>>,
     /// Dialog, URL and text-box requests for the region to show to viewers.
     pub ui_sender: Option<std::sync::mpsc::Sender<dialogs::UiCommand>>,
+    /// Account lookups for llRequestAgentData about agents outside the region.
+    pub agent_data_sender: Option<std::sync::mpsc::Sender<agent_data::AgentDataRequest>>,
     /// Sender for link commands (create link, break link).
     pub link_command_sender: Option<std::sync::mpsc::Sender<LinkCommand>>,
     /// Sender for object commands (die, message, etc.).
@@ -837,6 +840,7 @@ impl Default for ScriptContext {
             inventory_command_sender: None,
             sound_sender: None,
             ui_sender: None,
+            agent_data_sender: None,
             link_command_sender: None,
             object_command_sender: None,
             is_attachment: false,

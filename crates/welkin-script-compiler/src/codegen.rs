@@ -357,6 +357,13 @@ impl CodeGen {
                 self.emit_expr(rhs);
                 self.output.push(')');
             }
+            BinOp::Concat => {
+                self.output.push('(');
+                self.emit_expr(lhs);
+                self.output.push_str(" .. ");
+                self.emit_expr(rhs);
+                self.output.push(')');
+            }
             BinOp::Sub => {
                 self.output.push('(');
                 self.emit_expr(lhs);
@@ -547,6 +554,12 @@ impl CodeGen {
                 self.output.push_str(" = ");
                 self.emit_expr(target);
                 self.output.push_str(" + ");
+                self.emit_expr(value);
+            }
+            AssignOp::ConcatAssign => {
+                self.output.push_str(" = ");
+                self.emit_expr(target);
+                self.output.push_str(" .. ");
                 self.emit_expr(value);
             }
             AssignOp::SubAssign => {
@@ -920,5 +933,32 @@ state active {
     fn gen_return_void() {
         let out = compile(r#"default { state_entry() { return; } }"#);
         assert!(out.contains("return\n"));
+    }
+}
+
+#[cfg(test)]
+mod concat_tests {
+    use crate::compile_lsl;
+
+    fn lua(src: &str) -> String {
+        compile_lsl(src).expect("compiles")
+    }
+
+    #[test]
+    fn string_plus_string_uses_lua_concat() {
+        let out = lua(r#"default { state_entry() { string s = "a" + "b"; llSay(0, "x" + s); } }"#);
+        assert!(out.contains(" .. "), "expected concatenation in: {out}");
+    }
+
+    #[test]
+    fn numbers_keep_arithmetic_add() {
+        let out = lua("default { state_entry() { integer i = 1; i = i + 2; } }");
+        assert!(out.contains(" + ") && !out.contains(" .. "), "{out}");
+    }
+
+    #[test]
+    fn string_compound_add_concatenates() {
+        let out = lua(r#"default { state_entry() { string s = "a"; s += "b"; } }"#);
+        assert!(out.contains(" .. "), "{out}");
     }
 }

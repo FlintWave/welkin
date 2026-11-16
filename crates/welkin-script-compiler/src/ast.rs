@@ -196,6 +196,8 @@ impl Expr {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinOp {
     Add,
+    /// String concatenation (`string + string`), chosen by the analyzer.
+    Concat,
     Sub,
     Mul,
     Div,
@@ -237,6 +239,8 @@ pub enum PostfixOp {
 pub enum AssignOp {
     Assign,
     AddAssign,
+    /// `string += x`, chosen by the analyzer.
+    ConcatAssign,
     SubAssign,
     MulAssign,
     DivAssign,
