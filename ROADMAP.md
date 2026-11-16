@@ -30,7 +30,9 @@ Known limits of this release:
 - Stubs remain. A search of the Rust sources counts 233 lines that mention "stub"
   (138 in `welkin-modules`, 53 in the script VM, 28 in `welkin-services`, 11 in the
   conformance tool) and 24 `TODO` comments. Some are test helpers or comments, and
-  none has been sorted yet. The README lists examples.
+  none has been sorted yet. Ten "real implementation" commits of 2026-11-16 did not
+  lower the count; see the [module guide](docs/module-development.md#thin-module-methods).
+  The README lists examples.
 - The `ClientEgress` interface that modules use to message viewers is not connected
   in the region yet, so those messages are dropped.
 - Run on a trusted network only. The authentication and account service endpoints

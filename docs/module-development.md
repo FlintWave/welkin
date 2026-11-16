@@ -132,7 +132,29 @@ these events go to `NullEgress` and are dropped. A module written against the
 trait will start to work when the region installs one. Test your module with
 `RecordingEgress` in the meantime.
 
-## Module registry
+## Thin module methods
+
+On 2026-11-16 a batch of ten commits titled "real implementations" reworked
+methods in `welkin-modules` that had been marked as stubs. The table says what each
+method does now, after reading the code. In every row the running region does not
+call the method, so no viewer sees any of it yet. Do not treat these as working
+features.
+
+| Method | What it does now |
+|---|---|
+| `AvatarFactoryModule::save_baked_textures` | Skips nil and default-avatar bakes, keeps the rest in an in-memory cache, and returns true if any remain. It does not save to the asset service. |
+| `FriendsModule::status_notify` | Sends a `FriendOnline` event to each of the avatar's friends through `ClientEgress`. The region's egress is `NullEgress`, so the events are dropped. |
+| `FlotsamAssetCache::get` | On a memory hit, moves the entry to the newest position in the eviction order. There is no file tier, so a memory miss is a miss. |
+| `LandServiceConnector::get_land_data` | Returns `None`. Only its comment changed. |
+| `MuteListServiceConnector::update_mute` | Does nothing. |
+| `NeighbourServiceConnector::inform_neighbours_of_status` | Rejects a nil region ID with a warning and otherwise writes a debug log line. It sends nothing to neighbours. |
+| `SearchModule::search_places` | Returns no results. |
+| `GroupsModule::new` and the proposals and vote history requests | `new` makes a default module. The requests return empty lists, because group proposals are out of scope. |
+| `GroupsModule::handle_group_account_summary_request` | Asks the groups connector for the group record, discards the answer, and returns a default summary. |
+| `AssetTransactionModule::begin_upload` | Creates an upload transaction and now records its creation time. Its log message no longer says "stub". |
+
+A comment that no longer says "stub" is not evidence that the method works. Check
+what the method does, and whether the region calls it, before you rely on it.
 
 The `ModuleRegistry` owns all loaded modules:
 
