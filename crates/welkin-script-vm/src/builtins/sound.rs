@@ -295,6 +295,44 @@ pub fn register_sound(
         )?;
     }
 
+        {
+            let ctx = Arc::clone(ctx);
+            lua.globals().set(
+                "llCollisionSound",
+                lua.create_function(move |_lua, (sound, volume): (Option<String>, f64)| {
+                    let ctx = ctx.read();
+                    let sound_id = match sound {
+                        Some(sound) => resolve_sound(&ctx, &sound),
+                        None => Uuid::nil(),
+                    };
+                    let volume = volume.clamp(0.0, 1.0);
+                    if let Some(sender) = &ctx.sound_sender {
+                        let _ = sender.send(SoundCommand::CollisionSound {
+                            prim_id: ctx.prim_id,
+                            sound_id,
+                            volume,
+                        });
+                    }
+                    Ok(())
+                })?,
+            )?;
+        }
+        {
+            let ctx = Arc::clone(ctx);
+            lua.globals().set(
+                "llSetSoundQueueing",
+                lua.create_function(move |_lua, (enabled,): (i64,)| {
+                    let ctx = ctx.read();
+                    if let Some(sender) = &ctx.sound_sender {
+                        let _ = sender.send(SoundCommand::SetQueueing {
+                            prim_id: ctx.prim_id,
+                            enabled: enabled != 0,
+                        });
+                    }
+                    Ok(())
+                })?,
+            )?;
+        }
     Ok(())
 }
 

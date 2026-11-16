@@ -434,6 +434,8 @@ pub enum SoundCommand {
         bottom_sw: [f64; 3],
     },
     SetRadius { prim_id: Uuid, radius: f64 },
+    CollisionSound { prim_id: Uuid, sound_id: Uuid, volume: f64 },
+    SetQueueing { prim_id: Uuid, enabled: bool },
 }
 
 /// Commands sent from OSSL link functions to the region link subsystem.

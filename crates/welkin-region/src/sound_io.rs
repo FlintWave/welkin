@@ -277,6 +277,19 @@ pub async fn relay_sound(
                     p.sound_radius = radius as f32;
                 });
             }
+            welkin_script_vm::builtins::SoundCommand::CollisionSound { prim_id, sound_id, volume } => {
+                let _ = scene.with_object_mut(&prim_id, |g| {
+                    let p = g.root_part_mut();
+                    p.collision_sound = sound_id;
+                    p.collision_sound_volume = volume as f32;
+                });
+            }
+            welkin_script_vm::builtins::SoundCommand::SetQueueing { prim_id, enabled } => {
+                let _ = scene.with_object_mut(&prim_id, |g| {
+                    let p = g.root_part_mut();
+                    p.sound_queueing = enabled;
+                });
+            }
         }
     }
 }

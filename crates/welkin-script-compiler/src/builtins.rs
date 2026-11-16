@@ -185,6 +185,13 @@ pub static BUILTIN_FUNCTIONS: &[BuiltinFunc] = &[
     // ----- Sound -----
     BuiltinFunc { name: "llAdjustSoundVolume", return_type: LslType::Void, params: params!(Float) },
     BuiltinFunc { name: "llCollisionSound", return_type: LslType::Void, params: params!(String, Float) },
+    BuiltinFunc { name: "llLoopSound", return_type: LslType::Void, params: params!(String, Float) },
+    BuiltinFunc { name: "llLoopSoundMaster", return_type: LslType::Void, params: params!(String, Float) },
+    BuiltinFunc { name: "llLoopSoundSlave", return_type: LslType::Void, params: params!(String, Float) },
+    BuiltinFunc { name: "llPlaySoundSlave", return_type: LslType::Void, params: params!(String, Float) },
+    BuiltinFunc { name: "llSetSoundRadius", return_type: LslType::Void, params: params!(Float) },
+    BuiltinFunc { name: "llTriggerSound", return_type: LslType::Void, params: params!(String, Float) },
+    BuiltinFunc { name: "llTriggerSoundLimited", return_type: LslType::Void, params: params!(String, Float, Vector, Vector) },
     BuiltinFunc { name: "llPlaySound", return_type: LslType::Void, params: params!(String, Float) },
     BuiltinFunc { name: "llPreloadSound", return_type: LslType::Void, params: params!(String) },
     BuiltinFunc { name: "llSetSoundQueueing", return_type: LslType::Void, params: params!(Integer) },
