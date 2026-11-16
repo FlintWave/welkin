@@ -75,13 +75,15 @@ create-user <first> <last>
 
 For example, `create-user Alice Smith`. The console then asks for the password
 twice (`Password:` and `Confirm password:`) and does not echo what you type.
+It then asks `Email (optional, Enter to skip):`. The email is not a secret, so
+it is echoed and not kept in history.
 The console refuses a password typed on the command line, such as
 `create-user Alice Smith secret123`, and tells you to use the prompt instead.
 
 - The first and last name must be non-empty and contain no whitespace.
 - The password must be at least 8 characters and must not contain a double
   quote (`"`).
-- The console prompt does not take an email address.
+- The email is optional and must not contain spaces or double quotes.
 - The grid rejects a name or ID that already exists. Names are compared without
   regard to case or Unicode form, so `Alice Smith` and `alice smith` are the
   same account, and two simultaneous requests cannot both create it.
