@@ -13,7 +13,6 @@ DATA_DIR="/var/lib/opensim"
 CONFIG_DIR="/etc/opensim"
 SERVICE="welkin-robust.service"
 SERVICE_FILE="/etc/systemd/system/$SERVICE"
-PORTAL_PORT=8002
 
 info()  { printf "${BLUE}[INFO]${NC}  %s\n" "$*"; }
 ok()    { printf "${GREEN}[OK]${NC}    %s\n" "$*"; }
@@ -91,9 +90,6 @@ Region_Welcome = DefaultRegion
 AllowGetAuthInfo = false
 AllowSetAuthInfo = false
 AllowSetPassword = false
-
-[Portal]
-Enabled = true
 CONF
 
     chown opensim:opensim "$config_file"
@@ -169,7 +165,6 @@ print_summary() {
     printf "${GREEN}════════════════════════════════════════════════════${NC}\n"
     echo ""
     info "Install:      $INSTALL_DIR/"
-    info "Portal:       http://${ip}:${PORTAL_PORT}/"
     info "Config:       $CONFIG_DIR/robust.ini"
     info "Data:         $DATA_DIR/"
     info "Admin token:  $CONFIG_DIR/admin-token"

@@ -12,7 +12,6 @@ DATA_DIR="/var/lib/opensim"
 CONFIG_DIR="/etc/opensim"
 BIN_DIR="/usr/local/bin"
 SERVICE_FILE="/etc/systemd/system/welkin-robust.service"
-PORTAL_PORT=8002
 GRID_PORT=8003
 
 info()  { printf "${BLUE}[INFO]${NC}  %s\n" "$*"; }
@@ -119,9 +118,6 @@ Region_Welcome = DefaultRegion
 AllowGetAuthInfo = false
 AllowSetAuthInfo = false
 AllowSetPassword = false
-
-[Portal]
-Enabled = true
 CONF
 
     chown opensim:opensim "$config_file"
@@ -224,7 +220,6 @@ print_summary() {
     printf "${GREEN}  OpenSimulator installed successfully${NC}\n"
     printf "${GREEN}════════════════════════════════════════════════════${NC}\n"
     echo ""
-    info "Portal:       http://${ip}:${PORTAL_PORT}/"
     info "Grid services: http://${ip}:${GRID_PORT}/"
     info "Config:       $CONFIG_DIR/robust.ini"
     info "Data:         $DATA_DIR/"
