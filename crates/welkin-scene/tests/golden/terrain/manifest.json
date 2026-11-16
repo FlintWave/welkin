@@ -1,0 +1,425 @@
+{
+  "description": "Golden LayerData vectors: OpenSim 0.9.3.0 TerrainCompressor.cs output for the given 256x256 height maps.",
+  "layer_type": "0x4C land, stride 264, patch size 16, prequant 10",
+  "count": 19,
+  "terrains": [
+    {
+      "name": "flat21",
+      "generator": "21.0 everywhere",
+      "input_file": "inputs/flat21.f32.gz",
+      "input_format": "gzip of 65536 little-endian f32, row-major y*256+x, 256x256",
+      "opensim_output": "opensim-bins/flat21.opensim.bin",
+      "opensim_output_bytes": 2181,
+      "opensim_output_sha256": "622124d9372b0b63a5958c77c83ed5ae3dc4f9ebace02c594cc8d1ea236d1897",
+      "patches_encoded": "all 256 patches in order py=0..15 (outer), px=0..15 (inner)",
+      "compare": "bytes_identical",
+      "rust_vs_opensim_differing_bytes": 0,
+      "reference_decode_error": {
+        "max": 0.0,
+        "mean": 0.0,
+        "decoder": "LibreMetaverse 3.3.0 TerrainManager.DecompressLand of the OpenSim output"
+      },
+      "rust_decode_error_at_854b115": {
+        "max": 0.0,
+        "mean": 0.0
+      },
+      "suggested_assertion": "encode(input) == opensim_output byte for byte"
+    },
+    {
+      "name": "hills",
+      "generator": "21 + 8*sin(x*0.05)*cos(y*0.04) + 3*sin(x*0.2+y*0.1)",
+      "input_file": "inputs/hills.f32.gz",
+      "input_format": "gzip of 65536 little-endian f32, row-major y*256+x, 256x256",
+      "opensim_output": "opensim-bins/hills.opensim.bin",
+      "opensim_output_bytes": 16991,
+      "opensim_output_sha256": "81767e684af5f5482ce2bbd3c1c6d79f9a63113eecff3fd68c6fd6ddeb12b632",
+      "patches_encoded": "all 256 patches in order py=0..15 (outer), px=0..15 (inner)",
+      "compare": "bytes_identical",
+      "rust_vs_opensim_differing_bytes": 0,
+      "reference_decode_error": {
+        "max": 0.2047,
+        "mean": 0.0204,
+        "decoder": "LibreMetaverse 3.3.0 TerrainManager.DecompressLand of the OpenSim output"
+      },
+      "rust_decode_error_at_854b115": {
+        "max": 0.2047,
+        "mean": 0.0204
+      },
+      "suggested_assertion": "encode(input) == opensim_output byte for byte"
+    },
+    {
+      "name": "mountain",
+      "generator": "20 + 180*exp(-((x-128)^2+(y-128)^2)/4000)",
+      "input_file": "inputs/mountain.f32.gz",
+      "input_format": "gzip of 65536 little-endian f32, row-major y*256+x, 256x256",
+      "opensim_output": "opensim-bins/mountain.opensim.bin",
+      "opensim_output_bytes": 12347,
+      "opensim_output_sha256": "ad847d9e43affd5c9dff54da306974b9f5488072e071f7709f584194ad53a461",
+      "patches_encoded": "all 256 patches in order py=0..15 (outer), px=0..15 (inner)",
+      "compare": "bytes_identical",
+      "rust_vs_opensim_differing_bytes": 0,
+      "reference_decode_error": {
+        "max": 0.5395,
+        "mean": 0.0325,
+        "decoder": "LibreMetaverse 3.3.0 TerrainManager.DecompressLand of the OpenSim output"
+      },
+      "rust_decode_error_at_854b115": {
+        "max": 0.5395,
+        "mean": 0.0325
+      },
+      "suggested_assertion": "encode(input) == opensim_output byte for byte"
+    },
+    {
+      "name": "negative",
+      "generator": "-5 + 0.02*x - 0.01*y (clamped to >=0 by TerrainChannel::set, so effectively 0 where negative)",
+      "input_file": "inputs/negative.f32.gz",
+      "input_format": "gzip of 65536 little-endian f32, row-major y*256+x, 256x256",
+      "opensim_output": "opensim-bins/negative.opensim.bin",
+      "opensim_output_bytes": 2219,
+      "opensim_output_sha256": "5f77c10bd9468007846ffe6b81f8f1fefe8675c3c98a3777dbfd1bac55d65e8f",
+      "patches_encoded": "all 256 patches in order py=0..15 (outer), px=0..15 (inner)",
+      "compare": "bytes_identical",
+      "rust_vs_opensim_differing_bytes": 0,
+      "reference_decode_error": {
+        "max": 0.0127,
+        "mean": 0.0,
+        "decoder": "LibreMetaverse 3.3.0 TerrainManager.DecompressLand of the OpenSim output"
+      },
+      "rust_decode_error_at_854b115": {
+        "max": 0.0127,
+        "mean": 0.0
+      },
+      "suggested_assertion": "encode(input) == opensim_output byte for byte"
+    },
+    {
+      "name": "noise2m",
+      "generator": "30 + 2*rng()   (xorshift64 seed 0x123456789abcdef0 continuing across cases in file order of generation)",
+      "input_file": "inputs/noise2m.f32.gz",
+      "input_format": "gzip of 65536 little-endian f32, row-major y*256+x, 256x256",
+      "opensim_output": "opensim-bins/noise2m.opensim.bin",
+      "opensim_output_bytes": 88671,
+      "opensim_output_sha256": "d2569415b93086be91b8eaacd454f84863abdc953ab57a27ef30f589e2f3a089",
+      "patches_encoded": "all 256 patches in order py=0..15 (outer), px=0..15 (inner)",
+      "compare": "decode_only",
+      "rust_vs_opensim_differing_bytes": 1,
+      "reference_decode_error": {
+        "max": 0.1513,
+        "mean": 0.0301,
+        "decoder": "LibreMetaverse 3.3.0 TerrainManager.DecompressLand of the OpenSim output"
+      },
+      "rust_decode_error_at_854b115": {
+        "max": 0.1513,
+        "mean": 0.0301
+      },
+      "suggested_assertion": "decode(encode(input)) max/mean error <= reference*1.01 + 0.001; bytes may differ by rounding ties (<= 64 bytes)"
+    },
+    {
+      "name": "noise60m",
+      "generator": "40 + 60*rng()",
+      "input_file": "inputs/noise60m.f32.gz",
+      "input_format": "gzip of 65536 little-endian f32, row-major y*256+x, 256x256",
+      "opensim_output": "opensim-bins/noise60m.opensim.bin",
+      "opensim_output_bytes": 88407,
+      "opensim_output_sha256": "ca97351e822ad6c7e03a097952d3bcdde7ef3d3314bbc830e4fbbb46e7de37f0",
+      "patches_encoded": "all 256 patches in order py=0..15 (outer), px=0..15 (inner)",
+      "compare": "bytes_identical",
+      "rust_vs_opensim_differing_bytes": 0,
+      "reference_decode_error": {
+        "max": 5.0092,
+        "mean": 0.8993,
+        "decoder": "LibreMetaverse 3.3.0 TerrainManager.DecompressLand of the OpenSim output"
+      },
+      "rust_decode_error_at_854b115": {
+        "max": 5.0092,
+        "mean": 0.8993
+      },
+      "suggested_assertion": "encode(input) == opensim_output byte for byte"
+    },
+    {
+      "name": "ramp",
+      "generator": "0.25*x + 0.1*y",
+      "input_file": "inputs/ramp.f32.gz",
+      "input_format": "gzip of 65536 little-endian f32, row-major y*256+x, 256x256",
+      "opensim_output": "opensim-bins/ramp.opensim.bin",
+      "opensim_output_bytes": 7813,
+      "opensim_output_sha256": "90753c7a8db9bb77cc50c3e29757c0b670bb5bd4f5c27c978ef2b9044e58ed13",
+      "patches_encoded": "all 256 patches in order py=0..15 (outer), px=0..15 (inner)",
+      "compare": "decode_only",
+      "rust_vs_opensim_differing_bytes": 48,
+      "reference_decode_error": {
+        "max": 0.0395,
+        "mean": 0.0092,
+        "decoder": "LibreMetaverse 3.3.0 TerrainManager.DecompressLand of the OpenSim output"
+      },
+      "rust_decode_error_at_854b115": {
+        "max": 0.0395,
+        "mean": 0.0092
+      },
+      "suggested_assertion": "decode(encode(input)) max/mean error <= reference*1.01 + 0.001; bytes may differ by rounding ties (<= 64 bytes)"
+    },
+    {
+      "name": "step",
+      "generator": "x<100 ? 10 : 120",
+      "input_file": "inputs/step.f32.gz",
+      "input_format": "gzip of 65536 little-endian f32, row-major y*256+x, 256x256",
+      "opensim_output": "opensim-bins/step.opensim.bin",
+      "opensim_output_bytes": 2787,
+      "opensim_output_sha256": "7bd2e47c0a6a5f6af2f7a443c897f82b719d3d18c8d91f8675a3d6ee45129cd0",
+      "patches_encoded": "all 256 patches in order py=0..15 (outer), px=0..15 (inner)",
+      "compare": "bytes_identical",
+      "rust_vs_opensim_differing_bytes": 0,
+      "reference_decode_error": {
+        "max": 0.5059,
+        "mean": 0.0088,
+        "decoder": "LibreMetaverse 3.3.0 TerrainManager.DecompressLand of the OpenSim output"
+      },
+      "rust_decode_error_at_854b115": {
+        "max": 0.5059,
+        "mean": 0.0088
+      },
+      "suggested_assertion": "encode(input) == opensim_output byte for byte"
+    },
+    {
+      "name": "subtle",
+      "generator": "21 + 0.3*(x/255)",
+      "input_file": "inputs/subtle.f32.gz",
+      "input_format": "gzip of 65536 little-endian f32, row-major y*256+x, 256x256",
+      "opensim_output": "opensim-bins/subtle.opensim.bin",
+      "opensim_output_bytes": 3845,
+      "opensim_output_sha256": "f68421c29a76aa679e4303a31cd8f767834ad198b5f8c5660ad88c5ab89be4a0",
+      "patches_encoded": "all 256 patches in order py=0..15 (outer), px=0..15 (inner)",
+      "compare": "bytes_identical",
+      "rust_vs_opensim_differing_bytes": 0,
+      "reference_decode_error": {
+        "max": 0.0008,
+        "mean": 0.0002,
+        "decoder": "LibreMetaverse 3.3.0 TerrainManager.DecompressLand of the OpenSim output"
+      },
+      "rust_decode_error_at_854b115": {
+        "max": 0.0008,
+        "mean": 0.0002
+      },
+      "suggested_assertion": "encode(input) == opensim_output byte for byte"
+    },
+    {
+      "name": "checker4096",
+      "generator": "(x+y) even ? 0 : 4096",
+      "input_file": "inputs/checker4096.f32.gz",
+      "input_format": "gzip of 65536 little-endian f32, row-major y*256+x, 256x256",
+      "opensim_output": "opensim-bins/checker4096.opensim.bin",
+      "opensim_output_bytes": 29029,
+      "opensim_output_sha256": "aa3f125aba2c816f5b5920fcc0b09eb7c5927b7dedc0dfada1b9b673f9b514a1",
+      "patches_encoded": "all 256 patches in order py=0..15 (outer), px=0..15 (inner)",
+      "compare": "bytes_identical",
+      "rust_vs_opensim_differing_bytes": 0,
+      "reference_decode_error": {
+        "max": 202.1017,
+        "mean": 29.2655,
+        "decoder": "LibreMetaverse 3.3.0 TerrainManager.DecompressLand of the OpenSim output"
+      },
+      "rust_decode_error_at_854b115": {
+        "max": 202.1017,
+        "mean": 29.2655
+      },
+      "suggested_assertion": "encode(input) == opensim_output byte for byte"
+    },
+    {
+      "name": "lowzero",
+      "generator": "x<64 ? 0 : 3*rng()",
+      "input_file": "inputs/lowzero.f32.gz",
+      "input_format": "gzip of 65536 little-endian f32, row-major y*256+x, 256x256",
+      "opensim_output": "opensim-bins/lowzero.opensim.bin",
+      "opensim_output_bytes": 65958,
+      "opensim_output_sha256": "f456c17df8865c8c09e579e2d0539da661445c997d7c64e682d691dd9fc697ac",
+      "patches_encoded": "all 256 patches in order py=0..15 (outer), px=0..15 (inner)",
+      "compare": "bytes_identical",
+      "rust_vs_opensim_differing_bytes": 0,
+      "reference_decode_error": {
+        "max": 0.2462,
+        "mean": 0.0339,
+        "decoder": "LibreMetaverse 3.3.0 TerrainManager.DecompressLand of the OpenSim output"
+      },
+      "rust_decode_error_at_854b115": {
+        "max": 0.2462,
+        "mean": 0.0339
+      },
+      "suggested_assertion": "encode(input) == opensim_output byte for byte"
+    },
+    {
+      "name": "noise1000",
+      "generator": "1000*rng()  (xorshift64 seed 0xfeedbeef0badf00d)",
+      "input_file": "inputs/noise1000.f32.gz",
+      "input_format": "gzip of 65536 little-endian f32, row-major y*256+x, 256x256",
+      "opensim_output": "opensim-bins/noise1000.opensim.bin",
+      "opensim_output_bytes": 87737,
+      "opensim_output_sha256": "cb5791bc25f93e7aba2efa81761bfcb508d37db55b76b411ebccad55ef75915c",
+      "patches_encoded": "all 256 patches in order py=0..15 (outer), px=0..15 (inner)",
+      "compare": "bytes_identical",
+      "rust_vs_opensim_differing_bytes": 0,
+      "reference_decode_error": {
+        "max": 79.4022,
+        "mean": 14.9513,
+        "decoder": "LibreMetaverse 3.3.0 TerrainManager.DecompressLand of the OpenSim output"
+      },
+      "rust_decode_error_at_854b115": {
+        "max": 79.4022,
+        "mean": 14.9513
+      },
+      "suggested_assertion": "encode(input) == opensim_output byte for byte"
+    },
+    {
+      "name": "rampy",
+      "generator": "5 + 0.5*y - 0.01*x",
+      "input_file": "inputs/rampy.f32.gz",
+      "input_format": "gzip of 65536 little-endian f32, row-major y*256+x, 256x256",
+      "opensim_output": "opensim-bins/rampy.opensim.bin",
+      "opensim_output_bytes": 8421,
+      "opensim_output_sha256": "6adb4ba5f1c94e10c6dd9250b3ea79aae9f7b1075cb9280fb134a1eec1c59b73",
+      "patches_encoded": "all 256 patches in order py=0..15 (outer), px=0..15 (inner)",
+      "compare": "bytes_identical",
+      "rust_vs_opensim_differing_bytes": 0,
+      "reference_decode_error": {
+        "max": 0.0274,
+        "mean": 0.009,
+        "decoder": "LibreMetaverse 3.3.0 TerrainManager.DecompressLand of the OpenSim output"
+      },
+      "rust_decode_error_at_854b115": {
+        "max": 0.0274,
+        "mean": 0.009
+      },
+      "suggested_assertion": "encode(input) == opensim_output byte for byte"
+    },
+    {
+      "name": "sinus",
+      "generator": "500 + 400*sin(x*0.3)*cos(y*0.25)",
+      "input_file": "inputs/sinus.f32.gz",
+      "input_format": "gzip of 65536 little-endian f32, row-major y*256+x, 256x256",
+      "opensim_output": "opensim-bins/sinus.opensim.bin",
+      "opensim_output_bytes": 20512,
+      "opensim_output_sha256": "4e3b78892709a8138504efdc8d35147969c459fa88b18a4817c64199e65d66c9",
+      "patches_encoded": "all 256 patches in order py=0..15 (outer), px=0..15 (inner)",
+      "compare": "bytes_identical",
+      "rust_vs_opensim_differing_bytes": 0,
+      "reference_decode_error": {
+        "max": 19.561,
+        "mean": 2.631,
+        "decoder": "LibreMetaverse 3.3.0 TerrainManager.DecompressLand of the OpenSim output"
+      },
+      "rust_decode_error_at_854b115": {
+        "max": 19.561,
+        "mean": 2.631
+      },
+      "suggested_assertion": "encode(input) == opensim_output byte for byte"
+    },
+    {
+      "name": "spike",
+      "generator": "(x,y)==(128,128) ? 4000 : 10",
+      "input_file": "inputs/spike.f32.gz",
+      "input_format": "gzip of 65536 little-endian f32, row-major y*256+x, 256x256",
+      "opensim_output": "opensim-bins/spike.opensim.bin",
+      "opensim_output_bytes": 2501,
+      "opensim_output_sha256": "6dbbab77476a4ee5c2631cab56a9096a0594baeb60b8fbac7808ad3b18b620e0",
+      "patches_encoded": "all 256 patches in order py=0..15 (outer), px=0..15 (inner)",
+      "compare": "bytes_identical",
+      "rust_vs_opensim_differing_bytes": 0,
+      "reference_decode_error": {
+        "max": 626.377,
+        "mean": 0.1231,
+        "decoder": "LibreMetaverse 3.3.0 TerrainManager.DecompressLand of the OpenSim output"
+      },
+      "rust_decode_error_at_854b115": {
+        "max": 626.377,
+        "mean": 0.1231
+      },
+      "suggested_assertion": "encode(input) == opensim_output byte for byte"
+    },
+    {
+      "name": "spread004",
+      "generator": "21 + 0.004*((x+y)%2)   (flat-patch shortcut threshold test)",
+      "input_file": "inputs/spread004.f32.gz",
+      "input_format": "gzip of 65536 little-endian f32, row-major y*256+x, 256x256",
+      "opensim_output": "opensim-bins/spread004.opensim.bin",
+      "opensim_output_bytes": 2181,
+      "opensim_output_sha256": "622124d9372b0b63a5958c77c83ed5ae3dc4f9ebace02c594cc8d1ea236d1897",
+      "patches_encoded": "all 256 patches in order py=0..15 (outer), px=0..15 (inner)",
+      "compare": "bytes_identical",
+      "rust_vs_opensim_differing_bytes": 0,
+      "reference_decode_error": {
+        "max": 0.004,
+        "mean": 0.002,
+        "decoder": "LibreMetaverse 3.3.0 TerrainManager.DecompressLand of the OpenSim output"
+      },
+      "rust_decode_error_at_854b115": {
+        "max": 0.004,
+        "mean": 0.002
+      },
+      "suggested_assertion": "encode(input) == opensim_output byte for byte"
+    },
+    {
+      "name": "spread006",
+      "generator": "21 + 0.006*((x+y)%2)",
+      "input_file": "inputs/spread006.f32.gz",
+      "input_format": "gzip of 65536 little-endian f32, row-major y*256+x, 256x256",
+      "opensim_output": "opensim-bins/spread006.opensim.bin",
+      "opensim_output_bytes": 2693,
+      "opensim_output_sha256": "e7a07f084094ae17038181b75832c1be4687f577ef8c3a031db81a2e1b391bd2",
+      "patches_encoded": "all 256 patches in order py=0..15 (outer), px=0..15 (inner)",
+      "compare": "bytes_identical",
+      "rust_vs_opensim_differing_bytes": 0,
+      "reference_decode_error": {
+        "max": 0.0031,
+        "mean": 0.003,
+        "decoder": "LibreMetaverse 3.3.0 TerrainManager.DecompressLand of the OpenSim output"
+      },
+      "rust_decode_error_at_854b115": {
+        "max": 0.0031,
+        "mean": 0.003
+      },
+      "suggested_assertion": "encode(input) == opensim_output byte for byte"
+    },
+    {
+      "name": "spread100",
+      "generator": "21 + 0.5*((x+y)%2)",
+      "input_file": "inputs/spread100.f32.gz",
+      "input_format": "gzip of 65536 little-endian f32, row-major y*256+x, 256x256",
+      "opensim_output": "opensim-bins/spread100.opensim.bin",
+      "opensim_output_bytes": 39429,
+      "opensim_output_sha256": "eb2a4846592a18d5f0457005bd12b3cd97d6c02ca76807574b7d0a31e2c0b02a",
+      "patches_encoded": "all 256 patches in order py=0..15 (outer), px=0..15 (inner)",
+      "compare": "bytes_identical",
+      "rust_vs_opensim_differing_bytes": 0,
+      "reference_decode_error": {
+        "max": 0.0424,
+        "mean": 0.0069,
+        "decoder": "LibreMetaverse 3.3.0 TerrainManager.DecompressLand of the OpenSim output"
+      },
+      "rust_decode_error_at_854b115": {
+        "max": 0.0424,
+        "mean": 0.0069
+      },
+      "suggested_assertion": "encode(input) == opensim_output byte for byte"
+    },
+    {
+      "name": "terraced",
+      "generator": "20 + 8*(((x/16)+(y/16))%3)",
+      "input_file": "inputs/terraced.f32.gz",
+      "input_format": "gzip of 65536 little-endian f32, row-major y*256+x, 256x256",
+      "opensim_output": "opensim-bins/terraced.opensim.bin",
+      "opensim_output_bytes": 2181,
+      "opensim_output_sha256": "95602606d8f281cbdf48d719c631c0850658737aea6b77c4bcdd646275163787",
+      "patches_encoded": "all 256 patches in order py=0..15 (outer), px=0..15 (inner)",
+      "compare": "bytes_identical",
+      "rust_vs_opensim_differing_bytes": 0,
+      "reference_decode_error": {
+        "max": 0.0,
+        "mean": 0.0,
+        "decoder": "LibreMetaverse 3.3.0 TerrainManager.DecompressLand of the OpenSim output"
+      },
+      "rust_decode_error_at_854b115": {
+        "max": 0.0,
+        "mean": 0.0
+      },
+      "suggested_assertion": "encode(input) == opensim_output byte for byte"
+    }
+  ]
+}
