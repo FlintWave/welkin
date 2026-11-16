@@ -698,4 +698,158 @@ mod tests {
         assert!(attach_from_world(&ctx, stranger, other_local, 5).await.unwrap_err().contains("permission"));
         let _ = &h.perms;
     }
+
+#[test]
+fn worn_items_groups_items_by_point() {
+    let g_a = Uuid::new_v4();
+    let g_b = Uuid::new_v4();
+    let g_c = Uuid::new_v4();
+    let item_a = Uuid::new_v4();
+    let item_b = Uuid::new_v4();
+    let item_c = Uuid::new_v4();
+
+    let item_for = |g: &Uuid| -> Uuid {
+        if *g == g_a {
+            item_a
+        } else if *g == g_b {
+            item_b
+        } else if *g == g_c {
+            item_c
+        } else {
+            Uuid::nil()
+        }
+    };
+
+    let out = worn_items(&[(2, g_a), (2, g_b), (6, g_c)], |g| item_for(g));
+    assert_eq!(
+        out,
+        vec![
+            ("_ap_2".to_string(), format!("{},{}", item_a, item_b)),
+            ("_ap_6".to_string(), item_c.to_string()),
+        ]
+    );
+
+    // A group whose item id is nil is skipped.
+    let g_nil = Uuid::new_v4();
+    let out_nil = worn_items(&[(2, g_nil)], |g| {
+        if *g == g_nil {
+            Uuid::nil()
+        } else {
+            Uuid::nil()
+        }
+    });
+    assert!(out_nil.is_empty());
+
+    // Empty input gives an empty vec.
+    let out_empty = worn_items(&[], |g| item_for(g));
+    assert!(out_empty.is_empty());
+}
+
+#[test]
+fn parse_worn_items_reads_ids_and_ignores_junk() {
+    let u = Uuid::new_v4();
+    let u2 = Uuid::new_v4();
+    let asset = Uuid::new_v4();
+
+    let items = vec![
+        ("_ap_2".to_string(), format!("{},{}", u, u2)),
+        ("_ap_6".to_string(), format!("{}:{}", u, asset)),
+        ("Height".to_string(), "1.7".to_string()),
+        ("_ap_x".to_string(), u.to_string()),
+        ("_ap_5".to_string(), "not-a-uuid".to_string()),
+    ];
+
+    let parsed = parse_worn_items(&items);
+    let mut expected = vec![(2u8, u), (2u8, u2), (6u8, u)];
+    expected.sort();
+    assert_eq!(parsed, expected);
+}
+
+#[tokio::test]
+async fn the_avatar_service_remembers_what_is_worn_and_forgets_what_is_taken_off() {
+    let h = harness("avatar_service_remembers").await;
+    let item_a = add_object_item(&h.svc, h.agent, "A").await;
+    let item_b = add_object_item(&h.svc, h.agent, "B").await;
+    let id_a = Uuid::parse_str(&item_a.inventory_id).unwrap();
+    let id_b = Uuid::parse_str(&item_b.inventory_id).unwrap();
+
+    rez_attachment_from_inventory(&h.ctx(), h.agent, id_a, 2)
+        .await
+        .expect("wear a");
+    rez_attachment_from_inventory(&h.ctx(), h.agent, id_b, 6)
+        .await
+        .expect("wear b");
+
+    let avatar = h
+        .avatars
+        .get_avatar(&h.agent.to_string())
+        .await
+        .expect("get avatar");
+    assert!(avatar
+        .iter()
+        .any(|(k, v)| k == "_ap_2" && *v == id_a.to_string()));
+    assert!(avatar
+        .iter()
+        .any(|(k, v)| k == "_ap_6" && *v == id_b.to_string()));
+
+    detach_item_to_inventory(&h.ctx(), h.agent, id_a)
+        .await
+        .expect("detach a");
+
+    let avatar = h
+        .avatars
+        .get_avatar(&h.agent.to_string())
+        .await
+        .expect("get avatar");
+    assert!(!avatar.iter().any(|(k, _)| k == "_ap_2"));
+    assert!(avatar
+        .iter()
+        .any(|(k, v)| k == "_ap_6" && *v == id_b.to_string()));
+}
+
+#[tokio::test]
+async fn wearing_again_at_login_restores_the_saved_attachments() {
+    let h = harness("restore_saved").await;
+    let item_a = add_object_item(&h.svc, h.agent, "A").await;
+    let item_b = add_object_item(&h.svc, h.agent, "B").await;
+    let id_a = Uuid::parse_str(&item_a.inventory_id).unwrap();
+    let id_b = Uuid::parse_str(&item_b.inventory_id).unwrap();
+
+    rez_attachment_from_inventory(&h.ctx(), h.agent, id_a, 2)
+        .await
+        .expect("wear a");
+    rez_attachment_from_inventory(&h.ctx(), h.agent, id_b, 6)
+        .await
+        .expect("wear b");
+
+    remove_all_for_avatar(&h.ctx(), h.agent).await;
+
+    assert!(h.scene.attachments_of(&h.agent).is_empty());
+    let avatar = h
+        .avatars
+        .get_avatar(&h.agent.to_string())
+        .await
+        .expect("get avatar");
+    assert!(avatar
+        .iter()
+        .any(|(k, v)| k == "_ap_2" && *v == id_a.to_string()));
+    assert!(avatar
+        .iter()
+        .any(|(k, v)| k == "_ap_6" && *v == id_b.to_string()));
+
+    let restored = restore_saved_attachments(&h.ctx(), h.agent).await;
+    assert_eq!(restored, 2);
+
+    let worn = h.scene.attachments_of(&h.agent);
+    let points: Vec<u8> = worn.iter().map(|w| w.0).collect();
+    assert_eq!(points, vec![2, 6]);
+    for (point, group_id) in &worn {
+        let group = h.scene.get_object(group_id).unwrap();
+        let expected = if *point == 2 { id_a } else { id_b };
+        assert_eq!(group.attachment_item_id, expected);
+    }
+
+    let restored_again = restore_saved_attachments(&h.ctx(), h.agent).await;
+    assert_eq!(restored_again, 0);
+}
 }
