@@ -12,6 +12,19 @@ pub fn is_postgres(pool: &AnyPool) -> bool {
     scheme == "postgres" || scheme == "postgresql"
 }
 
+/// The dialect of the database behind `pool`.
+pub fn backend_of(pool: &AnyPool) -> crate::migrations::Backend {
+    use crate::migrations::Backend;
+    let scheme = pool.connect_options().database_url.scheme().to_ascii_lowercase();
+    if scheme.starts_with("mysql") || scheme.starts_with("mariadb") {
+        Backend::MySQL
+    } else if scheme.starts_with("postgres") {
+        Backend::PostgreSQL
+    } else {
+        Backend::SQLite
+    }
+}
+
 /// Rewrite `$n` placeholders in `query` for the pool's backend.
 pub fn sql(pool: &AnyPool, query: &str) -> String {
     if is_postgres(pool) {
@@ -42,6 +55,23 @@ pub fn rewrite_placeholders(query: &str) -> String {
     out
 }
 
+/// Adapt column types in a `CREATE TABLE` statement written in the SQLite/MySQL dialect
+/// to `backend`. PostgreSQL has no `BLOB`, `LONGBLOB`, `INT(n)` or `DATETIME`; MySQL
+/// rejects a literal `DEFAULT` on `TEXT` columns.
+pub fn ddl(backend: crate::migrations::Backend, statement: &str) -> String {
+    use crate::migrations::Backend;
+    match backend {
+        Backend::SQLite => statement.to_string(),
+        Backend::PostgreSQL => statement
+            .replace("LONGBLOB", "BYTEA")
+            .replace("MEDIUMBLOB", "BYTEA")
+            .replace("BLOB", "BYTEA")
+            .replace("INT(11)", "INTEGER")
+            .replace("DATETIME", "TIMESTAMP"),
+        Backend::MySQL => statement.replace("TEXT NOT NULL DEFAULT ''", "TEXT NOT NULL"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -68,5 +98,21 @@ mod tests {
             .expect("connect");
         assert!(!is_postgres(&pool));
         assert_eq!(sql(&pool, "DELETE FROM t WHERE a = $1"), "DELETE FROM t WHERE a = ?");
+    }
+
+    #[test]
+    fn ddl_adapts_types_per_backend() {
+        use crate::migrations::Backend;
+        let s = "CREATE TABLE t (a BLOB NOT NULL, b INT(11), c TEXT NOT NULL DEFAULT '')";
+        assert_eq!(ddl(Backend::SQLite, s), s);
+        assert_eq!(
+            ddl(Backend::PostgreSQL, s),
+            "CREATE TABLE t (a BYTEA NOT NULL, b INTEGER, c TEXT NOT NULL DEFAULT '')"
+        );
+        assert_eq!(
+            ddl(Backend::MySQL, s),
+            "CREATE TABLE t (a BLOB NOT NULL, b INT(11), c TEXT NOT NULL)"
+        );
+        assert_eq!(ddl(Backend::PostgreSQL, "x LONGBLOB"), "x BYTEA");
     }
 }

@@ -6,7 +6,7 @@ use uuid::Uuid;
 use welkin_data::migrations::Backend;
 use welkin_script_vm::ScriptState;
 
-pub async fn create_script_states_table(pool: &AnyPool, _backend: Backend) -> Result<(), sqlx::Error> {
+pub async fn create_script_states_table(pool: &AnyPool, backend: Backend) -> Result<(), sqlx::Error> {
     let sql = "CREATE TABLE IF NOT EXISTS script_states (
             script_id VARCHAR(36) PRIMARY KEY,
             prim_id VARCHAR(36) NOT NULL,
@@ -14,6 +14,7 @@ pub async fn create_script_states_table(pool: &AnyPool, _backend: Backend) -> Re
             globals_json TEXT NOT NULL
         )"
     .to_string();
+    let sql = welkin_data::portable::ddl(backend, &sql);
     sqlx::query(&sql)
         .execute(pool)
         .await?;
