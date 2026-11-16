@@ -193,7 +193,7 @@ mod tests {
         let (scene, id, lid) = world();
         let m = mass(&scene, lid);
 
-        let src = r#"default { state_entry() { llApplyImpulse(<500.0, 0.0, 0.0>, 0); } }"#;
+        let src = r#"default { state_entry() { llApplyImpulse(<500.0, 0.0, 0.0>, FALSE); } }"#;
         let luau = welkin_script_vm::compile_lsl(src).expect("LSL compile");
         let bytecode = welkin_script_vm::compile_source(&luau).expect("luau compile");
         let lua = welkin_script_vm::new_vm().unwrap();

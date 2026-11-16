@@ -8,8 +8,6 @@ publish.workspace = true
 [dependencies]
 welkin-types = { path = "../welkin-types" }
 welkin-script-compiler = { path = "../welkin-script-compiler" }
-welkin-script-vm = { path = "../welkin-script-vm" }
-welkin-scene = { path = "../welkin-scene" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
