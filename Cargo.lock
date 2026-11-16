@@ -5020,9 +5020,11 @@ version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
  "bitflags 2.13.2",
+ "flate2",
  "glam 0.34.3",
  "quick-xml",
  "serde",
+ "serde_json",
  "thiserror 2.0.21",
  "tokio",
  "tracing",

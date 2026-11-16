@@ -65,6 +65,10 @@ pub fn part_from_rows(row: &PrimRow, shape: Option<&PrimShapeRow>) -> SceneObjec
 
     part.sound_id = Uuid::parse_str(&row.looped_sound).unwrap_or(Uuid::nil());
     part.sound_gain = row.looped_sound_gain as f32;
+    if part.sound_id != Uuid::nil() {
+        part.sound_flags = 1;
+        part.sound_radius = 100.0;
+    }
     part.texture_animation = row.texture_animation.clone();
 
     part.camera_eye_offset = Vec3::new(row.camera_eye_offset_x as f32, row.camera_eye_offset_y as f32, row.camera_eye_offset_z as f32);
@@ -420,5 +424,32 @@ mod tests {
         assert_eq!(groups[1].part_count(), 1);
         assert_eq!(groups[1].root_part().uuid, p3.uuid);
     }
+
+#[test]
+fn a_looped_sound_comes_back_looping() {
+    let mut part = SceneObjectPart::new("Loud", Uuid::new_v4());
+    part.sound_id = Uuid::from_u128(0x77);
+    part.sound_gain = 0.5;
+
+    let row = part_to_prim_row(&part, "r", &part.uuid.to_string());
+    let shape = shape_to_row(&part);
+    let loaded = part_from_rows(&row, Some(&shape));
+
+    assert_eq!(loaded.sound_id, Uuid::from_u128(0x77));
+    assert_eq!(loaded.sound_gain, 0.5);
+    assert_eq!(loaded.sound_flags, 1);
+    assert_eq!(loaded.sound_radius, 100.0);
 }
 
+#[test]
+fn no_sound_means_no_loop_flags() {
+    let part = SceneObjectPart::new("Loud", Uuid::new_v4());
+
+    let row = part_to_prim_row(&part, "r", &part.uuid.to_string());
+    let shape = shape_to_row(&part);
+    let loaded = part_from_rows(&row, Some(&shape));
+
+    assert_eq!(loaded.sound_flags, 0);
+    assert_eq!(loaded.sound_radius, 0.0);
+}
+}

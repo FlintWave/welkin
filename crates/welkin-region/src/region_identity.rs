@@ -13,10 +13,10 @@ use uuid::Uuid;
 pub async fn create_table(pool: &AnyPool) -> Result<(), sqlx::Error> {
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS region_identity (
-            region_name TEXT NOT NULL,
+            region_name VARCHAR(255) NOT NULL,
             loc_x INTEGER NOT NULL,
             loc_y INTEGER NOT NULL,
-            region_id TEXT NOT NULL,
+            region_id VARCHAR(36) NOT NULL,
             PRIMARY KEY (region_name, loc_x, loc_y)
         )",
     )
@@ -39,7 +39,7 @@ pub async fn resolve(
     if let Some(text) = configured.map(str::trim).filter(|t| !t.is_empty()) {
         let id = Uuid::parse_str(text).map_err(|_| format!("[Region] RegionUUID \"{text}\" is not a UUID"))?;
         // Remember it so removing the setting later keeps the same id.
-        sqlx::query("DELETE FROM region_identity WHERE region_name = ? AND loc_x = ? AND loc_y = ?")
+        sqlx::query("DELETE FROM region_identity WHERE region_name = $1 AND loc_x = $2 AND loc_y = $3")
             .bind(name)
             .bind(x)
             .bind(y)
@@ -50,7 +50,7 @@ pub async fn resolve(
         return Ok(id);
     }
 
-    let row = sqlx::query("SELECT region_id FROM region_identity WHERE region_name = ? AND loc_x = ? AND loc_y = ?")
+    let row = sqlx::query("SELECT region_id FROM region_identity WHERE region_name = $1 AND loc_x = $2 AND loc_y = $3")
         .bind(name)
         .bind(x)
         .bind(y)
@@ -67,7 +67,7 @@ pub async fn resolve(
 }
 
 async fn store(pool: &AnyPool, name: &str, x: i64, y: i64, id: Uuid) -> Result<(), String> {
-    sqlx::query("INSERT INTO region_identity (region_name, loc_x, loc_y, region_id) VALUES (?, ?, ?, ?)")
+    sqlx::query("INSERT INTO region_identity (region_name, loc_x, loc_y, region_id) VALUES ($1, $2, $3, $4)")
         .bind(name)
         .bind(x)
         .bind(y)
