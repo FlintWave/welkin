@@ -13,6 +13,29 @@ Current viewer compatibility status, updated as live testing progresses.
 | Firestorm (OpenSim build) | Yes | Working | Tested 2026-11-14 |
 | LibreMetaverse bot | Yes | 10/10 steps pass | Automated test client |
 
+## Groups
+
+Groups are off by default; turn them on with `[Groups] Enabled = true` (see the
+[configuration reference](configuration.md#groups)). The region talks to the
+grid's groups service, which `welkin-robust` provides. These behaviours come from
+the code and its tests, not from a live viewer run.
+
+Working:
+
+- Group data is sent at login, so the viewer shows the avatar's groups with
+  their real names.
+- The active group appears in `AgentDataUpdate`.
+- A viewer can create a group, join one, leave one, update a group's info and
+  activate a group. The region replies with the viewer's usual reply messages and
+  refreshes the avatar's group state after a change.
+- The region makes its calls to the groups service without holding the session
+  lock, so a slow groups service does not freeze the avatar's connection.
+
+Not covered by this work: group roles and role editing, member lists, group
+notices and group proposals. I found no handlers for the role and member
+requests in the region code. Treat those as missing until a later change adds
+them.
+
 ## Inventory objects and attachments
 
 These behaviours come from the region code and its end-to-end tests with real
@@ -270,9 +293,7 @@ echo, movement, rez prim, script upload, script alive, touch event, logout).
 
 - Terrain edits made in the viewer: see [Terraforming](#terraforming) for what is and is not supported
 - Avatar animations on Aurora Viewer (needs AgentAnimation packet)
-- Groups: `welkin-services` has a client for the grid's groups service
-  (`RemoteGroupsConnector`), but the region does not call it yet, so group data
-  does not come from the grid's groups service
+- Groups are partial: see [Groups](#groups)
 
 ### Not yet user-tested
 

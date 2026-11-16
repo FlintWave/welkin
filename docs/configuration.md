@@ -244,6 +244,29 @@ wall-clock time on purpose, so the save interval does not shift with the
 frame rate. If you are migrating, set `IntervalSeconds` for the delay you
 want and drop `UpdateStorageEveryNFrames`; Welkin ignores that key.
 
+## Groups
+
+Group support in the region simulator is off by default.
+
+| Section | Key | Type | Default | Purpose |
+|---|---|---|---|---|
+| Groups | Enabled | bool | false | Turn on group data and group requests |
+| Groups | GroupsServerURI | string | (none) | URL of the grid groups service |
+| GroupsService | ServerURI | string | (none) | Second choice for the groups service URL |
+
+The region uses the first non-empty URL from `[Groups] GroupsServerURI`, then
+`[GroupsService] ServerURI`, then `[GridService] GridServerURI`, so a region that
+already points at `welkin-robust` needs only `Enabled = true`. The names match
+OpenSimulator's config.
+
+```toml
+[Groups]
+Enabled = true
+```
+
+If `Enabled` is true but no URL is found, groups stay off. See
+[Viewer compatibility](viewer-compatibility.md#groups) for what works.
+
 ## Module configuration
 
 Region modules read their settings through the `ModuleConfig` trait,
