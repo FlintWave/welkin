@@ -4208,17 +4208,29 @@ async fn process_messages(
             && let Some(client) = &client
         {
             let requests = req.request_image.clone();
+            static TEXTURE_CACHE: std::sync::OnceLock<
+                std::sync::Arc<welkin_caps::lru_cache::LruCache<uuid::Uuid, welkin_data::assets::AssetRow>>,
+            > = std::sync::OnceLock::new();
+            let texture_cache = TEXTURE_CACHE
+                .get_or_init(|| std::sync::Arc::new(welkin_caps::lru_cache::LruCache::new(1024)));
             for img in requests {
-                let asset = match asset_connector.get_asset(&img.image.to_string()).await {
-                    Ok(Some(a)) => a,
-                    _ => {
-                        let mut session = client.lock().await;
-                        let reply = ImageNotInDatabase {
-                            image_id: image_not_in_database::ImageID { id: img.image },
-                        };
-                        let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
-                        let _ = socket.send_to(&pkt_bytes, src).await;
-                        continue;
+                let asset = if let Some(cached) = texture_cache.get(&img.image) {
+                    cached
+                } else {
+                    match asset_connector.get_asset(&img.image.to_string()).await {
+                        Ok(Some(a)) => {
+                            texture_cache.put(img.image, a.clone());
+                            a
+                        }
+                        _ => {
+                            let mut session = client.lock().await;
+                            let reply = ImageNotInDatabase {
+                                image_id: image_not_in_database::ImageID { id: img.image },
+                            };
+                            let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                            let _ = socket.send_to(&pkt_bytes, src).await;
+                            continue;
+                        }
                     }
                 };
 

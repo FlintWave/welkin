@@ -1160,11 +1160,7 @@ impl MapImageServiceConnector {
                 }
             }
 
-            if saw_quoted && !has_nonempty_quoted {
-                return false;
-            }
-
-            true
+            !saw_quoted || has_nonempty_quoted
         }
 }
 

@@ -145,6 +145,7 @@ pub struct AvatarProperties {
     pub image_id: String,
     pub first_life_image_id: String,
     pub web_url: String,
+    pub profile_url: String,
     pub want_to_mask: i32,
     pub want_to_text: String,
     pub skills_mask: i32,
@@ -153,6 +154,8 @@ pub struct AvatarProperties {
     pub publish_profile: bool,
     pub publish_mature: bool,
     pub born_on: String,
+    pub charter_member: Vec<u8>,
+    pub flags: u32,
     pub first_name: Option<String>,
     pub last_name: Option<String>,
 }
@@ -370,11 +373,15 @@ impl ProfilesStore {
             last_name: String,
             #[sqlx(rename = "Created")]
             created: i32,
+            #[sqlx(rename = "UserFlags")]
+            user_flags: Option<i32>,
+            #[sqlx(rename = "UserTitle")]
+            user_title: Option<String>,
         }
         let account: Option<AccountRow> = sqlx::query_as::<_, AccountRow>(
             &crate::portable::sql(
                 &self.pool,
-                "SELECT FirstName, LastName, Created FROM UserAccounts WHERE PrincipalID = $1",
+                "SELECT FirstName, LastName, Created, UserFlags, UserTitle FROM UserAccounts WHERE PrincipalID = $1",
             ),
         )
         .bind(uuid.to_string())
@@ -415,6 +422,19 @@ impl ProfilesStore {
             })
             .unwrap_or_default();
 
+        let (charter_member, flags) = account
+            .as_ref()
+            .map(|a| {
+                let uf = a.user_flags.unwrap_or(0);
+                let mut membership = vec![((uf & 0x0f00) >> 8) as u8];
+                let title = a.user_title.clone().unwrap_or_default();
+                if !title.is_empty() {
+                    membership = title.into_bytes();
+                }
+                let flgs = (uf & 0xff) as u32;
+                (membership, flgs)
+            })
+            .unwrap_or((vec![0], 0));
         Ok(Some(AvatarProperties {
             user_uuid: uuid.to_string(),
             partner_id: p.profile_partner.clone(),
@@ -423,6 +443,7 @@ impl ProfilesStore {
             image_id: p.profile_image.clone(),
             first_life_image_id: p.profile_first_image.clone(),
             web_url: p.profile_url.clone(),
+            profile_url: p.profile_url.clone(),
             want_to_mask: p.profile_want_to_mask,
             want_to_text: p.profile_want_to_text.clone(),
             skills_mask: p.profile_skills_mask,
@@ -431,6 +452,8 @@ impl ProfilesStore {
             publish_profile: p.profile_allow_publish.first().copied().unwrap_or(0) != 0,
             publish_mature: p.profile_mature_publish.first().copied().unwrap_or(0) != 0,
             born_on,
+            charter_member: charter_member.clone(),
+            flags,
             first_name: account.as_ref().map(|a| a.first_name.clone()),
             last_name: account.as_ref().map(|a| a.last_name.clone()),
         }))
