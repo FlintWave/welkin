@@ -692,6 +692,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let heartbeat_socket = udp_socket.clone();
     let heartbeat_clients = udp_clients.clone();
     let heartbeat_sim_store = Arc::clone(&sim_store);
+    let script_pool = pool.inner().clone();
     let heartbeat_region_id = region_id_str.clone();
     let frame_metrics = Arc::new(std::sync::Mutex::new(sim_stats::FrameMetrics::new()));
     let heartbeat_metrics = Arc::clone(&frame_metrics);
@@ -746,9 +747,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         continue;
                     }
                 };
-                let prim_pos = heartbeat_scene
-                    .with_object(&prim_id, |g| g.position())
-                    .unwrap_or(glam::Vec3::new(128.0, 128.0, 22.0));
+                // A saved script whose object is gone would run as an orphan; drop it.
+                let Some(prim_pos) = heartbeat_scene
+                    .resolve_group_for_prim(&prim_id)
+                    .and_then(|group_id| heartbeat_scene.with_object(&group_id, |g| g.position()))
+                else {
+                    warn!(script = %script_id, prim = %prim_id, "saved script's object no longer exists; discarding its state");
+                    if let Err(e) = script_persist::delete_script_state(&script_pool, script_id).await {
+                        warn!(script = %script_id, error = %e, "could not delete the orphaned script state");
+                    }
+                    continue;
+                };
                 if let Err(e) = instance.register_builtins(make_script_context(script_id, prim_id, prim_pos)) {
                     warn!(script = %script_id, error = %e, "failed to register builtins for restored script");
                     continue;

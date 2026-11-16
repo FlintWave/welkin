@@ -43,6 +43,15 @@ pub async fn save_script_states(
     Ok(count)
 }
 
+/// Remove one saved script state (for example when its object no longer exists).
+pub async fn delete_script_state(pool: &AnyPool, script_id: Uuid) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM script_states WHERE script_id = ?")
+        .bind(script_id.to_string())
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 pub async fn load_script_states(
     pool: &AnyPool,
 ) -> Result<Vec<(Uuid, Uuid, ScriptState)>, sqlx::Error> {

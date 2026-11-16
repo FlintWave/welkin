@@ -478,7 +478,8 @@ impl ScriptInstance {
     pub fn reset(&mut self) -> Result<(), VmError> {
         let vm = Lua::new();
         if self.memory_limit > 0 {
-            vm.set_memory_limit(self.memory_limit)?;
+            // Headroom above the VM's baseline, same as `new` and `restore_from`.
+            vm.set_memory_limit(vm.used_memory() + self.memory_limit)?;
         }
         vm.load(&self.bytecode).exec()?;
         if let Some(ref ctx) = self.ctx {
@@ -576,6 +577,20 @@ impl fmt::Debug for ScriptInstance {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn reset_keeps_the_memory_limit_as_headroom() -> Result<(), VmError> {
+        // The handler builds a 200 KB string. With the limit read as headroom above the
+        // baseline this fits; read as an absolute cap (the old reset behaviour) the
+        // baseline plus 200 KB would not fit in 262,144 bytes.
+        let src = "function state_entry() big = string.rep('x', 200000) end";
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), src, 262_144)?;
+        inst.post_event(ScriptEvent::StateEntry);
+        inst.run_next_event()?;
+        inst.reset()?;
+        inst.run_next_event()?; // state_entry queued by reset
+        Ok(())
+    }
+
     #[test]
     fn small_memory_limits_are_headroom_not_an_absolute_cap() -> Result<(), VmError> {
         let src = "function state_entry() x = 1 end";
