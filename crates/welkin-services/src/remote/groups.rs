@@ -204,6 +204,38 @@ impl RemoteGroupsConnector {
         Ok(out)
     }
 
+    pub async fn get_all_memberships(&self, agent: Uuid) -> Result<Vec<MembershipRecord>, RemoteError> {
+        let params: Vec<(&str, String)> = vec![
+            ("METHOD", "GETMEMBERSHIP".to_string()),
+            ("RequestingAgentID", agent.to_string()),
+            ("AgentID", agent.to_string()),
+            ("ALL", "true".to_string()),
+        ];
+
+        let nodes = self.call(&params).await?;
+        if result_text(&nodes).eq_ignore_ascii_case("NULL") {
+            return Ok(Vec::new());
+        }
+
+        let result = match result_node(&nodes) {
+            Some(node) => node,
+            None => return Ok(Vec::new()),
+        };
+
+        let mut out = Vec::new();
+        let items = prefixed_children(result, "m");
+        if items.is_empty() {
+            if field(result, "GroupID") != "" || field(result, "GroupName") != "" {
+                out.push(parse_membership(result)?);
+            }
+        } else {
+            for item in items {
+                out.push(parse_membership(item)?);
+            }
+        }
+        Ok(out)
+    }
+
     pub async fn get_group_members(
         &self,
         requesting_agent: Uuid,
@@ -1634,5 +1666,55 @@ mod tests {
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].group_id, Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap());
         assert_eq!(records[0].group_name, "A");
+    }
+
+    #[tokio::test]
+    async fn get_all_memberships_lists_every_group() {
+        let (conn, _guard) = setup().await;
+        let agent = Uuid::new_v4();
+
+        let group_one = GroupRecord {
+            group_id: Uuid::nil(),
+            group_name: "Group One".to_string(),
+            charter: "charter".to_string(),
+            insignia_id: Uuid::new_v4(),
+            founder_id: agent,
+            membership_fee: 42,
+            open_enrollment: true,
+            show_in_list: true,
+            allow_publish: false,
+            mature_publish: true,
+            owner_role_id: Uuid::nil(),
+            member_count: 0,
+            role_count: 0,
+        };
+        conn.create_group(agent, &group_one).await.unwrap();
+
+        let group_two = GroupRecord {
+            group_id: Uuid::nil(),
+            group_name: "Group Two".to_string(),
+            charter: "charter".to_string(),
+            insignia_id: Uuid::new_v4(),
+            founder_id: agent,
+            membership_fee: 42,
+            open_enrollment: true,
+            show_in_list: true,
+            allow_publish: false,
+            mature_publish: true,
+            owner_role_id: Uuid::nil(),
+            member_count: 0,
+            role_count: 0,
+        };
+        conn.create_group(agent, &group_two).await.unwrap();
+
+        let records = conn.get_all_memberships(agent).await.unwrap();
+        assert_eq!(records.len(), 2);
+        let names: Vec<String> = records.iter().map(|record| record.group_name.clone()).collect();
+        assert!(names.contains(&"Group One".to_string()));
+        assert!(names.contains(&"Group Two".to_string()));
+
+        let unknown = Uuid::new_v4();
+        let empty = conn.get_all_memberships(unknown).await.unwrap();
+        assert!(empty.is_empty());
     }
 }

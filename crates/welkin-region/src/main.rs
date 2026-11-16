@@ -6,6 +6,7 @@ mod avatar_move;
 mod console;
 mod console_io;
 mod estate_config;
+mod groups_io;
 mod inventory_rez;
 mod object_add;
 mod persist;
@@ -91,6 +92,7 @@ struct RegionConfig {
     internal_port: u16,
     database_url: String,
     grid_service_url: Option<String>,
+    groups_server_uri: Option<String>,
     scene_config: SceneConfig,
 }
 
@@ -109,6 +111,15 @@ impl RegionConfig {
         let grid_service_url = config
             .get_string("GridService", "GridServerURI")
             .map(|s| s.to_string());
+
+        let groups_server_uri = if config.get_bool_or("Groups", "Enabled", true) {
+            groups_io::groups_server_uri(
+                config.get_string("GroupsService", "ServerURI"),
+                config.get_string("GridService", "GridServerURI"),
+            )
+        } else {
+            None
+        };
 
         let mut scene_config = SceneConfig::default();
         scene_config.physics_enabled =
@@ -152,6 +163,7 @@ impl RegionConfig {
             internal_port,
             database_url,
             grid_service_url,
+            groups_server_uri,
             scene_config,
         }
     }
@@ -499,6 +511,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let process_inventory = Arc::new(welkin_services::remote::inventory::RemoteInventoryConnector::new(accounts_url));
     let process_assets = Arc::new(welkin_services::remote::asset::RemoteAssetConnector::new(accounts_url));
     let process_avatars = Arc::new(welkin_services::remote::avatar::RemoteAvatarConnector::new(accounts_url));
+    let process_groups = region_config.groups_server_uri.as_deref().map(groups_io::GroupsCtx::new);
     let process_handle = tokio::spawn(async move {
         process_messages(
             msg_rx,
@@ -517,6 +530,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             process_inventory,
             process_assets,
             process_avatars,
+            process_groups,
         )
         .await;
     });
@@ -1583,6 +1597,7 @@ async fn process_messages(
     inventory_connector: Arc<welkin_services::remote::inventory::RemoteInventoryConnector>,
     asset_connector: Arc<welkin_services::remote::asset::RemoteAssetConnector>,
     avatar_connector: Arc<welkin_services::remote::avatar::RemoteAvatarConnector>,
+    groups: Option<groups_io::GroupsCtx>,
 ) {
     let mut last_agent_update: HashMap<Uuid, Instant> = HashMap::new();
     // Persistent vertical velocity per avatar (jumping and falling).
@@ -1660,6 +1675,7 @@ async fn process_messages(
                 &caps_base,
                 &accounts_connector,
                 &perms,
+                groups.as_ref(),
             )
             .await;
 
@@ -3790,15 +3806,19 @@ async fn process_messages(
                 .get_presence(&session.agent_id)
                 .map(|p| (p.first_name.clone(), p.last_name.clone()))
                 .unwrap_or_else(|| ("Unknown".to_string(), "User".to_string()));
+            let active = match &groups {
+                Some(g) => groups_io::active_group(g, session.agent_id).await,
+                None => groups_io::ActiveGroup::default(),
+            };
             let reply = AgentDataUpdate {
                 agent_data: agent_data_update::AgentData {
                     agent_id: session.agent_id,
                     first_name: name.0.into_bytes(),
                     last_name: name.1.into_bytes(),
-                    group_title: Vec::new(),
-                    active_group_id: Uuid::nil(),
-                    group_powers: 0,
-                    group_name: Vec::new(),
+                    group_title: groups_io::name_bytes(&active.title),
+                    active_group_id: active.group_id,
+                    group_powers: active.powers,
+                    group_name: groups_io::name_bytes(&active.name),
                 },
             };
             let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
@@ -4299,12 +4319,15 @@ async fn process_messages(
             && let Some(client) = &client
         {
             let mut reply_blocks = Vec::new();
-            for block in &req.uuid_name_block {
-                let mut name = b"Unknown".to_vec();
-                name.push(0);
+            let ids: Vec<Uuid> = req.uuid_name_block.iter().map(|b| b.id).collect();
+            let names = match &groups {
+                Some(g) => groups_io::group_names(g, &ids).await,
+                None => ids.iter().map(|id| (*id, "Unknown".to_string())).collect(),
+            };
+            for (id, name) in names {
                 reply_blocks.push(uuid_group_name_reply::UUIDNameBlock {
-                    id: block.id,
-                    group_name: name,
+                    id,
+                    group_name: groups_io::name_bytes(&name),
                 });
             }
             let reply = UUIDGroupNameReply {
@@ -4705,6 +4728,7 @@ async fn send_movement_complete(
     caps_base: &str,
     accounts: &Arc<welkin_services::remote::accounts::RemoteAccountsConnector>,
     perms: &DefaultPermissionsModule,
+    groups: Option<&groups_io::GroupsCtx>,
 ) {
     let mut session = client.lock().await;
 
@@ -4836,15 +4860,19 @@ async fn send_movement_complete(
     }
     info!(agent = %session.agent_id, "sent default standing animation");
 
+    let active = match groups {
+        Some(g) => groups_io::active_group(g, session.agent_id).await,
+        None => groups_io::ActiveGroup::default(),
+    };
     let agent_data_msg = AgentDataUpdate {
         agent_data: agent_data_update::AgentData {
             agent_id: session.agent_id,
             first_name: first_name.as_bytes().to_vec(),
             last_name: last_name.as_bytes().to_vec(),
-            group_title: Vec::new(),
-            active_group_id: Uuid::nil(),
-            group_powers: 0,
-            group_name: Vec::new(),
+            group_title: groups_io::name_bytes(&active.title),
+            active_group_id: active.group_id,
+            group_powers: active.powers,
+            group_name: groups_io::name_bytes(&active.name),
         },
     };
     let (pkt, _) = session.circuit.send_msg(&agent_data_msg, true);
@@ -4881,6 +4909,9 @@ async fn send_movement_complete(
         );
         eq.enqueue("EstablishAgentCommunication", Llsd::Map(eq_body))
             .await;
+    }
+    if let Some(g) = groups {
+        groups_io::send_agent_group_data(g, session.agent_id, &eq).await;
     }
     event_queues.write().await.insert(session.agent_id, eq);
     info!(agent = %session.agent_id, "event queue created with initial event");
