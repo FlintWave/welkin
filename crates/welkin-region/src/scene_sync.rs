@@ -276,4 +276,40 @@ mod tests {
         let child = seen.iter().find(|o| o.parent_id != 0).expect("child part delivered");
         assert_eq!(child.parent_id, root.id, "child references the root's local id");
     }
+
+    /// Real Rapier world: a physical prim dropped above terrain falls (reported as
+    /// moved each step), lands on the terrain, and a final at-rest update is sent.
+    #[test]
+    fn physical_prim_falls_lands_and_settles() {
+        use glam::Vec3;
+        use welkin_scene::group::SceneObjectGroup;
+        use welkin_scene::part::PrimFlags;
+        use welkin_scene::scene::{RegionInfo, Scene, SceneConfig};
+
+        let scene = Scene::new(RegionInfo::new("Phys", 1000, 1000), SceneConfig::default());
+        scene.set_physics(Box::new(welkin_physics_rapier::RapierPhysicsScene::new("Phys")));
+        scene.set_terrain(&vec![21.0f32; 256 * 256]);
+
+        let mut part = SceneObjectPart::new("Ball", Uuid::new_v4());
+        part.group_position = Vec3::new(128.0, 128.0, 40.0);
+        part.scale = Vec3::new(1.0, 1.0, 1.0);
+        part.flags |= PrimFlags::PHYSICS;
+        let id = scene.add_object(SceneObjectGroup::new(part));
+
+        let mut reports = 0usize;
+        let mut last_velocity_nonzero = false;
+        for _ in 0..600 {
+            scene.tick();
+            for m in scene.sync_physics_to_objects() {
+                reports += 1;
+                last_velocity_nonzero = m.velocity != Vec3::ZERO;
+            }
+        }
+
+        let z = scene.get_object(&id).unwrap().root_part().group_position.z;
+        assert!(reports > 5, "falling prim should have produced many updates, got {reports}");
+        assert!(z < 25.0, "prim should have fallen from 40 to the terrain (z={z})");
+        assert!(z > 20.0, "prim must rest on the terrain, not fall through it (z={z})");
+        assert!(!last_velocity_nonzero, "the final update must report the prim at rest");
+    }
 }

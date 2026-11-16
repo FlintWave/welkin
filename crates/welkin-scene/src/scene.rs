@@ -93,6 +93,17 @@ pub struct FrameStats {
     pub physics_ms: f32,
 }
 
+/// A physical object whose simulated state changed, for update broadcasting.
+#[derive(Debug, Clone)]
+pub struct MovedObject {
+    pub uuid: Uuid,
+    pub local_id: u32,
+    pub position: Vec3,
+    pub velocity: Vec3,
+    pub rotation: Quat,
+    pub angular_velocity: Vec3,
+}
+
 pub struct Scene {
     pub region_info: RegionInfo,
     pub config: SceneConfig,
@@ -397,6 +408,85 @@ impl Scene {
         });
     }
 
+    /// Push an object's current root transform into its physics actor. Call after
+    /// code (scripts, editing) moves an object directly so its collider follows.
+    pub fn push_object_to_physics(&self, uuid: &Uuid) {
+        let Some((local_id, pos, rot)) = self.with_object(uuid, |g| {
+            let r = g.root_part();
+            (r.local_id, r.group_position, r.rotation_offset)
+        }) else {
+            return;
+        };
+        let _ = self.with_physics(|ph| {
+            if let Some(actor) = ph.get_actor_mut(local_id) {
+                actor.set_position(pos);
+                actor.set_orientation(rot);
+            }
+        });
+    }
+
+    /// Copy simulated state of physical prims back into the scene. Returns the
+    /// objects whose transform or motion state changed (including coming to rest),
+    /// so the caller can send updates to viewers.
+    pub fn sync_physics_to_objects(&self) -> Vec<MovedObject> {
+        if !self.config.physics_enabled {
+            return Vec::new();
+        }
+        let physical: Vec<(Uuid, u32)> = self
+            .objects
+            .read()
+            .unwrap()
+            .iter()
+            .filter(|(_, g)| g.is_physical() && !g.is_phantom())
+            .map(|(id, g)| (*id, g.root_part().local_id))
+            .collect();
+        if physical.is_empty() {
+            return Vec::new();
+        }
+        let states: Vec<(Uuid, u32, Vec3, Vec3, Quat, Vec3)> = self
+            .with_physics(|ph| {
+                physical
+                    .iter()
+                    .filter_map(|(id, lid)| {
+                        ph.get_actor(*lid).map(|a| {
+                            (*id, *lid, a.position(), a.velocity(), a.orientation(), a.rotational_velocity())
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let mut moved = Vec::new();
+        let mut objects = self.objects.write().unwrap();
+        for (id, local_id, pos, vel, rot, ang) in states {
+            let Some(group) = objects.get_mut(&id) else { continue };
+            let old = group.root_part();
+            let pos_changed = (old.group_position - pos).length() > 0.005;
+            let rot_changed = old.rotation_offset.dot(rot).abs() < 0.99999;
+            let at_rest = vel.length() < 0.01 && ang.length() < 0.01;
+            let settled = at_rest && (old.velocity != Vec3::ZERO || old.angular_velocity != Vec3::ZERO);
+            if !(pos_changed || rot_changed || settled) {
+                continue;
+            }
+            let (vel, ang) = if at_rest { (Vec3::ZERO, Vec3::ZERO) } else { (vel, ang) };
+            group.set_position(pos);
+            group.set_rotation(rot);
+            let root = group.root_part_mut();
+            root.velocity = vel;
+            root.angular_velocity = ang;
+            group.mark_changed();
+            moved.push(MovedObject {
+                uuid: id,
+                local_id,
+                position: pos,
+                velocity: vel,
+                rotation: rot,
+                angular_velocity: ang,
+            });
+        }
+        moved
+    }
+
     fn unregister_root_from_physics(&self, local_id: u32) {
         if local_id == 0 {
             return;
@@ -585,6 +675,62 @@ mod tests {
         assert_eq!(scene.frame_number(), 0);
         assert!(!scene.is_active());
         assert!(!scene.is_shutting_down());
+    }
+
+    fn physical_group(name: &str, position: Vec3) -> SceneObjectGroup {
+        let mut part = test_part(name, Uuid::new_v4());
+        part.group_position = position;
+        part.flags |= crate::part::PrimFlags::PHYSICS;
+        SceneObjectGroup::new(part)
+    }
+
+    #[test]
+    fn sync_copies_physical_motion_back_and_reports_rest() {
+        let scene = test_scene();
+        scene.set_physics(Box::new(welkin_physics::null::NullPhysicsScene::new("t")));
+        let uuid = scene.add_object(physical_group("Ball", Vec3::new(5.0, 5.0, 50.0)));
+        let local_id = scene.get_object(&uuid).unwrap().root_part().local_id;
+
+        // Nothing moved yet.
+        assert!(scene.sync_physics_to_objects().is_empty());
+
+        // Physics moves the actor.
+        scene.with_physics(|p| {
+            let a = p.get_actor_mut(local_id).unwrap();
+            a.set_position(Vec3::new(5.0, 5.0, 40.0));
+            a.set_velocity(Vec3::new(0.0, 0.0, -5.0));
+        });
+        let moved = scene.sync_physics_to_objects();
+        assert_eq!(moved.len(), 1);
+        assert_eq!(moved[0].uuid, uuid);
+        assert_eq!(moved[0].position, Vec3::new(5.0, 5.0, 40.0));
+        let part = scene.get_object(&uuid).unwrap();
+        assert_eq!(part.root_part().group_position, Vec3::new(5.0, 5.0, 40.0));
+        assert_eq!(part.root_part().velocity, Vec3::new(0.0, 0.0, -5.0));
+
+        // Same state again: nothing to report.
+        assert!(scene.sync_physics_to_objects().is_empty());
+
+        // Comes to rest at the same spot: one final update with zero velocity.
+        scene.with_physics(|p| p.get_actor_mut(local_id).unwrap().set_velocity(Vec3::ZERO));
+        let rest = scene.sync_physics_to_objects();
+        assert_eq!(rest.len(), 1);
+        assert_eq!(rest[0].velocity, Vec3::ZERO);
+        assert!(scene.sync_physics_to_objects().is_empty());
+    }
+
+    #[test]
+    fn non_physical_objects_are_not_synced_but_moves_reach_physics() {
+        let scene = test_scene();
+        scene.set_physics(Box::new(welkin_physics::null::NullPhysicsScene::new("t")));
+        let uuid = scene.add_object(test_group("Wall", Uuid::new_v4(), Vec3::new(1.0, 1.0, 1.0)));
+        let local_id = scene.get_object(&uuid).unwrap().root_part().local_id;
+        assert!(scene.sync_physics_to_objects().is_empty());
+
+        scene.with_object_mut(&uuid, |g| g.set_position(Vec3::new(9.0, 9.0, 9.0)));
+        scene.push_object_to_physics(&uuid);
+        let p = scene.with_physics(|ph| ph.get_actor(local_id).unwrap().position()).unwrap();
+        assert_eq!(p, Vec3::new(9.0, 9.0, 9.0));
     }
 
     #[test]

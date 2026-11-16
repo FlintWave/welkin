@@ -698,6 +698,22 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     let frame_start = std::time::Instant::now();
                     let frame_stats = heartbeat_scene.tick();
                     let physics_ms = frame_stats.physics_ms;
+
+                    // Physical prims: copy simulated motion into the scene and tell viewers.
+                    for m in heartbeat_scene.sync_physics_to_objects() {
+                        broadcast_terse_object_update(
+                            m.local_id,
+                            m.position,
+                            m.velocity,
+                            glam::Vec3::ZERO,
+                            m.rotation,
+                            m.angular_velocity,
+                            heartbeat_scene.region_info.region_handle,
+                            &heartbeat_socket,
+                            &heartbeat_clients,
+                        )
+                        .await;
+                    }
                     let mut script_ms = 0.0f32;
                     if scripts_enabled {
                         // Drain any link_message events from builtins
@@ -949,6 +965,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                         group.root_part_mut().text = ctx_text.clone();
                                     }
                                 });
+                                heartbeat_scene.push_object_to_physics(prim_id);
                                 if let Some(updated) = heartbeat_scene.get_object(prim_id) {
                                     if text_changed {
                                         broadcast_full_object_update(&updated, heartbeat_scene.region_info.region_handle, &heartbeat_socket, &heartbeat_clients).await;
@@ -2500,6 +2517,7 @@ async fn process_messages(
                         }
                     }
                 });
+                scene.push_object_to_physics(&uuid);
 
                 // Read back updated values for terse broadcast
                 if let Some(obj) = scene.get_object(&uuid) {
