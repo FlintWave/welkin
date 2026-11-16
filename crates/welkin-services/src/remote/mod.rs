@@ -6,6 +6,7 @@ pub mod accounts;
 pub mod asset;
 pub mod avatar;
 pub mod grid;
+pub mod groups;
 pub mod inventory;
 
 use thiserror::Error;

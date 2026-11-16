@@ -28,6 +28,7 @@ http-body-util = "0.1"
 
 [dev-dependencies]
 tempfile = { workspace = true }
+sqlx = { workspace = true }
 
 [lints]
 workspace = true
