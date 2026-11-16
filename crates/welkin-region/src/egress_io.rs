@@ -48,10 +48,40 @@ pub fn event_target(event: &EgressEvent) -> Uuid {
         EgressEvent::Kick { agent, .. } => *agent,
         EgressEvent::LoadUrl { agent, .. } => *agent,
         EgressEvent::TextBox { agent, .. } => *agent,
+        EgressEvent::Dialog { agent, .. } => *agent,
         EgressEvent::AppearanceUpdate { agent } => *agent,
         EgressEvent::RebakeRequest { agent } => *agent,
         EgressEvent::FriendOnline { agent, .. } => *agent,
         EgressEvent::Im { to, .. } => *to,
+    }
+}
+
+/// Convert a script UI command (llDialog / llLoadURL / llTextBox) into an egress event.
+pub fn script_ui_event(cmd: welkin_script_vm::builtins::dialogs::UiCommand) -> EgressEvent {
+    use welkin_script_vm::builtins::dialogs::UiCommand;
+    match cmd {
+        UiCommand::Dialog { agent_id, object_name, object_id, owner_id, message, buttons, channel } => {
+            EgressEvent::Dialog { agent: agent_id, message, buttons, chat_channel: channel, object_name, object_id, owner_id }
+        }
+        UiCommand::LoadUrl { agent_id, object_name, object_id, owner_id, message, url } => {
+            EgressEvent::LoadUrl { agent: agent_id, object_name, object_id, owner_id, group_owned: false, message, url }
+        }
+        UiCommand::TextBox { agent_id, object_name, object_id, owner_id, message, channel } => {
+            EgressEvent::TextBox { agent: agent_id, message, chat_channel: channel, object_name, object_id, owner_id }
+        }
+    }
+}
+
+/// Convert llInstantMessage output into an IM event from the object to `target`.
+pub fn script_im_event(msg: &welkin_script_vm::ChatMessage, target: Uuid) -> EgressEvent {
+    EgressEvent::Im {
+        to: target,
+        from: msg.source_id,
+        from_name: msg.source_name.clone(),
+        dialog: 19, // IM_FROM_TASK
+        session_id: Uuid::nil(),
+        message: msg.message.clone(),
+        offline: false,
     }
 }
 
@@ -118,6 +148,34 @@ pub fn build_packets(
                     message: cstr(message),
                     url: cstr(url),
                 },
+            };
+            let (bytes, _) = session.circuit.send_msg(&msg, true);
+            vec![bytes]
+        }
+        EgressEvent::Dialog {
+            agent: _,
+            message,
+            buttons,
+            chat_channel,
+            object_name,
+            object_id,
+            owner_id,
+        } => {
+            let msg = msgs::ScriptDialog {
+                data: msgs::script_dialog::Data {
+                    object_id: *object_id,
+                    first_name: cstr(""),
+                    last_name: cstr(""),
+                    object_name: cstr(object_name),
+                    message: cstr(message),
+                    chat_channel: *chat_channel,
+                    image_id: Uuid::nil(),
+                },
+                buttons: buttons
+                    .iter()
+                    .map(|label| msgs::script_dialog::Buttons { button_label: cstr(label) })
+                    .collect(),
+                owner_data: vec![msgs::script_dialog::OwnerData { owner_id: *owner_id }],
             };
             let (bytes, _) = session.circuit.send_msg(&msg, true);
             vec![bytes]

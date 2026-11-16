@@ -22,6 +22,7 @@ pub mod physics;
 pub mod control;
 pub mod prim_params;
 pub mod sensor;
+pub mod dialogs;
 pub mod sound;
 pub mod string;
 pub mod timer;
@@ -689,6 +690,8 @@ pub struct ScriptContext {
     pub inventory_command_sender: Option<std::sync::mpsc::Sender<InventoryCommand>>,
     /// Sender for sound commands.
     pub sound_sender: Option<std::sync::mpsc::Sender<SoundCommand>>,
+    /// Dialog, URL and text-box requests for the region to show to viewers.
+    pub ui_sender: Option<std::sync::mpsc::Sender<dialogs::UiCommand>>,
     /// Sender for link commands (create link, break link).
     pub link_command_sender: Option<std::sync::mpsc::Sender<LinkCommand>>,
     /// Sender for object commands (die, message, etc.).
@@ -833,6 +836,7 @@ impl Default for ScriptContext {
             last_changed_event_key: None,
             inventory_command_sender: None,
             sound_sender: None,
+            ui_sender: None,
             link_command_sender: None,
             object_command_sender: None,
             is_attachment: false,
@@ -860,6 +864,7 @@ pub fn register_all(lua: &mlua::Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result
     list::register_list(lua)?;
     communication::register_communication(lua, ctx)?;
     sound::register_sound(lua, ctx)?;
+    dialogs::register_dialogs(lua, ctx)?;
     physics::register_physics(lua, ctx)?;
     object::register_object(lua, ctx)?;
     avatar::register_avatar(lua, ctx)?;

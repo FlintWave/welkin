@@ -334,6 +334,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // the delivery task is started once the UDP socket exists.
     let (region_egress, egress_rx) = egress_io::RegionEgress::new(scene.clone());
     scene_ref.egress = Arc::new(region_egress);
+    let script_egress = scene_ref.egress.clone();
     {
         let mut registry = scene_ref.registry.write();
         registry.register(ChatModule::new());
@@ -744,6 +745,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let heartbeat_sound_tx = sound_cmd_tx.clone();
     let _sound_cmd_tx = Arc::new(sound_cmd_tx);
 
+    // --- Script UI commands (llDialog / llLoadURL / llTextBox) → viewers via egress ---
+    let (ui_cmd_tx, ui_cmd_rx) = std::sync::mpsc::channel::<welkin_script_vm::builtins::dialogs::UiCommand>();
+    let heartbeat_ui_tx = ui_cmd_tx.clone();
+    let _ui_cmd_tx = Arc::new(ui_cmd_tx);
+    let heartbeat_egress = script_egress.clone();
+
     // --- Physics command channel: scripts (llApplyImpulse, llSetForce, ...) -> physics ---
     let (physics_cmd_tx, physics_cmd_rx) =
         std::sync::mpsc::channel::<(Uuid, welkin_script_vm::PhysicsCommand)>();
@@ -794,6 +801,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     sensor_sender: Some(heartbeat_sensor_tx.clone()),
                     control_sender: Some(heartbeat_control_tx.clone()),
                     sound_sender: Some(heartbeat_sound_tx.clone()),
+                    ui_sender: Some(heartbeat_ui_tx.clone()),
                     physics_sender: Some(heartbeat_physics_tx.clone()),
                     ..Default::default()
                 },
@@ -941,7 +949,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 id: chat_msg.source_id,
                                 message: chat_msg.message.clone(),
                             });
-                            if chat_msg.channel == 0 {
+                            if chat_msg.chat_type == welkin_script_vm::ChatType::IM {
+                                // llInstantMessage: deliver as a person-to-person IM, not local chat.
+                                if let Some(target) = chat_msg.target_id {
+                                    heartbeat_egress.send(egress_io::script_im_event(&chat_msg, target));
+                                }
+                            } else if chat_msg.channel == 0 {
                                 pending_chat.push(chat_msg);
                             }
                         }
@@ -993,6 +1006,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
                         // Drain script sound commands → viewer sound packets
                         let mut pending_sounds: Vec<welkin_script_vm::builtins::SoundCommand> = Vec::new();
+                        // Script dialogs, URLs and text boxes → egress
+                        while let Ok(cmd) = ui_cmd_rx.try_recv() {
+                            heartbeat_egress.send(egress_io::script_ui_event(cmd));
+                        }
+
                         while let Ok(cmd) = sound_cmd_rx.try_recv() {
                             pending_sounds.push(cmd);
                         }
