@@ -94,6 +94,7 @@ pub use world_map::{
     map_image::{MapImageModule, MapTileConfig, ShadedTerrainRenderer, TerrainRenderer},
 };
 pub use npc::NPCModule;
+pub use economy::SimpleMoneyModule;
 pub use voice::WebRtcVoiceModule;
 pub use hg::{
     entity_transfer::HGEntityTransferModule, friends::HGFriendsModule,

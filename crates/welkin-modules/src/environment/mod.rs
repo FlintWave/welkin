@@ -7,7 +7,7 @@ pub mod day_cycle;
 pub mod misc;
 pub mod sound;
 pub mod wind;
-pub use day_cycle::{day_fraction, sun_direction, moon_direction};
+pub use day_cycle::*;
 
 use uuid::Uuid;
 

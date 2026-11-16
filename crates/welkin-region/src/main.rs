@@ -26,6 +26,7 @@ mod persist;
 mod persist_load;
 mod region_identity;
 mod physics_cmd;
+mod policy;
 mod script_persist;
 mod scene_sync;
 mod sim_stats;
@@ -4584,6 +4585,8 @@ async fn process_messages(
                     "FreezeUser"
                 );
                 if scene.get_presence(&target_id).is_some() {
+                    // Region policy: authorised freeze now also constrains physics/movement.
+                    let _ = policy::apply_freeze_policy(&scene, &perms, agent_id, target_id, freeze);
                     let alert_text = if freeze {
                         "You have been frozen by an administrator."
                     } else {

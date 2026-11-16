@@ -8,11 +8,14 @@
 
 pub mod dtl_proxy;
 pub mod gloebit;
+pub mod simple_money;
 
 use uuid::Uuid;
 
 use crate::module::{ModuleConfig, ModuleError, ModuleType, RegionModule};
 use crate::registry::SceneRef;
+
+pub use simple_money::SimpleMoneyModule;
 
 // ---------------------------------------------------------------------------
 // MoneyTransactionType
