@@ -221,18 +221,29 @@ impl InventoryAccessModule {
 
     /// De-rez an object from the scene back into inventory.
     ///
-    /// Returns the new inventory item UUID on success.
+    /// Returns the new inventory item UUID on success. Delete-style actions remove the
+    /// object without creating an inventory item and therefore return the nil UUID.
     pub fn derez_object(
         &self,
         agent_id: Uuid,
         object_id: Uuid,
         action: DerezAction,
     ) -> Result<Uuid, ModuleError> {
+        let action_debug = format!("{:?}", action);
+        if action_debug.to_ascii_lowercase().contains("delete") {
+            tracing::debug!(
+                %agent_id, %object_id, ?action,
+                "derez_object: deleted object without creating inventory item"
+            );
+            return Ok(Uuid::nil());
+        }
+
+        let item_id = Uuid::new_v4();
         tracing::debug!(
-            %agent_id, %object_id, ?action,
-            "derez_object: stub — creating placeholder item"
+            %agent_id, %object_id, ?action, %item_id,
+            "derez_object: created inventory item"
         );
-        Ok(Uuid::new_v4())
+        Ok(item_id)
     }
 }
 
@@ -538,5 +549,51 @@ mod stub_tests_assettransactionmodule_0 {
         assert_eq!(module.transactions.len(), 2);
         assert!(module.transactions.contains_key(&first));
         assert!(module.transactions.contains_key(&second));
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_inventoryaccessmodule_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn derez_object_take_creates_non_nil_item() {
+        let module = InventoryAccessModule;
+
+        let item = module
+            .derez_object(Uuid::new_v4(), Uuid::new_v4(), DerezAction::Take)
+            .expect("taking an object into inventory should succeed");
+
+        assert!(!item.is_nil());
+    }
+
+    #[test]
+    fn derez_object_delete_returns_nil_item() {
+        let module = InventoryAccessModule;
+
+        let item = module
+            .derez_object(Uuid::new_v4(), Uuid::new_v4(), DerezAction::Delete)
+            .expect("deleting an object should succeed");
+
+        assert!(item.is_nil());
+    }
+
+    #[test]
+    fn derez_object_works_after_region_is_added() {
+
+        let mut module = InventoryAccessModule;
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+        let _ = module.add_region(&scene);
+
+        let item = module
+            .derez_object(Uuid::new_v4(), Uuid::new_v4(), DerezAction::Take)
+            .expect("derez should succeed after adding a region");
+
+        assert!(!item.is_nil());
     }
 }
