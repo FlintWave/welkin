@@ -17,6 +17,9 @@ pub struct SceneObjectGroup {
     pub is_attachment: bool,
     pub attachment_point: u8,
     pub attached_avatar: Uuid,
+    /// The inventory item this attachment was rezzed from (nil if it was attached
+    /// from the world).
+    pub attachment_item_id: Uuid,
 
     pub has_changed: bool,
     pub time_last_changed: i64,
@@ -35,6 +38,7 @@ impl SceneObjectGroup {
             is_attachment: false,
             attachment_point: 0,
             attached_avatar: Uuid::nil(),
+            attachment_item_id: Uuid::nil(),
             has_changed: false,
             time_last_changed: 0,
             time_first_changed: 0,

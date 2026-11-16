@@ -132,6 +132,21 @@ pub struct Scene {
     terrain_modified: AtomicBool,
 }
 
+/// Highest attachment point number (SL has 55 including HUD points).
+pub const MAX_ATTACHMENT_POINT: u8 = 55;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum AttachError {
+    #[error("invalid attachment point {0}")]
+    BadPoint(u8),
+    #[error("the avatar is not in the region")]
+    NoAvatar,
+    #[error("the object is not in the scene")]
+    NoObject,
+    #[error("the object is already attached")]
+    AlreadyAttached,
+}
+
 impl Scene {
     pub fn new(region_info: RegionInfo, config: SceneConfig) -> Self {
         Self {
@@ -647,6 +662,104 @@ impl Scene {
         out
     }
 
+    // ---- Attachments ----
+
+    /// Attach an object already in the scene to an avatar's attachment point. The
+    /// object leaves the physics world (it now follows the avatar) and its root part
+    /// takes the avatar as parent. `root.attached_pos` / `rotation_offset` hold the
+    /// offset from the attachment point and are left as set by the caller.
+    pub fn attach_object(
+        &self,
+        group_id: &Uuid,
+        agent_id: &Uuid,
+        point: u8,
+        item_id: Uuid,
+    ) -> Result<(), AttachError> {
+        if point == 0 || point > MAX_ATTACHMENT_POINT {
+            return Err(AttachError::BadPoint(point));
+        }
+        let avatar_local_id = self
+            .presences
+            .read()
+            .unwrap()
+            .get(agent_id)
+            .map(|p| p.local_id)
+            .ok_or(AttachError::NoAvatar)?;
+        let root_local_id = {
+            let mut objects = self.objects.write().unwrap();
+            let group = objects.get_mut(group_id).ok_or(AttachError::NoObject)?;
+            if group.is_attachment {
+                return Err(AttachError::AlreadyAttached);
+            }
+            group.is_attachment = true;
+            group.attachment_point = point;
+            group.attached_avatar = *agent_id;
+            group.attachment_item_id = item_id;
+            group.root_part_mut().parent_id = avatar_local_id;
+            group.root_part_mut().shape.last_attach_point = point;
+            group.mark_changed();
+            group.root_part().local_id
+        };
+        self.unregister_root_from_physics(root_local_id);
+        if let Some(p) = self.presences.write().unwrap().get_mut(agent_id) {
+            p.attachments.retain(|(_, g)| g != group_id);
+            p.attachments.push((point, *group_id));
+        }
+        Ok(())
+    }
+
+    /// Detach an attachment and leave it in the world at `position`. Returns false if
+    /// the object is not an attachment.
+    pub fn detach_object(&self, group_id: &Uuid, position: Vec3) -> bool {
+        let agent = {
+            let mut objects = self.objects.write().unwrap();
+            let Some(group) = objects.get_mut(group_id) else { return false };
+            if !group.is_attachment {
+                return false;
+            }
+            let agent = group.attached_avatar;
+            group.is_attachment = false;
+            group.attachment_point = 0;
+            group.attached_avatar = Uuid::nil();
+            group.attachment_item_id = Uuid::nil();
+            group.root_part_mut().parent_id = 0;
+            group.root_part_mut().attached_pos = Vec3::ZERO;
+            group.set_position(position);
+            group.mark_changed();
+            agent
+        };
+        if let Some(p) = self.presences.write().unwrap().get_mut(&agent) {
+            p.attachments.retain(|(_, g)| g != group_id);
+        }
+        if let Some(group) = self.get_object(group_id) {
+            self.register_group_with_physics(&group);
+        }
+        true
+    }
+
+    /// Object ids of the attachments an avatar wears, with their attachment points.
+    pub fn attachments_of(&self, agent_id: &Uuid) -> Vec<(u8, Uuid)> {
+        let objects = self.objects.read().unwrap();
+        let mut out: Vec<(u8, Uuid)> = objects
+            .iter()
+            .filter(|(_, g)| g.is_attachment && g.attached_avatar == *agent_id)
+            .map(|(id, g)| (g.attachment_point, *id))
+            .collect();
+        out.sort();
+        out
+    }
+
+    /// Remove every attachment an avatar wears from the scene (logout) and return them,
+    /// with their attachment points still set so callers can save them.
+    pub fn take_attachments_of(&self, agent_id: &Uuid) -> Vec<SceneObjectGroup> {
+        let ids: Vec<Uuid> = self.attachments_of(agent_id).into_iter().map(|(_, id)| id).collect();
+        let removed: Vec<SceneObjectGroup> = ids.iter().filter_map(|id| self.remove_object(id)).collect();
+        if let Some(p) = self.presences.write().unwrap().get_mut(agent_id) {
+            p.attachments.clear();
+        }
+        removed
+    }
+
     pub fn get_top_colliders(&self) -> Vec<(u32, f32)> {
         if let Ok(guard) = self.physics.lock()
             && let Some(ref physics) = *guard
@@ -888,6 +1001,80 @@ mod tests {
         // Revert restores the baked (loaded) height.
         scene.modify_terrain(PaintAction::Revert, 100.0, 100.0, 0.0, 4.0, 1.0);
         assert!((scene.terrain_height_at(100.0, 100.0) - before).abs() < 1e-3);
+    }
+
+    fn scene_with_avatar() -> (Scene, Uuid, u32) {
+        use crate::presence::{PresenceType, ScenePresence};
+        let scene = test_scene();
+        let agent = Uuid::new_v4();
+        scene.add_presence(ScenePresence::new(agent, "Test", "Avatar", PresenceType::User));
+        let local = scene.get_presence(&agent).unwrap().local_id;
+        (scene, agent, local)
+    }
+
+    #[test]
+    fn attach_parents_the_object_to_the_avatar_and_detach_puts_it_back() {
+        let (scene, agent, avatar_local) = scene_with_avatar();
+        let obj = scene.add_object(test_group("Hat", agent, Vec3::new(10.0, 10.0, 30.0)));
+        let item = Uuid::new_v4();
+        scene.attach_object(&obj, &agent, 2, item).unwrap();
+
+        let g = scene.get_object(&obj).unwrap();
+        assert!(g.is_attachment);
+        assert_eq!((g.attachment_point, g.attached_avatar, g.attachment_item_id), (2, agent, item));
+        assert_eq!(g.root_part().parent_id, avatar_local);
+        assert_eq!(scene.attachments_of(&agent), vec![(2, obj)]);
+        assert_eq!(scene.get_presence(&agent).unwrap().attachments, vec![(2, obj)]);
+
+        assert!(scene.detach_object(&obj, Vec3::new(50.0, 60.0, 25.0)));
+        let g = scene.get_object(&obj).unwrap();
+        assert!(!g.is_attachment);
+        assert_eq!(g.root_part().parent_id, 0);
+        assert_eq!(g.position(), Vec3::new(50.0, 60.0, 25.0));
+        assert!(scene.attachments_of(&agent).is_empty());
+        assert!(scene.get_presence(&agent).unwrap().attachments.is_empty());
+        assert!(!scene.detach_object(&obj, Vec3::ZERO), "already detached");
+    }
+
+    #[test]
+    fn attach_rejects_bad_requests() {
+        let (scene, agent, _) = scene_with_avatar();
+        let obj = scene.add_object(test_group("Hat", agent, Vec3::ZERO));
+        assert_eq!(scene.attach_object(&obj, &agent, 0, Uuid::nil()), Err(AttachError::BadPoint(0)));
+        assert_eq!(scene.attach_object(&obj, &agent, 56, Uuid::nil()), Err(AttachError::BadPoint(56)));
+        assert_eq!(scene.attach_object(&obj, &Uuid::new_v4(), 2, Uuid::nil()), Err(AttachError::NoAvatar));
+        assert_eq!(scene.attach_object(&Uuid::new_v4(), &agent, 2, Uuid::nil()), Err(AttachError::NoObject));
+        scene.attach_object(&obj, &agent, 2, Uuid::nil()).unwrap();
+        assert_eq!(scene.attach_object(&obj, &agent, 3, Uuid::nil()), Err(AttachError::AlreadyAttached));
+    }
+
+    #[test]
+    fn logout_takes_all_of_an_avatars_attachments_out_of_the_scene() {
+        let (scene, agent, _) = scene_with_avatar();
+        let a = scene.add_object(test_group("A", agent, Vec3::ZERO));
+        let b = scene.add_object(test_group("B", agent, Vec3::ZERO));
+        let ground = scene.add_object(test_group("Ground", agent, Vec3::ZERO));
+        scene.attach_object(&a, &agent, 2, Uuid::new_v4()).unwrap();
+        scene.attach_object(&b, &agent, 6, Uuid::new_v4()).unwrap();
+        let taken = scene.take_attachments_of(&agent);
+        assert_eq!(taken.len(), 2);
+        assert!(taken.iter().all(|g| g.is_attachment), "still marked so callers can save them");
+        assert!(scene.get_object(&a).is_none() && scene.get_object(&b).is_none());
+        assert!(scene.get_object(&ground).is_some());
+        assert!(scene.get_presence(&agent).unwrap().attachments.is_empty());
+    }
+
+    #[test]
+    fn attached_objects_leave_the_physics_world() {
+        let (scene, agent, _) = scene_with_avatar();
+        scene.set_physics(Box::new(welkin_physics::null::NullPhysicsScene::new("t")));
+        let obj = scene.add_object(test_group("Hat", agent, Vec3::new(5.0, 5.0, 30.0)));
+        let local = scene.get_object(&obj).unwrap().root_part().local_id;
+        assert!(scene.with_physics(|ph| ph.get_actor_mut(local).is_some()).unwrap());
+        scene.attach_object(&obj, &agent, 2, Uuid::nil()).unwrap();
+        assert!(!scene.with_physics(|ph| ph.get_actor_mut(local).is_some()).unwrap());
+        scene.detach_object(&obj, Vec3::new(5.0, 5.0, 30.0));
+        assert!(scene.with_physics(|ph| ph.get_actor_mut(local).is_some()).unwrap(), "back in the world");
     }
 
     #[test]
