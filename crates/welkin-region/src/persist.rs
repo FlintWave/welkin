@@ -139,6 +139,12 @@ pub async fn backup_dirty_objects(
     let mut persisted = 0usize;
     for uuid in &dirty_ids {
         if let Some(group) = scene.get_object(uuid) {
+            // Worn attachments are saved with the avatar's attachment list, not as
+            // objects lying in the region.
+            if group.is_attachment {
+                scene.mark_backed_up(uuid);
+                continue;
+            }
             let gid = group.uuid().to_string();
             let mut group_ok = true;
             for part in group.parts() {
@@ -162,6 +168,24 @@ pub async fn backup_dirty_objects(
         }
     }
     persisted
+}
+
+/// Load the region's saved objects into the scene. Returns how many objects were added.
+pub async fn load_objects_into_scene(scene: &Scene, store: &SimulationDataStore, region_uuid: &str) -> usize {
+    let rows = match store.load_objects(region_uuid).await {
+        Ok(rows) => rows,
+        Err(e) => {
+            tracing::error!(error = %e, "could not read saved objects; starting with an empty region");
+            return 0;
+        }
+    };
+    let groups = crate::persist_load::groups_from_rows(rows);
+    let count = groups.len();
+    for group in groups {
+        let id = scene.add_object(group);
+        scene.mark_backed_up(&id); // exactly as saved: nothing to write back
+    }
+    count
 }
 
 /// Save the terrain if it was edited since the last save. Returns true if saved.
@@ -265,5 +289,85 @@ mod terrain_tests {
         assert!((restarted.terrain_height_at(100.0, 100.0) - edited).abs() < 0.001);
         assert_eq!(restarted.terrain_height_at(10.0, 10.0), 21.0);
         let _ = std::fs::remove_file(&db_path);
+    }
+}
+
+#[cfg(test)]
+mod restart_tests {
+    use super::*;
+    use glam::Vec3;
+    use welkin_scene::group::SceneObjectGroup;
+    use welkin_scene::scene::{RegionInfo, SceneConfig};
+    use welkin_scene::terrain_paint::PaintAction;
+
+    /// Two "runs" against one database with no fixed region id: what the first run saves
+    /// (objects, terrain, estate) is what the second run loads.
+    #[tokio::test]
+    async fn a_restart_finds_its_objects_terrain_and_estate() {
+        sqlx::any::install_default_drivers();
+        let path = std::env::temp_dir().join(format!("welkin-restart-test-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let url = format!("sqlite:{}?mode=rwc", path.display());
+        let owner = uuid::Uuid::new_v4();
+        let cfg_path = std::env::temp_dir().join(format!("welkin-restart-cfg-{}.toml", std::process::id()));
+        std::fs::write(&cfg_path, format!("[Estate]\nEstateOwner = \"{owner}\"\n")).unwrap();
+        let config = welkin_config::Config::from_toml_file(&cfg_path).unwrap();
+        let _ = std::fs::remove_file(&cfg_path);
+
+        // The same start-up steps the binary performs.
+        async fn start(url: &str) -> (welkin_data::DataPool, uuid::Uuid, SimulationDataStore) {
+            let pool = welkin_data::DataPool::connect(url).await.expect("pool");
+            let backend = welkin_data::migrations::Backend::SQLite;
+            let runner = welkin_data::migrations::MigrationRunner::new(pool.inner().clone(), backend);
+            runner.ensure_migrations_table().await.unwrap();
+            for name in ["RegionStore", "EstateStore"] {
+                let sql = welkin_data::migrations::migration_content(name, backend).unwrap();
+                runner.run_migrations(name, sql).await.expect("migrations");
+            }
+            let id = crate::region_identity::resolve(pool.inner(), "Home", 1000, 1000, None).await.unwrap();
+            let store = SimulationDataStore::new(pool.inner().clone());
+            (pool, id, store)
+        }
+
+        // --- first run ---
+        let (pool, id1, store) = start(&url).await;
+        let mut info = RegionInfo::new("Home", 1000, 1000);
+        info.region_id = id1;
+        let mut config1 = SceneConfig::default();
+        config1.persist_min_seconds = 0;
+        let scene = Scene::new(info, config1);
+        let mut root = welkin_scene::part::SceneObjectPart::new("Box", owner);
+        root.group_position = Vec3::new(40.0, 50.0, 25.0);
+        let object = scene.add_object(SceneObjectGroup::new(root));
+        scene.modify_terrain(PaintAction::Raise, 100.0, 100.0, 0.0, 4.0, 3.0);
+        let edited = scene.terrain_height_at(100.0, 100.0);
+        let mut perms = crate::estate_config::permissions_from_config(&config);
+        let estate_store = welkin_data::estate::EstateStore::new(pool.inner().clone());
+        crate::estate_config::apply_estate_data(&mut perms, &estate_store, &id1.to_string()).await;
+        assert_eq!(backup_dirty_objects(&scene, &store, &id1.to_string()).await, 1);
+        assert!(backup_terrain(&scene, &store, &id1.to_string()).await);
+        pool.inner().close().await;
+
+        // --- second run: new process state, same database ---
+        let (pool, id2, store) = start(&url).await;
+        assert_eq!(id1, id2, "the region keeps its id");
+        let mut info = RegionInfo::new("Home", 1000, 1000);
+        info.region_id = id2;
+        let scene = Scene::new(info, SceneConfig::default());
+        assert_eq!(load_objects_into_scene(&scene, &store, &id2.to_string()).await, 1);
+        let loaded = scene.get_object(&object).expect("the object came back under its own id");
+        assert_eq!(loaded.root_part().name, "Box");
+        assert_eq!(loaded.position(), Vec3::new(40.0, 50.0, 25.0));
+        assert!(scene.collect_for_backup().is_empty(), "a loaded object is not dirty");
+        let saved = load_saved_terrain(&store, &id2.to_string()).await.expect("saved terrain");
+        scene.set_terrain(&saved);
+        assert!((scene.terrain_height_at(100.0, 100.0) - edited).abs() < 0.001);
+        let mut perms = crate::estate_config::permissions_from_config(&welkin_config::Config::default());
+        let estate_store = welkin_data::estate::EstateStore::new(pool.inner().clone());
+        crate::estate_config::apply_estate_data(&mut perms, &estate_store, &id2.to_string()).await;
+        assert_eq!(perms.estate_owner, owner, "the estate was found, not created again");
+        assert_eq!(estate_store.get_all_estates().await.unwrap().len(), 1);
+        pool.inner().close().await;
+        let _ = std::fs::remove_file(&path);
     }
 }

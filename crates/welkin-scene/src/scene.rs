@@ -178,6 +178,8 @@ impl Scene {
 
     pub fn add_object(&self, mut group: SceneObjectGroup) -> Uuid {
         let uuid = group.uuid();
+        // A new object has never been saved.
+        group.mark_changed();
 
         let mut local_ids: Vec<u32> = Vec::new();
         for part in group.parts_mut() {
@@ -1455,6 +1457,10 @@ mod tests {
         scene.add_object(g1);
         scene.add_object(g2);
         scene.add_object(g3);
+        // A new object counts as unsaved; this test wants one that is clean.
+        scene.mark_backed_up(&u3);
+        scene.mark_backed_up(&u1);
+        scene.mark_backed_up(&u2);
 
         // Mark two as needing backup (recently — would NOT pass timed collection)
         scene.with_object_mut(&u1, |g| g.mark_changed());

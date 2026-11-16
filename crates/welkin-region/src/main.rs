@@ -8,6 +8,7 @@ mod estate_config;
 mod inventory_rez;
 mod object_add;
 mod persist;
+mod persist_load;
 mod region_identity;
 mod physics_cmd;
 mod script_persist;
@@ -289,6 +290,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         None => vec![welkin_scene::terrain::DEFAULT_TERRAIN_HEIGHT; 256 * 256],
     };
     scene.set_terrain(&height_map);
+    let loaded_objects = persist::load_objects_into_scene(&scene, &sim_store, &region_id_str).await;
+    info!(loaded_objects, "loaded saved objects");
 
     // --- Module system ---
     let mut scene_ref = SceneRef::new(

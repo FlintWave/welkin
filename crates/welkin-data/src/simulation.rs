@@ -369,7 +369,8 @@ const PRIM_COLS: &str = "\
     ColorR, ColorG, ColorB, ColorA, \
     COALESCE(ParticleSystem,X'') AS ParticleSystem, ClickAction, Material, \
     COALESCE(CollisionSound,'') AS CollisionSound, CollisionSoundVolume, \
-    PassTouches, PassCollisions, LinkNumber, COALESCE(MediaURL,'') AS MediaURL, \
+    CASE WHEN PassTouches THEN 1 ELSE 0 END AS PassTouches, \
+    CASE WHEN PassCollisions THEN 1 ELSE 0 END AS PassCollisions, LinkNumber, COALESCE(MediaURL,'') AS MediaURL, \
     PhysicsShapeType, Density, GravityModifier, Friction, Restitution, \
     COALESCE(DynAttrs,'') AS DynAttrs";
 
@@ -399,7 +400,7 @@ const REGION_SETTINGS_COLS: &str = "\
     COALESCE(map_tile_id,'') AS map_tile_id, \
     COALESCE(telehub_object,'') AS telehub_object, \
     COALESCE(parcel_tile_id,'') AS parcel_tile_id, \
-    COALESCE(cacheID,'') AS cacheID, block_search";
+    COALESCE(cacheID,'') AS cacheID, CASE WHEN block_search THEN 1 ELSE 0 END AS block_search";
 
 // ---------------------------------------------------------------------------
 // Store

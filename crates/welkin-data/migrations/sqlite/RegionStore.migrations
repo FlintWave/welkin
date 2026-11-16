@@ -419,3 +419,8 @@ ALTER TABLE regionsettings ADD COLUMN TerrainPBR2 char(36) NOT NULL DEFAULT '000
 ALTER TABLE regionsettings ADD COLUMN TerrainPBR3 char(36) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000';
 ALTER TABLE regionsettings ADD COLUMN TerrainPBR4 char(36) NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000';
 COMMIT;
+
+:VERSION 43         #----- welkin: LinkNumber (OpenSim's SQLite store adds it in code, not in this file)
+BEGIN;
+ALTER TABLE prims ADD COLUMN LinkNumber integer not null default 0;
+COMMIT;
