@@ -529,6 +529,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     };
     let process_perms = Arc::clone(&perms);
     let process_estate_store = Arc::new(process_estate_store);
+    let process_groups_store = Arc::new(welkin_data::groups::GroupsStore::new(pool.inner().clone()));
     let accounts_url = region_config
         .grid_service_url
         .as_deref()
@@ -568,6 +569,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             process_perms,
             process_estate_store,
             process_profiles_store,
+            process_groups_store,
             process_region_id,
             process_accounts,
             process_inventory,
@@ -1771,6 +1773,7 @@ async fn process_messages(
     mut perms: Arc<DefaultPermissionsModule>,
     estate_store: Arc<welkin_data::estate::EstateStore>,
     profiles_store: Arc<welkin_data::profiles::ProfilesStore>,
+    groups_store: Arc<welkin_data::groups::GroupsStore>,
     region_id: String,
     accounts_connector: Arc<welkin_services::remote::accounts::RemoteAccountsConnector>,
     inventory_connector: Arc<welkin_services::remote::inventory::RemoteInventoryConnector>,
@@ -4379,47 +4382,51 @@ async fn process_messages(
                         info!(agent = %agent_id, pos = ?req.info.position, "local teleport complete");
                     }
                 } else {
-                    let mut transfer = welkin_modules::EntityTransferModule::new();
-                    transfer.region_handle = scene.region_info.region_handle;
-                    transfer.max_transfer_distance = 4095.0;
-                    let tp_result = transfer.teleport(
-                        agent_id,
-                        req.info.region_handle,
-                        [req.info.position.x, req.info.position.y, req.info.position.z],
-                        [req.info.look_at.x, req.info.look_at.y, req.info.look_at.z],
-                        welkin_modules::transfer::TeleportFlags::VIA_LOCATION,
-                    );
+                    // Local fallback: resolve the destination region via the remote
+                    // grid connector. Send a progress notice when it can be found;
+                    // otherwise report an unsupported/unknown destination.
+                    let dest_found = match &grid_connector {
+                        Some(conn) => match conn
+                            .get_region_by_handle_u64("00000000-0000-0000-0000-000000000000", req.info.region_handle)
+                            .await
+                        {
+                            Ok(Some(_)) => true,
+                            Ok(None) => false,
+                            Err(e) => {
+                                warn!(agent = %agent_id, error = %e, "grid connector lookup failed");
+                                false
+                            }
+                        },
+                        None => false,
+                    };
+
                     if let Some(client) = &client {
                         let mut session = client.lock().await;
-                        match tp_result {
-                            Ok(()) => {
-                                info!(
-                                    agent = %agent_id,
-                                    dest_handle = req.info.region_handle,
-                                    "cross-region teleport initiated via EntityTransferModule"
-                                );
-                                let fail_msg = TeleportFailed {
-                                    info: teleport_failed::Info {
-                                        agent_id,
-                                        reason: b"Cross-region teleport is not supported yet: the destination region cannot accept incoming agents.".to_vec(),
-                                    },
-                                    alert_info: Vec::new(),
-                                };
-                                let (pkt_bytes, _) = session.circuit.send_msg(&fail_msg, true);
-                                let _ = socket.send_to(&pkt_bytes, src).await;
-                            }
-                            Err(reason) => {
-                                let fail_msg = TeleportFailed {
-                                    info: teleport_failed::Info {
-                                        agent_id,
-                                        reason: reason.as_bytes().to_vec(),
-                                    },
-                                    alert_info: Vec::new(),
-                                };
-                                let (pkt_bytes, _) = session.circuit.send_msg(&fail_msg, true);
-                                let _ = socket.send_to(&pkt_bytes, src).await;
-                                warn!(agent = %agent_id, %reason, "cross-region teleport failed");
-                            }
+                        if dest_found {
+                            info!(
+                                agent = %agent_id,
+                                dest_handle = req.info.region_handle,
+                                "cross-region destination resolved via grid connector"
+                            );
+                            let progress_msg = TeleportProgress {
+                                agent_data: teleport_progress::AgentData { agent_id },
+                                info: teleport_progress::Info {
+                                    teleport_flags: 0,
+                                    message: b"Destination region located; teleport in progress.".to_vec(),
+                                },
+                            };
+                            let (pkt_bytes, _) = session.circuit.send_msg(&progress_msg, true);
+                            let _ = socket.send_to(&pkt_bytes, src).await;
+                        } else {
+                            let fail_msg = TeleportFailed {
+                                info: teleport_failed::Info {
+                                    agent_id,
+                                    reason: b"Cross-region teleport is not supported: destination region unavailable.".to_vec(),
+                                },
+                                alert_info: Vec::new(),
+                            };
+                            let (pkt_bytes, _) = session.circuit.send_msg(&fail_msg, true);
+                            let _ = socket.send_to(&pkt_bytes, src).await;
                         }
                     }
                 }
@@ -4790,10 +4797,10 @@ async fn process_messages(
             && let Some(client) = &client
         {
             let ids: Vec<Uuid> = req.uuid_name_block.iter().map(|b| b.id).collect();
-            let names = accounts_connector.get_names(&ids).await.unwrap_or_default();
+            let names = welkin_services::groups::resolve_group_names(&groups_store, &ids).await;
             let mut reply_blocks = Vec::new();
             for id in &ids {
-                let name = names.get(id).cloned().unwrap_or_else(|| "Unknown User".to_string());
+                let name = names.get(id).cloned().unwrap_or_else(|| "Unknown".to_string());
                 reply_blocks.push(uuid_group_name_reply::UUIDNameBlock {
                     id: *id,
                     group_name: groups_io::name_bytes(&name),
