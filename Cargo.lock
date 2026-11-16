@@ -4812,6 +4812,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "sqlx",
  "tokio",
  "toml 0.8.2",
  "tracing",
