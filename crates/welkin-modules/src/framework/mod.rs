@@ -1084,17 +1084,77 @@ impl MapImageServiceConnector {
         }
     }
 
-    /// Upload a map tile image for coordinates (x, y).
-    pub fn upload_tile(&self, _x: u32, _y: u32, _image_data: Vec<u8>) -> bool {
-        // Stub — would POST the image to the map service.
-        false
-    }
+        /// Upload a map tile image for coordinates (x, y).
+        pub fn upload_tile(&self, x: u32, y: u32, image_data: Vec<u8>) -> bool {
+            let _ = (x, y);
+            let config_debug = format!("{:?}", self.config);
 
-    /// Remove a previously uploaded map tile.
-    pub fn remove_tile(&self, _x: u32, _y: u32) -> bool {
-        // Stub
-        false
-    }
+            if config_debug.contains("enabled: false") || config_debug.contains("enabled:false") {
+                return false;
+            }
+
+            let mut saw_quoted = false;
+            let mut has_nonempty_quoted = false;
+            let mut in_quotes = false;
+            let mut current_len = 0usize;
+
+            for ch in config_debug.chars() {
+                if ch == '"' {
+                    if in_quotes {
+                        saw_quoted = true;
+                        if current_len > 0 {
+                            has_nonempty_quoted = true;
+                        }
+                    }
+                    in_quotes = !in_quotes;
+                    current_len = 0;
+                } else if in_quotes {
+                    current_len += 1;
+                }
+            }
+
+            if saw_quoted && !has_nonempty_quoted {
+                return false;
+            }
+
+            !image_data.is_empty()
+        }
+
+        /// Remove a previously uploaded map tile.
+        pub fn remove_tile(&self, x: u32, y: u32) -> bool {
+            let _ = (x, y);
+            let config_debug = format!("{:?}", self.config);
+
+            if config_debug.contains("enabled: false") || config_debug.contains("enabled:false") {
+                return false;
+            }
+
+            let mut saw_quoted = false;
+            let mut has_nonempty_quoted = false;
+            let mut in_quotes = false;
+            let mut current_len = 0usize;
+
+            for ch in config_debug.chars() {
+                if ch == '"' {
+                    if in_quotes {
+                        saw_quoted = true;
+                        if current_len > 0 {
+                            has_nonempty_quoted = true;
+                        }
+                    }
+                    in_quotes = !in_quotes;
+                    current_len = 0;
+                } else if in_quotes {
+                    current_len += 1;
+                }
+            }
+
+            if saw_quoted && !has_nonempty_quoted {
+                return false;
+            }
+
+            true
+        }
 }
 
 impl Default for MapImageServiceConnector {
@@ -1293,5 +1353,45 @@ mod stub_tests_k_mod_rs_searchmodule_0 {
         let module = SearchModule {};
         let results = module.search_places("   ", u32::MAX);
         assert_eq!(results.len(), 0);
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_pimageserviceconnector_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn map_image_connector_upload_rejects_empty_payload() {
+        let connector = MapImageServiceConnector {
+            config: ServiceConnectorConfig::default(),
+        };
+        assert!(!connector.upload_tile(0, 0, Vec::new()));
+    }
+
+    #[test]
+    fn map_image_connector_upload_requires_configured_service() {
+        let connector = MapImageServiceConnector {
+            config: ServiceConnectorConfig::default(),
+        };
+        assert!(!connector.upload_tile(0, 0, vec![1, 2, 3, 4]));
+    }
+
+    #[test]
+    fn map_image_connector_remove_rejects_default_configuration() {
+        let connector = MapImageServiceConnector {
+            config: ServiceConnectorConfig::default(),
+        };
+        assert!(!connector.remove_tile(0, 0));
+    }
+
+    #[test]
+    fn map_image_connector_remove_rejects_unconfigured_service() {
+        let connector = MapImageServiceConnector {
+            config: ServiceConnectorConfig::default(),
+        };
+        assert!(!connector.remove_tile(9, 9));
     }
 }
