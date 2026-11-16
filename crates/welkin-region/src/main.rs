@@ -6,6 +6,7 @@ mod console_io;
 mod persist;
 mod script_persist;
 mod sim_stats;
+mod sound_io;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -657,6 +658,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let heartbeat_control_tx = control_cmd_tx.clone();
     let _control_cmd_tx = Arc::new(control_cmd_tx);
 
+    // --- Sound command channel: scripts → SoundTrigger/AttachedSound packets ---
+    let (sound_cmd_tx, sound_cmd_rx) =
+        std::sync::mpsc::channel::<welkin_script_vm::builtins::SoundCommand>();
+    let heartbeat_sound_tx = sound_cmd_tx.clone();
+    let _sound_cmd_tx = Arc::new(sound_cmd_tx);
+
     // --- Heartbeat loop ---
     let heartbeat_cancel = cancel.clone();
     let heartbeat_scene = Arc::clone(&scene);
@@ -717,6 +724,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                             event_sender: Some(heartbeat_event_tx.clone()),
                                             sensor_sender: Some(heartbeat_sensor_tx.clone()),
                                             control_sender: Some(heartbeat_control_tx.clone()),
+                                            sound_sender: Some(heartbeat_sound_tx.clone()),
                                             ..Default::default()
                                         }
                                     ));
@@ -823,6 +831,21 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                     }
                                 }
                             }
+                        }
+
+                        // Drain script sound commands → viewer sound packets
+                        let mut pending_sounds: Vec<welkin_script_vm::builtins::SoundCommand> = Vec::new();
+                        while let Ok(cmd) = sound_cmd_rx.try_recv() {
+                            pending_sounds.push(cmd);
+                        }
+                        if !pending_sounds.is_empty() {
+                            sound_io::relay_sound(
+                                pending_sounds,
+                                &heartbeat_scene,
+                                &heartbeat_socket,
+                                &heartbeat_clients,
+                            )
+                            .await;
                         }
 
                         // Drain sensor requests
