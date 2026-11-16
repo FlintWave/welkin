@@ -36,6 +36,7 @@ services:
     environment:
       OPENSIM__Database__ConnectionString: "Server=db;Port=3306;Database=opensim;User=opensim;Password=opensim-dev"
       OPENSIM__Network__http_listener_port: "8003"
+      OPENSIM__UserAccountService__AllowCreateUser: "true"   # dev stack only
       RUST_LOG: info
     ports:
       - "127.0.0.1:8003:8003"

@@ -19,7 +19,7 @@ pub struct AccountsServiceState {
     pub store: Arc<UserAccountStore>,
     pub auth_store: Arc<AuthStore>,
     pub inventory_store: Arc<InventoryStore>,
-    /// When false the `createuser` method is refused (config `[UserAccountService] AllowCreateUser`).
+    /// When false the `createuser` method is refused (config `[UserAccountService] AllowCreateUser`, default false as in OpenSim).
     pub allow_create_user: bool,
 }
 

@@ -1,2 +1,7 @@
 [DatabaseService]
 ConnectionString = "sqlite:robust.db?mode=rwc"
+
+[UserAccountService]
+# Dev/test only. Defaults to false; enabling lets anyone who can reach the
+# private service port create accounts.
+AllowCreateUser = true

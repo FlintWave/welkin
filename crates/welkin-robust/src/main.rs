@@ -337,7 +337,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
                 store: accounts_store.clone(),
                 auth_store: auth_store.clone(),
                 inventory_store: inventory_store.clone(),
-                allow_create_user: config.get_bool_or("UserAccountService", "AllowCreateUser", true),
+                allow_create_user: config.get_bool_or("UserAccountService", "AllowCreateUser", false),
             },
         ))
         .merge(welkin_services::griduser::router(
