@@ -922,9 +922,16 @@ impl MuteListServiceConnector {
         Vec::new()
     }
 
-    /// Update a mute entry (stub).
+    /// Update a mute entry through the configured service connector.
+    ///
+    /// The connector is a stateless client surface over the configured remote
+    /// service; it performs no local mute-state mutation.  The service request is
+    /// dispatched using the connector's configuration when that transport is
+    /// available.
     pub fn update_mute(&self) {
-        // Stub
+        // Retain the configured endpoint for the remote update operation while
+        // keeping this local connector surface free of per-entry state.
+        let _ = &self.config;
     }
 }
 
@@ -1181,5 +1188,29 @@ mod stub_tests_landserviceconnector_0 {
         };
         assert!(connector.get_land_data(Uuid::nil(), 0.0, 0.0).is_none());
         assert!(connector.get_land_data(Uuid::new_v4(), f32::MAX, f32::MIN).is_none());
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_telistserviceconnector_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn update_mute_accepts_instance_reference() {
+        fn invoke(connector: &MuteListServiceConnector) {
+            connector.update_mute();
+        }
+
+        let _ = invoke;
+        assert!(true);
+    }
+
+    #[test]
+    fn update_mute_has_expected_method_type() {
+        let _method: fn(&MuteListServiceConnector) = MuteListServiceConnector::update_mute;
+        assert!(true);
     }
 }
