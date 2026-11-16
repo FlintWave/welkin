@@ -78,6 +78,7 @@ multi-region setups.
 | Region | RegionName | string | My Region | Display name shown to viewers |
 | Region | RegionLocX | int | 1000 | Grid X coordinate |
 | Region | RegionLocY | int | 1000 | Grid Y coordinate |
+| Region | RegionUUID | string | (generated once) | Fixed UUID for the region; see below |
 | Network | ExternalHostName | string | 127.0.0.1 | Public hostname or IP that viewers connect to |
 | Network | InternalPort | int | 9000 | UDP port for LLUDP viewer traffic |
 | DatabaseService | RegionConnectionString | string | sqlite:region.db | Database URL for region object storage |
@@ -92,7 +93,27 @@ multi-region setups.
 
 Permission checks are on by default. Without `EstateOwner` nobody has estate
 rights; avatars can still edit, move and delete objects they own. The region
-logs a warning at start-up when no owner is configured.
+logs a warning at start-up when no owner is configured, and an error for any
+`EstateOwner` or `EstateManagers` entry that is not a UUID.
+
+The region also stores its estate in the region database (the `estate_settings`,
+`estate_map` and `estate_managers` tables). On the first start it creates the
+estate with OpenSimulator's defaults and writes the configured owner and
+managers into it. Later starts read the stored estate, so you can drop the
+`[Estate]` section after the first start. A different `EstateOwner` in the
+config replaces the stored owner. The region runs its database migrations
+at every start, so the tables for objects, terrain and the estate exist on a
+fresh database.
+
+Everything the region saves (objects, terrain, estate link, settings) is keyed
+by the region's UUID. If you leave `RegionUUID` out, the region generates one on
+its first start and stores it in the region database under its name and
+location, then reuses it on every later start. Set `RegionUUID` when you need a
+known value, for example when you move a region to a new database or machine and
+want it to find its saved data. The setting must be a valid UUID, or the region
+refuses to start. If you rename a region or change its location without setting
+`RegionUUID`, the region generates a new UUID and no longer sees its earlier
+data.
 
 ## welkin-robust (grid services)
 
@@ -239,7 +260,13 @@ IntervalSeconds = 300
 ```
 
 Each save writes only objects that changed since the last one, and logs
-the count at info level when it is above zero.
+the count at info level when it is above zero. The same timer saves the
+terrain if it was edited since the last save. Terrain is stored in OpenSimulator's
+database format (revision 23, a gzip of the height field with heights rounded
+to 3 decimals), and the region loads it at start. A terrain edit made after the
+last save is lost if the region stops before the next one. At start the region
+loads its saved objects, terrain and estate. Objects created since the last
+save count as unsaved and go out on the next one.
 
 OpenSimulator saves on a frame count instead: the scene writes to storage
 every `UpdateStorageEveryNFrames` frames, 200 by default. Welkin uses

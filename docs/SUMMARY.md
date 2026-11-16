@@ -54,6 +54,7 @@
 - [Social modules](security-review-social-modules.md)
 - [Hypergrid](security-review-hypergrid.md)
 - [Voice](security-review-voice.md)
+- [Terraforming](security-review-terraforming.md)
 
 ---
 
