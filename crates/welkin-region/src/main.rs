@@ -4340,6 +4340,31 @@ async fn process_messages(
             info!(agent = %agent_id, count = req.uuid_name_block.len(), "UUIDGroupNameRequest: replied");
         }
 
+        if let Some(g) = &groups
+            && let Some(client) = &client
+            && let Some(pres) = scene.get_presence(&agent_id)
+        {
+            let first = pres.first_name.clone();
+            let last = pres.last_name.clone();
+            let eq = event_queues.read().await.get(&agent_id).cloned();
+            if let Some(outs) = groups_io::process_group_packet(
+                g,
+                agent_id,
+                pkt.id,
+                &pkt.body,
+                &first,
+                &last,
+                eq.as_deref(),
+            )
+            .await
+            {
+                let mut session = client.lock().await;
+                for out in outs {
+                    groups_io::send_group_out(&mut *session, &socket, src, out).await;
+                }
+            }
+        }
+
         if msg_id == ViewerEffect::ID
             && let Ok(ve) = ViewerEffect::decode(&pkt.body)
         {
