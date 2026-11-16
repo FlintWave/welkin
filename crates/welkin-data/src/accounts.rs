@@ -56,27 +56,33 @@ impl UserAccountStore {
     }
 
     pub async fn ensure_names(&self) -> Result<(), DataError> {
-        sqlx::query(
+        let q = crate::portable::sql(
+            &self.pool,
             "CREATE TABLE IF NOT EXISTS UserAccountNames (NameKey VARCHAR(255) NOT NULL PRIMARY KEY, PrincipalID VARCHAR(36) NOT NULL)",
-        )
-        .execute(&self.pool)
-        .await?;
+        );
+        sqlx::query(&q)
+            .execute(&self.pool)
+            .await?;
 
-        let rows: Vec<(String, String, String)> = sqlx::query_as::<_, (String, String, String)>(
+        let q = crate::portable::sql(
+            &self.pool,
             "SELECT PrincipalID, FirstName, LastName FROM UserAccounts WHERE PrincipalID NOT IN (SELECT PrincipalID FROM UserAccountNames)",
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        );
+        let rows: Vec<(String, String, String)> = sqlx::query_as::<_, (String, String, String)>(&q)
+            .fetch_all(&self.pool)
+            .await?;
 
         for (principal_id, first_name, last_name) in rows {
             let key = name_key(&first_name, &last_name);
-            if let Err(err) = sqlx::query(
+            let q = crate::portable::sql(
+                &self.pool,
                 "INSERT INTO UserAccountNames (NameKey, PrincipalID) VALUES ($1, $2)",
-            )
-            .bind(&key)
-            .bind(&principal_id)
-            .execute(&self.pool)
-            .await
+            );
+            if let Err(err) = sqlx::query(&q)
+                .bind(&key)
+                .bind(&principal_id)
+                .execute(&self.pool)
+                .await
             {
                 tracing::warn!(principal_id = %principal_id, error = %err, "failed to backfill user account name; continuing");
             }
@@ -87,7 +93,8 @@ impl UserAccountStore {
 
     pub async fn get_by_id(&self, principal_id: &str) -> Result<Option<UserAccountRow>, DataError> {
         let sql = format!("SELECT {COLS} FROM UserAccounts WHERE PrincipalID = $1");
-        Ok(sqlx::query_as::<_, UserAccountRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, UserAccountRow>(&q)
             .bind(principal_id)
             .fetch_optional(&self.pool)
             .await?)
@@ -103,12 +110,14 @@ impl UserAccountStore {
             .await?;
 
         let key = name_key(first, last);
-        let principal_id: Option<String> = sqlx::query_scalar::<_, String>(
+        let q = crate::portable::sql(
+            &self.pool,
             "SELECT PrincipalID FROM UserAccountNames WHERE NameKey = $1",
-        )
-        .bind(&key)
-        .fetch_optional(&self.pool)
-        .await?;
+        );
+        let principal_id: Option<String> = sqlx::query_scalar::<_, String>(&q)
+            .bind(&key)
+            .fetch_optional(&self.pool)
+            .await?;
 
         match principal_id {
             Some(id) => self.get_by_id(&id).await,
@@ -118,7 +127,8 @@ impl UserAccountStore {
 
     pub async fn get_by_email(&self, email: &str) -> Result<Option<UserAccountRow>, DataError> {
         let sql = format!("SELECT {COLS} FROM UserAccounts WHERE Email = $1");
-        Ok(sqlx::query_as::<_, UserAccountRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, UserAccountRow>(&q)
             .bind(email)
             .fetch_optional(&self.pool)
             .await?)
@@ -147,7 +157,8 @@ impl UserAccountStore {
              (SELECT PrincipalID FROM UserAccountNames \
               WHERE NameKey LIKE $2 ESCAPE '\\' OR NameKey LIKE $3 ESCAPE '\\')"
         );
-        Ok(sqlx::query_as::<_, UserAccountRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, UserAccountRow>(&q)
             .bind(scope_id)
             .bind(&first_pattern)
             .bind(&last_pattern)
@@ -161,33 +172,41 @@ impl UserAccountStore {
             .await?;
 
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM UserAccounts WHERE PrincipalID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM UserAccounts WHERE PrincipalID = $1");
+        sqlx::query(&q)
             .bind(&account.principal_id)
             .execute(&mut *tx)
             .await?;
-        sqlx::query("DELETE FROM UserAccountNames WHERE PrincipalID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM UserAccountNames WHERE PrincipalID = $1");
+        sqlx::query(&q)
             .bind(&account.principal_id)
             .execute(&mut *tx)
             .await?;
-        sqlx::query(
+        let q = crate::portable::sql(
+            &self.pool,
             "INSERT INTO UserAccounts (PrincipalID, ScopeID, FirstName, LastName, Email, \
              ServiceURLs, Created, UserLevel, UserFlags, UserTitle, active) \
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
-        )
-        .bind(&account.principal_id)
-        .bind(&account.scope_id)
-        .bind(&account.first_name)
-        .bind(&account.last_name)
-        .bind(&account.email)
-        .bind(&account.service_urls)
-        .bind(account.created)
-        .bind(account.user_level)
-        .bind(account.user_flags)
-        .bind(&account.user_title)
-        .bind(account.active)
-        .execute(&mut *tx)
-        .await?;
-        sqlx::query("INSERT INTO UserAccountNames (NameKey, PrincipalID) VALUES ($1, $2)")
+        );
+        sqlx::query(&q)
+            .bind(&account.principal_id)
+            .bind(&account.scope_id)
+            .bind(&account.first_name)
+            .bind(&account.last_name)
+            .bind(&account.email)
+            .bind(&account.service_urls)
+            .bind(account.created)
+            .bind(account.user_level)
+            .bind(account.user_flags)
+            .bind(&account.user_title)
+            .bind(account.active)
+            .execute(&mut *tx)
+            .await?;
+        let q = crate::portable::sql(
+            &self.pool,
+            "INSERT INTO UserAccountNames (NameKey, PrincipalID) VALUES ($1, $2)",
+        );
+        sqlx::query(&q)
             .bind(name_key(&account.first_name, &account.last_name))
             .bind(&account.principal_id)
             .execute(&mut *tx)
@@ -208,7 +227,11 @@ impl UserAccountStore {
     }
 
     pub async fn set_active(&self, principal_id: &str, active: bool) -> Result<(), DataError> {
-        sqlx::query("UPDATE UserAccounts SET active = $1 WHERE PrincipalID = $2")
+        let q = crate::portable::sql(
+            &self.pool,
+            "UPDATE UserAccounts SET active = $1 WHERE PrincipalID = $2",
+        );
+        sqlx::query(&q)
             .bind(i32::from(active))
             .bind(principal_id)
             .execute(&self.pool)
