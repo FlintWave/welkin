@@ -3,6 +3,7 @@
 mod logging;
 mod console;
 mod console_io;
+mod object_add;
 mod persist;
 mod script_persist;
 mod scene_sync;
@@ -2362,13 +2363,7 @@ async fn process_messages(
         if msg_id == ObjectAdd::ID
             && let Ok(add) = ObjectAdd::decode(&pkt.body)
         {
-            let mut root = SceneObjectPart::default();
-            root.uuid = Uuid::new_v4();
-            root.owner_id = add.agent_data.agent_id;
-            root.group_position = add.object_data.ray_end;
-            root.scale = add.object_data.scale;
-            root.rotation_offset = add.object_data.rotation;
-            root.name = "Object".to_string();
+            let root = object_add::part_from_object_add(&add);
             let obj_uuid = root.uuid;
             let group = SceneObjectGroup::new(root);
             let _obj_id = scene.add_object(group);
