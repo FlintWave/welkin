@@ -27,6 +27,61 @@ pub enum TerrainIoError {
     UnsupportedDimensions { width: u32, height: u32 },
 }
 
+/// OpenSim terrain database revision codes (`DBTerrainRevision`).
+pub const DB_REVISION_VARIABLE_2D: i32 = 22;
+pub const DB_REVISION_VARIABLE_2D_GZIP: i32 = 23;
+
+/// Serialise heights as OpenSim's `Variable2DGzip` (revision 23): gzip of
+/// `i32 size_x, i32 size_y, f32 heights` (y outer, x inner), heights rounded to
+/// 3 decimals.
+pub fn to_db_blob(size_x: u32, size_y: u32, heights: &[f32]) -> Result<Vec<u8>, TerrainIoError> {
+    let expected = (size_x as usize) * (size_y as usize);
+    if heights.len() != expected {
+        return Err(TerrainIoError::InvalidSize { expected: expected * 4, got: heights.len() * 4 });
+    }
+    let mut raw = Vec::with_capacity(8 + expected * 4);
+    raw.extend_from_slice(&(size_x as i32).to_le_bytes());
+    raw.extend_from_slice(&(size_y as i32).to_le_bytes());
+    for &h in heights {
+        raw.extend_from_slice(&((h * 1000.0).round() / 1000.0).to_le_bytes());
+    }
+    let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    gz.write_all(&raw)?;
+    Ok(gz.finish()?)
+}
+
+/// Parse a terrain database blob of revision 22 (plain) or 23 (gzip). Returns
+/// (size_x, size_y, heights, row-major y*size_x+x).
+pub fn from_db_blob(revision: i32, blob: &[u8]) -> Result<(u32, u32, Vec<f32>), TerrainIoError> {
+    let raw: Vec<u8> = match revision {
+        DB_REVISION_VARIABLE_2D => blob.to_vec(),
+        DB_REVISION_VARIABLE_2D_GZIP => {
+            let mut out = Vec::new();
+            flate2::read::GzDecoder::new(blob).read_to_end(&mut out)?;
+            out
+        }
+        _ => return Err(TerrainIoError::UnsupportedDimensions { width: 0, height: revision as u32 }),
+    };
+    if raw.len() < 8 {
+        return Err(TerrainIoError::InvalidSize { expected: 8, got: raw.len() });
+    }
+    let w = i32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]);
+    let h = i32::from_le_bytes([raw[4], raw[5], raw[6], raw[7]]);
+    if w <= 0 || h <= 0 || w > 4096 || h > 4096 {
+        return Err(TerrainIoError::UnsupportedDimensions { width: w as u32, height: h as u32 });
+    }
+    let count = (w as usize) * (h as usize);
+    if raw.len() != 8 + count * 4 {
+        return Err(TerrainIoError::InvalidSize { expected: 8 + count * 4, got: raw.len() });
+    }
+    let heights = raw[8..]
+        .chunks_exact(4)
+        .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        .map(|v| if v.is_finite() { v } else { 0.0 })
+        .collect();
+    Ok((w as u32, h as u32, heights))
+}
+
 pub fn save_raw32(terrain: &TerrainChannel, writer: &mut impl Write) -> Result<(), TerrainIoError> {
     for &h in terrain.heights() {
         writer.write_all(&h.to_le_bytes())?;
@@ -106,6 +161,40 @@ fn read_full(reader: &mut impl Read, buf: &mut [u8]) -> Result<usize, std::io::E
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn db_blob_round_trips_in_opensim_format() {
+        let heights: Vec<f32> = (0..32 * 16).map(|i| i as f32 * 0.37).collect();
+        let blob = super::to_db_blob(32, 16, &heights).unwrap();
+        let (w, h, back) = super::from_db_blob(super::DB_REVISION_VARIABLE_2D_GZIP, &blob).unwrap();
+        assert_eq!((w, h), (32, 16));
+        for (a, b) in heights.iter().zip(&back) {
+            assert!((a - b).abs() <= 0.0006, "{a} vs {b}");
+        }
+    }
+
+    #[test]
+    fn db_blob_rejects_bad_input() {
+        assert!(super::from_db_blob(99, &[1, 2, 3]).is_err());
+        assert!(super::from_db_blob(super::DB_REVISION_VARIABLE_2D, &[0; 4]).is_err());
+        // wrong payload length for the declared size
+        let mut raw = Vec::new();
+        raw.extend_from_slice(&16i32.to_le_bytes());
+        raw.extend_from_slice(&16i32.to_le_bytes());
+        raw.extend_from_slice(&[0u8; 12]);
+        assert!(super::from_db_blob(super::DB_REVISION_VARIABLE_2D, &raw).is_err());
+        assert!(super::to_db_blob(16, 16, &[0.0; 5]).is_err());
+    }
+
+    #[test]
+    fn db_blob_replaces_non_finite_values() {
+        let mut raw = Vec::new();
+        raw.extend_from_slice(&1i32.to_le_bytes());
+        raw.extend_from_slice(&1i32.to_le_bytes());
+        raw.extend_from_slice(&f32::NAN.to_le_bytes());
+        let (_, _, h) = super::from_db_blob(super::DB_REVISION_VARIABLE_2D, &raw).unwrap();
+        assert_eq!(h, vec![0.0]);
+    }
+
     use super::*;
     use std::io::Cursor;
 

@@ -128,6 +128,8 @@ pub struct Scene {
     terrain: RwLock<TerrainChannel>,
     /// The terrain as last loaded or baked; the `Revert` brush restores from it.
     baked_terrain: RwLock<Vec<f32>>,
+    /// Set when terrain is edited; cleared when it has been saved.
+    terrain_modified: AtomicBool,
 }
 
 impl Scene {
@@ -149,6 +151,7 @@ impl Scene {
             physics: Mutex::new(None),
             terrain: RwLock::new(TerrainChannel::new_default()),
             baked_terrain: RwLock::new(TerrainChannel::new_default().heights().to_vec()),
+            terrain_modified: AtomicBool::new(false),
         }
     }
 
@@ -560,6 +563,9 @@ impl Scene {
             let heights = if changed.is_empty() { Vec::new() } else { terrain.heights().to_vec() };
             (changed, heights)
         };
+        if !changed.is_empty() {
+            self.terrain_modified.store(true, Ordering::SeqCst);
+        }
         if !changed.is_empty()
             && let Ok(mut guard) = self.physics.lock()
             && let Some(ref mut physics) = *guard
@@ -567,6 +573,20 @@ impl Scene {
             physics.set_terrain(&heights);
         }
         changed
+    }
+
+    /// The terrain heights if they were edited since the last save (and marks them
+    /// as saved). Call `mark_terrain_modified` again if the save fails.
+    pub fn take_terrain_for_backup(&self) -> Option<Vec<f32>> {
+        if self.terrain_modified.swap(false, Ordering::SeqCst) {
+            Some(self.terrain.read().unwrap().heights().to_vec())
+        } else {
+            None
+        }
+    }
+
+    pub fn mark_terrain_modified(&self) {
+        self.terrain_modified.store(true, Ordering::SeqCst);
     }
 
     /// Apply a terraform brush (a viewer `ModifyLand` click). Returns the changed
@@ -868,6 +888,21 @@ mod tests {
         // Revert restores the baked (loaded) height.
         scene.modify_terrain(PaintAction::Revert, 100.0, 100.0, 0.0, 4.0, 1.0);
         assert!((scene.terrain_height_at(100.0, 100.0) - before).abs() < 1e-3);
+    }
+
+    #[test]
+    fn edited_terrain_is_offered_for_backup_once() {
+        use crate::terrain_paint::PaintAction;
+        let scene = test_scene();
+        assert!(scene.take_terrain_for_backup().is_none(), "untouched terrain needs no save");
+        scene.set_terrain(&vec![5.0; 256 * 256]);
+        assert!(scene.take_terrain_for_backup().is_none(), "loading terrain is not an edit");
+        scene.modify_terrain(PaintAction::Raise, 50.0, 50.0, 0.0, 3.0, 1.0);
+        let heights = scene.take_terrain_for_backup().expect("edited");
+        assert_eq!(heights.len(), 256 * 256);
+        assert!(scene.take_terrain_for_backup().is_none());
+        scene.mark_terrain_modified();
+        assert!(scene.take_terrain_for_backup().is_some());
     }
 
     #[test]

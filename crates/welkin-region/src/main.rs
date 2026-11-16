@@ -223,6 +223,24 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     info!(url = %redact_connection_string(&region_config.database_url), "Connecting to database");
     let pool = DataPool::connect(&region_config.database_url).await?;
     script_persist::create_script_states_table(pool.inner()).await?;
+    // Region tables (prims, terrain, ...): without them nothing the region saves would persist.
+    {
+        let backend = if region_config.database_url.starts_with("mysql") {
+            welkin_data::migrations::Backend::MySQL
+        } else if region_config.database_url.starts_with("postgres") {
+            welkin_data::migrations::Backend::PostgreSQL
+        } else {
+            welkin_data::migrations::Backend::SQLite
+        };
+        let runner = welkin_data::migrations::MigrationRunner::new(pool.inner().clone(), backend);
+        runner.ensure_migrations_table().await?;
+        if let Some(content) = welkin_data::migrations::migration_content("RegionStore", backend) {
+            match runner.run_migrations("RegionStore", content).await {
+                Ok(version) => info!(version, "region store schema is current"),
+                Err(e) => return Err(format!("region store migration failed: {e}").into()),
+            }
+        }
+    }
     let sim_store = std::sync::Arc::new(welkin_data::simulation::SimulationDataStore::new(pool.inner().clone()));
     info!("Database connection established");
 
@@ -243,12 +261,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         let physics =
             welkin_physics_rapier::RapierPhysicsScene::new(&scene.region_info.region_name);
         scene.set_physics(Box::new(physics));
-        // Flat terrain at the default height: the same ground viewers are sent in
-        // `send_movement_complete`, so physics, avatars and the viewer agree.
-        let height_map = vec![welkin_scene::terrain::DEFAULT_TERRAIN_HEIGHT; 256 * 256];
-        scene.set_terrain(&height_map);
-        info!("Physics engine (Rapier) initialised with terrain heightfield");
     }
+    // The region's terrain: the saved heightmap, or flat at the default height. One
+    // source for physics, avatars and the viewers' LayerData.
+    let height_map = match persist::load_saved_terrain(&sim_store, &region_id_str).await {
+        Some(saved) => {
+            info!("loaded saved terrain");
+            saved
+        }
+        None => vec![welkin_scene::terrain::DEFAULT_TERRAIN_HEIGHT; 256 * 256],
+    };
+    scene.set_terrain(&height_map);
 
     // --- Module system ---
     let mut scene_ref = SceneRef::new(
@@ -1056,6 +1079,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         if n > 0 {
                             tracing::info!(count = n, "persisted dirty objects");
                         }
+                        if persist::backup_terrain(&heartbeat_scene, &heartbeat_sim_store, &heartbeat_region_id).await {
+                            tracing::info!("persisted terrain");
+                        }
                     }
                 }
             }
@@ -1398,6 +1424,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }).await.is_err() {
             warn!("dirty prim flush timed out; some objects may not be persisted");
         }
+    }
+    match tokio::time::timeout(
+        Duration::from_secs(15),
+        persist::backup_terrain(&scene, &sim_store, &region_id_str),
+    )
+    .await
+    {
+        Ok(true) => info!("saved edited terrain on shutdown"),
+        Ok(false) => {}
+        Err(_) => warn!("terrain save timed out; recent terrain edits may be lost"),
     }
     pool.inner().close().await;
     info!("database pool closed");

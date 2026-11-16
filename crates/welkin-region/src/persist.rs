@@ -163,3 +163,107 @@ pub async fn backup_dirty_objects(
     }
     persisted
 }
+
+/// Save the terrain if it was edited since the last save. Returns true if saved.
+pub async fn backup_terrain(scene: &Scene, store: &SimulationDataStore, region_uuid: &str) -> bool {
+    let Some(heights) = scene.take_terrain_for_backup() else {
+        return false;
+    };
+    let blob = match welkin_scene::terrain_io::to_db_blob(256, 256, &heights) {
+        Ok(blob) => blob,
+        Err(e) => {
+            tracing::error!(error = %e, "terrain not saved: serialisation failed");
+            scene.mark_terrain_modified();
+            return false;
+        }
+    };
+    match store
+        .store_terrain(region_uuid, welkin_scene::terrain_io::DB_REVISION_VARIABLE_2D_GZIP, &blob)
+        .await
+    {
+        Ok(()) => true,
+        Err(e) => {
+            tracing::error!(error = %e, "terrain not saved: database write failed");
+            scene.mark_terrain_modified();
+            false
+        }
+    }
+}
+
+/// Terrain heights saved for this region, if any (and usable for a 256 m region).
+pub async fn load_saved_terrain(store: &SimulationDataStore, region_uuid: &str) -> Option<Vec<f32>> {
+    let row = match store.load_terrain(region_uuid).await {
+        Ok(Some(row)) => row,
+        Ok(None) => return None,
+        Err(e) => {
+            tracing::error!(error = %e, "could not read saved terrain; starting with flat terrain");
+            return None;
+        }
+    };
+    match welkin_scene::terrain_io::from_db_blob(row.revision, &row.heightfield) {
+        Ok((256, 256, heights)) => Some(heights),
+        Ok((w, h, _)) => {
+            tracing::error!(w, h, "saved terrain is not 256x256; ignoring it");
+            None
+        }
+        Err(e) => {
+            tracing::error!(revision = row.revision, error = %e, "saved terrain is unreadable; ignoring it");
+            None
+        }
+    }
+}
+
+#[cfg(test)]
+mod terrain_tests {
+    use super::*;
+    use welkin_scene::scene::{RegionInfo, SceneConfig};
+    use welkin_scene::terrain_paint::PaintAction;
+
+    async fn store() -> (SimulationDataStore, std::path::PathBuf) {
+        sqlx::any::install_default_drivers();
+        // A file: each connection to `sqlite::memory:` would be a separate database.
+        static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let path = std::env::temp_dir().join(format!(
+            "welkin-terrain-test-{}-{}.db",
+            std::process::id(),
+            N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        ));
+        let _ = std::fs::remove_file(&path);
+        let url = format!("sqlite:{}?mode=rwc", path.display());
+        let pool = welkin_data::DataPool::connect(&url).await.expect("pool");
+        let runner = welkin_data::migrations::MigrationRunner::new(
+            pool.inner().clone(),
+            welkin_data::migrations::Backend::SQLite,
+        );
+        let sql = welkin_data::migrations::migration_content(
+            "RegionStore",
+            welkin_data::migrations::Backend::SQLite,
+        )
+        .expect("RegionStore migrations");
+        runner.ensure_migrations_table().await.expect("migrations table");
+        runner.run_migrations("RegionStore", sql).await.expect("region migrations");
+        (SimulationDataStore::new(pool.inner().clone()), path)
+    }
+
+    #[tokio::test]
+    async fn edited_terrain_survives_a_restart() {
+        let (store, db_path) = store().await;
+        let region = "11111111-1111-1111-1111-111111111111";
+        assert!(load_saved_terrain(&store, region).await.is_none());
+
+        let scene = Scene::new(RegionInfo::new("T", 1000, 1000), SceneConfig::default());
+        assert!(!backup_terrain(&scene, &store, region).await, "nothing to save yet");
+        scene.modify_terrain(PaintAction::Raise, 100.0, 100.0, 0.0, 4.0, 3.0);
+        let edited = scene.terrain_height_at(100.0, 100.0);
+        assert!(backup_terrain(&scene, &store, region).await);
+        assert!(!backup_terrain(&scene, &store, region).await, "saved once");
+
+        // "Restart": a fresh scene loads the saved heights.
+        let restarted = Scene::new(RegionInfo::new("T", 1000, 1000), SceneConfig::default());
+        let saved = load_saved_terrain(&store, region).await.expect("saved terrain");
+        restarted.set_terrain(&saved);
+        assert!((restarted.terrain_height_at(100.0, 100.0) - edited).abs() < 0.001);
+        assert_eq!(restarted.terrain_height_at(10.0, 10.0), 21.0);
+        let _ = std::fs::remove_file(&db_path);
+    }
+}

@@ -312,7 +312,12 @@ pub async fn execute(ctx: &ConsoleContext, line: &str) -> String {
         Sub::Backup => {
             let count =
                 crate::persist::backup_dirty_objects(&ctx.scene, &ctx.sim_store, &ctx.region_id).await;
-            format!("backed up {} objects", count)
+            let terrain = crate::persist::backup_terrain(&ctx.scene, &ctx.sim_store, &ctx.region_id).await;
+            if terrain {
+                format!("backed up {} objects and the terrain", count)
+            } else {
+                format!("backed up {} objects", count)
+            }
         }
         Sub::Alert { message } => {
             let message = message.join(" ");
