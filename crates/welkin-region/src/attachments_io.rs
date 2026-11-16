@@ -266,16 +266,19 @@ pub async fn restore_saved_attachments(ctx: &AttachCtx<'_>, agent: Uuid) -> usiz
     worn
 }
 
-/// Attach an object that is already in the scene. Replaces what is worn at the same point
-/// unless `append`. Returns the attachment point used.
-pub async fn attach_scene_object(
+struct AttachPlan {
+    point: u8,
+    offset: Vec3,
+    replaced: Vec<Uuid>,
+}
+
+async fn plan_attach(
     ctx: &AttachCtx<'_>,
     agent: Uuid,
     group_id: Uuid,
     requested: u8,
     append: bool,
-    item_id: Uuid,
-) -> Result<u8, String> {
+) -> Result<AttachPlan, String> {
     let group = ctx.scene.get_object(&group_id).ok_or("the object is not in the scene")?;
     let root = group.root_part();
     let (point, offset) = resolve_attach_point(
@@ -300,6 +303,31 @@ pub async fn attach_scene_object(
     if worn.len() - replaced.len() >= MAX_AGENT_ATTACHMENTS {
         return Err("too many attachments".to_string());
     }
+
+    Ok(AttachPlan {
+        point,
+        offset,
+        replaced,
+    })
+}
+
+/// Attach an object that is already in the scene. Replaces what is worn at the same point
+/// unless `append`. Returns the attachment point used.
+pub async fn attach_scene_object(
+    ctx: &AttachCtx<'_>,
+    agent: Uuid,
+    group_id: Uuid,
+    requested: u8,
+    append: bool,
+    item_id: Uuid,
+) -> Result<u8, String> {
+    let plan = plan_attach(ctx, agent, group_id, requested, append).await?;
+    let AttachPlan {
+        point,
+        offset,
+        replaced,
+    } = plan;
+
     for old in replaced {
         // Only attachments that came from inventory can be put back there.
         if ctx.scene.get_object(&old).is_some_and(|g| !g.attachment_item_id.is_nil()) {
@@ -378,6 +406,7 @@ pub async fn attach_from_world(
         return Err("already attached".to_string());
     }
     let (point, append) = split_point(raw_point);
+    plan_attach(ctx, agent, group_id, point, append).await?;
     let item = inventory_rez::save_group_to_inventory(ctx.inventory, ctx.assets, DeRezAction::Take, agent, Uuid::nil(), &group)
         .await?;
     drop(group);
@@ -851,5 +880,31 @@ async fn wearing_again_at_login_restores_the_saved_attachments() {
 
     let restored_again = restore_saved_attachments(&h.ctx(), h.agent).await;
     assert_eq!(restored_again, 0);
+}
+
+#[tokio::test]
+async fn a_failed_world_attach_leaves_inventory_untouched() {
+    let h = harness("failed-world-attach").await;
+    sqlx::query("INSERT INTO inventoryfolders (folderName,type,version,folderID,agentID,parentFolderID) VALUES ('Objects',6,1,$1,$2,$3)")
+        .bind(Uuid::new_v4().to_string())
+        .bind(h.agent.to_string())
+        .bind(Uuid::nil().to_string())
+        .execute(h.svc.pool.inner())
+        .await
+        .unwrap();
+
+    let group = h.scene.add_object(welkin_scene::group::SceneObjectGroup::new(welkin_scene::part::SceneObjectPart::new("Sword", h.agent)));
+    let local = h.scene.get_object(&group).unwrap().root_part().local_id;
+
+    let err = attach_from_world(&h.ctx(), h.agent, local, 56).await.unwrap_err();
+    assert!(err.contains("invalid attachment point"));
+
+    let count: i64 = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM inventoryitems")
+        .fetch_one(h.svc.pool.inner())
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+
+    assert!(!h.scene.get_object(&group).unwrap().is_attachment);
 }
 }
