@@ -555,6 +555,16 @@ LLUDP (UDP 9000) is not proxied; it must be reachable directly.
   Argon2id with `osim-migrate upgrade-passwords`
 - OSSL function access is gated by threat level with per-function overrides
 
+### Account creation
+
+The grid's `createuser` method is off by default (`[UserAccountService]
+AllowCreateUser = false`). Turn it on only while you create accounts, then set
+it back to false and restart `welkin-robust`. While it is on, anyone who can
+reach the private service port can create accounts. The repository's
+development `robust.toml` and compose file enable it for local testing; do not
+copy that into a production grid. See the
+[configuration reference](configuration.md#welkin-robust-grid-services).
+
 ### Rate limiting
 
 Apply rate limiting at the reverse proxy layer. Key endpoints to protect:

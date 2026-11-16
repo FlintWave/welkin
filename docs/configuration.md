@@ -92,6 +92,19 @@ storage, inventory queries).
 |---|---|---|---|---|
 | DatabaseService | ConnectionString | string | sqlite:robust.db | Database URL for all grid services |
 | DatabaseService | RobustConnectionString | string | (from ConnectionString) | Override when grid services need a separate database |
+| UserAccountService | AllowCreateUser | bool | false | Let the `createuser` grid method create accounts |
+
+`AllowCreateUser` matches OpenSimulator's default. While it is false, the
+`create-user` console command in `welkin-region` fails with "grid refused to
+create the user". Set it to `true` only on a development or test grid, or
+briefly while you create the first account. When it is true, anyone who can
+reach the private service port (8003 by default) can create accounts, so keep
+that port off the public network.
+
+```toml
+[UserAccountService]
+AllowCreateUser = true
+```
 
 ## Database URLs
 

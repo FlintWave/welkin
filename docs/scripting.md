@@ -388,6 +388,25 @@ llReleaseControls, llTakeControls
 
 Request and release keyboard/mouse control events from the avatar.
 
+### Sound
+
+llPlaySound, llLoopSound, llStopSound, llTriggerSound, llTriggerSoundLimited,
+llPreloadSound and llAdjustSoundVolume send the same viewer messages as
+OpenSimulator. The region relays them from `sound_io.rs`.
+
+- llPlaySound sends an AttachedSound message to every client, with flags 0, or
+  QUEUE (0x10) when the script has called llSetSoundQueueing(TRUE).
+- llTriggerSound sends a SoundTrigger message only to avatars within the
+  prim's sound radius. A radius of 0 means 100 m, and the prim keeps 100 m
+  from then on. llTriggerSoundLimited scales the volume down linearly with
+  distance, to silence at 100 m.
+- llPreloadSound reaches avatars within twice the sound radius, with the same
+  0 to 100 m default.
+- llLoopSound and llStopSound change the root prim's sound fields and then
+  broadcast a full object update, so avatars who arrive later still hear the
+  loop. Loop flags are LOOP (0x01), MASTER (0x02) and SLAVE (0x04), plus QUEUE
+  (0x10) when queueing is on. llStopSound sets STOP (0x20).
+
 ## Differences from OpenSimulator
 
 | | OpenSimulator | Welkin |
