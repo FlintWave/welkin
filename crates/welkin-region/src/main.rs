@@ -1460,6 +1460,8 @@ async fn process_messages(
     accounts_connector: Arc<welkin_services::remote::accounts::RemoteAccountsConnector>,
 ) {
     let mut last_agent_update: HashMap<Uuid, Instant> = HashMap::new();
+    // Persistent vertical velocity per avatar (jumping and falling).
+    let mut avatar_vertical: HashMap<Uuid, f32> = HashMap::new();
     let mut last_anim: HashMap<Uuid, &'static str> = HashMap::new();
     let mut always_run: HashSet<Uuid> = HashSet::new();
     let mut group_sessions = ChatSessionState::new();
@@ -2090,7 +2092,13 @@ async fn process_messages(
             last_agent_update.insert(update.agent_data.agent_id, now);
             let moved = prev_pos + vel * dt;
             let ground_z = scene.terrain_height_at(moved.x, moved.y);
-            let new_pos = avatar_move::place_on_ground(moved, flying, ground_z, dt);
+            // AGENT_CONTROL_UP_POS while walking is a jump.
+            let jump = !flying && flags & 0x0010 != 0;
+            let vz = avatar_vertical.entry(update.agent_data.agent_id).or_insert(0.0);
+            let new_pos = avatar_move::place_on_ground(moved, flying, jump, ground_z, dt, vz);
+            if !flying {
+                vel.z = *vz; // let viewers extrapolate jumps and falls
+            }
 
             scene.update_presence_position(&update.agent_data.agent_id, new_pos, rot);
 
