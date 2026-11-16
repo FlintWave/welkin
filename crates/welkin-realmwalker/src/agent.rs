@@ -122,9 +122,6 @@ pub mod animations {
     pub const TYPE: Uuid = Uuid::from_u128(0xc541c47f_e0c0_058b_ad1a_d6ae3a4584d9);
 }
 
-/// LL_PCODE_LEGACY_AVATAR -- pcode value for avatar objects.
-const PCODE_AVATAR: u8 = 46;
-
 /// Send a raw AgentUpdate packet to the simulator.
 ///
 /// This is the low-level function. Higher-level helpers like `move_to`,

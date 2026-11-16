@@ -428,7 +428,6 @@ impl Default for RemoteConnectorCacheWrapper {
 /// Mirrors the C# `GroupsServiceHGConnectorModule`.
 pub struct HGGroupsServiceConnector {
     enabled: bool,
-    local_service_url: String,
     local_groups_uri: String,
     cache: RemoteConnectorCacheWrapper,
     /// The local connector that handles operations for local agents.
@@ -439,7 +438,6 @@ impl HGGroupsServiceConnector {
     pub fn new() -> Self {
         Self {
             enabled: false,
-            local_service_url: "local".to_string(),
             local_groups_uri: "http://127.0.0.1".to_string(),
             cache: RemoteConnectorCacheWrapper::new(),
             local_connector: None,
@@ -449,12 +447,11 @@ impl HGGroupsServiceConnector {
     /// Create with a local connector and configuration.
     pub fn with_config(
         local_connector: Box<dyn IGroupsServicesConnector>,
-        local_service_url: &str,
+        _local_service_url: &str,
         local_groups_uri: &str,
     ) -> Self {
         Self {
             enabled: true,
-            local_service_url: local_service_url.to_string(),
             local_groups_uri: local_groups_uri.to_string(),
             cache: RemoteConnectorCacheWrapper::new(),
             local_connector: Some(local_connector),
