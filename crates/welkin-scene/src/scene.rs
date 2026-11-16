@@ -158,6 +158,10 @@ impl Scene {
             }
         }
 
+        // Register with physics before the group moves into the map (the objects
+        // lock is not held while the physics lock is taken).
+        self.register_group_with_physics(&group);
+
         self.objects.write().unwrap().insert(uuid, group);
         self.object_count.fetch_add(1, Ordering::Relaxed);
 
@@ -174,6 +178,7 @@ impl Scene {
         }
 
         self.object_count.fetch_sub(1, Ordering::Relaxed);
+        self.unregister_root_from_physics(group.root_part().local_id);
         tracing::debug!(region = %self.region_info.region_name, object = %uuid, "object removed from scene");
         Some(group)
     }
@@ -348,6 +353,55 @@ impl Scene {
 
     pub fn set_physics(&self, physics: Box<dyn PhysicsScene + Send>) {
         *self.physics.lock().unwrap() = Some(physics);
+        // Objects added before the backend existed (e.g. restored from storage) must
+        // also become physics actors.
+        let existing: Vec<SceneObjectGroup> =
+            self.objects.read().unwrap().values().cloned().collect();
+        for group in &existing {
+            self.register_group_with_physics(group);
+        }
+    }
+
+    /// Run `f` against the physics backend, if one is installed and enabled.
+    pub fn with_physics<R>(&self, f: impl FnOnce(&mut dyn PhysicsScene) -> R) -> Option<R> {
+        let mut guard = self.physics.lock().ok()?;
+        let physics = guard.as_mut()?;
+        Some(f(&mut **physics))
+    }
+
+    /// Add the group's root prim to the physics world. Non-physical prims become
+    /// fixed colliders; phantom prims are registered as sensors. (Linkset children
+    /// are not yet separate colliders.)
+    fn register_group_with_physics(&self, group: &SceneObjectGroup) {
+        if !self.config.physics_enabled {
+            return;
+        }
+        let root = group.root_part();
+        if root.local_id == 0 {
+            return;
+        }
+        let physical = group.is_physical();
+        let phantom = group.is_phantom();
+        let _ = self.with_physics(|ph| {
+            ph.add_prim(
+                root.local_id,
+                &root.name,
+                root.group_position,
+                root.scale,
+                root.rotation_offset,
+                physical,
+            );
+            if phantom && let Some(actor) = ph.get_actor_mut(root.local_id) {
+                actor.set_phantom(true);
+            }
+        });
+    }
+
+    fn unregister_root_from_physics(&self, local_id: u32) {
+        if local_id == 0 {
+            return;
+        }
+        let _ = self.with_physics(|ph| ph.remove_prim(local_id));
     }
 
     pub fn has_physics(&self) -> bool {
@@ -531,6 +585,32 @@ mod tests {
         assert_eq!(scene.frame_number(), 0);
         assert!(!scene.is_active());
         assert!(!scene.is_shutting_down());
+    }
+
+    #[test]
+    fn objects_register_with_physics_on_add_and_unregister_on_remove() {
+        let scene = test_scene();
+        scene.set_physics(Box::new(welkin_physics::null::NullPhysicsScene::new("t")));
+        let owner = Uuid::new_v4();
+        let uuid = scene.add_object(test_group("Box", owner, Vec3::new(10.0, 10.0, 30.0)));
+        let local_id = scene.get_object(&uuid).unwrap().root_part().local_id;
+
+        assert!(scene.with_physics(|p| p.get_actor(local_id).is_some()).unwrap());
+        let pos = scene.with_physics(|p| p.get_actor(local_id).unwrap().position()).unwrap();
+        assert_eq!(pos, Vec3::new(10.0, 10.0, 30.0));
+
+        scene.remove_object(&uuid);
+        assert!(!scene.with_physics(|p| p.get_actor(local_id).is_some()).unwrap());
+    }
+
+    #[test]
+    fn objects_added_before_physics_are_registered_when_it_arrives() {
+        let scene = test_scene();
+        let uuid = scene.add_object(test_group("Early", Uuid::new_v4(), Vec3::ZERO));
+        let local_id = scene.get_object(&uuid).unwrap().root_part().local_id;
+
+        scene.set_physics(Box::new(welkin_physics::null::NullPhysicsScene::new("t")));
+        assert!(scene.with_physics(|p| p.get_actor(local_id).is_some()).unwrap());
     }
 
     #[test]
