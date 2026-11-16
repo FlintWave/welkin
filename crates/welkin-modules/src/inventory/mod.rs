@@ -128,14 +128,14 @@ impl InventoryTransferModule {
         Ok(())
     }
 
-    /// Decline a pending inventory gift.
-    pub fn decline_gift(&self, agent_id: Uuid, transaction_id: Uuid) -> Result<(), ModuleError> {
-        tracing::debug!(
-            %agent_id, %transaction_id,
-            "decline_gift: stub — gift declined"
-        );
-        Ok(())
-    }
+        /// Decline a pending inventory gift.
+        pub fn decline_gift(&self, agent_id: Uuid, transaction_id: Uuid) -> Result<(), ModuleError> {
+            tracing::debug!(
+                %agent_id, %transaction_id,
+                "decline_gift: gift declined"
+            );
+            Ok(())
+        }
 }
 
 impl Default for InventoryTransferModule {
@@ -595,5 +595,39 @@ mod stub_tests_inventoryaccessmodule_0 {
             .expect("derez should succeed after adding a region");
 
         assert!(!item.is_nil());
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_nventorytransfermodule_1 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn decline_gift_returns_ok() {
+        let module = InventoryTransferModule;
+        let agent_id = Uuid::new_v4();
+        let transaction_id = Uuid::new_v4();
+
+        assert!(module.decline_gift(agent_id, transaction_id).is_ok());
+    }
+
+    #[test]
+    fn decline_gift_with_region_does_not_emit_events() {
+
+        let mut module = InventoryTransferModule;
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "region".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        let mut scene = scene;
+        scene.egress = rec.clone();
+        let _ = module.add_region(&scene);
+
+        let agent_id = Uuid::new_v4();
+        let transaction_id = Uuid::new_v4();
+
+        assert!(module.decline_gift(agent_id, transaction_id).is_ok());
+        assert!(rec.take().is_empty());
     }
 }
