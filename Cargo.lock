@@ -5455,6 +5455,7 @@ dependencies = [
  "clap",
  "sqlx",
  "tokio",
+ "tower",
  "tracing",
  "tracing-subscriber",
  "uuid",

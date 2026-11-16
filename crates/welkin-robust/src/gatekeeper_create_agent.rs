@@ -2,12 +2,13 @@
 
 //! Inbound CreateAgent handling for the gatekeeper.
 //!
-//! This is an initial skeleton: it exposes an axum route that accepts the
-//! form-encoded `CreateAgent` POST used by the Hypergrid Gandalf handshake,
-//! validates the basic fields, keeps a record of the visiting foreign agent,
-//! and returns an (empty) seed-capability LLSD response.  Full handoff
-//! (VerifyAgent / VerifyClient callbacks, UUID-impersonation checks, presence
-//! creation, simulation CreateAgent) is intentionally left beyond this prefix.
+//! Exposes an axum route that accepts the form-encoded `CreateAgent` POST used
+//! by the Hypergrid Gandalf handshake, validates basic fields, performs
+//! impersonation/verification guards (VerifyAgent/VerifyClient emulation via an
+//! optional in-process UserAgent service), keeps a record of the visiting
+//! foreign agent, and returns an (empty) seed-capability LLSD response.  Full
+//! simulation co-validation (Presence creation, SimulationService.CreateAgent)
+//! remains beyond this layer.
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -21,12 +22,14 @@ use axum::{
     routing::post,
 };
 use uuid::Uuid;
+use welkin_data::accounts::UserAccountStore;
+use welkin_services::hypergrid::UserAgentService;
+use welkin_services::user_agent::UserAgentServiceImpl;
 
 // ---------------------------------------------------------------------------
 // State and records
 // ---------------------------------------------------------------------------
 
-/// A minimal record of a foreign agent that has just arrived via Hypergrid.
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ForeignAgentRecord {
@@ -39,36 +42,50 @@ pub struct ForeignAgentRecord {
     pub viewer: String,
 }
 
-/// Shared state for the inbound CreateAgent handler.
 #[derive(Clone)]
 pub struct CreateAgentState {
-    /// session_id -> foreign agent record.
     pub records: Arc<RwLock<HashMap<Uuid, ForeignAgentRecord>>>,
+    /// Optional accounts store used for UUID-impersonation checks.  When
+    /// absent, impersonation checks are skipped (emulation/unavailable).
+    pub accounts_store: Option<Arc<UserAccountStore>>,
+    /// Optional home-grid UserAgent service used to emulate VerifyAgent /
+    /// VerifyClient callbacks.  When `None`, callback verification is skipped.
+    pub user_agent: Option<Arc<UserAgentServiceImpl>>,
+    /// This grid's external (gatekeeper) name, used for coming-home checks.
+    pub grid_external_name: String,
 }
 
 impl Default for CreateAgentState {
     fn default() -> Self {
         Self {
             records: Arc::new(RwLock::new(HashMap::new())),
+            accounts_store: None,
+            user_agent: None,
+            grid_external_name: String::new(),
         }
     }
 }
 
-// ---------------------------------------------------------------------------
-// Router
-// ---------------------------------------------------------------------------
+impl CreateAgentState {
+    #[allow(dead_code)]
+    pub fn with_user_agent(mut self, ua: Arc<UserAgentServiceImpl>) -> Self {
+        self.user_agent = Some(ua);
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn with_accounts_store(mut self, store: Arc<UserAccountStore>) -> Self {
+        self.accounts_store = Some(store);
+        self
+    }
+}
 
 pub fn router(state: CreateAgentState) -> Router {
-    // HG CreateAgent posts are conventionally sent to the base grid URL.
     Router::new()
         .route("/create_agent", post(handle_create_agent))
         .route("/", post(handle_create_agent))
         .with_state(state)
 }
-
-// ---------------------------------------------------------------------------
-// Handler
-// ---------------------------------------------------------------------------
 
 async fn handle_create_agent(State(state): State<CreateAgentState>, body: Bytes) -> Response {
     let text = String::from_utf8_lossy(&body);
@@ -98,15 +115,71 @@ async fn handle_create_agent(State(state): State<CreateAgentState>, body: Bytes)
         .and_then(|v| Uuid::parse_str(v).ok());
     let region_handle = params.get("region_handle").and_then(|v| v.parse::<u64>().ok());
 
-    // ---- Verification (prefix only) --------------------------------------
-    // TODO(handoff): call the home grid UserAgentService.VerifyAgent(session_id, token)
-    // and VerifyClient(session_id, reported_ip).  The service-session token is
-    // expected in params["service_session_id"] / params["service_token"].
-    let _service_token = params
+    let client_ip = params.get("ip_address").cloned().unwrap_or_default();
+    let viewer = params.get("viewer").cloned().unwrap_or_default();
+    let server_token = params
         .get("service_session_id")
-        .or_else(|| params.get("service_token"));
-    // TODO(handoff): check UUID impersonation against local accounts (AccountsStore).
-    // TODO(handoff): enforce foreign-agent allow/deny rules (GatekeeperConfig).
+        .or_else(|| params.get("service_token"))
+        .cloned();
+
+    // ---- VerifyAgent / VerifyClient callback (emulated) -------------------
+    // Emulate the foreign gatekeeper calling back to the agent's home grid
+    // UserAgentService.  Uses an in-process UserAgentServiceImpl when wired;
+    // otherwise (no real home grid reachable) the check is skipped.
+    if let Some(ua) = &state.user_agent {
+        let token = server_token.clone().unwrap_or_default();
+        match ua.verify_agent(session_id, &token) {
+            Ok(true) => {}
+            _ => {
+                tracing::warn!(
+                    %agent_id, %session_id,
+                    "CreateAgent: VerifyAgent failed"
+                );
+                return xml_error("VerifyAgent verification failed");
+            }
+        }
+        match ua.verify_client(session_id, &client_ip) {
+            Ok(true) => {}
+            _ => {
+                tracing::warn!(
+                    %agent_id, %session_id,
+                    "CreateAgent: VerifyClient failed"
+                );
+                return xml_error("VerifyClient verification failed");
+            }
+        }
+    } else {
+        // Emulation unavailable: still require a non-empty service token as a
+        // minimal anti-spoofing check so anonymous CreateAgent calls are
+        // rejected when no callback service is wired.
+        if server_token.as_deref().unwrap_or("").is_empty() {
+            tracing::warn!("CreateAgent: missing service session token");
+            return xml_error("missing service_session_id / service_token");
+        }
+    }
+
+    // ---- UUID impersonation guard -----------------------------------------
+    if let Some(accounts) = &state.accounts_store {
+        if let Ok(Some(_acct)) = accounts.get_by_id(&agent_id.to_string()).await {
+            // agent_id collides with a local account: only allowed if the agent
+            // is genuinely coming home.
+            let coming_home = state
+                .user_agent
+                .as_ref()
+                .map(|ua| {
+                    ua.is_agent_coming_home(session_id, &state.grid_external_name)
+                        .unwrap_or(false)
+                })
+                .unwrap_or(false);
+            if !coming_home {
+                tracing::warn!(
+                    %agent_id, %session_id,
+                    "CreateAgent: UUID impersonation rejected"
+                );
+                return xml_error("UUID impersonation: agent not coming home");
+            }
+        }
+    }
 
     let record = ForeignAgentRecord {
         agent_id,
@@ -114,20 +187,13 @@ async fn handle_create_agent(State(state): State<CreateAgentState>, body: Bytes)
         secure_session_id,
         destination_uuid,
         region_handle,
-        client_ip: params.get("ip_address").cloned().unwrap_or_default(),
-        viewer: params.get("viewer").cloned().unwrap_or_default(),
+        client_ip,
+        viewer,
     };
 
     state.records.write().unwrap().insert(session_id, record);
     tracing::info!(%agent_id, %session_id, "CreateAgent: foreign agent record persisted");
 
-    // ---- Persistence via HGUserManagementModule --------------------------
-    // HGUserManagementModule lives in welkin-modules and is not currently
-    // exposed to the robust host.  When wired, foreign agent identity should
-    // be added via module.add_user(agent_id, first, last, home_uri).
-    // (Left as a handoff item; see root note in task.)
-
-    // Seed-capability response (empty map is acceptable to the gandalf parser).
     let body = String::from(
         "<?xml version=\"1.0\"?><llsd><map></map></llsd>",
     );
@@ -151,10 +217,6 @@ fn xml_error(msg: &str) -> Response {
     )
         .into_response()
 }
-
-// ---------------------------------------------------------------------------
-// Form parsing helpers
-// ---------------------------------------------------------------------------
 
 fn parse_form(body: &str) -> HashMap<String, String> {
     let mut out = HashMap::new();
@@ -204,4 +266,116 @@ fn xml_escape(s: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::Router;
+    use axum::http::Request;
+    use tower::util::ServiceExt;
+    use welkin_services::user_agent::{UserAgentConfig, UserAgentServiceImpl};
+
+    fn ua(bypass: bool) -> Arc<UserAgentServiceImpl> {
+        Arc::new(UserAgentServiceImpl::new(UserAgentConfig {
+            grid_name: "http://mygrid.example:9000/".into(),
+            my_external_ip: "203.0.113.1".into(),
+            bypass_client_verification: bypass,
+            level_outside_contacts: 0,
+            show_details: true,
+        }))
+    }
+
+    fn body(params: &[(&str, &str)]) -> String {
+        params
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join("&")
+    }
+
+    async fn post(state: CreateAgentState, body: String) -> u16 {
+        let app: Router = router(state);
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/create_agent")
+                    .header("content-type", "application/x-www-form-urlencoded")
+                    .body(axum::body::Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        resp.status().as_u16()
+    }
+
+    #[tokio::test]
+    async fn missing_token_rejected_when_no_ua() {
+        let sid = Uuid::new_v4();
+        let aid = Uuid::new_v4();
+        let status = post(
+            CreateAgentState::default(),
+            body(&[("agent_id", &aid.to_string()), ("session_id", &sid.to_string())]),
+        )
+        .await;
+        assert_eq!(status, 400);
+    }
+
+    #[tokio::test]
+    async fn verify_agent_success() {
+        let session = Uuid::new_v4();
+        let agent = Uuid::new_v4();
+        let token = "tok-123";
+        let service = ua(true);
+        service.store_travel_info(welkin_services::hypergrid::TravelingAgentInfo {
+            session_id: session,
+            user_id: agent,
+            grid_external_name: "http://foreign.example:9000/".into(),
+            service_token: token.into(),
+            client_ip_address: "10.0.0.1".into(),
+        });
+
+        let mut state = CreateAgentState::default().with_user_agent(service);
+        state.grid_external_name = "http://foreign.example:9000/".into();
+
+        let status = post(
+            state,
+            body(&[
+                ("agent_id", &agent.to_string()),
+                ("session_id", &session.to_string()),
+                ("service_session_id", token),
+                ("ip_address", "10.0.0.1"),
+            ]),
+        )
+        .await;
+        assert_eq!(status, 200);
+    }
+
+    #[tokio::test]
+    async fn verify_agent_failure() {
+        let session = Uuid::new_v4();
+        let agent = Uuid::new_v4();
+        let service = ua(true);
+        service.store_travel_info(welkin_services::hypergrid::TravelingAgentInfo {
+            session_id: session,
+            user_id: agent,
+            grid_external_name: "http://foreign.example:9000/".into(),
+            service_token: "correct".into(),
+            client_ip_address: "10.0.0.1".into(),
+        });
+
+        let state = CreateAgentState::default().with_user_agent(service);
+        let status = post(
+            state,
+            body(&[
+                ("agent_id", &agent.to_string()),
+                ("session_id", &session.to_string()),
+                ("service_session_id", "wrong"),
+                ("ip_address", "10.0.0.1"),
+            ]),
+        )
+        .await;
+        assert_eq!(status, 400);
+    }
 }

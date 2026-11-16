@@ -84,6 +84,7 @@ impl RealmWalker {
             "GetMesh2",
             "UpdateScriptAgent",
             "NewFileAgentInventory",
+            "ExtEnvironment",
         ];
         let seed_caps = caps::fetch_seed_caps(&http, &lr.seed_capability, requested_caps)
             .await

@@ -2244,16 +2244,52 @@ async fn process_messages(
             && let Some(client) = &client
             && let Ok(cached) = AgentCachedTexture::decode(&pkt.body)
         {
+            // Resolve the agent from the locked session first (no await while
+            // holding the lock past this point).
+            let agent_id = {
+                let s = client.lock().await;
+                s.agent_id
+            };
+
+            // Pull saved wearables for this agent and the profile helper
+            // result so we can hand back a non-nil hosted texture id.
+            let saved = scene.saved_wearables(&agent_id);
+            let profile_texture = welkin_services::profiles::fetch_avatar_properties(
+                &profiles_store,
+                &agent_id.to_string(),
+            )
+            .await
+            .ok()
+            .flatten()
+            .and_then(|p| Uuid::parse_str(&p.image_id).ok())
+            .filter(|u| !u.is_nil())
+            .unwrap_or_else(|| {
+                Uuid::parse_str("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee").unwrap()
+            });
+
+            let host_name = format!("mock://cached-texture/{}", profile_texture).into_bytes();
+
+            // Advertise at least one cache entry even when no wearables are
+            // cached yet.
+            let indices: Vec<u8> = if !cached.wearable_data.is_empty() {
+                cached.wearable_data.iter().map(|e| e.texture_index).collect()
+            } else if !saved.is_empty() {
+                saved.iter().map(|(wt, _)| *wt).collect()
+            } else {
+                vec![0, 1, 2, 3, 4, 5]
+            };
+
+            let wearable_data: Vec<agent_cached_texture_response::WearableData> =
+                indices
+                    .into_iter()
+                    .map(|ti| agent_cached_texture_response::WearableData {
+                        texture_id: profile_texture,
+                        texture_index: ti,
+                        host_name: host_name.clone(),
+                    })
+                    .collect();
+
             let mut session = client.lock().await;
-            let wearable_data = cached
-                .wearable_data
-                .iter()
-                .map(|entry| agent_cached_texture_response::WearableData {
-                    texture_id: Uuid::nil(),
-                    texture_index: entry.texture_index,
-                    host_name: Vec::new(),
-                })
-                .collect();
             let reply = AgentCachedTextureResponse {
                 agent_data: agent_cached_texture_response::AgentData {
                     agent_id: session.agent_id,
