@@ -9,6 +9,7 @@ mod estate_config;
 mod groups_invites;
 mod groups_io;
 mod groups_admin;
+mod groups_chat;
 mod groups_queries;
 mod groups_tasks;
 mod inventory_rez;
@@ -1611,6 +1612,7 @@ async fn process_messages(
     let mut last_anim: HashMap<Uuid, &'static str> = HashMap::new();
     let mut always_run: HashSet<Uuid> = HashSet::new();
     let mut group_sessions = ChatSessionState::new();
+    let group_chat = groups_chat::GroupChat::new();
     loop {
         let (src, pkt) = tokio::select! {
             _ = cancel.cancelled() => break,
@@ -4368,6 +4370,21 @@ async fn process_messages(
         }
 
         if let Some(g) = &groups
+            && groups_chat::is_notices_list_packet(pkt.id)
+            && let Some(client) = &client
+        {
+            groups_chat::spawn_notices_list(
+                g.clone(),
+                agent_id,
+                pkt.id,
+                pkt.body.clone(),
+                client.clone(),
+                socket.clone(),
+                src,
+            );
+        }
+
+        if let Some(g) = &groups
             && groups_invites::is_invite_packet(pkt.id)
             && let Some(client) = &client
             && let Some(pres) = scene.get_presence(&agent_id)
@@ -4531,6 +4548,32 @@ async fn process_messages(
                     meta_data: Vec::new(),
                 }
             };
+
+            // With groups enabled, group chat and notices go through the groups service
+            // (membership and SendNotices checked); the in-memory arms below serve only
+            // regions without groups.
+            if let Some(g) = &groups
+                && groups_chat::is_chat_dialog(dialog, mb.from_group)
+            {
+                if let Some(client) = &client
+                    && let Some(pres) = scene.get_presence(&agent_id)
+                {
+                    groups_chat::spawn_chat_im(
+                        g.clone(),
+                        group_chat.clone(),
+                        agent_id,
+                        pres.first_name.clone(),
+                        pres.last_name.clone(),
+                        scene.region_info.region_id,
+                        im.clone(),
+                        clients.clone(),
+                        client.clone(),
+                        socket.clone(),
+                        src,
+                    );
+                }
+                continue;
+            }
 
             match dialog {
                 // 0: MessageFromAgent

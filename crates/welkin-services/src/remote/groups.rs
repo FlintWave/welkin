@@ -177,10 +177,13 @@ impl RemoteGroupsConnector {
             ("AgentID", agent.to_string()),
         ];
 
+        // `None` asks for the agent's active group; a nil id names no group, so it is no membership
+        // (it must not fall through to the active-group lookup).
         if let Some(id) = group_id {
-            if !id.is_nil() {
-                params.push(("GroupID", id.to_string()));
+            if id.is_nil() {
+                return Ok(Vec::new());
             }
+            params.push(("GroupID", id.to_string()));
         }
 
         let nodes = self.call(&params).await?;
