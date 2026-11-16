@@ -2441,7 +2441,16 @@ async fn process_messages(
 
             // --- Animation state machine ---
             // Determine desired animation from control flags
-            let desired_anim = if flying {
+            // Airborne without flying: rising is JUMP, falling is FALLDOWN.
+            let airborne = !flying
+                && new_pos.z > ground_z + avatar_move::AVATAR_STAND_OFFSET + 0.1;
+            let desired_anim = if airborne {
+                if *vz < 0.0 {
+                    "666307d9-a860-572d-6fd4-c3ab8865c094" // FALLDOWN
+                } else {
+                    "2305bd75-1ca9-b03b-1faa-b176b8a8c49e" // JUMP
+                }
+            } else if flying {
                 if flags & 0x0001 != 0 || flags & 0x0002 != 0 || flags & 0x0004 != 0 || flags & 0x0008 != 0 {
                     "aec4610c-757f-bc4e-c092-c6e9caf18daf" // FLY
                 } else if flags & 0x0010 != 0 {
