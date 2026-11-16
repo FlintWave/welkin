@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 use std::sync::mpsc;
-use std::time::Duration;
 
 use welkin_script_vm::builtins::{register_all, ScriptContext, SoundCommand};
 

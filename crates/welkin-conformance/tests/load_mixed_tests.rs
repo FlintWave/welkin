@@ -9,8 +9,11 @@
 // `pub mod cutover;`, the integration tests can use `welkin_conformance::cutover::*`
 // instead of the path-include approach below.
 
+// Whole modules are included for the tests that use part of them.
+#[allow(dead_code)]
 #[path = "../src/load_test.rs"]
 mod load_test;
+#[allow(dead_code)]
 #[path = "../src/mixed_grid.rs"]
 mod mixed_grid;
 

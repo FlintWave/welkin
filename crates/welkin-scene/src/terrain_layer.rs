@@ -155,7 +155,7 @@ pub fn decode_land_layer(data: &[u8]) -> Option<Vec<(u32, u32, Vec<f32>)>> {
         }
 
         let mut tmp = vec![0.0f32; 256];
-        let oo = 0.7071068f32;
+        let oo = std::f32::consts::FRAC_1_SQRT_2;
         for c in 0..16usize {
             for n in 0..16usize {
                 let mut total = oo * block[c];

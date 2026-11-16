@@ -346,10 +346,6 @@ pub fn read_archive_into<R: Read>(
                 Some(pos) => after[pos + 1..].to_string(),
                 None => continue,
             }
-        } else if full_path.starts_with(constants::ASSETS_PATH)
-            || full_path == constants::CONTROL_FILE_PATH
-        {
-            full_path.clone()
         } else {
             full_path.clone()
         };
