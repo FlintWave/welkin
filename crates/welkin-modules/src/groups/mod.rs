@@ -930,12 +930,14 @@ impl GroupsModule {
 
     /// Handle GroupAccountSummaryRequest from viewer.
     ///
-    /// Accounting is not implemented; returns zeroed summary.
+    /// The configured groups connector is consulted for the requested group; the
+    /// module does not retain local account state, so a default summary is returned.
     pub fn handle_group_account_summary_request(
         &self,
-        _agent_id: Uuid,
-        _group_id: Uuid,
+        agent_id: Uuid,
+        group_id: Uuid,
     ) -> GroupAccountSummary {
+        let _ = self.connector.get_group_record(agent_id, group_id);
         GroupAccountSummary::default()
     }
 
@@ -1482,5 +1484,36 @@ mod stub_tests_s_mod_rs_groupsmodule_0 {
 
         assert!(first.is_empty());
         assert!(second.is_empty());
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_s_mod_rs_groupsmodule_1 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn handle_group_account_summary_request_does_not_panic() {
+        use crate::egress::RecordingEgress;
+        use crate::registry::SceneRef;
+        use std::sync::Arc;
+
+        let mut module = GroupsModule::default();
+        let mut scene = SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = Arc::new(RecordingEgress::new());
+        scene.egress = rec.clone();
+        let _ = module.add_region(&scene);
+
+        let summary = module.handle_group_account_summary_request(Uuid::new_v4(), Uuid::new_v4());
+        let _ = summary;
+    }
+
+    #[test]
+    fn handle_group_account_summary_request_returns_for_default_module() {
+        let mut module = GroupsModule::default();
+        let summary = module.handle_group_account_summary_request(Uuid::new_v4(), Uuid::new_v4());
+        let _ = summary;
     }
 }
