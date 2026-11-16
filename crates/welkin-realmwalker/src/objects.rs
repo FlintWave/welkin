@@ -1317,7 +1317,7 @@ mod tests {
 
     #[test]
     fn handle_terse_update() {
-        use welkin_msg::objects::{encode_terse, f32_to_u16};
+        use welkin_msg::objects::encode_terse;
 
         let terse_data = encode_terse(
             99,

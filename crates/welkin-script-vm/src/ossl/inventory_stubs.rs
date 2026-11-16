@@ -7,7 +7,7 @@
 
 use super::{OsslFunc, OsslThreatLevel};
 use crate::builtins::{
-    AttachAction, AttachRequest, InventoryCommand, LinkCommand, LinkPartInfo, ObjectCommand,
+    AttachAction, AttachRequest, InventoryCommand, LinkCommand, ObjectCommand,
     ScriptContext, SoundCommand, INVENTORY_ALL, INVENTORY_OBJECT, MASK_BASE, MASK_EVERYONE,
     MASK_GROUP, MASK_NEXT, MASK_OWNER, OS_ATTACH_MSG_ALL, OS_ATTACH_MSG_INVERT_POINTS,
     PERM_COPY, PERM_MODIFY, PERM_TRANSFER,
@@ -2128,6 +2128,7 @@ fn register_os_get_link_number(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> L
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::builtins::LinkPartInfo;
     use crate::builtins::{InventoryItem, ScriptContext};
     use parking_lot::RwLock;
     use std::sync::Arc;

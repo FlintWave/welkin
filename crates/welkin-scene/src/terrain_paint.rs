@@ -159,7 +159,7 @@ pub fn paint_effect(
         }
         PaintAction::Flatten => {
             let mut sz = size;
-            sz *= 2.0 * sz;
+            sz = 2.0 * sz * sz;
             for yi in start_y..=end_y {
                 for xi in start_x..=end_x {
                     let x = xi as u32;

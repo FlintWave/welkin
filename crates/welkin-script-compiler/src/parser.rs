@@ -99,12 +99,7 @@ impl Parser {
             if self.errors.len() > 1000 {
                 break;
             }
-            if self.check(&Token::KwDefault) {
-                match self.parse_state() {
-                    Ok(s) => states.push(s),
-                    Err(()) => self.synchronize_top(),
-                }
-            } else if self.check(&Token::KwState) {
+            if self.check(&Token::KwDefault) || self.check(&Token::KwState) {
                 match self.parse_state() {
                     Ok(s) => states.push(s),
                     Err(()) => self.synchronize_top(),
