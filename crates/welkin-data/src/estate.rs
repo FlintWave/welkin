@@ -83,7 +83,7 @@ pub struct EstateBanRow {
 const ESTATE_COLS: &str = "EstateID, EstateName, AbuseEmailToEstateOwner, DenyAnonymous, ResetHomeOnTeleport, FixedSun, DenyTransacted, BlockDwell, DenyIdentified, AllowVoice, UseGlobalTime, PricePerMeter, TaxFree, AllowDirectTeleport, RedirectGridX, RedirectGridY, ParentEstateID, SunPosition, EstateSkipScripts, BillableFactor, PublicAccess, AbuseEmail, EstateOwner, DenyMinors, AllowLandmark, AllowParcelChanges, AllowSetHome, AllowEnviromentOverride";
 const ESTATE_COLS_E: &str = "e.EstateID, e.EstateName, e.AbuseEmailToEstateOwner, e.DenyAnonymous, e.ResetHomeOnTeleport, e.FixedSun, e.DenyTransacted, e.BlockDwell, e.DenyIdentified, e.AllowVoice, e.UseGlobalTime, e.PricePerMeter, e.TaxFree, e.AllowDirectTeleport, e.RedirectGridX, e.RedirectGridY, e.ParentEstateID, e.SunPosition, e.EstateSkipScripts, e.BillableFactor, e.PublicAccess, e.AbuseEmail, e.EstateOwner, e.DenyMinors, e.AllowLandmark, e.AllowParcelChanges, e.AllowSetHome, e.AllowEnviromentOverride";
 
-const ESTATE_UPDATE: &str = "UPDATE estate_settings SET EstateName = $2, AbuseEmailToEstateOwner = $3, DenyAnonymous = $4, ResetHomeOnTeleport = $5, FixedSun = $6, DenyTransacted = $7, BlockDwell = $8, DenyIdentified = $9, AllowVoice = $10, UseGlobalTime = $11, PricePerMeter = $12, TaxFree = $13, AllowDirectTeleport = $14, RedirectGridX = $15, RedirectGridY = $16, ParentEstateID = $17, SunPosition = $18, EstateSkipScripts = $19, BillableFactor = $20, PublicAccess = $21, AbuseEmail = $22, EstateOwner = $23, DenyMinors = $24, AllowLandmark = $25, AllowParcelChanges = $26, AllowSetHome = $27, AllowEnviromentOverride = $28 WHERE EstateID = $1";
+const ESTATE_UPDATE: &str = "UPDATE estate_settings SET EstateName = $1, AbuseEmailToEstateOwner = $2, DenyAnonymous = $3, ResetHomeOnTeleport = $4, FixedSun = $5, DenyTransacted = $6, BlockDwell = $7, DenyIdentified = $8, AllowVoice = $9, UseGlobalTime = $10, PricePerMeter = $11, TaxFree = $12, AllowDirectTeleport = $13, RedirectGridX = $14, RedirectGridY = $15, ParentEstateID = $16, SunPosition = $17, EstateSkipScripts = $18, BillableFactor = $19, PublicAccess = $20, AbuseEmail = $21, EstateOwner = $22, DenyMinors = $23, AllowLandmark = $24, AllowParcelChanges = $25, AllowSetHome = $26, AllowEnviromentOverride = $27 WHERE EstateID = $28";
 
 #[derive(Clone)]
 pub struct EstateStore {
@@ -97,7 +97,8 @@ impl EstateStore {
 
     pub async fn get_estate(&self, estate_id: i32) -> Result<Option<EstateSettingsRow>, DataError> {
         let sql = format!("SELECT {ESTATE_COLS} FROM estate_settings WHERE EstateID = $1");
-        let row = sqlx::query_as::<_, EstateSettingsRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let row = sqlx::query_as::<_, EstateSettingsRow>(&q)
             .bind(estate_id)
             .fetch_optional(&self.pool)
             .await?;
@@ -109,7 +110,8 @@ impl EstateStore {
         name: &str,
     ) -> Result<Option<EstateSettingsRow>, DataError> {
         let sql = format!("SELECT {ESTATE_COLS} FROM estate_settings WHERE EstateName = $1");
-        let row = sqlx::query_as::<_, EstateSettingsRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let row = sqlx::query_as::<_, EstateSettingsRow>(&q)
             .bind(name.to_string())
             .fetch_optional(&self.pool)
             .await?;
@@ -124,7 +126,8 @@ impl EstateStore {
             "SELECT {ESTATE_COLS_E} FROM estate_settings e \
              JOIN estate_map m ON e.EstateID = m.EstateID WHERE m.RegionID = $1"
         );
-        let row = sqlx::query_as::<_, EstateSettingsRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let row = sqlx::query_as::<_, EstateSettingsRow>(&q)
             .bind(region_id.to_string())
             .fetch_optional(&self.pool)
             .await?;
@@ -135,7 +138,11 @@ impl EstateStore {
     /// Returns the id; `estate.estate_id` is ignored.
     pub async fn create_estate(&self, estate: &EstateSettingsRow) -> Result<i32, DataError> {
         let mut tx = self.pool.begin().await?;
-        let next: (i64,) = sqlx::query_as("SELECT COALESCE(MAX(EstateID), 99) + 1 FROM estate_settings")
+        let q = crate::portable::sql(
+            &self.pool,
+            "SELECT COALESCE(MAX(EstateID), 99) + 1 FROM estate_settings",
+        );
+        let next: (i64,) = sqlx::query_as(&q)
             .fetch_one(&mut *tx)
             .await?;
         let id = next.0 as i32;
@@ -143,7 +150,8 @@ impl EstateStore {
             "INSERT INTO estate_settings ({ESTATE_COLS}) VALUES \
              ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)"
         );
-        sqlx::query(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        sqlx::query(&q)
             .bind(id)
             .bind(estate.estate_name.clone())
             .bind(estate.abuse_email_to_estate_owner)
@@ -179,8 +187,8 @@ impl EstateStore {
     }
 
     pub async fn store_estate(&self, estate: &EstateSettingsRow) -> Result<(), DataError> {
-        sqlx::query(ESTATE_UPDATE)
-            .bind(estate.estate_id)
+        let q = crate::portable::sql(&self.pool, ESTATE_UPDATE);
+        sqlx::query(&q)
             .bind(estate.estate_name.clone())
             .bind(estate.abuse_email_to_estate_owner)
             .bind(estate.deny_anonymous)
@@ -208,6 +216,7 @@ impl EstateStore {
             .bind(estate.allow_parcel_changes)
             .bind(estate.allow_set_home)
             .bind(estate.allow_environment_override)
+            .bind(estate.estate_id)
             .execute(&self.pool)
             .await?;
         Ok(())
@@ -215,11 +224,13 @@ impl EstateStore {
 
     pub async fn link_region(&self, estate_id: i32, region_id: &str) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM estate_map WHERE RegionID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM estate_map WHERE RegionID = $1");
+        sqlx::query(&q)
             .bind(region_id.to_string())
             .execute(&mut *tx)
             .await?;
-        sqlx::query("INSERT INTO estate_map (RegionID, EstateID) VALUES ($1, $2)")
+        let q = crate::portable::sql(&self.pool, "INSERT INTO estate_map (RegionID, EstateID) VALUES ($1, $2)");
+        sqlx::query(&q)
             .bind(region_id.to_string())
             .bind(estate_id)
             .execute(&mut *tx)
@@ -230,7 +241,8 @@ impl EstateStore {
 
     async fn list_uuids(&self, table: &str, estate_id: i32) -> Result<Vec<String>, DataError> {
         let sql = format!("SELECT uuid FROM {table} WHERE EstateID = $1");
-        let rows: Vec<(String,)> = sqlx::query_as(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let rows: Vec<(String,)> = sqlx::query_as(&q)
             .bind(estate_id)
             .fetch_all(&self.pool)
             .await?;
@@ -239,7 +251,8 @@ impl EstateStore {
 
     async fn add_uuid(&self, table: &str, estate_id: i32, uuid: &str) -> Result<(), DataError> {
         let sql = format!("INSERT INTO {table} (EstateID, uuid) VALUES ($1, $2)");
-        sqlx::query(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        sqlx::query(&q)
             .bind(estate_id)
             .bind(uuid.to_string())
             .execute(&self.pool)
@@ -254,7 +267,8 @@ impl EstateStore {
         uuid: &str,
     ) -> Result<bool, DataError> {
         let sql = format!("DELETE FROM {table} WHERE EstateID = $1 AND uuid = $2");
-        let res = sqlx::query(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let res = sqlx::query(&q)
             .bind(estate_id)
             .bind(uuid.to_string())
             .execute(&self.pool)
@@ -303,35 +317,40 @@ impl EstateStore {
     }
 
     pub async fn get_estate_bans(&self, estate_id: i32) -> Result<Vec<EstateBanRow>, DataError> {
-        let rows = sqlx::query_as::<_, EstateBanRow>(
+        let q = crate::portable::sql(
+            &self.pool,
             "SELECT EstateID, bannedUUID, bannedIp, bannedIpHostMask, bannedNameMask, \
              banningUUID, banTime FROM estateban WHERE EstateID = $1",
-        )
-        .bind(estate_id)
-        .fetch_all(&self.pool)
-        .await?;
+        );
+        let rows = sqlx::query_as::<_, EstateBanRow>(&q)
+            .bind(estate_id)
+            .fetch_all(&self.pool)
+            .await?;
         Ok(rows)
     }
 
     pub async fn add_estate_ban(&self, ban: &EstateBanRow) -> Result<(), DataError> {
-        sqlx::query(
+        let q = crate::portable::sql(
+            &self.pool,
             "INSERT INTO estateban (EstateID, bannedUUID, bannedIp, bannedIpHostMask, \
              bannedNameMask, banningUUID, banTime) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-        )
-        .bind(ban.estate_id)
-        .bind(ban.banned_uuid.clone())
-        .bind(ban.banned_ip.clone())
-        .bind(ban.banned_ip_host_mask.clone())
-        .bind(ban.banned_name_mask.clone())
-        .bind(ban.banning_uuid.clone())
-        .bind(ban.ban_time)
-        .execute(&self.pool)
-        .await?;
+        );
+        sqlx::query(&q)
+            .bind(ban.estate_id)
+            .bind(ban.banned_uuid.clone())
+            .bind(ban.banned_ip.clone())
+            .bind(ban.banned_ip_host_mask.clone())
+            .bind(ban.banned_name_mask.clone())
+            .bind(ban.banning_uuid.clone())
+            .bind(ban.ban_time)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
     pub async fn remove_estate_ban(&self, estate_id: i32, uuid: &str) -> Result<bool, DataError> {
-        let res = sqlx::query("DELETE FROM estateban WHERE EstateID = $1 AND bannedUUID = $2")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM estateban WHERE EstateID = $1 AND bannedUUID = $2");
+        let res = sqlx::query(&q)
             .bind(estate_id)
             .bind(uuid.to_string())
             .execute(&self.pool)
@@ -341,36 +360,37 @@ impl EstateStore {
 
     pub async fn get_all_estates(&self) -> Result<Vec<EstateSettingsRow>, DataError> {
         let sql = format!("SELECT {ESTATE_COLS} FROM estate_settings");
-        let rows = sqlx::query_as::<_, EstateSettingsRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let rows = sqlx::query_as::<_, EstateSettingsRow>(&q)
             .fetch_all(&self.pool)
             .await?;
         Ok(rows)
     }
 
     pub async fn get_estate_ids_by_name(&self, name: &str) -> Result<Vec<i32>, DataError> {
-        let rows: Vec<(i32,)> =
-            sqlx::query_as("SELECT EstateID FROM estate_settings WHERE EstateName = $1")
-                .bind(name.to_string())
-                .fetch_all(&self.pool)
-                .await?;
+        let q = crate::portable::sql(&self.pool, "SELECT EstateID FROM estate_settings WHERE EstateName = $1");
+        let rows: Vec<(i32,)> = sqlx::query_as(&q)
+            .bind(name.to_string())
+            .fetch_all(&self.pool)
+            .await?;
         Ok(rows.into_iter().map(|r| r.0).collect())
     }
 
     pub async fn get_estate_ids_by_owner(&self, owner: &str) -> Result<Vec<i32>, DataError> {
-        let rows: Vec<(i32,)> =
-            sqlx::query_as("SELECT EstateID FROM estate_settings WHERE EstateOwner = $1")
-                .bind(owner.to_string())
-                .fetch_all(&self.pool)
-                .await?;
+        let q = crate::portable::sql(&self.pool, "SELECT EstateID FROM estate_settings WHERE EstateOwner = $1");
+        let rows: Vec<(i32,)> = sqlx::query_as(&q)
+            .bind(owner.to_string())
+            .fetch_all(&self.pool)
+            .await?;
         Ok(rows.into_iter().map(|r| r.0).collect())
     }
 
     pub async fn get_regions_for_estate(&self, estate_id: i32) -> Result<Vec<String>, DataError> {
-        let rows: Vec<(String,)> =
-            sqlx::query_as("SELECT RegionID FROM estate_map WHERE EstateID = $1")
-                .bind(estate_id)
-                .fetch_all(&self.pool)
-                .await?;
+        let q = crate::portable::sql(&self.pool, "SELECT RegionID FROM estate_map WHERE EstateID = $1");
+        let rows: Vec<(String,)> = sqlx::query_as(&q)
+            .bind(estate_id)
+            .fetch_all(&self.pool)
+            .await?;
         Ok(rows.into_iter().map(|r| r.0).collect())
     }
 }
