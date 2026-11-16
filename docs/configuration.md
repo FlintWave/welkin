@@ -85,6 +85,24 @@ multi-region setups.
 | GridService | GridServerURI | string | (none) | URL of the ROBUST grid service private port |
 | Scene | PhysicsEnabled | bool | true | Run Rapier physics simulation |
 | Scene | ScriptsEnabled | bool | true | Run LSL/OSSL script execution |
+| Estate | EstateOwner | string | (none) | Avatar UUID of the estate owner. Only the owner and managers may terraform or use estate tools |
+| Estate | EstateManagers | string | (none) | Comma-separated avatar UUIDs with estate manager rights |
+| Permissions | serverside_object_permissions | bool | true | Set false to switch all permission checks off (development only) |
+| Permissions | region_owner_is_god | bool | true | Treat the estate owner as an administrator |
+
+Permission checks are on by default. Without `EstateOwner` nobody has estate
+rights; avatars can still edit, move and delete objects they own. The region
+logs a warning at start-up when no owner is configured, and an error for any
+`EstateOwner` or `EstateManagers` entry that is not a UUID.
+
+The region also stores its estate in the region database (the `estate_settings`,
+`estate_map` and `estate_managers` tables). On the first start it creates the
+estate with OpenSimulator's defaults and writes the configured owner and
+managers into it. Later starts read the stored estate, so you can drop the
+`[Estate]` section after the first start. A different `EstateOwner` in the
+config replaces the stored owner. The region runs its database migrations
+at every start, so the tables for objects, terrain and the estate exist on a
+fresh database.
 
 ## welkin-robust (grid services)
 
@@ -185,7 +203,11 @@ IntervalSeconds = 300
 ```
 
 Each save writes only objects that changed since the last one, and logs
-the count at info level when it is above zero.
+the count at info level when it is above zero. The same timer saves the
+terrain if it was edited since the last save. Terrain is stored in OpenSimulator's
+database format (revision 23, a gzip of the height field with heights rounded
+to 3 decimals), and the region loads it at start. A terrain edit made after the
+last save is lost if the region stops before the next one.
 
 OpenSimulator saves on a frame count instead: the scene writes to storage
 every `UpdateStorageEveryNFrames` frames, 200 by default. Welkin uses

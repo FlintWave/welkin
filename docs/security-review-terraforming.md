@@ -18,6 +18,16 @@ two layers.
 - `TerrainChannel::set` ignores NaN and infinite heights and keeps the old
   value, so no other caller can write them either.
 
+## Related findings
+
+- MEDIUM-C: a viewer could send `ModifyLand` as fast as it liked. The region now
+  accepts one request per avatar every 20 ms, as OpenSimulator does, and drops
+  the rest (commit 25996f9).
+- HIGH-A: object permission checks used to be bypassed by default. They are now
+  enforced by default, and the estate owner and managers come from the
+  `[Estate]` config section (commit 416fa77). The handshake reports estate owner
+  and manager status to the viewer.
+
 ## Other controls
 
 - Only avatars that pass `can_edit_terrain` can change the terrain.

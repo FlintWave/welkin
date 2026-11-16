@@ -163,6 +163,10 @@ created, globals are injected, and the bytecode is re-executed from the top.
 Scripts that need mid-function resume use a checkpoint pattern (a `_checkpoint`
 global that the script checks on entry).
 
+Restored scripts get the full set of ll* and os* functions and no absolute
+memory cap. An earlier version restored them without the functions, and the
+restore could fail with "not enough memory".
+
 ## Built-in functions
 
 ### ll* functions (LSL API)

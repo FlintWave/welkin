@@ -565,6 +565,17 @@ development `robust.toml` and compose file enable it for local testing; do not
 copy that into a production grid. See the
 [configuration reference](configuration.md#welkin-robust-grid-services).
 
+### Estate owner and permissions
+
+Permission checks are on by default (`[Permissions]
+serverside_object_permissions`). Set `[Estate] EstateOwner` to your avatar UUID
+and add managers with `EstateManagers`; without an owner, nobody can terraform
+or use the estate tools, though avatars can still edit objects they own. Turn
+the permission checks off only on a development region: with them off, any
+avatar can edit or delete any object. Each avatar's terrain edits are also
+limited to one every 20 ms. See the
+[configuration reference](configuration.md#welkin-region-region-simulator).
+
 ### Private service port
 
 `welkin-robust` binds its private port (8003 by default) to `127.0.0.1`. That
