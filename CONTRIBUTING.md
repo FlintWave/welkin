@@ -44,7 +44,8 @@ warning fails the build. It has three jobs:
   work.
 
 Run the same commands locally before you push. The documentation workflow
-(`mdbook.yml`) also runs on pushes to `dev` that change `docs/`.
+(`mdbook.yml`) deploys only from `main`, so a push to `dev` does not publish
+unreviewed docs.
 
 ## Reporting bugs
 

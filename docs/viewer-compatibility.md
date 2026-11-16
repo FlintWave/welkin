@@ -13,6 +13,30 @@ Current viewer compatibility status, updated as live testing progresses.
 | Firestorm (OpenSim build) | Yes | Working | Tested 2026-11-14 |
 | LibreMetaverse bot | Yes | 10/10 steps pass | Automated test client |
 
+## Terraforming
+
+These behaviours come from the region code and its tests, including
+round-trip tests of the terrain encoder against the viewer's decoding
+algorithm; they are not yet confirmed in a live viewer session.
+
+- A viewer's `ModifyLand` request edits the scene's terrain, and the changed
+  patches are sent to every connected viewer as `LayerData`. The region no
+  longer sends a flat 21 m terrain.
+- The six brushes ported from OpenSimulator are flatten, raise, lower, smooth,
+  noise and revert. A single click paints a round brush; viewers send the
+  brush radius in the extended block, and older viewers send only a 1, 2 or 4 m
+  size index. A dragged rectangle over the whole region applies the same action
+  to the whole area, as OpenSimulator's flood brushes do. An area edit limited
+  to one parcel is not supported yet and does nothing.
+- The terrain encoder follows the Second Life LayerData format: a discrete
+  cosine transform per 16 by 16 patch, zigzag ordering and quantisation. The
+  region is 16 by 16 patches. Updates are split into packet-sized payloads, and
+  the transform uses lookup tables.
+- A request is applied only if the requesting avatar may edit terrain
+  (`can_edit_terrain`). Requests with NaN or infinite values, or absurd ones, are
+  dropped whole; see the [terraforming security review](security-review-terraforming.md).
+- Whether terrain edits survive a region restart is not yet verified.
+
 ## Avatar movement and physics
 
 These behaviours come from the region code and its tests; they are not yet
@@ -193,7 +217,7 @@ echo, movement, rez prim, script upload, script alive, touch event, logout).
 
 ### Known limitations
 
-- Full DCT terrain compression (field-order fix pending)
+- Terrain edits made in the viewer: see [Terraforming](#terraforming) for what is and is not supported
 - Avatar animations on Aurora Viewer (needs AgentAnimation packet)
 
 ### Not yet user-tested
@@ -305,8 +329,9 @@ without manual intervention.
   LibreMetaverse 3.x sends LLSD. Both are supported.
 - Aurora swaps the ZEROCODED and ACK flag bits in the LLUDP header. Welkin
   detects and handles both layouts.
-- Terrain uses a flat-terrain shortcut (range=0, dc_offset=21.0). Full DCT
-  compression has a field-order fix pending.
+- Terrain is sent as real LayerData: a DCT, zigzag and quantised encoding of
+  the heightfield, in packet-sized payloads (see [Terraforming](#terraforming)).
+  The flat-terrain shortcut (range 0, offset 21.0) is gone.
 
 ## Sound protocol
 
