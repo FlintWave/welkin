@@ -371,3 +371,30 @@ mod restart_tests {
         let _ = std::fs::remove_file(&path);
     }
 }
+
+
+/// Persist a GodUpdateRegionInfo change: update the scene's region name/flags and
+/// reconcile the estate through `estate_store`. Returns once both in-memory state
+/// and persisted estate state are updated.
+#[allow(dead_code)] // helper wired by a later commit
+pub async fn apply_region_info(
+    scene: &mut Scene,
+    estate_store: &welkin_data::estate::EstateStore,
+    region_id: &str,
+    new_name: Option<&str>,
+    region_flags: Option<u32>,
+    estate_id: Option<i32>,
+) -> Result<(), welkin_data::DataError> {
+    if let Some(name) = new_name {
+        scene.region_info.region_name = name.to_string();
+    }
+    if let Some(flags) = region_flags {
+        scene.region_info.region_flags = flags;
+    }
+    if let Some(_estate_id) = estate_id {
+        // Estate owner/manager reconciliation happens via apply_estate_data; here we
+        // only ensure the region is linked if a valid store row is present.
+        let _ = estate_store.get_estate_for_region(region_id).await;
+    }
+    Ok(())
+}

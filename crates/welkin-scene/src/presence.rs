@@ -80,6 +80,8 @@ pub struct ScenePresence {
     pub is_flying: bool,
     pub is_sitting: bool,
     pub sitting_on: Uuid,
+    pub is_frozen: bool,
+    pub frozen: bool,
     pub draw_distance: f32,
     pub region_handle: u64,
 
@@ -125,6 +127,8 @@ impl ScenePresence {
             is_flying: false,
             is_sitting: false,
             sitting_on: Uuid::nil(),
+            is_frozen: false,
+            frozen: false,
             draw_distance: 128.0,
             region_handle: 0,
 

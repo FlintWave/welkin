@@ -371,7 +371,7 @@ impl ProfilesStore {
             #[sqlx(rename = "Created")]
             created: i32,
         }
-        let account: Option<AccountRow> = match sqlx::query_as::<_, AccountRow>(
+        let account: Option<AccountRow> = sqlx::query_as::<_, AccountRow>(
             &crate::portable::sql(
                 &self.pool,
                 "SELECT FirstName, LastName, Created FROM UserAccounts WHERE PrincipalID = $1",
@@ -380,10 +380,7 @@ impl ProfilesStore {
         .bind(uuid.to_string())
         .fetch_optional(&self.pool)
         .await
-        {
-            Ok(v) => v,
-            Err(_) => None,
-        };
+        .unwrap_or_default();
 
         if profile.is_none() && account.is_none() {
             return Ok(None);

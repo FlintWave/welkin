@@ -4109,7 +4109,7 @@ async fn process_messages(
                 let total_packets = if asset.data.is_empty() {
                     1usize
                 } else {
-                    (asset.data.len() + CHUNK - 1) / CHUNK
+                    asset.data.len().div_ceil(CHUNK)
                 };
                 let mut start = img.packet as usize;
                 if start >= total_packets {

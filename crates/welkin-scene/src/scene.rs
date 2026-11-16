@@ -261,6 +261,14 @@ impl Scene {
         self.objects.read().unwrap().get(uuid).cloned()
     }
 
+    pub fn pay_price_info(&self, uuid: &Uuid) -> Option<crate::part::PayPriceInfo> {
+        self.with_object(uuid, |g| g.pay_price_info())
+    }
+
+    pub fn object_sale_info(&self, uuid: &Uuid) -> Option<crate::part::ObjectSaleInfo> {
+        self.with_object(uuid, |g| g.object_sale_info())
+    }
+
     /// Resolve a prim UUID (root or child) to the UUID of the object group that owns it.
     pub fn resolve_group_for_prim(&self, prim_id: &Uuid) -> Option<Uuid> {
         let objects = self.objects.read().unwrap();
@@ -389,6 +397,9 @@ impl Scene {
 
     pub fn update_presence_position(&self, uuid: &Uuid, position: Vec3, rotation: Quat) -> bool {
         if let Some(p) = self.presences.write().unwrap().get_mut(uuid) {
+            if p.is_frozen || p.frozen {
+                return false;
+            }
             p.position = position;
             p.body_rotation = rotation;
             true
@@ -411,6 +422,44 @@ impl Scene {
         } else {
             false
         }
+    }
+
+    /// Freeze or unfreeze an avatar in this scene.
+    ///
+    /// A frozen avatar keeps its current transform and cannot move through the
+    /// normal presence-update path until it is unfrozen again.  Unknown
+    /// avatars are left untouched.
+    pub fn set_avatar_frozen<A: std::borrow::Borrow<Uuid>>(&self, agent_id: A, frozen: bool) -> bool {
+        let agent_id = *agent_id.borrow();
+        if let Some(p) = self.presences.write().unwrap().get_mut(&agent_id) {
+            p.is_frozen = frozen;
+            p.frozen = frozen;
+            if frozen {
+                p.velocity = Vec3::ZERO;
+                p.controls = crate::presence::AgentControls::empty();
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_avatar_frozen<A: std::borrow::Borrow<Uuid>>(&self, agent_id: A) -> bool {
+        let agent_id = *agent_id.borrow();
+        self.presences
+            .read()
+            .unwrap()
+            .get(&agent_id)
+            .map(|p| p.is_frozen || p.frozen)
+            .unwrap_or(false)
+    }
+
+    pub fn avatar_frozen<A: std::borrow::Borrow<Uuid>>(&self, agent_id: A) -> bool {
+        self.is_avatar_frozen(agent_id)
+    }
+
+    pub fn is_frozen<A: std::borrow::Borrow<Uuid>>(&self, agent_id: A) -> bool {
+        self.is_avatar_frozen(agent_id)
     }
 
     // ---- Spatial queries ----
@@ -1679,4 +1728,22 @@ mod tests {
     }
 
 
+
+    #[test]
+    fn set_avatar_frozen_sets_flag_and_blocks_movement() {
+        let (scene, agent, _) = scene_with_avatar();
+        let original = scene.get_presence(&agent).unwrap().position;
+        assert!(scene.set_avatar_frozen(&agent, true));
+        let p = scene.get_presence(&agent).unwrap();
+        assert!(p.is_frozen);
+        assert!(p.frozen);
+        let new_pos = Vec3::new(1.0, 2.0, 3.0);
+        assert!(!scene.update_presence_position(&agent, new_pos, Quat::IDENTITY));
+        assert_eq!(scene.get_presence(&agent).unwrap().position, original);
+
+        assert!(scene.set_avatar_frozen(agent, false));
+        assert!(!scene.get_presence(&agent).unwrap().is_frozen);
+        assert!(scene.update_presence_position(&agent, new_pos, Quat::IDENTITY));
+        assert_eq!(scene.get_presence(&agent).unwrap().position, new_pos);
+    }
 }

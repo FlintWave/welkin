@@ -58,6 +58,14 @@ impl SceneObjectGroup {
         &self.root_part
     }
 
+    pub fn pay_price_info(&self) -> crate::part::PayPriceInfo {
+        self.root_part.pay_price_info()
+    }
+
+    pub fn object_sale_info(&self) -> crate::part::ObjectSaleInfo {
+        self.root_part.object_sale_info()
+    }
+
     pub fn root_part_mut(&mut self) -> &mut SceneObjectPart {
         &mut self.root_part
     }

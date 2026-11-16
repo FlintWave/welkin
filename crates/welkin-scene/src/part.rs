@@ -424,4 +424,78 @@ mod tests {
         assert_eq!(c.b(), 30);
         assert_eq!(c.a(), 40);
     }
+
+    #[test]
+    fn pay_price_info_from_field_list() {
+        let info = pay_price_info([10, 20, 50, 100, -2]);
+        assert_eq!(info.default_pay_price, 10);
+        assert_eq!(info.buttons, [20, 50, 100, -2]);
+        assert_eq!(ObjectSaleInfo::default(), PayPriceInfo {
+            default_pay_price: -1,
+            buttons: [-1, -1, -1, -1],
+        });
+    }
+
+    #[test]
+    fn part_exposes_sale_info() {
+        let mut part = SceneObjectPart::default();
+        part.pay_price = [5, 1, 2, 3, 4];
+        let info = part.object_sale_info();
+        assert_eq!(info.default_pay_price, 5);
+        assert_eq!(info.buttons, [1, 2, 3, 4]);
+    }
 }
+
+/// Object pay-price / sale-info derived from an object's `pay_price` field list
+/// (`[default, button1, button2, button3, button4]`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PayPriceInfo {
+    pub default_pay_price: i32,
+    pub buttons: [i32; 4],
+}
+
+impl Default for PayPriceInfo {
+    fn default() -> Self {
+        Self {
+            default_pay_price: -1,
+            buttons: [-1, -1, -1, -1],
+        }
+    }
+}
+
+impl PayPriceInfo {
+    pub fn from_pay_price(pay_price: [i32; 5]) -> Self {
+        Self {
+            default_pay_price: pay_price[0],
+            buttons: [pay_price[1], pay_price[2], pay_price[3], pay_price[4]],
+        }
+    }
+}
+
+/// Backwards/alternate name for the same helper value.
+pub type ObjectSaleInfo = PayPriceInfo;
+
+impl SceneObjectPart {
+    pub fn pay_price_info(&self) -> PayPriceInfo {
+        PayPriceInfo::from_pay_price(self.pay_price)
+    }
+
+    /// Alias: scene object sale info exposed from a part.
+    pub fn object_sale_info(&self) -> ObjectSaleInfo {
+        self.pay_price_info()
+    }
+}
+
+/// Free helper: build sale/pay-price info from a `pay_price` field list.
+pub fn pay_price_info(pay_price: [i32; 5]) -> PayPriceInfo {
+    PayPriceInfo::from_pay_price(pay_price)
+}
+
+pub fn object_sale_info(pay_price: [i32; 5]) -> ObjectSaleInfo {
+    PayPriceInfo::from_pay_price(pay_price)
+}
+
+pub fn pay_price_from_field_list(pay_price: [i32; 5]) -> PayPriceInfo {
+    PayPriceInfo::from_pay_price(pay_price)
+}
+
