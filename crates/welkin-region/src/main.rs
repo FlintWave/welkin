@@ -5,6 +5,7 @@ mod console;
 mod console_io;
 mod object_add;
 mod persist;
+mod physics_cmd;
 mod script_persist;
 mod scene_sync;
 mod sim_stats;
@@ -666,6 +667,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let heartbeat_sound_tx = sound_cmd_tx.clone();
     let _sound_cmd_tx = Arc::new(sound_cmd_tx);
 
+    // --- Physics command channel: scripts (llApplyImpulse, llSetForce, ...) -> physics ---
+    let (physics_cmd_tx, physics_cmd_rx) =
+        std::sync::mpsc::channel::<(Uuid, welkin_script_vm::PhysicsCommand)>();
+    let heartbeat_physics_tx = physics_cmd_tx.clone();
+    let _physics_cmd_tx = Arc::new(physics_cmd_tx);
+
     // --- Heartbeat loop ---
     let heartbeat_cancel = cancel.clone();
     let heartbeat_scene = Arc::clone(&scene);
@@ -698,6 +705,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     let frame_start = std::time::Instant::now();
                     let frame_stats = heartbeat_scene.tick();
                     let physics_ms = frame_stats.physics_ms;
+
+                    // Script physics commands act on the physics bodies before the next step.
+                    while let Ok((prim_id, cmd)) = physics_cmd_rx.try_recv() {
+                        if let Err(reason) = physics_cmd::apply_physics_command(&heartbeat_scene, &prim_id, &cmd) {
+                            warn!(prim = %prim_id, command = ?cmd, %reason, "physics command not applied");
+                        }
+                    }
 
                     // Physical prims: copy simulated motion into the scene and tell viewers.
                     for m in heartbeat_scene.sync_physics_to_objects() {
@@ -744,6 +758,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                             sensor_sender: Some(heartbeat_sensor_tx.clone()),
                                             control_sender: Some(heartbeat_control_tx.clone()),
                                             sound_sender: Some(heartbeat_sound_tx.clone()),
+                                            physics_sender: Some(heartbeat_physics_tx.clone()),
                                             ..Default::default()
                                         }
                                     ));
