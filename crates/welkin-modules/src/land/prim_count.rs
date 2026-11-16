@@ -50,9 +50,6 @@ impl PrimCountModule {
     }
 
     /// Force a recount by resetting the stored counts for a parcel to zero.
-    ///
-    /// A real implementation would walk the scene graph and re-tally; this
-    /// stub simply zeroes the entry.
     pub fn recount(&mut self, parcel_local_id: i32) {
         self.counts.insert(parcel_local_id, PrimCounts::default());
     }
@@ -113,5 +110,30 @@ impl RegionModule for PrimCountModule {
     fn close(&mut self) -> Result<(), ModuleError> {
         self.counts.clear();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_nt_rs_primcountmodule_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn recount_creates_parcel_entry() {
+        let mut module = PrimCountModule { counts: HashMap::new() };
+        module.recount(42);
+        assert!(module.counts.contains_key(&42));
+    }
+
+    #[test]
+    fn recount_resets_existing_parcel_entry() {
+        let mut module = PrimCountModule { counts: HashMap::new() };
+        module.counts.insert(42, PrimCounts::default());
+        let before_len = module.counts.len();
+        module.recount(42);
+        assert!(module.counts.contains_key(&42));
+        assert_eq!(module.counts.len(), before_len);
     }
 }

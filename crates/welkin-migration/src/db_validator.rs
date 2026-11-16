@@ -325,30 +325,169 @@ impl fmt::Display for ValidateError {
 
 impl std::error::Error for ValidateError {}
 
-/// Validate the database at `connection_string` against the expected schema.
-///
-/// Currently only the comparison engine is implemented.  Real database
-/// introspection (MySQL, PostgreSQL, SQLite via sqlx) will be added once the
-/// `sqlx` dependency is wired in.
 pub async fn validate_schema(connection_string: &str) -> Result<ValidationReport, ValidateError> {
     let scheme = connection_string
-        .split("://")
+        .split(':')
         .next()
         .unwrap_or("")
         .to_lowercase();
 
     match scheme.as_str() {
-        "sqlite" | "mysql" | "postgres" | "postgresql" => {
-            // Stub: in production this will connect via sqlx, run
-            // information_schema / PRAGMA queries, build ActualSchema, then
-            // call compare_schemas.
-            Err(ValidateError::Database(format!(
-                "live database introspection for {scheme}:// is not yet implemented; \
-                 use compare_schemas() directly for testing"
-            )))
-        }
-        _ => Err(ValidateError::UnsupportedScheme(scheme)),
+        "sqlite" | "mysql" | "postgres" | "postgresql" => {}
+        _ => return Err(ValidateError::UnsupportedScheme(scheme)),
     }
+
+    sqlx::any::install_default_drivers();
+    let pool = sqlx::pool::PoolOptions::<sqlx::Any>::new()
+        .max_connections(1)
+        .connect(connection_string)
+        .await
+        .map_err(|e| ValidateError::Database(e.to_string()))?;
+
+    let actual = match scheme.as_str() {
+        "sqlite" => introspect_sqlite(&pool).await?,
+        "mysql" => introspect_mysql(&pool).await?,
+        "postgres" | "postgresql" => introspect_postgres(&pool).await?,
+        _ => unreachable!(),
+    };
+
+    Ok(compare_schemas(&expected_schema(), &actual))
+}
+
+async fn introspect_sqlite(pool: &sqlx::AnyPool) -> Result<ActualSchema, ValidateError> {
+    let table_rows = sqlx::query(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| ValidateError::Database(e.to_string()))?;
+
+    let mut tables = Vec::new();
+    for table_row in table_rows {
+        let table_name: String = sqlx::Row::try_get::<String, _>(&table_row, 0)
+            .map_err(|e| ValidateError::Database(e.to_string()))?;
+
+        let escaped = table_name.replace('"', "\"\"");
+        let sql = format!("PRAGMA table_info(\"{}\")", escaped);
+        let column_rows = sqlx::query(&sql)
+            .fetch_all(pool)
+            .await
+            .map_err(|e| ValidateError::Database(e.to_string()))?;
+
+        let mut columns = Vec::new();
+        for column_row in column_rows {
+            let name: String = sqlx::Row::try_get::<String, _>(&column_row, "name")
+                .map_err(|e| ValidateError::Database(e.to_string()))?;
+            let declared: String = sqlx::Row::try_get::<Option<String>, _>(&column_row, "type")
+                .map_err(|e| ValidateError::Database(e.to_string()))?
+                .unwrap_or_default();
+            let col_type = if declared.is_empty() {
+                "TEXT".to_string()
+            } else {
+                declared
+            };
+            let notnull: i64 = sqlx::Row::try_get::<i64, _>(&column_row, "notnull")
+                .map_err(|e| ValidateError::Database(e.to_string()))?;
+            let pk: i64 = sqlx::Row::try_get::<i64, _>(&column_row, "pk")
+                .map_err(|e| ValidateError::Database(e.to_string()))?;
+            let nullable = notnull == 0 && pk == 0;
+
+            columns.push(ColumnDef {
+                name,
+                col_type,
+                nullable,
+            });
+        }
+
+        tables.push(TableDef {
+            name: table_name,
+            columns,
+        });
+    }
+
+    Ok(ActualSchema { tables })
+}
+
+async fn introspect_mysql(pool: &sqlx::AnyPool) -> Result<ActualSchema, ValidateError> {
+    let sql = "SELECT CAST(table_name AS CHAR) AS table_name, CAST(column_name AS CHAR) AS column_name, CAST(column_type AS CHAR) AS column_type, CAST(is_nullable AS CHAR) AS is_nullable FROM information_schema.columns WHERE table_schema = DATABASE() ORDER BY table_name, ordinal_position";
+    let rows = sqlx::query(sql)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| ValidateError::Database(e.to_string()))?;
+
+    let mut tables: Vec<TableDef> = Vec::new();
+    for row in rows {
+        let table_name: String = sqlx::Row::try_get::<String, _>(&row, "table_name")
+            .map_err(|e| ValidateError::Database(e.to_string()))?;
+        let column_name: String = sqlx::Row::try_get::<String, _>(&row, "column_name")
+            .map_err(|e| ValidateError::Database(e.to_string()))?;
+        let column_type: String = sqlx::Row::try_get::<String, _>(&row, "column_type")
+            .map_err(|e| ValidateError::Database(e.to_string()))?;
+        let is_nullable: String = sqlx::Row::try_get::<String, _>(&row, "is_nullable")
+            .map_err(|e| ValidateError::Database(e.to_string()))?;
+        let nullable = is_nullable == "YES";
+
+        let column = ColumnDef {
+            name: column_name,
+            col_type: column_type,
+            nullable,
+        };
+
+        if let Some(last) = tables.last_mut() {
+            if last.name == table_name {
+                last.columns.push(column);
+                continue;
+            }
+        }
+
+        tables.push(TableDef {
+            name: table_name,
+            columns: vec![column],
+        });
+    }
+
+    Ok(ActualSchema { tables })
+}
+
+async fn introspect_postgres(pool: &sqlx::AnyPool) -> Result<ActualSchema, ValidateError> {
+    let sql = "SELECT table_name, column_name, data_type, is_nullable FROM information_schema.columns WHERE table_schema = current_schema() ORDER BY table_name, ordinal_position";
+    let rows = sqlx::query(sql)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| ValidateError::Database(e.to_string()))?;
+
+    let mut tables: Vec<TableDef> = Vec::new();
+    for row in rows {
+        let table_name: String = sqlx::Row::try_get::<String, _>(&row, "table_name")
+            .map_err(|e| ValidateError::Database(e.to_string()))?;
+        let column_name: String = sqlx::Row::try_get::<String, _>(&row, "column_name")
+            .map_err(|e| ValidateError::Database(e.to_string()))?;
+        let data_type: String = sqlx::Row::try_get::<String, _>(&row, "data_type")
+            .map_err(|e| ValidateError::Database(e.to_string()))?;
+        let is_nullable: String = sqlx::Row::try_get::<String, _>(&row, "is_nullable")
+            .map_err(|e| ValidateError::Database(e.to_string()))?;
+        let nullable = is_nullable == "YES";
+
+        let column = ColumnDef {
+            name: column_name,
+            col_type: data_type,
+            nullable,
+        };
+
+        if let Some(last) = tables.last_mut() {
+            if last.name == table_name {
+                last.columns.push(column);
+                continue;
+            }
+        }
+
+        tables.push(TableDef {
+            name: table_name,
+            columns: vec![column],
+        });
+    }
+
+    Ok(ActualSchema { tables })
 }
 
 // ---------------------------------------------------------------------------
@@ -955,5 +1094,117 @@ mod tests {
     fn boolean_aliases_match() {
         assert!(types_match("BOOL", "BOOLEAN"));
         assert!(types_match("TINYINT(1)", "BOOLEAN"));
+    }
+}
+
+#[cfg(test)]
+mod live_tests {
+    use super::*;
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+    struct TempDb {
+        path: std::path::PathBuf,
+    }
+
+    impl Drop for TempDb {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.path);
+            let _ = std::fs::remove_file(format!("{}-wal", self.path.display()));
+            let _ = std::fs::remove_file(format!("{}-shm", self.path.display()));
+        }
+    }
+
+    #[tokio::test]
+    async fn introspect_sqlite_reads_tables_and_columns() {
+        sqlx::any::install_default_drivers();
+        let pid = std::process::id();
+        let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let path = std::env::temp_dir().join(format!("welkin-validator-{}-{}.sqlite", pid, n));
+        let _ = std::fs::remove_file(&path);
+        let _guard = TempDb { path: path.clone() };
+
+        let url = format!("sqlite:{}?mode=rwc", path.display());
+        let pool = sqlx::pool::PoolOptions::<sqlx::Any>::new()
+            .max_connections(1)
+            .connect(&url)
+            .await
+            .unwrap();
+
+        sqlx::query("CREATE TABLE assets(id VARCHAR(36) NOT NULL PRIMARY KEY, name VARCHAR(64))")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("CREATE TABLE extra_t(a INTEGER)")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let actual = introspect_sqlite(&pool).await.unwrap();
+        assert_eq!(actual.tables.len(), 2);
+
+        let assets = actual
+            .tables
+            .iter()
+            .find(|table| table.name == "assets")
+            .unwrap();
+        assert_eq!(assets.columns.len(), 2);
+        assert_eq!(assets.columns[0].name, "id");
+        assert_eq!(assets.columns[0].col_type, "VARCHAR(36)");
+        assert!(!assets.columns[0].nullable);
+        assert_eq!(assets.columns[1].name, "name");
+        assert_eq!(assets.columns[1].col_type, "VARCHAR(64)");
+        assert!(assets.columns[1].nullable);
+
+        let extra = actual
+            .tables
+            .iter()
+            .find(|table| table.name == "extra_t")
+            .unwrap();
+        assert_eq!(extra.columns.len(), 1);
+        assert_eq!(extra.columns[0].name, "a");
+        assert_eq!(extra.columns[0].col_type, "INTEGER");
+        assert!(extra.columns[0].nullable);
+
+        drop(pool);
+    }
+
+    #[tokio::test]
+    async fn validate_schema_rejects_unsupported_scheme() {
+        let err = validate_schema("ftp://x").await.unwrap_err();
+        assert!(matches!(err, ValidateError::UnsupportedScheme(scheme) if scheme == "ftp"));
+    }
+
+    #[tokio::test]
+    async fn validate_schema_sqlite_reports_extra_table() {
+        sqlx::any::install_default_drivers();
+        let pid = std::process::id();
+        let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let path = std::env::temp_dir().join(format!("welkin-validator-{}-{}.sqlite", pid, n));
+        let _ = std::fs::remove_file(&path);
+        let _guard = TempDb { path: path.clone() };
+
+        let url = format!("sqlite:{}?mode=rwc", path.display());
+        let pool = sqlx::pool::PoolOptions::<sqlx::Any>::new()
+            .max_connections(1)
+            .connect(&url)
+            .await
+            .unwrap();
+
+        sqlx::query("CREATE TABLE assets(id VARCHAR(36) NOT NULL PRIMARY KEY, name VARCHAR(64))")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("CREATE TABLE extra_t(a INTEGER)")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        drop(pool);
+
+        let report = validate_schema(&url).await.unwrap();
+        assert!(report
+            .diffs
+            .iter()
+            .any(|diff| matches!(diff, SchemaDiff::ExtraTable(name) if name.eq_ignore_ascii_case("extra_t"))));
     }
 }

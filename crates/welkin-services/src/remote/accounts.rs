@@ -21,6 +21,20 @@ impl RemoteAccountsConnector {
         }
     }
 
+    /// Account creation time (unix seconds) for `user_id`, if the account exists.
+    pub async fn get_created(&self, user_id: &str) -> Result<Option<i64>, RemoteError> {
+        let params = [("METHOD", "getaccount"), ("UserID", user_id)];
+        let body = self
+            .client
+            .post(&self.accounts_uri)
+            .form(&params)
+            .send()
+            .await?
+            .text()
+            .await?;
+        Ok(super::extract_text(&body, "Created").and_then(|s| s.trim().parse::<i64>().ok()))
+    }
+
     pub async fn get_name(&self, user_id: &str) -> Result<(String, String), RemoteError> {
         let params = [("METHOD", "getaccount"), ("UserID", user_id)];
         let body = self

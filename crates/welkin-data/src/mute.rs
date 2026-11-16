@@ -29,36 +29,44 @@ impl MuteStore {
     }
 
     pub async fn get_mutes(&self, agent_id: &str) -> Result<Vec<MuteRow>, DataError> {
-        let rows = sqlx::query_as::<_, MuteRow>(
+        let q = crate::portable::sql(
+            &self.pool,
             "SELECT AgentID, MuteID, MuteName, MuteType, MuteFlags, Stamp \
              FROM MuteList WHERE AgentID = $1",
-        )
-        .bind(agent_id.to_string())
-        .fetch_all(&self.pool)
-        .await?;
+        );
+        let rows = sqlx::query_as::<_, MuteRow>(&q)
+            .bind(agent_id.to_string())
+            .fetch_all(&self.pool)
+            .await?;
         Ok(rows)
     }
 
     pub async fn add_mute(&self, mute: &MuteRow) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM MuteList WHERE AgentID = $1 AND MuteID = $2 AND MuteName = $3")
+        let delete_sql = crate::portable::sql(
+            &self.pool,
+            "DELETE FROM MuteList WHERE AgentID = $1 AND MuteID = $2 AND MuteName = $3",
+        );
+        sqlx::query(&delete_sql)
             .bind(mute.agent_id.clone())
             .bind(mute.mute_id.clone())
             .bind(mute.mute_name.clone())
             .execute(&mut *tx)
             .await?;
-        sqlx::query(
+        let insert_sql = crate::portable::sql(
+            &self.pool,
             "INSERT INTO MuteList (AgentID, MuteID, MuteName, MuteType, MuteFlags, Stamp) \
              VALUES ($1, $2, $3, $4, $5, $6)",
-        )
-        .bind(mute.agent_id.clone())
-        .bind(mute.mute_id.clone())
-        .bind(mute.mute_name.clone())
-        .bind(mute.mute_type)
-        .bind(mute.mute_flags)
-        .bind(mute.stamp)
-        .execute(&mut *tx)
-        .await?;
+        );
+        sqlx::query(&insert_sql)
+            .bind(mute.agent_id.clone())
+            .bind(mute.mute_id.clone())
+            .bind(mute.mute_name.clone())
+            .bind(mute.mute_type)
+            .bind(mute.mute_flags)
+            .bind(mute.stamp)
+            .execute(&mut *tx)
+            .await?;
         tx.commit().await?;
         Ok(())
     }
@@ -69,14 +77,16 @@ impl MuteStore {
         mute_id: &str,
         mute_name: &str,
     ) -> Result<bool, DataError> {
-        let res = sqlx::query(
+        let q = crate::portable::sql(
+            &self.pool,
             "DELETE FROM MuteList WHERE AgentID = $1 AND MuteID = $2 AND MuteName = $3",
-        )
-        .bind(agent_id.to_string())
-        .bind(mute_id.to_string())
-        .bind(mute_name.to_string())
-        .execute(&self.pool)
-        .await?;
+        );
+        let res = sqlx::query(&q)
+            .bind(agent_id.to_string())
+            .bind(mute_id.to_string())
+            .bind(mute_name.to_string())
+            .execute(&self.pool)
+            .await?;
         Ok(res.rows_affected() > 0)
     }
 }

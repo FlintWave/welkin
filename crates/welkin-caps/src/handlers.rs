@@ -939,6 +939,57 @@ fn log_upload_body(cap_name: &str, body: &[u8]) {
 
 pub type EventQueueMap = Arc<RwLock<HashMap<Uuid, Arc<EventQueue>>>>;
 
+/// Per-agent secret that is part of the agent's capability URLs (agent id -> secret).
+pub type CapSecrets = Arc<RwLock<HashMap<Uuid, String>>>;
+
+/// State of the per-agent event queue capability.
+#[derive(Clone)]
+pub struct AgentEventQueueState {
+    pub queues: EventQueueMap,
+    pub secrets: CapSecrets,
+}
+
+/// Split a capability token `<agent-uuid>-<secret>` into its parts.
+pub fn split_agent_token(token: &str) -> Option<(Uuid, String)> {
+    let token = token.trim_matches('/');
+    if token.len() < 38 || !token.is_char_boundary(36) || token.as_bytes().get(36) != Some(&b'-') {
+        return None;
+    }
+    let agent = Uuid::parse_str(&token[..36]).ok()?;
+    let secret = token[37..].to_string();
+    if secret.is_empty() {
+        return None;
+    }
+    Some((agent, secret))
+}
+
+/// `EventQueueGet` for one agent: `/EventQueueGet/<agent-uuid>-<secret>`.
+pub async fn event_queue_get_for_agent(
+    State(state): State<AgentEventQueueState>,
+    axum::extract::Path(token): axum::extract::Path<String>,
+) -> Response {
+    let Some((agent, secret)) = split_agent_token(&token) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let bound = state.secrets.read().await.get(&agent).cloned();
+    if bound.as_deref() != Some(secret.as_str()) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let eq = state.queues.read().await.get(&agent).cloned();
+    let Some(eq) = eq else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    match eq.poll(Duration::from_secs(25)).await {
+        EventQueueResponse::Events { events, .. } => (
+            StatusCode::OK,
+            [("content-type", "application/llsd+xml")],
+            events,
+        )
+            .into_response(),
+        EventQueueResponse::Timeout => StatusCode::BAD_GATEWAY.into_response(),
+    }
+}
+
 pub async fn event_queue_get(State(eq_map): State<EventQueueMap>, body: Bytes) -> Response {
     let agent_id = match from_xml(&body) {
         Ok(llsd) => {
@@ -1519,5 +1570,27 @@ mod tests {
         assert_eq!(*llsd.get("language"), Llsd::String("en".into()));
         let prefs = llsd.get("access_prefs");
         assert_eq!(*prefs.get("max"), Llsd::String("A".into()));
+    }
+}
+
+#[cfg(test)]
+mod agent_token_tests {
+    use super::*;
+
+    #[test]
+    fn splits_agent_and_secret() {
+        let agent = Uuid::new_v4();
+        let secret = Uuid::new_v4().to_string();
+        let token = format!("{agent}-{secret}");
+        assert_eq!(split_agent_token(&token), Some((agent, secret.clone())));
+        assert_eq!(split_agent_token(&format!("/{token}/")), Some((agent, secret)));
+    }
+
+    #[test]
+    fn rejects_malformed_tokens() {
+        assert_eq!(split_agent_token("seed"), None);
+        assert_eq!(split_agent_token(""), None);
+        assert_eq!(split_agent_token(&format!("{}-", Uuid::new_v4())), None);
+        assert_eq!(split_agent_token(&format!("{}x{}", Uuid::new_v4(), "secret")), None);
     }
 }

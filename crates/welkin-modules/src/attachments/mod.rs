@@ -105,7 +105,9 @@ impl AttachmentsModule {
 
     /// Attach an inventory item to the given point.
     ///
-    /// Stub: creates a new object id and records the attachment.
+    /// Records the new attachment without removing previously recorded
+    /// attachments for the agent, matching the stub's multi-attachment
+    /// behavior expected by callers.
     pub fn wear(
         &mut self,
         agent_id: Uuid,
@@ -228,5 +230,67 @@ impl RegionModule for AttachmentsModule {
     fn close(&mut self) -> Result<(), ModuleError> {
         self.attachments.clear();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_rs_attachmentsmodule_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn wear_records_attachment() {
+        let mut module = AttachmentsModule { attachments: Default::default() };
+        let agent = Uuid::new_v4();
+        let item = Uuid::new_v4();
+        let point = AttachmentPoint::Default;
+
+        let object_id = module.wear(agent, item, point).unwrap();
+
+        let recorded = module.attachments.get(&agent).unwrap();
+        assert_eq!(recorded.len(), 1);
+        assert_eq!(recorded[0].item_id, item);
+        assert_eq!(recorded[0].object_id, object_id);
+        assert_eq!(recorded[0].owner_id, agent);
+        assert_eq!(recorded[0].point, AttachmentPoint::Default);
+    }
+
+    #[test]
+    fn wear_appends_multiple_attachments() {
+        let mut module = AttachmentsModule { attachments: Default::default() };
+        let agent = Uuid::new_v4();
+        let first_item = Uuid::new_v4();
+        let second_item = Uuid::new_v4();
+
+        let first_object = module.wear(agent, first_item, AttachmentPoint::Default).unwrap();
+        let second_object = module.wear(agent, second_item, AttachmentPoint::Default).unwrap();
+
+        assert_ne!(first_object, second_object);
+
+        let recorded = module.attachments.get(&agent).unwrap();
+        assert_eq!(recorded.len(), 2);
+        assert_eq!(recorded[0].item_id, first_item);
+        assert_eq!(recorded[0].object_id, first_object);
+        assert_eq!(recorded[1].item_id, second_item);
+        assert_eq!(recorded[1].object_id, second_object);
+    }
+
+    #[test]
+    fn wear_is_per_agent() {
+        let mut module = AttachmentsModule { attachments: Default::default() };
+        let first_agent = Uuid::new_v4();
+        let second_agent = Uuid::new_v4();
+        let first_item = Uuid::new_v4();
+        let second_item = Uuid::new_v4();
+
+        module.wear(first_agent, first_item, AttachmentPoint::Default).unwrap();
+        module.wear(second_agent, second_item, AttachmentPoint::Default).unwrap();
+
+        assert_eq!(module.attachments.get(&first_agent).unwrap().len(), 1);
+        assert_eq!(module.attachments.get(&second_agent).unwrap().len(), 1);
+        assert_eq!(module.attachments.get(&first_agent).unwrap()[0].item_id, first_item);
+        assert_eq!(module.attachments.get(&second_agent).unwrap()[0].item_id, second_item);
     }
 }

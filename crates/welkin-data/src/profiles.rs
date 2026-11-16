@@ -164,7 +164,8 @@ impl ProfilesStore {
         creator_uuid: &str,
     ) -> Result<Vec<ClassifiedRow>, DataError> {
         let sql = format!("SELECT {CLASSIFIED_COLS} FROM classifieds WHERE creatoruuid = $1");
-        let rows = sqlx::query_as::<_, ClassifiedRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let rows = sqlx::query_as::<_, ClassifiedRow>(&q)
             .bind(creator_uuid.to_string())
             .fetch_all(&self.pool)
             .await?;
@@ -173,7 +174,8 @@ impl ProfilesStore {
 
     pub async fn get_classified(&self, id: &str) -> Result<Option<ClassifiedRow>, DataError> {
         let sql = format!("SELECT {CLASSIFIED_COLS} FROM classifieds WHERE classifieduuid = $1");
-        let row = sqlx::query_as::<_, ClassifiedRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let row = sqlx::query_as::<_, ClassifiedRow>(&q)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
             .await?;
@@ -182,7 +184,8 @@ impl ProfilesStore {
 
     pub async fn store_classified(&self, row: &ClassifiedRow) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM classifieds WHERE classifieduuid = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM classifieds WHERE classifieduuid = $1");
+        sqlx::query(&q)
             .bind(row.classified_uuid.clone())
             .execute(&mut *tx)
             .await?;
@@ -190,7 +193,8 @@ impl ProfilesStore {
             "INSERT INTO classifieds ({CLASSIFIED_COLS}) VALUES \
              ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)"
         );
-        sqlx::query(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        sqlx::query(&q)
             .bind(row.classified_uuid.clone())
             .bind(row.creator_uuid.clone())
             .bind(row.creation_date)
@@ -213,7 +217,8 @@ impl ProfilesStore {
     }
 
     pub async fn delete_classified(&self, id: &str) -> Result<bool, DataError> {
-        let res = sqlx::query("DELETE FROM classifieds WHERE classifieduuid = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM classifieds WHERE classifieduuid = $1");
+        let res = sqlx::query(&q)
             .bind(id.to_string())
             .execute(&self.pool)
             .await?;
@@ -224,7 +229,8 @@ impl ProfilesStore {
 
     pub async fn get_picks(&self, creator_uuid: &str) -> Result<Vec<PickRow>, DataError> {
         let sql = format!("SELECT {PICK_COLS} FROM userpicks WHERE creatoruuid = $1");
-        let rows = sqlx::query_as::<_, PickRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let rows = sqlx::query_as::<_, PickRow>(&q)
             .bind(creator_uuid.to_string())
             .fetch_all(&self.pool)
             .await?;
@@ -233,7 +239,8 @@ impl ProfilesStore {
 
     pub async fn get_pick(&self, id: &str) -> Result<Option<PickRow>, DataError> {
         let sql = format!("SELECT {PICK_COLS} FROM userpicks WHERE pickuuid = $1");
-        let row = sqlx::query_as::<_, PickRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let row = sqlx::query_as::<_, PickRow>(&q)
             .bind(id.to_string())
             .fetch_optional(&self.pool)
             .await?;
@@ -242,7 +249,8 @@ impl ProfilesStore {
 
     pub async fn store_pick(&self, row: &PickRow) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM userpicks WHERE pickuuid = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM userpicks WHERE pickuuid = $1");
+        sqlx::query(&q)
             .bind(row.pick_uuid.clone())
             .execute(&mut *tx)
             .await?;
@@ -250,7 +258,8 @@ impl ProfilesStore {
             "INSERT INTO userpicks ({PICK_COLS}) VALUES \
              ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)"
         );
-        sqlx::query(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        sqlx::query(&q)
             .bind(row.pick_uuid.clone())
             .bind(row.creator_uuid.clone())
             .bind(row.top_pick.clone())
@@ -272,7 +281,8 @@ impl ProfilesStore {
     }
 
     pub async fn delete_pick(&self, id: &str) -> Result<bool, DataError> {
-        let res = sqlx::query("DELETE FROM userpicks WHERE pickuuid = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM userpicks WHERE pickuuid = $1");
+        let res = sqlx::query(&q)
             .bind(id.to_string())
             .execute(&self.pool)
             .await?;
@@ -283,7 +293,8 @@ impl ProfilesStore {
 
     pub async fn get_profile(&self, uuid: &str) -> Result<Option<ProfileRow>, DataError> {
         let sql = format!("SELECT {PROFILE_COLS} FROM userprofile WHERE useruuid = $1");
-        let row = sqlx::query_as::<_, ProfileRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let row = sqlx::query_as::<_, ProfileRow>(&q)
             .bind(uuid.to_string())
             .fetch_optional(&self.pool)
             .await?;
@@ -292,7 +303,8 @@ impl ProfilesStore {
 
     pub async fn store_profile(&self, row: &ProfileRow) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM userprofile WHERE useruuid = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM userprofile WHERE useruuid = $1");
+        sqlx::query(&q)
             .bind(row.user_uuid.clone())
             .execute(&mut *tx)
             .await?;
@@ -300,7 +312,8 @@ impl ProfilesStore {
             "INSERT INTO userprofile ({PROFILE_COLS}) VALUES \
              ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)"
         );
-        sqlx::query(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        sqlx::query(&q)
             .bind(row.user_uuid.clone())
             .bind(row.profile_partner.clone())
             .bind(row.profile_allow_publish.clone())
@@ -328,14 +341,16 @@ impl ProfilesStore {
         user_uuid: &str,
         target_uuid: &str,
     ) -> Result<Option<NoteRow>, DataError> {
-        let row = sqlx::query_as::<_, NoteRow>(
+        let q = crate::portable::sql(
+            &self.pool,
             "SELECT useruuid, targetuuid, notes FROM usernotes \
              WHERE useruuid = $1 AND targetuuid = $2",
-        )
-        .bind(user_uuid.to_string())
-        .bind(target_uuid.to_string())
-        .fetch_optional(&self.pool)
-        .await?;
+        );
+        let row = sqlx::query_as::<_, NoteRow>(&q)
+            .bind(user_uuid.to_string())
+            .bind(target_uuid.to_string())
+            .fetch_optional(&self.pool)
+            .await?;
         Ok(row)
     }
 
@@ -346,12 +361,14 @@ impl ProfilesStore {
         notes: &str,
     ) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM usernotes WHERE useruuid = $1 AND targetuuid = $2")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM usernotes WHERE useruuid = $1 AND targetuuid = $2");
+        sqlx::query(&q)
             .bind(user_uuid.to_string())
             .bind(target_uuid.to_string())
             .execute(&mut *tx)
             .await?;
-        sqlx::query("INSERT INTO usernotes (useruuid, targetuuid, notes) VALUES ($1, $2, $3)")
+        let q = crate::portable::sql(&self.pool, "INSERT INTO usernotes (useruuid, targetuuid, notes) VALUES ($1, $2, $3)");
+        sqlx::query(&q)
             .bind(user_uuid.to_string())
             .bind(target_uuid.to_string())
             .bind(notes.to_string())
@@ -364,31 +381,36 @@ impl ProfilesStore {
     // ---- settings ----
 
     pub async fn get_settings(&self, uuid: &str) -> Result<Option<UserSettingsRow>, DataError> {
-        let row = sqlx::query_as::<_, UserSettingsRow>(
+        let q = crate::portable::sql(
+            &self.pool,
             "SELECT useruuid, imviaemail, visible, email FROM usersettings WHERE useruuid = $1",
-        )
-        .bind(uuid.to_string())
-        .fetch_optional(&self.pool)
-        .await?;
+        );
+        let row = sqlx::query_as::<_, UserSettingsRow>(&q)
+            .bind(uuid.to_string())
+            .fetch_optional(&self.pool)
+            .await?;
         Ok(row)
     }
 
     pub async fn store_settings(&self, row: &UserSettingsRow) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM usersettings WHERE useruuid = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM usersettings WHERE useruuid = $1");
+        sqlx::query(&q)
             .bind(row.user_uuid.clone())
             .execute(&mut *tx)
             .await?;
-        sqlx::query(
+        let q = crate::portable::sql(
+            &self.pool,
             "INSERT INTO usersettings (useruuid, imviaemail, visible, email) \
              VALUES ($1, $2, $3, $4)",
-        )
-        .bind(row.user_uuid.clone())
-        .bind(row.im_via_email.clone())
-        .bind(row.visible.clone())
-        .bind(row.email.clone())
-        .execute(&mut *tx)
-        .await?;
+        );
+        sqlx::query(&q)
+            .bind(row.user_uuid.clone())
+            .bind(row.im_via_email.clone())
+            .bind(row.visible.clone())
+            .bind(row.email.clone())
+            .execute(&mut *tx)
+            .await?;
         tx.commit().await?;
         Ok(())
     }
@@ -400,34 +422,39 @@ impl ProfilesStore {
         user_id: &str,
         tag_id: &str,
     ) -> Result<Option<UserAppDataRow>, DataError> {
-        let row = sqlx::query_as::<_, UserAppDataRow>(
+        let q = crate::portable::sql(
+            &self.pool,
             "SELECT UserId, TagId, DataKey, DataVal FROM userdata \
              WHERE UserId = $1 AND TagId = $2",
-        )
-        .bind(user_id.to_string())
-        .bind(tag_id.to_string())
-        .fetch_optional(&self.pool)
-        .await?;
+        );
+        let row = sqlx::query_as::<_, UserAppDataRow>(&q)
+            .bind(user_id.to_string())
+            .bind(tag_id.to_string())
+            .fetch_optional(&self.pool)
+            .await?;
         Ok(row)
     }
 
     pub async fn store_app_data(&self, row: &UserAppDataRow) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM userdata WHERE UserId = $1 AND TagId = $2")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM userdata WHERE UserId = $1 AND TagId = $2");
+        sqlx::query(&q)
             .bind(row.user_id.clone())
             .bind(row.tag_id.clone())
             .execute(&mut *tx)
             .await?;
-        sqlx::query(
+        let q = crate::portable::sql(
+            &self.pool,
             "INSERT INTO userdata (UserId, TagId, DataKey, DataVal) \
              VALUES ($1, $2, $3, $4)",
-        )
-        .bind(row.user_id.clone())
-        .bind(row.tag_id.clone())
-        .bind(row.data_key.clone())
-        .bind(row.data_val.clone())
-        .execute(&mut *tx)
-        .await?;
+        );
+        sqlx::query(&q)
+            .bind(row.user_id.clone())
+            .bind(row.tag_id.clone())
+            .bind(row.data_key.clone())
+            .bind(row.data_val.clone())
+            .execute(&mut *tx)
+            .await?;
         tx.commit().await?;
         Ok(())
     }

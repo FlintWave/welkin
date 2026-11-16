@@ -8,7 +8,7 @@
 
 use crate::DataError;
 
-/// A single offline instant message row, matching the C# `OfflineIMData`
+/// A single offline instant message row, matching the C# `OfflineImData`
 /// schema in the `im_offline` table.
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct OfflineImRow {
@@ -53,7 +53,8 @@ impl OfflineImStore {
 
     /// Return the count of offline messages queued for `principal_id`.
     pub async fn get_count(&self, principal_id: &str) -> Result<i64, DataError> {
-        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM im_offline WHERE PrincipalID = $1")
+        let q = crate::portable::sql(&self.pool, "SELECT COUNT(*) FROM im_offline WHERE PrincipalID = $1");
+        let row: (i64,) = sqlx::query_as(&q)
             .bind(principal_id.to_string())
             .fetch_one(&self.pool)
             .await?;
@@ -73,34 +74,39 @@ impl OfflineImStore {
         if count >= self.max_offline_ims {
             return Ok(false);
         }
-        sqlx::query(
+        let q = crate::portable::sql(
+            &self.pool,
             "INSERT INTO im_offline (PrincipalID, FromID, Message, TMStamp) \
              VALUES ($1, $2, $3, $4)",
-        )
-        .bind(principal_id.to_string())
-        .bind(from_id.to_string())
-        .bind(message.to_string())
-        .bind(tm_stamp)
-        .execute(&self.pool)
-        .await?;
+        );
+        sqlx::query(&q)
+            .bind(principal_id.to_string())
+            .bind(from_id.to_string())
+            .bind(message.to_string())
+            .bind(tm_stamp)
+            .execute(&self.pool)
+            .await?;
         Ok(true)
     }
 
     /// Retrieve all offline messages for `principal_id`.
     pub async fn get_messages(&self, principal_id: &str) -> Result<Vec<OfflineImRow>, DataError> {
-        let rows = sqlx::query_as::<_, OfflineImRow>(
+        let q = crate::portable::sql(
+            &self.pool,
             "SELECT id, PrincipalID, FromID, Message, TMStamp \
              FROM im_offline WHERE PrincipalID = $1 ORDER BY TMStamp ASC",
-        )
-        .bind(principal_id.to_string())
-        .fetch_all(&self.pool)
-        .await?;
+        );
+        let rows = sqlx::query_as::<_, OfflineImRow>(&q)
+            .bind(principal_id.to_string())
+            .fetch_all(&self.pool)
+            .await?;
         Ok(rows)
     }
 
     /// Delete all offline messages for `principal_id` (by recipient).
     pub async fn delete_messages(&self, principal_id: &str) -> Result<u64, DataError> {
-        let res = sqlx::query("DELETE FROM im_offline WHERE PrincipalID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM im_offline WHERE PrincipalID = $1");
+        let res = sqlx::query(&q)
             .bind(principal_id.to_string())
             .execute(&self.pool)
             .await?;
@@ -109,7 +115,8 @@ impl OfflineImStore {
 
     /// Delete all messages sent *from* `from_id` (used when deleting a user).
     pub async fn delete_from_messages(&self, from_id: &str) -> Result<u64, DataError> {
-        let res = sqlx::query("DELETE FROM im_offline WHERE FromID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM im_offline WHERE FromID = $1");
+        let res = sqlx::query(&q)
             .bind(from_id.to_string())
             .execute(&self.pool)
             .await?;
@@ -119,7 +126,8 @@ impl OfflineImStore {
     /// Delete messages older than 14 days (matching C# `DeleteOld`).
     pub async fn delete_old(&self) -> Result<u64, DataError> {
         let cutoff = chrono::Utc::now().timestamp() - 14 * 86400;
-        let res = sqlx::query("DELETE FROM im_offline WHERE TMStamp < $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM im_offline WHERE TMStamp < $1");
+        let res = sqlx::query(&q)
             .bind(cutoff)
             .execute(&self.pool)
             .await?;

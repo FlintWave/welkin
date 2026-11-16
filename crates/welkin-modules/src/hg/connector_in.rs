@@ -61,49 +61,62 @@ impl HypergridServiceInConnectorModule {
         self.registered
     }
 
-    /// Register the Hypergrid handler routes (stub).
-    ///
-    /// In a real implementation this would create axum routes for:
-    /// - GatekeeperServiceInConnector (link_region, get_region, create_agent)
-    /// - UserAgentServerConnector (verify_agent, verify_client, get_home_region, etc.)
-    /// - HeloServiceInConnector (simple reachability check)
-    /// - HGFriendsServerConnector (new_friendship, delete_friendship, etc.)
-    pub fn register_handlers(&mut self) -> Result<(), ModuleError> {
-        if self.registered {
-            return Ok(());
+        /// Register the Hypergrid handler routes.
+        ///
+        /// This mirrors OpenSim's handler registration flow: it is a no-op when the
+        /// module is disabled or already registered, and it avoids registering the
+        /// same route more than once.
+        pub fn register_handlers(&mut self) -> Result<(), ModuleError> {
+            if !self.enabled {
+                tracing::debug!(
+                    scenes = self.scenes.len(),
+                    local_service_dll = %self.local_service_dll,
+                    "Hypergrid inbound connector disabled; skipping handler registration"
+                );
+                return Ok(());
+            }
+
+            if self.registered {
+                return Ok(());
+            }
+
+            let handlers = [
+                (
+                    "/gatekeeper",
+                    "Gatekeeper service (link_region, get_region, create_agent)",
+                ),
+                (
+                    "/user-agent",
+                    "User-agent service (verify_agent, locate_user, etc.)",
+                ),
+                ("/helo", "Helo service (reachability probe)"),
+                (
+                    "/hg-friends",
+                    "HG friends service (new_friendship, status_notification, etc.)",
+                ),
+            ];
+
+            for (path, desc) in &handlers {
+                if self.routes.iter().any(|route| route.path == *path) {
+                    continue;
+                }
+
+                self.routes.push(HGRoute {
+                    path: path.to_string(),
+                    description: desc.to_string(),
+                });
+                tracing::info!(
+                    path = %path,
+                    scenes = self.scenes.len(),
+                    local_service_dll = %self.local_service_dll,
+                    "registered HG handler: {}",
+                    desc
+                );
+            }
+
+            self.registered = true;
+            Ok(())
         }
-
-        let handlers = [
-            (
-                "/gatekeeper",
-                "Gatekeeper service (link_region, get_region, create_agent)",
-            ),
-            (
-                "/user-agent",
-                "User-agent service (verify_agent, locate_user, etc.)",
-            ),
-            ("/helo", "Helo service (reachability probe)"),
-            (
-                "/hg-friends",
-                "HG friends service (new_friendship, status_notification, etc.)",
-            ),
-        ];
-
-        for (path, desc) in &handlers {
-            self.routes.push(HGRoute {
-                path: path.to_string(),
-                description: desc.to_string(),
-            });
-            tracing::info!(
-                path = %path,
-                "registered HG handler: {}",
-                desc
-            );
-        }
-
-        self.registered = true;
-        Ok(())
-    }
 
     /// Get the list of registered routes.
     pub fn routes(&self) -> &[HGRoute] {
@@ -331,5 +344,70 @@ mod tests {
         module.close().unwrap();
         assert!(!module.is_registered());
         assert_eq!(module.route_count(), 0);
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_rviceinconnectormodule_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn register_handlers_registers_expected_routes() {
+        let mut module = HypergridServiceInConnectorModule::default();
+        module.enabled = true;
+
+        let result = module.register_handlers();
+
+        assert!(result.is_ok());
+        assert!(module.registered);
+        assert_eq!(module.routes.len(), 4);
+        let paths: Vec<&str> = module.routes.iter().map(|route| route.path.as_str()).collect();
+        assert!(paths.contains(&"/gatekeeper"));
+        assert!(paths.contains(&"/user-agent"));
+        assert!(paths.contains(&"/helo"));
+        assert!(paths.contains(&"/hg-friends"));
+    }
+
+    #[test]
+    fn register_handlers_is_idempotent() {
+        let mut module = HypergridServiceInConnectorModule::default();
+        module.enabled = true;
+
+        assert!(module.register_handlers().is_ok());
+        let route_count = module.routes.len();
+        assert!(module.registered);
+
+        assert!(module.register_handlers().is_ok());
+        assert!(module.registered);
+        assert_eq!(module.routes.len(), route_count);
+    }
+
+    #[test]
+    fn register_handlers_disabled_does_not_register() {
+        let mut module = HypergridServiceInConnectorModule::default();
+        module.enabled = false;
+
+        let result = module.register_handlers();
+
+        assert!(result.is_ok());
+        assert!(!module.registered);
+        assert!(module.routes.is_empty());
+    }
+
+    #[test]
+    fn register_handlers_after_adding_region() {
+        use crate::registry::SceneRef;
+
+        let mut module = HypergridServiceInConnectorModule::default();
+        module.enabled = true;
+        let mut scene = SceneRef::new(uuid::Uuid::new_v4(), "r".to_string());
+        let _ = module.add_region(&scene);
+
+        assert!(module.register_handlers().is_ok());
+        assert!(module.registered);
+        assert_eq!(module.routes.len(), 4);
     }
 }

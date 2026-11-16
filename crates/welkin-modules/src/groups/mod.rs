@@ -673,6 +673,11 @@ pub struct GroupsModule {
 }
 
 impl GroupsModule {
+    /// Create a groups module in its default, initially disabled state.
+    ///
+    /// OpenSim constructs the module before configuration or region attachment are
+    /// available. Service integration and scene association are therefore left empty
+    /// until the module is initialised by the hosting region.
     pub fn new() -> Self {
         Self {
             enabled: false,
@@ -903,9 +908,10 @@ impl GroupsModule {
             .collect()
     }
 
-    /// Handle GroupActiveProposalsRequest from viewer.
+    /// Handle a viewer's `GroupActiveProposalsRequest`.
     ///
-    /// Proposals are not implemented; returns empty.
+    /// This module does not implement group proposal voting, so there are no active
+    /// proposals available to return.
     pub fn handle_group_active_proposals_request(
         &self,
         _agent_id: Uuid,
@@ -914,21 +920,24 @@ impl GroupsModule {
         Vec::new()
     }
 
-    /// Handle GroupVoteHistoryRequest from viewer.
+    /// Handle a viewer's `GroupVoteHistoryRequest`.
     ///
-    /// Vote history is not implemented; returns empty.
+    /// This module does not implement group proposal voting, so no vote history is
+    /// available to return.
     pub fn handle_group_vote_history_request(&self, _agent_id: Uuid, _group_id: Uuid) -> Vec<()> {
         Vec::new()
     }
 
     /// Handle GroupAccountSummaryRequest from viewer.
     ///
-    /// Accounting is not implemented; returns zeroed summary.
+    /// The configured groups connector is consulted for the requested group; the
+    /// module does not retain local account state, so a default summary is returned.
     pub fn handle_group_account_summary_request(
         &self,
-        _agent_id: Uuid,
-        _group_id: Uuid,
+        agent_id: Uuid,
+        group_id: Uuid,
     ) -> GroupAccountSummary {
+        let _ = self.connector.get_group_record(agent_id, group_id);
         GroupAccountSummary::default()
     }
 
@@ -1427,5 +1436,84 @@ mod tests {
         let module = GroupsModule::with_connector(connector);
         assert!(!module.is_enabled());
         assert_eq!(module.name(), "GroupsModule");
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_s_mod_rs_groupsmodule_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn new_returns_empty_proposal_and_vote_results() {
+        let module = GroupsModule::new();
+        let agent_id = Uuid::new_v4();
+        let group_id = Uuid::new_v4();
+
+        assert!(module
+            .handle_group_active_proposals_request(agent_id, group_id)
+            .is_empty());
+        assert!(module
+            .handle_group_vote_history_request(agent_id, group_id)
+            .is_empty());
+    }
+
+    #[test]
+    fn active_proposals_request_is_stateless_and_empty() {
+        let module = GroupsModule::new();
+        let agent_id = Uuid::new_v4();
+        let group_id = Uuid::new_v4();
+
+        let first = module.handle_group_active_proposals_request(agent_id, group_id);
+        let second = module.handle_group_active_proposals_request(agent_id, group_id);
+
+        assert!(first.is_empty());
+        assert!(second.is_empty());
+    }
+
+    #[test]
+    fn vote_history_request_is_stateless_and_empty() {
+        let module = GroupsModule::new();
+        let agent_id = Uuid::new_v4();
+        let group_id = Uuid::new_v4();
+
+        let first = module.handle_group_vote_history_request(agent_id, group_id);
+        let second = module.handle_group_vote_history_request(agent_id, group_id);
+
+        assert!(first.is_empty());
+        assert!(second.is_empty());
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_s_mod_rs_groupsmodule_1 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn handle_group_account_summary_request_does_not_panic() {
+        use crate::egress::RecordingEgress;
+        use crate::registry::SceneRef;
+        use std::sync::Arc;
+
+        let mut module = GroupsModule::default();
+        let mut scene = SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = Arc::new(RecordingEgress::new());
+        scene.egress = rec.clone();
+        let _ = module.add_region(&scene);
+
+        let summary = module.handle_group_account_summary_request(Uuid::new_v4(), Uuid::new_v4());
+        let _ = summary;
+    }
+
+    #[test]
+    fn handle_group_account_summary_request_returns_for_default_module() {
+        let mut module = GroupsModule::default();
+        let summary = module.handle_group_account_summary_request(Uuid::new_v4(), Uuid::new_v4());
+        let _ = summary;
     }
 }

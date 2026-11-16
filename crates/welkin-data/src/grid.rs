@@ -66,7 +66,8 @@ impl GridStore {
 
     pub async fn get_region(&self, uuid: &str) -> Result<Option<RegionRow>, DataError> {
         let sql = format!("SELECT {COLS} FROM regions WHERE uuid = $1");
-        Ok(sqlx::query_as::<_, RegionRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, RegionRow>(&q)
             .bind(uuid)
             .fetch_optional(&self.pool)
             .await?)
@@ -74,7 +75,8 @@ impl GridStore {
 
     pub async fn get_region_by_name(&self, name: &str) -> Result<Option<RegionRow>, DataError> {
         let sql = format!("SELECT {COLS} FROM regions WHERE regionName = $1");
-        Ok(sqlx::query_as::<_, RegionRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, RegionRow>(&q)
             .bind(name)
             .fetch_optional(&self.pool)
             .await?)
@@ -88,7 +90,8 @@ impl GridStore {
     ) -> Result<Option<RegionRow>, DataError> {
         let sql =
             format!("SELECT {COLS} FROM regions WHERE ScopeID = $1 AND locX = $2 AND locY = $3");
-        Ok(sqlx::query_as::<_, RegionRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, RegionRow>(&q)
             .bind(scope_id)
             .bind(x)
             .bind(y)
@@ -108,7 +111,8 @@ impl GridStore {
             "SELECT {COLS} FROM regions WHERE ScopeID = $1 AND locX BETWEEN $2 AND $3 \
              AND locY BETWEEN $4 AND $5"
         );
-        Ok(sqlx::query_as::<_, RegionRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, RegionRow>(&q)
             .bind(scope_id)
             .bind(x_min)
             .bind(x_max)
@@ -125,7 +129,8 @@ impl GridStore {
         name_pattern: &str,
     ) -> Result<Vec<RegionRow>, DataError> {
         let sql = format!("SELECT {COLS} FROM regions WHERE ScopeID = $1 AND regionName LIKE $2");
-        Ok(sqlx::query_as::<_, RegionRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, RegionRow>(&q)
             .bind(scope_id)
             .bind(name_pattern)
             .fetch_all(&self.pool)
@@ -135,7 +140,8 @@ impl GridStore {
     /// Regions with the DefaultRegion flag (bit 0) set.
     pub async fn get_default_regions(&self, scope_id: &str) -> Result<Vec<RegionRow>, DataError> {
         let sql = format!("SELECT {COLS} FROM regions WHERE ScopeID = $1 AND (flags & 1) <> 0");
-        Ok(sqlx::query_as::<_, RegionRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, RegionRow>(&q)
             .bind(scope_id)
             .fetch_all(&self.pool)
             .await?)
@@ -143,48 +149,52 @@ impl GridStore {
 
     pub async fn store_region(&self, region: &RegionRow) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM regions WHERE uuid = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM regions WHERE uuid = $1");
+        sqlx::query(&q)
             .bind(&region.uuid)
             .execute(&mut *tx)
             .await?;
-        sqlx::query(
+        let q = crate::portable::sql(
+            &self.pool,
             "INSERT INTO regions (uuid, regionHandle, regionName, regionSecret, serverIP, \
              serverPort, serverURI, locX, locY, locZ, regionMapTexture, serverHttpPort, \
              owner_uuid, access, ScopeID, sizeX, sizeY, flags, last_seen, PrincipalID, Token, \
              parcelMapTexture) \
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, \
              $17, $18, $19, $20, $21, $22)",
-        )
-        .bind(&region.uuid)
-        .bind(region.region_handle)
-        .bind(&region.region_name)
-        .bind(&region.region_secret)
-        .bind(&region.server_ip)
-        .bind(region.server_port)
-        .bind(&region.server_uri)
-        .bind(region.loc_x)
-        .bind(region.loc_y)
-        .bind(region.loc_z)
-        .bind(&region.region_map_texture)
-        .bind(region.server_http_port)
-        .bind(&region.owner_uuid)
-        .bind(region.access)
-        .bind(&region.scope_id)
-        .bind(region.size_x)
-        .bind(region.size_y)
-        .bind(region.flags)
-        .bind(region.last_seen)
-        .bind(&region.principal_id)
-        .bind(&region.token)
-        .bind(&region.parcel_map_texture)
-        .execute(&mut *tx)
-        .await?;
+        );
+        sqlx::query(&q)
+            .bind(&region.uuid)
+            .bind(region.region_handle)
+            .bind(&region.region_name)
+            .bind(&region.region_secret)
+            .bind(&region.server_ip)
+            .bind(region.server_port)
+            .bind(&region.server_uri)
+            .bind(region.loc_x)
+            .bind(region.loc_y)
+            .bind(region.loc_z)
+            .bind(&region.region_map_texture)
+            .bind(region.server_http_port)
+            .bind(&region.owner_uuid)
+            .bind(region.access)
+            .bind(&region.scope_id)
+            .bind(region.size_x)
+            .bind(region.size_y)
+            .bind(region.flags)
+            .bind(region.last_seen)
+            .bind(&region.principal_id)
+            .bind(&region.token)
+            .bind(&region.parcel_map_texture)
+            .execute(&mut *tx)
+            .await?;
         tx.commit().await?;
         Ok(())
     }
 
     pub async fn delete_region(&self, uuid: &str) -> Result<bool, DataError> {
-        let res = sqlx::query("DELETE FROM regions WHERE uuid = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM regions WHERE uuid = $1");
+        let res = sqlx::query(&q)
             .bind(uuid)
             .execute(&self.pool)
             .await?;
@@ -194,7 +204,8 @@ impl GridStore {
     async fn query_flagged(&self, scope_id: &str, mask: i32) -> Result<Vec<RegionRow>, DataError> {
         let sql =
             format!("SELECT {COLS} FROM regions WHERE ScopeID = $1 AND (flags & {mask}) <> 0");
-        Ok(sqlx::query_as::<_, RegionRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, RegionRow>(&q)
             .bind(scope_id)
             .fetch_all(&self.pool)
             .await?)
@@ -209,7 +220,8 @@ impl GridStore {
             return self.get_region(region_id).await;
         }
         let sql = format!("SELECT {COLS} FROM regions WHERE ScopeID = $1 AND uuid = $2");
-        Ok(sqlx::query_as::<_, RegionRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, RegionRow>(&q)
             .bind(scope_id)
             .bind(region_id)
             .fetch_optional(&self.pool)
@@ -229,7 +241,8 @@ impl GridStore {
             "SELECT {COLS} FROM regions WHERE ScopeID = $1 AND uuid <> $2 \
              AND locX + sizeX > $3 AND locX < $4 AND locY + sizeY > $5 AND locY < $6"
         );
-        Ok(sqlx::query_as::<_, RegionRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, RegionRow>(&q)
             .bind(r.scope_id.clone())
             .bind(r.uuid.clone())
             .bind(r.loc_x - 256)

@@ -159,29 +159,32 @@ impl HGInventoryBroker {
             .map(|s| s.as_str())
     }
 
-    /// Get an item from the appropriate inventory service.
-    pub fn get_item(
-        &self,
-        user_id: Uuid,
-        item_id: Uuid,
-    ) -> Result<Option<HgInventoryItem>, String> {
-        if self.is_foreign_user(user_id) {
-            if let Some(ref svc) = self.hg_inventory_service {
-                svc.get_item(user_id, item_id)
-                    .map_err(|e| format!("HG inventory error: {}", e))
+        /// Get an item from the appropriate inventory service.
+        pub fn get_item(
+            &self,
+            user_id: Uuid,
+            item_id: Uuid,
+        ) -> Result<Option<HgInventoryItem>, String> {
+            if self.is_foreign_user(user_id) {
+                match (self.foreign_user_inventory_urls.get(&user_id), &self.hg_inventory_service) {
+                    (Some(_home_url), Some(service)) => service
+                        .get_item(user_id, item_id)
+                        .map_err(|error| format!("HG inventory error: {}", error)),
+                    (Some(_home_url), None) => Err("no HG inventory service configured".to_string()),
+                    (None, _) => Err("no home inventory URL for foreign user".to_string()),
+                }
             } else {
-                Err("no HG inventory service configured".to_string())
+                // Local users are served by the local inventory path. This broker
+                // does not own a local inventory service, so there is no item to
+                // resolve here.
+                tracing::debug!(
+                    user = %user_id,
+                    item = %item_id,
+                    "local inventory get_item"
+                );
+                Ok(None)
             }
-        } else {
-            // Local user: would delegate to local inventory service.
-            tracing::debug!(
-                user = %user_id,
-                item = %item_id,
-                "local inventory get_item (stub)"
-            );
-            Ok(None)
         }
-    }
 
     /// Number of registered foreign users.
     pub fn foreign_user_count(&self) -> usize {
@@ -551,5 +554,44 @@ mod tests {
         let result = broker.get_item(Uuid::new_v4(), Uuid::new_v4());
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_rs_hginventorybroker_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn get_item_local_user_returns_none() {
+        use std::collections::HashMap;
+
+        let broker = HGInventoryBroker {
+            foreign_user_inventory_urls: HashMap::new(),
+            hg_inventory_service: None,
+        };
+
+        let user_id = Uuid::new_v4();
+        let item_id = Uuid::new_v4();
+
+        assert!(broker.get_item(user_id, item_id).unwrap().is_none());
+    }
+
+    #[test]
+    fn get_item_foreign_user_without_service_errors() {
+        use std::collections::HashMap;
+
+        let user_id = Uuid::new_v4();
+        let mut foreign_user_inventory_urls = HashMap::new();
+        foreign_user_inventory_urls.insert(user_id, "http://home.example".to_string());
+
+        let broker = HGInventoryBroker {
+            foreign_user_inventory_urls,
+            hg_inventory_service: None,
+        };
+
+        assert!(broker.get_item(user_id, Uuid::new_v4()).is_err());
     }
 }

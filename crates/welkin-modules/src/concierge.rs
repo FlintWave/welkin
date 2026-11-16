@@ -99,49 +99,49 @@ impl ConciergeModule {
             .replace("{2}", &count.to_string())
     }
 
-    /// Record an avatar entering a concierge area.
-    ///
-    /// Returns the formatted welcome message if the module is enabled and the
-    /// avatar was not already tracked in the area.
-    pub fn on_avatar_enter(
-        &mut self,
-        area: ConciergeArea,
-        agent_id: Uuid,
-        avatar_name: &str,
-        region_name: &str,
-    ) -> Option<String> {
-        if !self.enabled {
-            return None;
+        /// Record an avatar entering a concierge area.
+        ///
+        /// Returns the formatted welcome message if the module is enabled and the
+        /// avatar was not already tracked in the area.
+        pub fn on_avatar_enter(
+            &mut self,
+            area: ConciergeArea,
+            agent_id: Uuid,
+            avatar_name: &str,
+            region_name: &str,
+        ) -> Option<String> {
+            if !self.enabled {
+                return None;
+            }
+
+            let agents = self.attendance.entry(area.clone()).or_default();
+            if !agents.insert(agent_id) {
+                // Already present — no welcome.
+                return None;
+            }
+
+            let count = agents.len();
+            let template = self.get_welcome_message(&area);
+            let msg = Self::substitute_message(template, avatar_name, region_name, count);
+
+            // Broadcast the welcome via the scene event bus.
+            if let Some(ref scene) = self.scene {
+                let evt = ChatMessageEvent {
+                    region_id: scene.region_id,
+                    sender_id: Uuid::nil(),
+                    message: msg.clone(),
+                    channel: 0,
+                };
+                let _ = scene.events.on_chat_message.send(evt);
+            }
+
+            // Notify the configured broker, if any.
+            if !self.broker_url.is_empty() {
+                self.notify_broker("enter", agent_id, avatar_name, region_name, count);
+            }
+
+            Some(msg)
         }
-
-        let agents = self.attendance.entry(area.clone()).or_default();
-        if !agents.insert(agent_id) {
-            // Already present — no welcome.
-            return None;
-        }
-
-        let count = agents.len();
-        let template = self.get_welcome_message(&area);
-        let msg = Self::substitute_message(template, avatar_name, region_name, count);
-
-        // Broadcast the welcome via the scene event bus.
-        if let Some(ref scene) = self.scene {
-            let evt = ChatMessageEvent {
-                region_id: scene.region_id,
-                sender_id: Uuid::nil(),
-                message: msg.clone(),
-                channel: 0,
-            };
-            let _ = scene.events.on_chat_message.send(evt);
-        }
-
-        // Fire HTTP broker notification (stub).
-        if !self.broker_url.is_empty() {
-            self.notify_broker("enter", agent_id, avatar_name, region_name, count);
-        }
-
-        Some(msg)
-    }
 
     /// Record an avatar leaving a concierge area.
     ///
@@ -523,5 +523,120 @@ mod tests {
         assert_eq!(module.attendance_count(&area), 0);
 
         module.close().unwrap();
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_ge_rs_conciergemodule_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn enter_disabled_returns_none_and_does_not_track() {
+
+        let mut module = ConciergeModule {
+            enabled: false,
+            welcome_message: "welcome".to_string(),
+            goodbye_message: String::new(),
+            area_messages: std::collections::HashMap::new(),
+            attendance: std::collections::HashMap::new(),
+            broker_url: String::new(),
+            scene: None,
+        };
+
+        let mut scene = crate::registry::SceneRef::new(uuid::Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+        let _ = module.add_region(&scene);
+
+        let area = ConciergeArea::Region(uuid::Uuid::new_v4());
+        let agent = uuid::Uuid::new_v4();
+        assert!(module
+            .on_avatar_enter(area.clone(), agent, "Alice", "Region")
+            .is_none());
+        assert!(!module.attendance.contains_key(&area));
+    }
+
+    #[test]
+    fn enter_first_time_returns_welcome_and_tracks_avatar() {
+
+        let mut module = ConciergeModule {
+            enabled: true,
+            welcome_message: "welcome".to_string(),
+            goodbye_message: String::new(),
+            area_messages: std::collections::HashMap::new(),
+            attendance: std::collections::HashMap::new(),
+            broker_url: String::new(),
+            scene: None,
+        };
+
+        let mut scene = crate::registry::SceneRef::new(uuid::Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+        let _ = module.add_region(&scene);
+
+        let area = ConciergeArea::Region(uuid::Uuid::new_v4());
+        let agent = uuid::Uuid::new_v4();
+        let msg = module.on_avatar_enter(area.clone(), agent, "Alice", "Region");
+
+        assert_eq!(msg, Some("welcome".to_string()));
+        assert!(module.attendance.get(&area).unwrap().contains(&agent));
+    }
+
+    #[test]
+    fn enter_same_avatar_twice_only_welcomes_first_time() {
+
+        let mut module = ConciergeModule {
+            enabled: true,
+            welcome_message: "welcome".to_string(),
+            goodbye_message: String::new(),
+            area_messages: std::collections::HashMap::new(),
+            attendance: std::collections::HashMap::new(),
+            broker_url: String::new(),
+            scene: None,
+        };
+
+        let mut scene = crate::registry::SceneRef::new(uuid::Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+        let _ = module.add_region(&scene);
+
+        let area = ConciergeArea::Region(uuid::Uuid::new_v4());
+        let agent = uuid::Uuid::new_v4();
+
+        assert!(module
+            .on_avatar_enter(area.clone(), agent, "Alice", "Region")
+            .is_some());
+        assert!(module
+            .on_avatar_enter(area.clone(), agent, "Alice", "Region")
+            .is_none());
+        assert_eq!(module.attendance.get(&area).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn enter_uses_per_area_custom_welcome_message() {
+
+        let mut module = ConciergeModule {
+            enabled: true,
+            welcome_message: "default".to_string(),
+            goodbye_message: String::new(),
+            area_messages: std::collections::HashMap::new(),
+            attendance: std::collections::HashMap::new(),
+            broker_url: String::new(),
+            scene: None,
+        };
+
+        let area = ConciergeArea::Region(uuid::Uuid::new_v4());
+        module.area_messages.insert(area.clone(), "custom".to_string());
+
+        let mut scene = crate::registry::SceneRef::new(uuid::Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+        let _ = module.add_region(&scene);
+
+        let msg = module.on_avatar_enter(area, uuid::Uuid::new_v4(), "Bob", "Region");
+        assert_eq!(msg, Some("custom".to_string()));
     }
 }

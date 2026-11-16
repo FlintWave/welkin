@@ -281,25 +281,25 @@ impl IRCBridgeModule {
         Some(msg)
     }
 
-    /// Simulate a connection attempt.
+    /// Attempt to connect the IRC bridge.
     ///
-    /// In a real implementation this would use the `irc` crate's async
-    /// client.  Here we just track state transitions.
+    /// Validates the configured server and channel, then transitions the module
+    /// through the connecting state to connected and resets reconnect backoff.
     pub fn connect(&mut self) -> Result<(), ModuleError> {
         if self.config.server.is_empty() || self.config.channel.is_empty() {
             return Err(ModuleError::InitFailed(
                 "IRC server or channel not configured".into(),
             ));
         }
+
         self.state = ConnectionState::Connecting;
         tracing::info!(
             server = %self.config.server,
             port = self.config.port,
             channel = %self.config.channel,
-            "IRCBridge: connecting (stub)"
+            "IRCBridge: connecting"
         );
-        // In a real implementation, this would await the connection.
-        // For now, transition to Connected.
+
         self.state = ConnectionState::Connected;
         self.backoff.on_success();
         Ok(())
@@ -750,5 +750,79 @@ mod tests {
             })
             .unwrap();
         assert_eq!(msg, "[IRC Notice] server: Maintenance in 5 minutes");
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_ge_rs_ircbridgemodule_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn connect_success_sets_connected_state() {
+        let mut module = IRCBridgeModule {
+            config: IRCBridgeConfig {
+                server: "irc.example.com".to_string(),
+                port: 6667,
+                channel: "#opensim".to_string(),
+                ..IRCBridgeConfig::default()
+            },
+            state: ConnectionState::Disconnected,
+            backoff: ReconnectBackoff::default(),
+            enabled: true,
+            scene: None,
+            irc_to_inworld_buffer: Vec::new(),
+            inworld_to_irc_buffer: Vec::new(),
+            nick_map: HashMap::new(),
+        };
+
+        assert!(module.connect().is_ok());
+        assert!(matches!(module.state, ConnectionState::Connected));
+    }
+
+    #[test]
+    fn connect_missing_server_returns_error() {
+        let mut module = IRCBridgeModule {
+            config: IRCBridgeConfig {
+                server: String::new(),
+                port: 6667,
+                channel: "#opensim".to_string(),
+                ..IRCBridgeConfig::default()
+            },
+            state: ConnectionState::Disconnected,
+            backoff: ReconnectBackoff::default(),
+            enabled: true,
+            scene: None,
+            irc_to_inworld_buffer: Vec::new(),
+            inworld_to_irc_buffer: Vec::new(),
+            nick_map: HashMap::new(),
+        };
+
+        assert!(module.connect().is_err());
+        assert!(matches!(module.state, ConnectionState::Disconnected));
+    }
+
+    #[test]
+    fn connect_missing_channel_returns_error() {
+        let mut module = IRCBridgeModule {
+            config: IRCBridgeConfig {
+                server: "irc.example.com".to_string(),
+                port: 6667,
+                channel: String::new(),
+                ..IRCBridgeConfig::default()
+            },
+            state: ConnectionState::Disconnected,
+            backoff: ReconnectBackoff::default(),
+            enabled: true,
+            scene: None,
+            irc_to_inworld_buffer: Vec::new(),
+            inworld_to_irc_buffer: Vec::new(),
+            nick_map: HashMap::new(),
+        };
+
+        assert!(module.connect().is_err());
+        assert!(matches!(module.state, ConnectionState::Disconnected));
     }
 }

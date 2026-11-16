@@ -8,6 +8,9 @@ mod console_io;
 mod estate_config;
 mod groups_invites;
 mod groups_io;
+mod agent_data_io;
+mod egress_io;
+mod friends_notify;
 mod groups_admin;
 mod groups_chat;
 mod groups_queries;
@@ -329,6 +332,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     scene_ref.region_handle = scene.region_info.region_handle;
     scene_ref.region_size_x = scene.region_info.region_size_x;
     scene_ref.region_size_y = scene.region_info.region_size_y;
+    // Modules push alerts, kicks, dialogs and IMs to viewers through this channel;
+    // the delivery task is started once the UDP socket exists.
+    let (region_egress, egress_rx) = egress_io::RegionEgress::new(scene.clone());
+    scene_ref.egress = Arc::new(region_egress);
+    let script_egress = scene_ref.egress.clone();
     {
         let mut registry = scene_ref.registry.write();
         registry.register(ChatModule::new());
@@ -486,6 +494,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // --- Per-session EventQueue map ---
     let event_queues: EventQueueMap = Arc::new(RwLock::new(std::collections::HashMap::new()));
+    let cap_secrets: welkin_caps::handlers::CapSecrets =
+        Arc::new(RwLock::new(std::collections::HashMap::new()));
 
     // --- Caps base URL (used by both process_messages and the caps server) ---
     let caps_port = region_config.internal_port.wrapping_add(1);
@@ -522,6 +532,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let process_inventory = Arc::new(welkin_services::remote::inventory::RemoteInventoryConnector::new(accounts_url));
     let process_assets = Arc::new(welkin_services::remote::asset::RemoteAssetConnector::new(accounts_url));
     let process_avatars = Arc::new(welkin_services::remote::avatar::RemoteAvatarConnector::new(accounts_url));
+    let process_friends = Arc::new(welkin_services::remote::friends::RemoteFriendsConnector::new(accounts_url));
+    let process_egress = scene_ref.egress.clone();
     let process_groups = region_config.groups_server_uri.as_deref().map(groups_io::GroupsCtx::new);
     let process_handle = tokio::spawn(async move {
         process_messages(
@@ -542,6 +554,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             process_assets,
             process_avatars,
             process_groups,
+            process_friends,
+            process_egress,
         )
         .await;
     });
@@ -594,8 +608,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             .with_state(event_queues.clone()),
     );
     caps_router = caps_router.route(
+        "/EventQueueGet/{token}",
+        axum::routing::post(welkin_caps::handlers::event_queue_get_for_agent).with_state(
+            welkin_caps::handlers::AgentEventQueueState {
+                queues: event_queues.clone(),
+                secrets: cap_secrets.clone(),
+            },
+        ),
+    );
+    caps_router = caps_router.route(
         "/CAPS/{*path}",
-        axum::routing::post(seed_caps_handler).with_state(caps_base.clone()),
+        axum::routing::post(seed_caps_handler).with_state((caps_base.clone(), cap_secrets.clone())),
     );
     caps_router = caps_router
         .route("/currency.php", axum::routing::post(currency_php_handler))
@@ -728,6 +751,19 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let heartbeat_sound_tx = sound_cmd_tx.clone();
     let _sound_cmd_tx = Arc::new(sound_cmd_tx);
 
+    // --- Script UI commands (llDialog / llLoadURL / llTextBox) → viewers via egress ---
+    let (ui_cmd_tx, ui_cmd_rx) = std::sync::mpsc::channel::<welkin_script_vm::builtins::dialogs::UiCommand>();
+    let heartbeat_ui_tx = ui_cmd_tx.clone();
+    let _ui_cmd_tx = Arc::new(ui_cmd_tx);
+    let heartbeat_egress = script_egress.clone();
+    let (agent_data_tx, agent_data_rx) =
+        std::sync::mpsc::channel::<welkin_script_vm::builtins::agent_data::AgentDataRequest>();
+    let heartbeat_agent_data_tx = agent_data_tx.clone();
+    let _agent_data_tx = Arc::new(agent_data_tx);
+    let heartbeat_accounts = Arc::new(welkin_services::remote::accounts::RemoteAccountsConnector::new(
+        region_config.grid_service_url.as_deref().unwrap_or("http://localhost:8003"),
+    ));
+
     // --- Physics command channel: scripts (llApplyImpulse, llSetForce, ...) -> physics ---
     let (physics_cmd_tx, physics_cmd_rx) =
         std::sync::mpsc::channel::<(Uuid, welkin_script_vm::PhysicsCommand)>();
@@ -766,11 +802,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             let prim_name = heartbeat_scene
                 .with_object(&prim_id, |g| g.root_part().name.clone())
                 .unwrap_or_default();
+            let owner_id = heartbeat_scene
+                .with_object(&prim_id, |g| g.root_part().owner_id)
+                .unwrap_or_default();
             std::sync::Arc::new(parking_lot::RwLock::new(
                 welkin_script_vm::builtins::ScriptContext {
                     script_id,
                     prim_id,
                     prim_name,
+                    owner_id,
+                    region_name: heartbeat_scene.region_info.region_name.clone(),
                     position: [prim_pos.x as f64, prim_pos.y as f64, prim_pos.z as f64],
                     chat_sender: Some(heartbeat_chat_tx.clone()),
                     timer_sender: Some(heartbeat_timer_tx.clone()),
@@ -778,6 +819,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     sensor_sender: Some(heartbeat_sensor_tx.clone()),
                     control_sender: Some(heartbeat_control_tx.clone()),
                     sound_sender: Some(heartbeat_sound_tx.clone()),
+                    ui_sender: Some(heartbeat_ui_tx.clone()),
+                    agent_data_sender: Some(heartbeat_agent_data_tx.clone()),
                     physics_sender: Some(heartbeat_physics_tx.clone()),
                     ..Default::default()
                 },
@@ -925,7 +968,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 id: chat_msg.source_id,
                                 message: chat_msg.message.clone(),
                             });
-                            if chat_msg.channel == 0 {
+                            if chat_msg.chat_type == welkin_script_vm::ChatType::IM {
+                                // llInstantMessage: deliver as a person-to-person IM, not local chat.
+                                if let Some(target) = chat_msg.target_id {
+                                    heartbeat_egress.send(egress_io::script_im_event(&chat_msg, target));
+                                }
+                            } else if chat_msg.channel == 0 {
                                 pending_chat.push(chat_msg);
                             }
                         }
@@ -977,6 +1025,25 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
 
                         // Drain script sound commands → viewer sound packets
                         let mut pending_sounds: Vec<welkin_script_vm::builtins::SoundCommand> = Vec::new();
+                        // llRequestAgentData lookups → account service → dataserver event
+                        while let Ok(req) = agent_data_rx.try_recv() {
+                            let accounts = heartbeat_accounts.clone();
+                            let scheduler = heartbeat_scheduler.clone();
+                            tokio::spawn(async move {
+                                if let Some(data) = agent_data_io::resolve(&accounts, &req).await {
+                                    scheduler.lock().post_event_to_prim(
+                                        req.prim_id,
+                                        ScriptEvent::Dataserver { request_id: req.request_id, data },
+                                    );
+                                }
+                            });
+                        }
+
+                        // Script dialogs, URLs and text boxes → egress
+                        while let Ok(cmd) = ui_cmd_rx.try_recv() {
+                            heartbeat_egress.send(egress_io::script_ui_event(cmd));
+                        }
+
                         while let Ok(cmd) = sound_cmd_rx.try_recv() {
                             pending_sounds.push(cmd);
                         }
@@ -1043,8 +1110,28 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                             tracing::warn!(script = %script_id, error = %err, "script execution error");
                         }
 
+                        // llResetScript: honour the flag the VM set, then clear it
+                        let reset_ids: Vec<Uuid> = {
+                            let sched = heartbeat_scheduler.lock();
+                            sched.all_scripts().filter_map(|inst| {
+                                let ctx_arc = inst.context()?;
+                                let mut ctx = ctx_arc.write();
+                                if ctx.reset_requested {
+                                    ctx.reset_requested = false;
+                                    Some(inst.script_id)
+                                } else {
+                                    None
+                                }
+                            }).collect()
+                        };
+                        for script_id in reset_ids {
+                            if let Err(e) = heartbeat_scheduler.lock().reset_script(&script_id) {
+                                tracing::warn!(script = %script_id, error = %e, "llResetScript failed");
+                            }
+                        }
+
                         // Propagate script context changes to scene objects
-                        let script_changes: Vec<(Uuid, glam::Vec3, glam::Quat, glam::Vec3, String)> = {
+                        let script_changes: Vec<(Uuid, glam::Vec3, glam::Quat, glam::Vec3, String, welkin_scene::part::PartColor, u8)> = {
                             let sched = heartbeat_scheduler.lock();
                             sched.all_scripts().filter_map(|inst| {
                                 let ctx_arc = inst.context()?;
@@ -1055,10 +1142,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                     glam::Quat::from_xyzw(ctx.rotation[0] as f32, ctx.rotation[1] as f32, ctx.rotation[2] as f32, ctx.rotation[3] as f32),
                                     glam::Vec3::new(ctx.scale[0] as f32, ctx.scale[1] as f32, ctx.scale[2] as f32),
                                     ctx.hover_text.clone(),
+                                    welkin_scene::part::PartColor::new(
+                                        (ctx.hover_text_color[0] * 255.0).round() as u8,
+                                        (ctx.hover_text_color[1] * 255.0).round() as u8,
+                                        (ctx.hover_text_color[2] * 255.0).round() as u8,
+                                        (ctx.hover_text_alpha * 255.0).round() as u8,
+                                    ),
+                                    ctx.click_action.clamp(0, 255) as u8,
                                 ))
                             }).collect()
                         };
-                        for (prim_id, ctx_pos, ctx_rot, ctx_scale, ctx_text) in &script_changes {
+                        for (prim_id, ctx_pos, ctx_rot, ctx_scale, ctx_text, ctx_color, ctx_click) in &script_changes {
                             let needs_update = if let Some(obj) = heartbeat_scene.get_object(prim_id) {
                                 let rp = obj.root_part();
                                 let pos_diff = (rp.group_position - *ctx_pos).length() > 0.001;
@@ -1067,7 +1161,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                     || (rp.rotation_offset.z - ctx_rot.z).abs() > 0.001
                                     || (rp.rotation_offset.w - ctx_rot.w).abs() > 0.001;
                                 let scale_diff = (rp.scale - *ctx_scale).length() > 0.001;
-                                let text_diff = rp.text != *ctx_text;
+                                let text_diff = (rp.text != *ctx_text || (!ctx_text.is_empty() && rp.text_color.0 != ctx_color.0))
+                                    || rp.click_action != *ctx_click;
                                 (pos_diff, rot_diff, scale_diff, text_diff)
                             } else {
                                 continue;
@@ -1085,7 +1180,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                         group.root_part_mut().scale = *ctx_scale;
                                     }
                                     if text_changed {
-                                        group.root_part_mut().text = ctx_text.clone();
+                                        let root = group.root_part_mut();
+                                        root.text = ctx_text.clone();
+                                        root.text_color = *ctx_color;
+                                        root.click_action = *ctx_click;
                                     }
                                 });
                                 heartbeat_scene.push_object_to_physics(prim_id);
@@ -1333,6 +1431,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         grid_uri: config.get_string_or("GridService", "GridServerURI", ""),
         http: reqwest::Client::new(),
     });
+    tokio::spawn(egress_io::run(
+        egress_rx,
+        udp_clients.clone(),
+        udp_socket.clone(),
+        scene.region_info.region_id,
+    ));
     tokio::spawn(console_io::run_actions(
         console_rx,
         udp_socket.clone(),
@@ -1611,6 +1715,8 @@ async fn process_messages(
     asset_connector: Arc<welkin_services::remote::asset::RemoteAssetConnector>,
     avatar_connector: Arc<welkin_services::remote::avatar::RemoteAvatarConnector>,
     groups: Option<groups_io::GroupsCtx>,
+    friends: Arc<welkin_services::remote::friends::RemoteFriendsConnector>,
+    egress: welkin_modules::egress::SharedEgress,
 ) {
     let mut last_agent_update: HashMap<Uuid, Instant> = HashMap::new();
     // Persistent vertical velocity per avatar (jumping and falling).
@@ -1813,6 +1919,11 @@ async fn process_messages(
                     }
                 }
                 info!(agent = %agent_id, "announced new avatar to other clients");
+                // Friends see this avatar come online (and this avatar sees who is here).
+                let (friends, egress) = (friends.clone(), egress.clone());
+                tokio::spawn(async move {
+                    friends_notify::notify_status(egress.as_ref(), &friends, agent_id, true).await;
+                });
             }
 
             // --- Issue 2B: Send all EXISTING avatars to the newly logged-in user ---
@@ -2008,6 +2119,12 @@ async fn process_messages(
             && let Some(client) = &client
         {
             modify_throttle.forget(&agent_id);
+            {
+                let (friends, egress) = (friends.clone(), egress.clone());
+                tokio::spawn(async move {
+                    friends_notify::notify_status(egress.as_ref(), &friends, agent_id, false).await;
+                });
+            }
             if let Some(g) = &groups {
                 g.sequencer().forget(agent_id);
                 g.queue().forget(agent_id);
@@ -5449,7 +5566,17 @@ const KNOWN_CAPS: &[&str] = &[
     "ProvisionVoiceAccountRequest",
 ];
 
-async fn seed_caps_handler(State(base_url): State<String>, body: Bytes) -> impl IntoResponse {
+async fn seed_caps_handler(
+    State((base_url, secrets)): State<(String, welkin_caps::handlers::CapSecrets)>,
+    axum::extract::Path(path): axum::extract::Path<String>,
+    body: Bytes,
+) -> impl IntoResponse {
+    // The login service puts `<agent-uuid>-<secret>` in the seed path; the agent's event
+    // queue capability URL carries the same token so polls can be told apart.
+    let agent_token = welkin_caps::handlers::split_agent_token(&path);
+    if let Some((agent, secret)) = &agent_token {
+        secrets.write().await.insert(*agent, secret.clone());
+    }
     let requested = from_xml(&body).unwrap_or(Llsd::Array(Vec::new()));
     let names: Vec<String> = match &requested {
         Llsd::Array(arr) => arr.iter().map(|v| v.as_str().to_string()).collect(),
@@ -5459,7 +5586,13 @@ async fn seed_caps_handler(State(base_url): State<String>, body: Bytes) -> impl 
     let mut map = Map::new();
     for name in &names {
         if KNOWN_CAPS.contains(&name.as_str()) {
-            map.insert(name.clone(), Llsd::String(format!("{}/{}", base_url, name)));
+            let url = match (&agent_token, name.as_str()) {
+                (Some((agent, secret)), "EventQueueGet") => {
+                    format!("{}/EventQueueGet/{}-{}", base_url, agent, secret)
+                }
+                _ => format!("{}/{}", base_url, name),
+            };
+            map.insert(name.clone(), Llsd::String(url));
         }
     }
 

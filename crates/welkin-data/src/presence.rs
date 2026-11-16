@@ -35,7 +35,8 @@ impl PresenceStore {
 
     pub async fn get_by_session(&self, session_id: &str) -> Result<Option<PresenceRow>, DataError> {
         let sql = format!("SELECT {COLS} FROM Presence WHERE SessionID = $1");
-        let row = sqlx::query_as::<_, PresenceRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let row = sqlx::query_as::<_, PresenceRow>(&q)
             .bind(session_id.to_string())
             .fetch_optional(&self.pool)
             .await?;
@@ -44,7 +45,8 @@ impl PresenceStore {
 
     pub async fn get_by_user(&self, user_id: &str) -> Result<Vec<PresenceRow>, DataError> {
         let sql = format!("SELECT {COLS} FROM Presence WHERE UserID = $1");
-        let rows = sqlx::query_as::<_, PresenceRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let rows = sqlx::query_as::<_, PresenceRow>(&q)
             .bind(user_id.to_string())
             .fetch_all(&self.pool)
             .await?;
@@ -60,7 +62,11 @@ impl PresenceStore {
     }
 
     pub async fn report_agent(&self, session_id: &str, region_id: &str) -> Result<(), DataError> {
-        sqlx::query("UPDATE Presence SET RegionID = $1, LastSeen = $2 WHERE SessionID = $3")
+        let q = crate::portable::sql(
+            &self.pool,
+            "UPDATE Presence SET RegionID = $1, LastSeen = $2 WHERE SessionID = $3",
+        );
+        sqlx::query(&q)
             .bind(region_id.to_string())
             .bind(now_string())
             .bind(session_id.to_string())
@@ -75,20 +81,23 @@ impl PresenceStore {
         session_id: &str,
         secure_session_id: &str,
     ) -> Result<(), DataError> {
-        sqlx::query(
+        let q = crate::portable::sql(
+            &self.pool,
             "INSERT INTO Presence (UserID, SessionID, SecureSessionID, LastSeen) VALUES ($1, $2, $3, $4)",
-        )
-        .bind(user_id.to_string())
-        .bind(session_id.to_string())
-        .bind(secure_session_id.to_string())
-        .bind(now_string())
-        .execute(&self.pool)
-        .await?;
+        );
+        sqlx::query(&q)
+            .bind(user_id.to_string())
+            .bind(session_id.to_string())
+            .bind(secure_session_id.to_string())
+            .bind(now_string())
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
     pub async fn logout(&self, session_id: &str) -> Result<bool, DataError> {
-        let res = sqlx::query("DELETE FROM Presence WHERE SessionID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM Presence WHERE SessionID = $1");
+        let res = sqlx::query(&q)
             .bind(session_id.to_string())
             .execute(&self.pool)
             .await?;
@@ -96,7 +105,8 @@ impl PresenceStore {
     }
 
     pub async fn logout_region(&self, region_id: &str) -> Result<u64, DataError> {
-        let res = sqlx::query("DELETE FROM Presence WHERE RegionID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM Presence WHERE RegionID = $1");
+        let res = sqlx::query(&q)
             .bind(region_id.to_string())
             .execute(&self.pool)
             .await?;
@@ -107,7 +117,8 @@ impl PresenceStore {
         let cutoff = (chrono::Utc::now() - chrono::Duration::seconds(seconds))
             .format(DT_FMT)
             .to_string();
-        let res = sqlx::query("DELETE FROM Presence WHERE LastSeen < $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM Presence WHERE LastSeen < $1");
+        let res = sqlx::query(&q)
             .bind(cutoff)
             .execute(&self.pool)
             .await?;

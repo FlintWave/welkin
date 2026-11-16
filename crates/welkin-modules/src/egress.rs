@@ -10,6 +10,7 @@ pub enum EgressEvent {
     Kick { agent: Uuid, reason: String },
     LoadUrl { agent: Uuid, object_name: String, object_id: Uuid, owner_id: Uuid, group_owned: bool, message: String, url: String },
     TextBox { agent: Uuid, message: String, chat_channel: i32, object_name: String, object_id: Uuid, owner_id: Uuid },
+    Dialog { agent: Uuid, message: String, buttons: Vec<String>, chat_channel: i32, object_name: String, object_id: Uuid, owner_id: Uuid },
     AppearanceUpdate { agent: Uuid },
     RebakeRequest { agent: Uuid },
     FriendOnline { agent: Uuid, friend: Uuid, online: bool },
@@ -80,6 +81,7 @@ impl ClientEgress for RecordingEgress {
             | EgressEvent::Kick { agent, .. }
             | EgressEvent::LoadUrl { agent, .. }
             | EgressEvent::TextBox { agent, .. }
+            | EgressEvent::Dialog { agent, .. }
             | EgressEvent::AppearanceUpdate { agent }
             | EgressEvent::RebakeRequest { agent }
             | EgressEvent::FriendOnline { agent, .. } => *agent,

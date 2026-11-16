@@ -39,7 +39,7 @@ impl GridUserStore {
 
     pub async fn get(&self, user_id: &str) -> Result<Option<GridUserRow>, DataError> {
         let sql = format!("SELECT {COLS} FROM GridUser WHERE UserID = $1");
-        let row = sqlx::query_as::<_, GridUserRow>(&sql)
+        let row = sqlx::query_as::<_, GridUserRow>(&crate::portable::sql(&self.pool, &sql))
             .bind(user_id.to_string())
             .fetch_optional(&self.pool)
             .await?;
@@ -48,7 +48,7 @@ impl GridUserStore {
 
     pub async fn get_online(&self) -> Result<Vec<GridUserRow>, DataError> {
         let sql = format!("SELECT {COLS} FROM GridUser WHERE Online = 'true'");
-        let rows = sqlx::query_as::<_, GridUserRow>(&sql)
+        let rows = sqlx::query_as::<_, GridUserRow>(&crate::portable::sql(&self.pool, &sql))
             .fetch_all(&self.pool)
             .await?;
         Ok(rows)
@@ -56,14 +56,14 @@ impl GridUserStore {
 
     pub async fn store(&self, row: &GridUserRow) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM GridUser WHERE UserID = $1")
+        sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM GridUser WHERE UserID = $1"))
             .bind(row.user_id.clone())
             .execute(&mut *tx)
             .await?;
         let sql = format!(
             "INSERT INTO GridUser ({COLS}) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
         );
-        sqlx::query(&sql)
+        sqlx::query(&crate::portable::sql(&self.pool, &sql))
             .bind(row.user_id.clone())
             .bind(row.home_region_id.clone())
             .bind(row.home_position.clone())
@@ -87,9 +87,10 @@ impl GridUserStore {
         position: &str,
         look_at: &str,
     ) -> Result<(), DataError> {
-        sqlx::query(
+        sqlx::query(&crate::portable::sql(
+            &self.pool,
             "UPDATE GridUser SET HomeRegionID = $1, HomePosition = $2, HomeLookAt = $3 WHERE UserID = $4",
-        )
+        ))
         .bind(region_id.to_string())
         .bind(position.to_string())
         .bind(look_at.to_string())
@@ -106,9 +107,10 @@ impl GridUserStore {
         position: &str,
         look_at: &str,
     ) -> Result<(), DataError> {
-        sqlx::query(
+        sqlx::query(&crate::portable::sql(
+            &self.pool,
             "UPDATE GridUser SET LastRegionID = $1, LastPosition = $2, LastLookAt = $3 WHERE UserID = $4",
-        )
+        ))
         .bind(region_id.to_string())
         .bind(position.to_string())
         .bind(look_at.to_string())
@@ -129,7 +131,7 @@ impl GridUserStore {
         } else {
             "UPDATE GridUser SET Online = $1, Logout = $2 WHERE UserID = $3"
         };
-        sqlx::query(sql)
+        sqlx::query(&crate::portable::sql(&self.pool, sql))
             .bind(if online { "true" } else { "false" }.to_string())
             .bind(timestamp.to_string())
             .bind(user_id.to_string())

@@ -90,7 +90,8 @@ impl InventoryStore {
 
     pub async fn get_item(&self, id: &str) -> Result<Option<InventoryItemRow>, DataError> {
         let sql = format!("SELECT {ITEM_COLS} FROM inventoryitems WHERE inventoryID = $1");
-        Ok(sqlx::query_as::<_, InventoryItemRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, InventoryItemRow>(&q)
             .bind(id)
             .fetch_optional(&self.pool)
             .await?)
@@ -98,7 +99,8 @@ impl InventoryStore {
 
     pub async fn get_folder(&self, id: &str) -> Result<Option<InventoryFolderRow>, DataError> {
         let sql = format!("SELECT {FOLDER_COLS} FROM inventoryfolders WHERE folderID = $1");
-        Ok(sqlx::query_as::<_, InventoryFolderRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, InventoryFolderRow>(&q)
             .bind(id)
             .fetch_optional(&self.pool)
             .await?)
@@ -109,7 +111,8 @@ impl InventoryStore {
         folder_id: &str,
     ) -> Result<Vec<InventoryItemRow>, DataError> {
         let sql = format!("SELECT {ITEM_COLS} FROM inventoryitems WHERE parentFolderID = $1");
-        Ok(sqlx::query_as::<_, InventoryItemRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, InventoryItemRow>(&q)
             .bind(folder_id)
             .fetch_all(&self.pool)
             .await?)
@@ -120,7 +123,8 @@ impl InventoryStore {
         parent_id: &str,
     ) -> Result<Vec<InventoryFolderRow>, DataError> {
         let sql = format!("SELECT {FOLDER_COLS} FROM inventoryfolders WHERE parentFolderID = $1");
-        Ok(sqlx::query_as::<_, InventoryFolderRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, InventoryFolderRow>(&q)
             .bind(parent_id)
             .fetch_all(&self.pool)
             .await?)
@@ -133,7 +137,8 @@ impl InventoryStore {
         let sql = format!(
             "SELECT {FOLDER_COLS} FROM inventoryfolders WHERE agentID = $1 AND parentFolderID = $2"
         );
-        Ok(sqlx::query_as::<_, InventoryFolderRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, InventoryFolderRow>(&q)
             .bind(agent_id)
             .bind(ZERO_UUID)
             .fetch_optional(&self.pool)
@@ -145,7 +150,8 @@ impl InventoryStore {
         agent_id: &str,
     ) -> Result<Vec<InventoryFolderRow>, DataError> {
         let sql = format!("SELECT {FOLDER_COLS} FROM inventoryfolders WHERE agentID = $1");
-        Ok(sqlx::query_as::<_, InventoryFolderRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, InventoryFolderRow>(&q)
             .bind(agent_id)
             .fetch_all(&self.pool)
             .await?)
@@ -153,11 +159,13 @@ impl InventoryStore {
 
     pub async fn store_item(&self, item: &InventoryItemRow) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM inventoryitems WHERE inventoryID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM inventoryitems WHERE inventoryID = $1");
+        sqlx::query(&q)
             .bind(&item.inventory_id)
             .execute(&mut *tx)
             .await?;
-        sqlx::query(
+        let q = crate::portable::sql(
+            &self.pool,
             "INSERT INTO inventoryitems (assetID, assetType, inventoryName, inventoryDescription, \
              inventoryNextPermissions, inventoryCurrentPermissions, invType, creatorID, \
              inventoryBasePermissions, inventoryEveryOnePermissions, salePrice, saleType, \
@@ -165,57 +173,62 @@ impl InventoryStore {
              inventoryGroupPermissions) \
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, \
              $17, $18, $19, $20)",
-        )
-        .bind(&item.asset_id)
-        .bind(item.asset_type)
-        .bind(&item.inventory_name)
-        .bind(&item.inventory_description)
-        .bind(item.next_permissions)
-        .bind(item.current_permissions)
-        .bind(item.inv_type)
-        .bind(&item.creator_id)
-        .bind(item.base_permissions)
-        .bind(item.everyone_permissions)
-        .bind(item.sale_price)
-        .bind(item.sale_type)
-        .bind(item.creation_date)
-        .bind(&item.group_id)
-        .bind(item.group_owned)
-        .bind(item.flags)
-        .bind(&item.inventory_id)
-        .bind(&item.avatar_id)
-        .bind(&item.parent_folder_id)
-        .bind(item.group_permissions)
-        .execute(&mut *tx)
-        .await?;
+        );
+        sqlx::query(&q)
+            .bind(&item.asset_id)
+            .bind(item.asset_type)
+            .bind(&item.inventory_name)
+            .bind(&item.inventory_description)
+            .bind(item.next_permissions)
+            .bind(item.current_permissions)
+            .bind(item.inv_type)
+            .bind(&item.creator_id)
+            .bind(item.base_permissions)
+            .bind(item.everyone_permissions)
+            .bind(item.sale_price)
+            .bind(item.sale_type)
+            .bind(item.creation_date)
+            .bind(&item.group_id)
+            .bind(item.group_owned)
+            .bind(item.flags)
+            .bind(&item.inventory_id)
+            .bind(&item.avatar_id)
+            .bind(&item.parent_folder_id)
+            .bind(item.group_permissions)
+            .execute(&mut *tx)
+            .await?;
         tx.commit().await?;
         Ok(())
     }
 
     pub async fn store_folder(&self, folder: &InventoryFolderRow) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM inventoryfolders WHERE folderID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM inventoryfolders WHERE folderID = $1");
+        sqlx::query(&q)
             .bind(&folder.folder_id)
             .execute(&mut *tx)
             .await?;
-        sqlx::query(
+        let q = crate::portable::sql(
+            &self.pool,
             "INSERT INTO inventoryfolders (folderName, type, version, folderID, agentID, \
              parentFolderID) VALUES ($1, $2, $3, $4, $5, $6)",
-        )
-        .bind(&folder.folder_name)
-        .bind(folder.folder_type)
-        .bind(folder.version)
-        .bind(&folder.folder_id)
-        .bind(&folder.agent_id)
-        .bind(&folder.parent_folder_id)
-        .execute(&mut *tx)
-        .await?;
+        );
+        sqlx::query(&q)
+            .bind(&folder.folder_name)
+            .bind(folder.folder_type)
+            .bind(folder.version)
+            .bind(&folder.folder_id)
+            .bind(&folder.agent_id)
+            .bind(&folder.parent_folder_id)
+            .execute(&mut *tx)
+            .await?;
         tx.commit().await?;
         Ok(())
     }
 
     pub async fn delete_item(&self, id: &str) -> Result<bool, DataError> {
-        let res = sqlx::query("DELETE FROM inventoryitems WHERE inventoryID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM inventoryitems WHERE inventoryID = $1");
+        let res = sqlx::query(&q)
             .bind(id)
             .execute(&self.pool)
             .await?;
@@ -223,7 +236,8 @@ impl InventoryStore {
     }
 
     pub async fn delete_folder(&self, id: &str) -> Result<bool, DataError> {
-        let res = sqlx::query("DELETE FROM inventoryfolders WHERE folderID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM inventoryfolders WHERE folderID = $1");
+        let res = sqlx::query(&q)
             .bind(id)
             .execute(&self.pool)
             .await?;
@@ -231,7 +245,11 @@ impl InventoryStore {
     }
 
     pub async fn increment_folder_version(&self, folder_id: &str) -> Result<(), DataError> {
-        sqlx::query("UPDATE inventoryfolders SET version = version + 1 WHERE folderID = $1")
+        let q = crate::portable::sql(
+            &self.pool,
+            "UPDATE inventoryfolders SET version = version + 1 WHERE folderID = $1",
+        );
+        sqlx::query(&q)
             .bind(folder_id)
             .execute(&self.pool)
             .await?;
@@ -246,11 +264,14 @@ impl InventoryStore {
         let mut descendants: Vec<String> = Vec::new();
         let mut frontier: Vec<String> = vec![folder_id.to_string()];
         while let Some(parent) = frontier.pop() {
-            let rows: Vec<(String,)> =
-                sqlx::query_as("SELECT folderID FROM inventoryfolders WHERE parentFolderID = $1")
-                    .bind(&parent)
-                    .fetch_all(&mut *tx)
-                    .await?;
+            let q = crate::portable::sql(
+                &self.pool,
+                "SELECT folderID FROM inventoryfolders WHERE parentFolderID = $1",
+            );
+            let rows: Vec<(String,)> = sqlx::query_as(&q)
+                .bind(&parent)
+                .fetch_all(&mut *tx)
+                .await?;
             for (id,) in rows {
                 // Guard against cycles.
                 if id != folder_id && !descendants.contains(&id) {
@@ -264,13 +285,21 @@ impl InventoryStore {
             .map(String::as_str)
             .chain(std::iter::once(folder_id))
         {
-            sqlx::query("DELETE FROM inventoryitems WHERE parentFolderID = $1")
+            let q = crate::portable::sql(
+                &self.pool,
+                "DELETE FROM inventoryitems WHERE parentFolderID = $1",
+            );
+            sqlx::query(&q)
                 .bind(id)
                 .execute(&mut *tx)
                 .await?;
         }
         for id in &descendants {
-            sqlx::query("DELETE FROM inventoryfolders WHERE folderID = $1")
+            let q = crate::portable::sql(
+                &self.pool,
+                "DELETE FROM inventoryfolders WHERE folderID = $1",
+            );
+            sqlx::query(&q)
                 .bind(id)
                 .execute(&mut *tx)
                 .await?;
@@ -284,9 +313,11 @@ impl InventoryStore {
         agent_id: &str,
         folder_type: i16,
     ) -> Result<Option<InventoryFolderRow>, DataError> {
-        let sql =
-            format!("SELECT {FOLDER_COLS} FROM inventoryfolders WHERE agentID = $1 AND type = $2");
-        Ok(sqlx::query_as::<_, InventoryFolderRow>(&sql)
+        let sql = format!(
+            "SELECT {FOLDER_COLS} FROM inventoryfolders WHERE agentID = $1 AND type = $2"
+        );
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, InventoryFolderRow>(&q)
             .bind(agent_id)
             .bind(folder_type)
             .fetch_optional(&self.pool)
@@ -294,19 +325,26 @@ impl InventoryStore {
     }
 
     pub async fn move_folder(&self, folder_id: &str, parent_id: &str) -> Result<bool, DataError> {
-        let res =
-            sqlx::query("UPDATE inventoryfolders SET parentFolderID = $1 WHERE folderID = $2")
-                .bind(parent_id)
-                .bind(folder_id)
-                .execute(&self.pool)
-                .await?;
+        let q = crate::portable::sql(
+            &self.pool,
+            "UPDATE inventoryfolders SET parentFolderID = $1 WHERE folderID = $2",
+        );
+        let res = sqlx::query(&q)
+            .bind(parent_id)
+            .bind(folder_id)
+            .execute(&self.pool)
+            .await?;
         Ok(res.rows_affected() > 0)
     }
 
     pub async fn delete_folders(&self, folder_ids: &[&str]) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
         for id in folder_ids {
-            sqlx::query("DELETE FROM inventoryfolders WHERE folderID = $1")
+            let q = crate::portable::sql(
+                &self.pool,
+                "DELETE FROM inventoryfolders WHERE folderID = $1",
+            );
+            sqlx::query(&q)
                 .bind(*id)
                 .execute(&mut *tx)
                 .await?;
@@ -318,7 +356,11 @@ impl InventoryStore {
     pub async fn delete_items(&self, item_ids: &[&str]) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
         for id in item_ids {
-            sqlx::query("DELETE FROM inventoryitems WHERE inventoryID = $1")
+            let q = crate::portable::sql(
+                &self.pool,
+                "DELETE FROM inventoryitems WHERE inventoryID = $1",
+            );
+            sqlx::query(&q)
                 .bind(*id)
                 .execute(&mut *tx)
                 .await?;
@@ -331,7 +373,11 @@ impl InventoryStore {
     pub async fn move_items(&self, item_ids: &[&str], dest_ids: &[&str]) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
         for (id, dest) in item_ids.iter().zip(dest_ids.iter()) {
-            sqlx::query("UPDATE inventoryitems SET parentFolderID = $1 WHERE inventoryID = $2")
+            let q = crate::portable::sql(
+                &self.pool,
+                "UPDATE inventoryitems SET parentFolderID = $1 WHERE inventoryID = $2",
+            );
+            sqlx::query(&q)
                 .bind(*dest)
                 .bind(*id)
                 .execute(&mut *tx)
@@ -349,7 +395,8 @@ impl InventoryStore {
             "SELECT {ITEM_COLS} FROM inventoryitems WHERE avatarID = $1 AND invType = 21 \
              AND (flags & 1) = 1"
         );
-        Ok(sqlx::query_as::<_, InventoryItemRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, InventoryItemRow>(&q)
             .bind(agent_id)
             .fetch_all(&self.pool)
             .await?)
@@ -361,14 +408,16 @@ impl InventoryStore {
         principal_id: &str,
         asset_id: &str,
     ) -> Result<i32, DataError> {
-        let rows: Vec<(i64,)> = sqlx::query_as(
+        let q = crate::portable::sql(
+            &self.pool,
             "SELECT COALESCE(inventoryCurrentPermissions, 0) FROM inventoryitems \
              WHERE avatarID = $1 AND assetID = $2",
-        )
-        .bind(principal_id)
-        .bind(asset_id)
-        .fetch_all(&self.pool)
-        .await?;
+        );
+        let rows: Vec<(i64,)> = sqlx::query_as(&q)
+            .bind(principal_id)
+            .bind(asset_id)
+            .fetch_all(&self.pool)
+            .await?;
         Ok(rows.into_iter().fold(0i64, |acc, (p,)| acc | p) as i32)
     }
 

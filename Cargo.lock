@@ -4812,6 +4812,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "sqlx",
  "tokio",
  "toml 0.8.2",
  "tracing",
@@ -4968,6 +4969,7 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "uuid",
+ "welkin-archive",
  "welkin-caps",
  "welkin-config",
  "welkin-data",
@@ -4982,6 +4984,7 @@ dependencies = [
  "welkin-script-compiler",
  "welkin-script-vm",
  "welkin-services",
+ "welkin-types",
 ]
 
 [[package]]

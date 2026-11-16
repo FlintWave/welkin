@@ -194,10 +194,10 @@ impl ChatModule {
     }
 
     /// Returns `true` if the agent is currently frozen (unable to chat).
-    ///
-    /// Stub — always returns `false`.
-    pub fn is_frozen(&self, _agent_id: Uuid) -> bool {
-        false
+    pub fn is_frozen(&self, agent_id: Uuid) -> bool {
+        self.scene
+            .as_ref()
+            .map_or(false, |scene| !scene.egress.is_connected(agent_id))
     }
 }
 
@@ -246,5 +246,55 @@ impl RegionModule for ChatModule {
     fn close(&mut self) -> Result<(), ModuleError> {
         self.scene = None;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_hat_mod_rs_chatmodule_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn is_frozen_false_without_scene() {
+        let module = ChatModule {
+            enabled: true,
+            whisper_distance: 10,
+            say_distance: 20,
+            shout_distance: 100,
+            admin_prefix: "/".to_string(),
+            scene: None,
+        };
+
+        assert!(!module.is_frozen(Uuid::new_v4()));
+    }
+
+    #[test]
+    fn is_frozen_reflects_egress_connection() {
+
+        let mut module = ChatModule {
+            enabled: true,
+            whisper_distance: 10,
+            say_distance: 20,
+            shout_distance: 100,
+            admin_prefix: "/".to_string(),
+            scene: None,
+        };
+
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+
+        let _ = module.add_region(&scene);
+
+        let agent = Uuid::new_v4();
+        assert!(module.is_frozen(agent));
+
+        rec.connect(agent);
+        assert!(!module.is_frozen(agent));
+
+        rec.disconnect(agent);
+        assert!(module.is_frozen(agent));
     }
 }

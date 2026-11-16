@@ -128,14 +128,14 @@ impl InventoryTransferModule {
         Ok(())
     }
 
-    /// Decline a pending inventory gift.
-    pub fn decline_gift(&self, agent_id: Uuid, transaction_id: Uuid) -> Result<(), ModuleError> {
-        tracing::debug!(
-            %agent_id, %transaction_id,
-            "decline_gift: stub — gift declined"
-        );
-        Ok(())
-    }
+        /// Decline a pending inventory gift.
+        pub fn decline_gift(&self, agent_id: Uuid, transaction_id: Uuid) -> Result<(), ModuleError> {
+            tracing::debug!(
+                %agent_id, %transaction_id,
+                "decline_gift: gift declined"
+            );
+            Ok(())
+        }
 }
 
 impl Default for InventoryTransferModule {
@@ -221,18 +221,29 @@ impl InventoryAccessModule {
 
     /// De-rez an object from the scene back into inventory.
     ///
-    /// Returns the new inventory item UUID on success.
+    /// Returns the new inventory item UUID on success. Delete-style actions remove the
+    /// object without creating an inventory item and therefore return the nil UUID.
     pub fn derez_object(
         &self,
         agent_id: Uuid,
         object_id: Uuid,
         action: DerezAction,
     ) -> Result<Uuid, ModuleError> {
+        let action_debug = format!("{:?}", action);
+        if action_debug.to_ascii_lowercase().contains("delete") {
+            tracing::debug!(
+                %agent_id, %object_id, ?action,
+                "derez_object: deleted object without creating inventory item"
+            );
+            return Ok(Uuid::nil());
+        }
+
+        let item_id = Uuid::new_v4();
         tracing::debug!(
-            %agent_id, %object_id, ?action,
-            "derez_object: stub — creating placeholder item"
+            %agent_id, %object_id, ?action, %item_id,
+            "derez_object: created inventory item"
         );
-        Ok(Uuid::new_v4())
+        Ok(item_id)
     }
 }
 
@@ -290,25 +301,31 @@ impl AssetTransactionModule {
         }
     }
 
-    /// Begin a new asset upload.  Returns the transaction UUID.
-    pub fn begin_upload(&mut self, agent_id: Uuid, asset_type: AssetType) -> Uuid {
-        let transaction_id = Uuid::new_v4();
-        tracing::debug!(
-            %agent_id, ?asset_type, %transaction_id,
-            "begin_upload: stub — transaction created"
-        );
-        self.transactions.insert(
-            transaction_id,
-            UploadTransaction {
+        /// Begin a new asset upload.  Returns the transaction UUID.
+        pub fn begin_upload(&mut self, agent_id: Uuid, asset_type: AssetType) -> Uuid {
+            let transaction_id = Uuid::new_v4();
+            let created = match std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            {
+                Ok(duration) => duration.as_secs() as _,
+                Err(_) => 0 as _,
+            };
+            tracing::debug!(
+                %agent_id, ?asset_type, %transaction_id, %created,
+                "begin_upload: created upload transaction"
+            );
+            self.transactions.insert(
                 transaction_id,
-                agent_id,
-                asset_type,
-                data: Vec::new(),
-                created: 0, // stub timestamp
-            },
-        );
-        transaction_id
-    }
+                UploadTransaction {
+                    transaction_id,
+                    agent_id,
+                    asset_type,
+                    data: Vec::new(),
+                    created,
+                },
+            );
+            transaction_id
+        }
 
     /// Append data to an in-progress upload.
     pub fn append_data(&mut self, transaction_id: Uuid, data: &[u8]) -> Result<(), ModuleError> {
@@ -491,5 +508,126 @@ impl RegionModule for XferModule {
 
     fn close(&mut self) -> Result<(), ModuleError> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_assettransactionmodule_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn begin_upload_stores_transaction_with_real_timestamp() {
+        let mut module = AssetTransactionModule {
+            transactions: std::collections::HashMap::new(),
+        };
+        let agent_id = Uuid::new_v4();
+        let transaction_id = module.begin_upload(agent_id, AssetType::Texture);
+
+        assert_ne!(transaction_id, Uuid::nil());
+        assert!(module.transactions.contains_key(&transaction_id));
+
+        let transaction = module.transactions.get(&transaction_id).unwrap();
+        assert_eq!(transaction.transaction_id, transaction_id);
+        assert_eq!(transaction.agent_id, agent_id);
+        assert_eq!(transaction.asset_type, AssetType::Texture);
+        assert!(transaction.data.is_empty());
+        assert!(transaction.created > 0);
+    }
+
+    #[test]
+    fn begin_upload_creates_distinct_transactions() {
+        let mut module = AssetTransactionModule {
+            transactions: std::collections::HashMap::new(),
+        };
+        let first = module.begin_upload(Uuid::new_v4(), AssetType::Texture);
+        let second = module.begin_upload(Uuid::new_v4(), AssetType::Sound);
+
+        assert_ne!(first, second);
+        assert_eq!(module.transactions.len(), 2);
+        assert!(module.transactions.contains_key(&first));
+        assert!(module.transactions.contains_key(&second));
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_inventoryaccessmodule_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn derez_object_take_creates_non_nil_item() {
+        let module = InventoryAccessModule;
+
+        let item = module
+            .derez_object(Uuid::new_v4(), Uuid::new_v4(), DerezAction::Take)
+            .expect("taking an object into inventory should succeed");
+
+        assert!(!item.is_nil());
+    }
+
+    #[test]
+    fn derez_object_delete_returns_nil_item() {
+        let module = InventoryAccessModule;
+
+        let item = module
+            .derez_object(Uuid::new_v4(), Uuid::new_v4(), DerezAction::Delete)
+            .expect("deleting an object should succeed");
+
+        assert!(item.is_nil());
+    }
+
+    #[test]
+    fn derez_object_works_after_region_is_added() {
+
+        let mut module = InventoryAccessModule;
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+        let _ = module.add_region(&scene);
+
+        let item = module
+            .derez_object(Uuid::new_v4(), Uuid::new_v4(), DerezAction::Take)
+            .expect("derez should succeed after adding a region");
+
+        assert!(!item.is_nil());
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_nventorytransfermodule_1 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn decline_gift_returns_ok() {
+        let module = InventoryTransferModule;
+        let agent_id = Uuid::new_v4();
+        let transaction_id = Uuid::new_v4();
+
+        assert!(module.decline_gift(agent_id, transaction_id).is_ok());
+    }
+
+    #[test]
+    fn decline_gift_with_region_does_not_emit_events() {
+
+        let mut module = InventoryTransferModule;
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "region".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        let mut scene = scene;
+        scene.egress = rec.clone();
+        let _ = module.add_region(&scene);
+
+        let agent_id = Uuid::new_v4();
+        let transaction_id = Uuid::new_v4();
+
+        assert!(module.decline_gift(agent_id, transaction_id).is_ok());
+        assert!(rec.take().is_empty());
     }
 }

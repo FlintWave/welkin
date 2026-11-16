@@ -11,7 +11,8 @@ before the project is anywhere near production-ready.
 
 - **Grid login**: ROBUST grid services (asset, inventory, authentication,
   user-account, grid-info, avatar, presence, friends, map) accept viewer
-  logins. Aurora Viewer and Firestorm both connect successfully.
+  logins. Firestorm connects successfully. An Aurora Viewer connection is
+  reported but not recorded.
 - **Region simulator**: a single region loads, sends terrain and object data to
   viewers, and handles avatar movement (walk, run, fly, jump, fall, crouch).
 - **Terrain**: real DCT-based LayerData encoding, terraform brushes (raise,
@@ -28,7 +29,8 @@ before the project is anywhere near production-ready.
   stored notices, membership-gated queries, and per-avatar task queues.
 - **OAR loading**: `load oar <file>` console command imports assets, objects,
   and .r32 terrain from OpenSim OAR archives.
-- **Default assets**: 5,683 default asset sets seeded at ROBUST startup.
+- **Default assets**: default avatar assets loaded from user-supplied
+  OpenSimulator asset sets at ROBUST startup (the repo ships no assets).
 - **Parcels**: ParcelProperties sent via both UDP and event queue (modern
   viewers need the event queue path for fly permissions).
 - **Animations**: walk, run, stand, sit, jump, fall, crouch, crouchwalk, and
@@ -36,7 +38,7 @@ before the project is anywhere near production-ready.
 - **Instant messaging**: P2P IM relay between agents; session IDs computed
   correctly (XOR of both agent IDs, not leaked sender session).
 - **Bot testing**: multi-bot LibreMetaverse harness (login, chat, IM, friend
-  requests, group invites, teleport, wandering).
+  requests, group invites, wandering).
 - **CI**: GitHub Actions running `cargo clippy -D warnings` and `cargo test`.
 - **Tests**: 2,688 passing (0 failures, 2 ignored).
 
@@ -77,7 +79,7 @@ Notable gaps:
   appearance updates) are silently dropped at runtime.
 - **Postgres/MySQL**: SQLite is the only tested backend. Placeholder syntax is
   ported but the column types have known issues (#79).
-- **Web UI**: none. Configuration is INI files and a console REPL.
+- **Web UI**: none. Configuration is TOML files and a console REPL.
 
 ### Known limits
 
@@ -101,6 +103,6 @@ See docs/quick-start.md for setup and first login.
 ### Stats
 
 - 527 commits over 3 days (project started 2026-11-13)
-- 26 crates, ~198,000 lines of Rust
+- 25 crates in the workspace plus a standalone desktop companion, ~198,000 lines of Rust
 - 2,688 tests passing
 - LGPL-3.0-or-later
