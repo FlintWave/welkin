@@ -19,6 +19,8 @@ pub struct AccountsServiceState {
     pub store: Arc<UserAccountStore>,
     pub auth_store: Arc<AuthStore>,
     pub inventory_store: Arc<InventoryStore>,
+    /// When false the `createuser` method is refused (config `[UserAccountService] AllowCreateUser`).
+    pub allow_create_user: bool,
 }
 
 pub fn router(state: AccountsServiceState) -> Router {
@@ -275,8 +277,11 @@ async fn handle_accounts(State(state): State<AccountsServiceState>, body: Bytes)
                 }
             }
         }
-        // TODO: gate with AllowCreateUser config
         "createuser" => {
+            if !state.allow_create_user {
+                tracing::warn!("createuser refused: AllowCreateUser is false");
+                return result_fail();
+            }
             let first = f.str("FirstName").to_string();
             let last = f.str("LastName").to_string();
             let password = f.str("Password").to_string();

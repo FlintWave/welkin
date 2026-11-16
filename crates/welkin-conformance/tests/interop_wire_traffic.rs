@@ -441,6 +441,7 @@ fn build_router(pool: &sqlx::AnyPool) -> axum::Router {
             store: accounts_store.clone(),
             auth_store: auth_store.clone(),
             inventory_store: inv_store.clone(),
+            allow_create_user: true,
         }))
         .merge(welkin_services::friends::router(FriendsServiceState {
             store: friends_store.clone(),
