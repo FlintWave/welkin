@@ -114,7 +114,7 @@ correct result, not when the code exists.
 | Item | Behavior | Correct behavior |
 |---|---|---|
 | AgentSit | Logs "confirmed sit", does nothing | Update presence to seated, parent to sit target, stop movement |
-| ObjectBuy | Sends fake MoneyBalanceReply | Transfer ownership, debit/credit accounts |
+| ObjectBuy | RESOLVED for delivery (618651f): sale type and price are checked and the object goes to the buyer's inventory; the sample economy charges nothing | Transfer ownership, debit/credit accounts |
 | HomeLocation POST | Returns success, never persists | Store home location in user profile |
 | NewFileAgentInventory | Returns random UUIDs | Store uploaded asset, create inventory item |
 | UpdateNotecardAgentInventory | Returns random UUID | Store notecard content |

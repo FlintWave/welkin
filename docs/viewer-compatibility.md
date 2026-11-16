@@ -40,7 +40,11 @@ Working:
   and sends the invitee an instant message. The invitee can accept, which adds
   them to the group and refreshes their group state, or decline. A refused
   invitation shows the inviter "Unable to invite that agent (no permission, or
-  already a member)."
+  already a member)." The region logs a failed invitation lookup.
+- If you test invitations with a LibreMetaverse bot, note that LibreMetaverse
+  declines a group invitation unless the bot's `GroupInvitation` handler sets
+  `Accept`. An earlier failure reported as "accept does not add the member" was
+  the test harness; accepting on the server works.
 - The group founder holds the Owner role only, not Owner and Officer both.
 - Members can manage the group from the viewer's group window: create, update
   and delete roles (including their powers), assign members to roles or remove
@@ -406,6 +410,23 @@ the scene. The permissions module must allow the action.
 - The item's permissions follow OpenSimulator's rules: the owner keeps the
   object's permissions, and anyone else gets them cut down to the next-owner
   permissions.
+
+Buying an object (`ObjectBuy`): the region checks the sale and, if it passes,
+puts the object in the buyer's inventory in the folder the buyer chose, and sends
+the new item to the buyer's viewer. These behaviours come from the code and its
+tests, not a live viewer run.
+
+- The sale type and price in the request must match the object. The region
+  refuses an object that is not for sale, a request whose sale type differs from
+  the object's, and a request whose price differs from the object's price.
+- A copy sale gives the buyer a copy and the object stays in the scene. An
+  original sale moves the object itself: it is saved into the buyer's inventory
+  and removed from the scene. Contents sales are not supported and are refused.
+- When the region refuses a purchase, the buyer sees the alert "Unable to buy:
+  <reason>." (for example "not for sale" or "price changed"), and the region logs
+  the refusal.
+- No money moves. The sample economy charges nothing, so a purchase is free
+  whatever the price.
 
 Attachments: an attachment is an object worn by an avatar.
 
