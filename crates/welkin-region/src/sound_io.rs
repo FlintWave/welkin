@@ -171,81 +171,31 @@ pub async fn relay_sound(
                 master,
                 slave,
             } => {
-                if let Some((group_uuid, _position, owner_id)) =
-                    scene.with_object(&prim_id, |g| (g.uuid(), g.position(), g.root_part().owner_id))
-                {
-                    let flags = loop_flags(master, slave);
-                    let _ = scene.with_object_mut(&prim_id, |g| {
-                        let p = g.root_part_mut();
-                        p.sound_id = sound_id;
-                        p.sound_gain = volume as f32;
-                        p.sound_flags = flags;
-                    });
-
-                    let msg = AttachedSound {
-                        data_block: attached_sound::DataBlock {
-                            sound_id,
-                            object_id: group_uuid,
-                            owner_id,
-                            gain: volume as f32,
-                            flags,
-                        },
-                    };
-
-                    let snapshot: Vec<(
-                        std::net::SocketAddr,
-                        std::sync::Arc<tokio::sync::Mutex<welkin_net::server::ClientSession>>,
-                    )> = {
-                        let g = clients.read().await;
-                        g.iter().map(|(a, c)| (*a, c.clone())).collect()
-                    };
-
-                    for (addr, client) in snapshot {
-                        let pkt = {
-                            let mut s = client.lock().await;
-                            s.circuit.send_msg(&msg, true).0
-                        };
-                        let _ = socket.send_to(&pkt, addr).await;
+                let _ = scene.with_object_mut(&prim_id, |g| {
+                    let p = g.root_part_mut();
+                    p.sound_id = sound_id;
+                    p.sound_gain = volume as f32;
+                    p.sound_flags = loop_flags_with_queue(master, slave, p.sound_queueing);
+                    if p.sound_radius == 0.0 {
+                        p.sound_radius = 100.0;
                     }
+                });
+
+                if let Some(group) = scene.get_object(&prim_id) {
+                    crate::broadcast_full_object_update(&group, scene.region_info.region_handle, socket.as_ref(), clients).await;
                 }
             }
 
             welkin_script_vm::builtins::SoundCommand::StopSound { prim_id } => {
-                if let Some((group_uuid, _position, owner_id)) =
-                    scene.with_object(&prim_id, |g| (g.uuid(), g.position(), g.root_part().owner_id))
-                {
-                    let _ = scene.with_object_mut(&prim_id, |g| {
-                        let p = g.root_part_mut();
-                        p.sound_id = uuid::Uuid::nil();
-                        p.sound_gain = 0.0;
-                        p.sound_flags = 0;
-                    });
+                let _ = scene.with_object_mut(&prim_id, |g| {
+                    let p = g.root_part_mut();
+                    p.sound_id = uuid::Uuid::nil();
+                    p.sound_flags = 0x20;
+                    p.sound_gain = 0.0;
+                });
 
-                    let msg = AttachedSound {
-                        data_block: attached_sound::DataBlock {
-                            sound_id: uuid::Uuid::nil(),
-                            object_id: group_uuid,
-                            owner_id,
-                            gain: 0.0,
-                            flags: 0x20,
-                        },
-                    };
-
-                    let snapshot: Vec<(
-                        std::net::SocketAddr,
-                        std::sync::Arc<tokio::sync::Mutex<welkin_net::server::ClientSession>>,
-                    )> = {
-                        let g = clients.read().await;
-                        g.iter().map(|(a, c)| (*a, c.clone())).collect()
-                    };
-
-                    for (addr, client) in snapshot {
-                        let pkt = {
-                            let mut s = client.lock().await;
-                            s.circuit.send_msg(&msg, true).0
-                        };
-                        let _ = socket.send_to(&pkt, addr).await;
-                    }
+                if let Some(group) = scene.get_object(&prim_id) {
+                    crate::broadcast_full_object_update(&group, scene.region_info.region_handle, socket.as_ref(), clients).await;
                 }
             }
 
@@ -399,6 +349,10 @@ pub fn loop_flags(master: bool, slave: bool) -> u8 {
     flags
 }
 
+pub fn loop_flags_with_queue(master: bool, slave: bool, queueing: bool) -> u8 {
+    loop_flags(master, slave) | if queueing { 0x10 } else { 0 }
+}
+
 pub fn play_flags(queueing: bool) -> u8 {
     if queueing {
         0x10
@@ -533,5 +487,15 @@ mod tests {
     fn in_preload_range_boundary() {
         assert!(!in_preload_range(10000.0, 50.0));
         assert!(in_preload_range(9999.999, 50.0));
+    }
+
+    #[test]
+    fn loop_flags_with_queue_false() {
+        assert_eq!(loop_flags_with_queue(false, false, false), loop_flags(false, false));
+    }
+
+    #[test]
+    fn loop_flags_with_queue_true() {
+        assert_eq!(loop_flags_with_queue(false, false, true), loop_flags(false, false) | 0x10);
     }
 }
