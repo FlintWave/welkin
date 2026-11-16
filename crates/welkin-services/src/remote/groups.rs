@@ -1756,4 +1756,39 @@ mod tests {
         assert_eq!(names, vec!["Everyone", "Owners"]);
         assert!(!roles.iter().any(|role| role.name == "Officers"));
     }
+
+    #[tokio::test]
+    async fn set_active_role_requires_holding_the_role() {
+        let (conn, _guard) = setup().await;
+        let founder = Uuid::new_v4();
+        let member = Uuid::new_v4();
+        let group = GroupRecord {
+            group_id: Uuid::nil(),
+            group_name: "Test Group".to_string(),
+            charter: "charter".to_string(),
+            insignia_id: Uuid::new_v4(),
+            founder_id: founder,
+            membership_fee: 42,
+            open_enrollment: true,
+            show_in_list: true,
+            allow_publish: false,
+            mature_publish: true,
+            owner_role_id: Uuid::nil(),
+            member_count: 0,
+            role_count: 0,
+        };
+
+        let created = conn.create_group(founder, &group).await.unwrap();
+        conn.add_agent_to_group(founder, member, created.group_id, Uuid::nil(), "").await.unwrap();
+
+        conn.set_active(member, member, created.group_id, "ROLE", Some(created.owner_role_id)).await.unwrap();
+        let memberships = conn.get_membership(member, Some(created.group_id)).await.unwrap();
+        assert_eq!(memberships.len(), 1);
+        assert_ne!(memberships[0].active_role, created.owner_role_id);
+
+        conn.set_active(founder, founder, created.group_id, "ROLE", Some(created.owner_role_id)).await.unwrap();
+        let memberships = conn.get_membership(founder, Some(created.group_id)).await.unwrap();
+        assert_eq!(memberships.len(), 1);
+        assert_eq!(memberships[0].active_role, created.owner_role_id);
+    }
 }

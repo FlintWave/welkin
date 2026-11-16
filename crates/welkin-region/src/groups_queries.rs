@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::groups_io::{GroupsCtx, name_bytes};
 use welkin_msg::msgs;
 
-const MEMBER_VISIBLE: u64 = 1 << 50;
+const MEMBER_VISIBLE: u64 = welkin_data::groups::GroupPowers::MEMBER_VISIBLE.bits();
 
 #[derive(Debug)]
 pub enum QueryOut {

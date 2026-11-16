@@ -53,13 +53,13 @@ bitflags! {
         const START_PROPOSAL        = 1 << 44;
         const VOTE_ON_PROPOSAL      = 1 << 45;
         const RETURN_GROUP_OWNED    = 1 << 48;
-        const HOST_EVENT            = 1 << 49;
-        const MEMBER_VISIBLE        = 1 << 50;
-        const JOIN_CHAT             = 1 << 51;
-        const ALLOW_ENVIRONMENT     = 1 << 52;
-        const EXPERIENCE_ADMIN      = 1 << 53;
-        const EXPERIENCE_CREATOR    = 1 << 54;
-        const GROUP_BAN_ACCESS      = 1 << 55;
+        const HOST_EVENT            = 1 << 41;
+        const MEMBER_VISIBLE        = 1 << 47;
+        const JOIN_CHAT             = 1 << 16;
+        const ALLOW_ENVIRONMENT     = 1 << 46;
+        const EXPERIENCE_ADMIN      = 1 << 49;
+        const EXPERIENCE_CREATOR    = 1 << 50;
+        const GROUP_BAN_ACCESS      = 1 << 51;
 
         const DEFAULT_EVERYONE = Self::ALLOW_SET_HOME.bits()
             | Self::ACCOUNTABLE.bits()
@@ -1103,6 +1103,84 @@ mod tests {
 
         drop(store);
         drop(pool);
+    }
+
+    #[test]
+    fn group_powers_bits_match_the_protocol() {
+        let table: [(&str, GroupPowers, u32); 51] = [
+            ("INVITE", GroupPowers::INVITE, 1),
+            ("EJECT", GroupPowers::EJECT, 2),
+            ("CHANGE_OPTIONS", GroupPowers::CHANGE_OPTIONS, 3),
+            ("CREATE_ROLE", GroupPowers::CREATE_ROLE, 4),
+            ("DELETE_ROLE", GroupPowers::DELETE_ROLE, 5),
+            ("ROLE_PROPERTIES", GroupPowers::ROLE_PROPERTIES, 6),
+            ("ASSIGN_MEMBER_LIMITED", GroupPowers::ASSIGN_MEMBER_LIMITED, 7),
+            ("ASSIGN_MEMBER", GroupPowers::ASSIGN_MEMBER, 8),
+            ("REMOVE_MEMBER", GroupPowers::REMOVE_MEMBER, 9),
+            ("CHANGE_ACTIONS", GroupPowers::CHANGE_ACTIONS, 10),
+            ("CHANGE_IDENTITY", GroupPowers::CHANGE_IDENTITY, 11),
+            ("LAND_DEED", GroupPowers::LAND_DEED, 12),
+            ("LAND_RELEASE", GroupPowers::LAND_RELEASE, 13),
+            ("LAND_SET_SALE", GroupPowers::LAND_SET_SALE, 14),
+            ("LAND_DIVIDE_JOIN", GroupPowers::LAND_DIVIDE_JOIN, 15),
+            ("JOIN_CHAT", GroupPowers::JOIN_CHAT, 16),
+            ("FIND_PLACES", GroupPowers::FIND_PLACES, 17),
+            ("LAND_CHANGE_IDENTITY", GroupPowers::LAND_CHANGE_IDENTITY, 18),
+            ("SET_LANDING_POINT", GroupPowers::SET_LANDING_POINT, 19),
+            ("CHANGE_MEDIA", GroupPowers::CHANGE_MEDIA, 20),
+            ("LAND_EDIT", GroupPowers::LAND_EDIT, 21),
+            ("LAND_OPTIONS", GroupPowers::LAND_OPTIONS, 22),
+            ("ALLOW_EDIT_LAND", GroupPowers::ALLOW_EDIT_LAND, 23),
+            ("ALLOW_FLY", GroupPowers::ALLOW_FLY, 24),
+            ("ALLOW_REZ", GroupPowers::ALLOW_REZ, 25),
+            ("ALLOW_LANDMARK", GroupPowers::ALLOW_LANDMARK, 26),
+            ("ALLOW_VOICE_CHAT", GroupPowers::ALLOW_VOICE_CHAT, 27),
+            ("ALLOW_SET_HOME", GroupPowers::ALLOW_SET_HOME, 28),
+            ("LAND_MANAGE_ALLOWED", GroupPowers::LAND_MANAGE_ALLOWED, 29),
+            ("LAND_MANAGE_BANNED", GroupPowers::LAND_MANAGE_BANNED, 30),
+            ("LAND_MANAGE_PASSES", GroupPowers::LAND_MANAGE_PASSES, 31),
+            ("LAND_EJECT_AND_FREEZE", GroupPowers::LAND_EJECT_AND_FREEZE, 32),
+            ("RETURN_GROUP_SET", GroupPowers::RETURN_GROUP_SET, 33),
+            ("RETURN_NON_GROUP", GroupPowers::RETURN_NON_GROUP, 34),
+            ("LAND_GARDENING", GroupPowers::LAND_GARDENING, 35),
+            ("DEED_OBJECT", GroupPowers::DEED_OBJECT, 36),
+            ("MODERATE_CHAT", GroupPowers::MODERATE_CHAT, 37),
+            ("OBJECT_MANIPULATE", GroupPowers::OBJECT_MANIPULATE, 38),
+            ("OBJECT_SET_FOR_SALE", GroupPowers::OBJECT_SET_FOR_SALE, 39),
+            ("ACCOUNTABLE", GroupPowers::ACCOUNTABLE, 40),
+            ("HOST_EVENT", GroupPowers::HOST_EVENT, 41),
+            ("SEND_NOTICES", GroupPowers::SEND_NOTICES, 42),
+            ("RECEIVE_NOTICES", GroupPowers::RECEIVE_NOTICES, 43),
+            ("START_PROPOSAL", GroupPowers::START_PROPOSAL, 44),
+            ("VOTE_ON_PROPOSAL", GroupPowers::VOTE_ON_PROPOSAL, 45),
+            ("ALLOW_ENVIRONMENT", GroupPowers::ALLOW_ENVIRONMENT, 46),
+            ("MEMBER_VISIBLE", GroupPowers::MEMBER_VISIBLE, 47),
+            ("RETURN_GROUP_OWNED", GroupPowers::RETURN_GROUP_OWNED, 48),
+            ("EXPERIENCE_ADMIN", GroupPowers::EXPERIENCE_ADMIN, 49),
+            ("EXPERIENCE_CREATOR", GroupPowers::EXPERIENCE_CREATOR, 50),
+            ("GROUP_BAN_ACCESS", GroupPowers::GROUP_BAN_ACCESS, 51),
+        ];
+
+        for (name, power, shift) in table {
+            assert_eq!(power.bits(), 1u64 << shift, "{name}");
+        }
+
+        let mut seen = 0u64;
+        for (name, power, _) in &table {
+            assert_eq!(seen & power.bits(), 0, "duplicate bit for {name}");
+            seen |= power.bits();
+        }
+
+        assert_eq!(GroupPowers::NONE.bits(), 0);
+    }
+
+    #[test]
+    fn group_powers_composites_are_pinned() {
+        // OpenSim's DefaultEveryonePowers/OfficersPowers/OwnerPowers computed
+        // with the corrected bit positions.
+        assert_eq!(GroupPowers::DEFAULT_EVERYONE.bits(), 62672565501952);
+        assert_eq!(GroupPowers::OFFICERS.bits(), 560750921775310);
+        assert_eq!(GroupPowers::OWNERS.bits(), 4503599627370494);
     }
 
     #[test]
