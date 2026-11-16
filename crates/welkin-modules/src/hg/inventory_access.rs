@@ -122,16 +122,14 @@ impl HGAssetMapper {
 /// normal inventory service; foreign users go through the HG inventory
 /// connector which presents only their Suitcase folder.
 pub struct HGInventoryBroker {
-    local_grid_uri: String,
     /// Maps foreign user UUIDs to their home grid's inventory service URL.
     foreign_user_inventory_urls: HashMap<Uuid, String>,
     hg_inventory_service: Option<Arc<dyn HypergridInventoryService>>,
 }
 
 impl HGInventoryBroker {
-    pub fn new(local_grid_uri: &str) -> Self {
+    pub fn new(_local_grid_uri: &str) -> Self {
         Self {
-            local_grid_uri: local_grid_uri.to_string(),
             foreign_user_inventory_urls: HashMap::new(),
             hg_inventory_service: None,
         }
