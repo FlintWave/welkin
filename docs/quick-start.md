@@ -81,9 +81,9 @@ Start the grid services first, then the region simulator:
 ./target/release/welkin-region --config welkin.toml
 ```
 
-On first run the web portal at `http://localhost:9000/` walks you through
-database setup, creating the first user account, and placing the region on
-the grid map.
+The web portal and its first-run wizard do not work yet; the portal crate is a
+scaffold (see [Grid Portal](architecture.md#grid-portal)). Account creation and
+region placement through the portal are not available.
 
 ## Connect a viewer
 
@@ -93,7 +93,7 @@ Point your viewer at the login URI `http://127.0.0.1:8002/`:
 - Firestorm: open Grid Manager, add a new grid with the login URI above,
   then select it and log in
 
-Log in with the user account you created during setup.
+Log in with an existing user account on the grid.
 
 ## Standalone vs external grid
 

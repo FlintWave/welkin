@@ -6,6 +6,11 @@ The grid-portal change is accepted (`8b685e0`). All 26 tasks are done. It adds
 a browser portal, an installer, a first-run wizard and an optional desktop
 companion, so a grid can be installed with one command and run from a browser.
 
+> [!WARNING]
+> Status update: the portal crate is a scaffold. Most handlers return fake
+> success and no binary mounts it. "Accepted" here means the planned tasks were
+> ticked, not that the portal works.
+
 ## What was built
 
 The first feature commit (`ddba6d0`) added 2,974 lines in 21 files: the
