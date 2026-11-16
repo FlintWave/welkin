@@ -420,7 +420,11 @@ confirmed in a live viewer session.
   jump height does not depend on how often the viewer sends AgentUpdate.
 - A walking avatar that is in the air plays the JUMP animation while it rises and
   the FALLDOWN animation while it falls. The region counts an avatar as airborne
-  when it is not flying and is more than 0.1 m above its standing height.
+  when it is not flying and is more than 0.1 m above its standing height. On
+  the ground, holding the crouch control plays CROUCH, or CROUCHWALK when the
+  avatar is also moving. The region logs each animation change (control flags,
+  flying state and animation) at info level, which helps when you diagnose a
+  flying problem.
 - Physical prims move under the Rapier physics engine. The region copies the
   simulated position and motion back into the scene and sends terse updates to
   viewers, including a final update with zero velocity when an object comes to
