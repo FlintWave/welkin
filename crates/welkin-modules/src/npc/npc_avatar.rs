@@ -321,9 +321,17 @@ impl NPCAvatar {
                 });
             }
         }
-    /// Stub: no-op.
+    /// Send an animation to this NPC's visible presence.
+    ///
+    /// The simplified welkin model does not carry an animation-specific client
+    /// event; animation playback is driven by the owning scene presence and there
+    /// is no additional local state to update here.
     pub fn send_animation(&self, _anim_id: Uuid, _sequence: i32) {}
-    /// Stub: no-op.
+    /// Stop an animation on this NPC's visible presence.
+    ///
+    /// The simplified welkin model does not carry an animation-specific client
+    /// event; animation playback is driven by the owning scene presence and there
+    /// is no additional local state to update here.
     pub fn stop_animation(&self, _anim_id: Uuid) {}
     /// Stub: no-op.
     pub fn send_coarse_location_update(&self, _users: &[Uuid], _positions: &[[f32; 3]]) {}
@@ -786,5 +794,115 @@ mod stub_tests_c_avatar_rs_npcavatar_1 {
             }
             _ => panic!("unexpected egress event"),
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_c_avatar_rs_npcavatar_2 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn send_animation_does_not_panic_without_scene() {
+        let npc = NPCAvatar {
+            first_name: "Test".to_string(),
+            last_name: "Avatar".to_string(),
+            agent_id: Uuid::new_v4(),
+            owner_id: Uuid::new_v4(),
+            start_pos: [0.0; 3],
+            position: [0.0; 3],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            sense_as_agent: false,
+            scene: None,
+            active_group_id: Uuid::nil(),
+            active_group_name: String::new(),
+            active_group_powers: 0,
+            disconnected: false,
+            sitting: false,
+            sit_target: None,
+        };
+
+        npc.send_animation(Uuid::new_v4(), 1);
+    }
+
+    #[test]
+    fn send_animation_does_not_panic_with_scene() {
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+
+        let npc = NPCAvatar {
+            first_name: "Test".to_string(),
+            last_name: "Avatar".to_string(),
+            agent_id: Uuid::new_v4(),
+            owner_id: Uuid::new_v4(),
+            start_pos: [0.0; 3],
+            position: [0.0; 3],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            sense_as_agent: false,
+            scene: Some(scene),
+            active_group_id: Uuid::nil(),
+            active_group_name: String::new(),
+            active_group_powers: 0,
+            disconnected: false,
+            sitting: false,
+            sit_target: None,
+        };
+
+        npc.send_animation(Uuid::new_v4(), 2);
+        assert!(rec.take().is_empty());
+    }
+
+    #[test]
+    fn stop_animation_does_not_panic_without_scene() {
+        let npc = NPCAvatar {
+            first_name: "Test".to_string(),
+            last_name: "Avatar".to_string(),
+            agent_id: Uuid::new_v4(),
+            owner_id: Uuid::new_v4(),
+            start_pos: [0.0; 3],
+            position: [0.0; 3],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            sense_as_agent: false,
+            scene: None,
+            active_group_id: Uuid::nil(),
+            active_group_name: String::new(),
+            active_group_powers: 0,
+            disconnected: false,
+            sitting: false,
+            sit_target: None,
+        };
+
+        npc.stop_animation(Uuid::new_v4());
+    }
+
+    #[test]
+    fn stop_animation_does_not_panic_with_scene() {
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+
+        let npc = NPCAvatar {
+            first_name: "Test".to_string(),
+            last_name: "Avatar".to_string(),
+            agent_id: Uuid::new_v4(),
+            owner_id: Uuid::new_v4(),
+            start_pos: [0.0; 3],
+            position: [0.0; 3],
+            rotation: [0.0, 0.0, 0.0, 1.0],
+            sense_as_agent: false,
+            scene: Some(scene),
+            active_group_id: Uuid::nil(),
+            active_group_name: String::new(),
+            active_group_powers: 0,
+            disconnected: false,
+            sitting: false,
+            sit_target: None,
+        };
+
+        npc.stop_animation(Uuid::new_v4());
+        assert!(rec.take().is_empty());
     }
 }
