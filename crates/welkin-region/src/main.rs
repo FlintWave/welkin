@@ -811,6 +811,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     prim_id,
                     prim_name,
                     owner_id,
+                    region_name: heartbeat_scene.region_info.region_name.clone(),
                     position: [prim_pos.x as f64, prim_pos.y as f64, prim_pos.z as f64],
                     chat_sender: Some(heartbeat_chat_tx.clone()),
                     timer_sender: Some(heartbeat_timer_tx.clone()),

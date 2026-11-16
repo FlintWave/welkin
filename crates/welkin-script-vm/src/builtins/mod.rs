@@ -23,6 +23,9 @@ pub mod control;
 pub mod prim_params;
 pub mod sensor;
 pub mod agent_data;
+pub mod extra_g1;
+pub mod extra_g2;
+pub mod extra_g3;
 pub mod dialogs;
 pub mod sound;
 pub mod string;
@@ -693,6 +696,48 @@ pub struct ScriptContext {
     pub sound_sender: Option<std::sync::mpsc::Sender<SoundCommand>>,
     /// Dialog, URL and text-box requests for the region to show to viewers.
     pub ui_sender: Option<std::sync::mpsc::Sender<dialogs::UiCommand>>,
+    /// Name of the running script (llGetScriptName).
+    pub script_name: String,
+    /// Region name (llGetRegionName).
+    pub region_name: String,
+    /// Start parameter given at rez (llGetStartParameter).
+    pub start_param: i32,
+    /// Prim click action (llSetClickAction).
+    pub click_action: i32,
+    /// Sit text (llSetSitText).
+    pub sit_text: String,
+    /// Touch text.
+    pub touch_text: String,
+    /// Prim mass in kg (llGetMass).
+    pub prim_mass: f64,
+    /// STATUS_* flags set with llSetStatus.
+    pub status_flags: i32,
+    /// Pin for llRemoteLoadScriptPin (llSetRemoteScriptAccessPin).
+    pub remote_script_pin: i32,
+    /// llVolumeDetect enabled.
+    pub volume_detect: bool,
+    /// llPassCollisions mode.
+    pub pass_collisions: i32,
+    /// llCollisionFilter name.
+    pub collision_filter_name: String,
+    /// llCollisionFilter id.
+    pub collision_filter_id: String,
+    /// llCollisionFilter accept flag.
+    pub collision_filter_accept: bool,
+    /// Set by llResetScript; the scheduler resets the script after the event.
+    pub reset_requested: bool,
+    /// Total seconds of llSleep requested by the current event (delay is accounted by the scheduler).
+    pub sleep_requested: f64,
+    /// llSetCameraParams list.
+    pub camera_params: Vec<f64>,
+    /// llSetCameraEyeOffset.
+    pub camera_eye_offset: [f64; 3],
+    /// llSetCameraAtOffset.
+    pub camera_at_offset: [f64; 3],
+    /// llTargetOmega axis (x,y,z) and spinrate.
+    pub target_omega: [f64; 4],
+    /// llRotLookAt/llLookAt target.
+    pub look_at_target: Option<[f64; 3]>,
     /// Account lookups for llRequestAgentData about agents outside the region.
     pub agent_data_sender: Option<std::sync::mpsc::Sender<agent_data::AgentDataRequest>>,
     /// Sender for link commands (create link, break link).
@@ -840,6 +885,27 @@ impl Default for ScriptContext {
             inventory_command_sender: None,
             sound_sender: None,
             ui_sender: None,
+            script_name: String::new(),
+            region_name: String::new(),
+            start_param: 0,
+            click_action: 0,
+            sit_text: String::new(),
+            touch_text: String::new(),
+            prim_mass: 1.0,
+            status_flags: 0,
+            remote_script_pin: 0,
+            volume_detect: false,
+            pass_collisions: 0,
+            collision_filter_name: String::new(),
+            collision_filter_id: String::new(),
+            collision_filter_accept: true,
+            reset_requested: false,
+            sleep_requested: 0.0,
+            camera_params: Vec::new(),
+            camera_eye_offset: [0.0; 3],
+            camera_at_offset: [0.0; 3],
+            target_omega: [0.0; 4],
+            look_at_target: None,
             agent_data_sender: None,
             link_command_sender: None,
             object_command_sender: None,
@@ -869,6 +935,9 @@ pub fn register_all(lua: &mlua::Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result
     communication::register_communication(lua, ctx)?;
     sound::register_sound(lua, ctx)?;
     dialogs::register_dialogs(lua, ctx)?;
+    extra_g1::register_extra_g1(lua, ctx)?;
+    extra_g2::register_extra_g2(lua, ctx)?;
+    extra_g3::register_extra_g3(lua, ctx)?;
     physics::register_physics(lua, ctx)?;
     object::register_object(lua, ctx)?;
     avatar::register_avatar(lua, ctx)?;
