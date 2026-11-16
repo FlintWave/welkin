@@ -91,6 +91,8 @@ pub struct ScenePresence {
     pub animation_sequence: u32,
 
     pub attachments: Vec<(u8, Uuid)>,
+    /// Wearables persisted for this avatar: (wearable_type, texture-or-folder uuid).
+    pub saved_wearables: Vec<(u8, Uuid)>,
     pub speed_multiplier: f32,
 }
 
@@ -134,6 +136,7 @@ impl ScenePresence {
             animation_sequence: 0,
 
             attachments: Vec::new(),
+            saved_wearables: Vec::new(),
             speed_multiplier: 1.0,
         }
     }

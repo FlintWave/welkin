@@ -25,6 +25,10 @@ pub struct RegionInfo {
     pub region_handle: u64,
     pub external_host_name: String,
     pub internal_port: u16,
+    /// Region access level, encoded as the protocol `SimAccess` u8 value.
+    pub region_access: u8,
+    /// Informational region flags for map block responses.
+    pub region_flags: u32,
 }
 
 impl RegionInfo {
@@ -40,9 +44,41 @@ impl RegionInfo {
             region_handle,
             external_host_name: String::new(),
             internal_port: 9000,
+            region_access: 21, // Mature default, matching existing MapBlockRequest behaviour
+            region_flags: 0,
         }
     }
 }
+
+/// Basic map-block information derived from a [`Scene`], so callers such as
+/// `MapBlockRequest` handling no longer need to hardcode placeholder values.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionMapBlock {
+    /// Grid X coordinate (region units).
+    pub x: u16,
+    /// Grid Y coordinate (region units).
+    pub y: u16,
+    /// Human-readable region name.
+    pub name: String,
+    /// Region access level, encoded as the protocol `SimAccess` u8 value.
+    pub access: u8,
+    /// Access flags (alias of [`Self::access`] for callers naming it so).
+    pub access_flags: u8,
+    /// Informational region flags.
+    pub region_flags: u32,
+    /// Number of agents (proxied from presence count).
+    pub agents: u8,
+    /// Agent count (alias of [`Self::agents`]).
+    pub agent_count: u8,
+    /// Region size in X (meters).
+    pub size_x: u16,
+    /// Region size in Y (meters).
+    pub size_y: u16,
+}
+
+/// Alias for [`RegionMapBlock`], matching the alternate naming suggested for the
+/// map provider.
+pub type MapBlockSummary = RegionMapBlock;
 
 #[derive(Debug, Clone)]
 pub struct SceneConfig {
@@ -330,6 +366,25 @@ impl Scene {
 
     pub fn presence_count(&self) -> usize {
         self.presences.read().unwrap().len()
+    }
+
+    /// Return a basic map-block summary for this scene, derived from region info
+    /// and the current presence count (used as an agent-count proxy).
+    pub fn region_map_block_summary(&self) -> RegionMapBlock {
+        let ri = &self.region_info;
+        let agents = self.presence_count().min(u8::MAX as usize) as u8;
+        RegionMapBlock {
+            x: ri.region_loc_x as u16,
+            y: ri.region_loc_y as u16,
+            name: ri.region_name.clone(),
+            access: ri.region_access,
+            access_flags: ri.region_access,
+            region_flags: ri.region_flags,
+            agents,
+            agent_count: agents,
+            size_x: ri.region_size_x as u16,
+            size_y: ri.region_size_y as u16,
+        }
     }
 
     pub fn update_presence_position(&self, uuid: &Uuid, position: Vec3, rotation: Quat) -> bool {
@@ -774,6 +829,50 @@ impl Scene {
         removed
     }
 
+    /// Retrieve the saved wearables for an avatar (wearable_type -> texture or folder uuid).
+    pub fn saved_wearables(&self, agent_id: &Uuid) -> Vec<(u8, Uuid)> {
+        self.presences.read().unwrap().get(agent_id).map(|p| p.saved_wearables.clone()).unwrap_or_default()
+    }
+
+    /// Alias of `saved_wearables`.
+    pub fn wearables_of(&self, agent_id: &Uuid) -> Vec<(u8, Uuid)> {
+        self.saved_wearables(agent_id)
+    }
+
+    /// Alias of `saved_wearables`.
+    pub fn persisted_wearables(&self, agent_id: &Uuid) -> Vec<(u8, Uuid)> {
+        self.saved_wearables(agent_id)
+    }
+
+    /// Alias of `saved_wearables`.
+    pub fn get_saved_wearables(&self, agent_id: &Uuid) -> Vec<(u8, Uuid)> {
+        self.saved_wearables(agent_id)
+    }
+
+    /// Replace the saved wearables for an avatar. Returns false if the avatar is not present.
+    pub fn set_saved_wearables(&self, agent_id: &Uuid, wearables: Vec<(u8, Uuid)>) -> bool {
+        if let Some(p) = self.presences.write().unwrap().get_mut(agent_id) {
+            p.saved_wearables = wearables;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Append/merge one saved wearable (wearable_type -> uuid) for an avatar.
+    pub fn save_wearable(&self, agent_id: &Uuid, wearable_type: u8, uuid: Uuid) -> bool {
+        if let Some(p) = self.presences.write().unwrap().get_mut(agent_id) {
+            if let Some(slot) = p.saved_wearables.iter_mut().find(|(t, _)| *t == wearable_type) {
+                slot.1 = uuid;
+            } else {
+                p.saved_wearables.push((wearable_type, uuid));
+            }
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn get_top_colliders(&self) -> Vec<(u32, f32)> {
         if let Ok(guard) = self.physics.lock()
             && let Some(ref physics) = *guard
@@ -919,6 +1018,7 @@ mod tests {
     use super::*;
     use crate::part::SceneObjectPart;
     use crate::presence::PresenceType;
+    use crate::presence::ScenePresence;
 
     fn test_scene() -> Scene {
         let info = RegionInfo::new("Test Region", 1000, 1000);
@@ -943,6 +1043,27 @@ mod tests {
         assert_eq!(scene.frame_number(), 0);
         assert!(!scene.is_active());
         assert!(!scene.is_shutting_down());
+    }
+
+    #[test]
+    fn region_map_block_summary_reflects_region_and_agent_proxy() {
+        let scene = test_scene();
+        let summary = scene.region_map_block_summary();
+        assert_eq!(summary.x, 1000);
+        assert_eq!(summary.y, 1000);
+        assert_eq!(summary.name, "Test Region");
+        assert_eq!(summary.access, 21);
+        assert_eq!(summary.region_flags, 0);
+        assert_eq!(summary.agents, 0);
+        assert_eq!(summary.agent_count, 0);
+        assert_eq!(summary.size_x, 256);
+        assert_eq!(summary.size_y, 256);
+
+        let presence = ScenePresence::new(Uuid::new_v4(), "A", "B", PresenceType::User);
+        scene.add_presence(presence);
+        let summary = scene.region_map_block_summary();
+        assert_eq!(summary.agents, 1);
+        assert_eq!(summary.agent_count, 1);
     }
 
     fn physical_group(name: &str, position: Vec3) -> SceneObjectGroup {
@@ -1535,4 +1656,27 @@ mod tests {
             assert_eq!(g.time_last_changed, 0);
         });
     }
+    #[test]
+    fn saved_wearables_default_empty_and_roundtrip() {
+        let scene = test_scene();
+        let agent = Uuid::new_v4();
+        let presence = ScenePresence::new(agent, "A", "B", PresenceType::User);
+        scene.add_presence(presence);
+
+        assert!(scene.saved_wearables(&agent).is_empty());
+
+        let t = Uuid::new_v4();
+        assert!(scene.set_saved_wearables(&agent, vec![(4, t)]));
+        assert_eq!(scene.saved_wearables(&agent), vec![(4, t)]);
+        assert_eq!(scene.wearables_of(&agent), vec![(4, t)]);
+        assert_eq!(scene.persisted_wearables(&agent), vec![(4, t)]);
+        assert_eq!(scene.get_saved_wearables(&agent), vec![(4, t)]);
+
+        assert!(scene.save_wearable(&agent, 5, Uuid::nil()));
+        let mut v = scene.saved_wearables(&agent);
+        v.sort();
+        assert_eq!(v.len(), 2);
+    }
+
+
 }

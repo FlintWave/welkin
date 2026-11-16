@@ -210,3 +210,83 @@ impl RegionModule for SampleMoneyModule {
         Ok(())
     }
 }
+
+// ---------------------------------------------------------------------------
+// EconomySummary — region snapshot for EconomyDataRequest
+// ---------------------------------------------------------------------------
+
+/// Lightweight, immutable snapshot of the values a region reports in response
+/// to `EconomyDataRequest`. All inputs come from elsewhere (estate settings,
+/// capacity config, parcel store); this type only bundles them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EconomySummary {
+    /// Price per square meter sourced from `EstateSettings.price_per_meter`.
+    pub price_per_meter: i32,
+    /// Available script capacity sourced from region capacity config.
+    pub available_script_capacity: u32,
+    /// Cost per script run (Linden-style); defaults to 0 (free).
+    pub cost_per_script_run: i32,
+    /// Electron/energy limit reported to clients; defaults to 0.
+    pub electron_limit: u32,
+    /// Number of parcels in the region.
+    pub parcel_count: u32,
+}
+
+impl Default for EconomySummary {
+    fn default() -> Self {
+        Self {
+            price_per_meter: 1,
+            available_script_capacity: 0,
+            cost_per_script_run: 0,
+            electron_limit: 0,
+            parcel_count: 0,
+        }
+    }
+}
+
+impl EconomySummary {
+    pub fn new(price_per_meter: i32, available_script_capacity: u32, parcel_count: u32) -> Self {
+        Self {
+            price_per_meter,
+            available_script_capacity,
+            cost_per_script_run: 0,
+            electron_limit: 0,
+            parcel_count,
+        }
+    }
+}
+
+/// Build an [`EconomySummary`] from estate price-per-meter and region
+/// capacity/parcel counts. Cost-per-script-run and the electron limit default
+/// to zero.
+pub fn build_economy_summary(
+    price_per_meter: i32,
+    available_script_capacity: u32,
+    parcel_count: u32,
+) -> EconomySummary {
+    EconomySummary::new(price_per_meter, available_script_capacity, parcel_count)
+}
+
+#[cfg(test)]
+mod summary_tests {
+    use super::*;
+
+    #[test]
+    fn defaults_cost_and_electron_limit() {
+        let s = build_economy_summary(7, 15000, 4);
+        assert_eq!(s.price_per_meter, 7);
+        assert_eq!(s.available_script_capacity, 15000);
+        assert_eq!(s.parcel_count, 4);
+        assert_eq!(s.cost_per_script_run, 0);
+        assert_eq!(s.electron_limit, 0);
+    }
+
+    #[test]
+    fn overrides_allowed() {
+        let mut s = EconomySummary::new(1, 2, 3);
+        s.cost_per_script_run = 5;
+        s.electron_limit = 9;
+        assert_eq!(s.cost_per_script_run, 5);
+        assert_eq!(s.electron_limit, 9);
+    }
+}

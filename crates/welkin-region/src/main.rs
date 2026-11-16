@@ -278,6 +278,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     let sim_store = std::sync::Arc::new(welkin_data::simulation::SimulationDataStore::new(pool.inner().clone()));
+    let profiles_store = std::sync::Arc::new(welkin_data::profiles::ProfilesStore::new(pool.inner().clone()));
     info!("Database connection established");
 
     // --- Scene creation ---
@@ -518,6 +519,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let process_scheduler = Arc::clone(&script_scheduler);
     let process_grid_connector = grid_connector.clone();
     let process_estate_store = welkin_data::estate::EstateStore::new(pool.inner().clone());
+    let process_profiles_store = Arc::clone(&profiles_store);
     let process_region_id = region_id_str.clone();
     let perms = {
         let mut perms = estate_config::permissions_from_config(&config);
@@ -564,6 +566,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             process_grid_connector,
             process_perms,
             process_estate_store,
+            process_profiles_store,
             process_region_id,
             process_accounts,
             process_inventory,
@@ -1755,6 +1758,7 @@ async fn process_messages(
     grid_connector: Option<Arc<welkin_services::remote::grid::RemoteGridConnector>>,
     mut perms: Arc<DefaultPermissionsModule>,
     estate_store: Arc<welkin_data::estate::EstateStore>,
+    profiles_store: Arc<welkin_data::profiles::ProfilesStore>,
     region_id: String,
     accounts_connector: Arc<welkin_services::remote::accounts::RemoteAccountsConnector>,
     inventory_connector: Arc<welkin_services::remote::inventory::RemoteInventoryConnector>,
@@ -2149,13 +2153,27 @@ async fn process_messages(
             && let Some(client) = &client
         {
             let mut session = client.lock().await;
+            let aid = session.agent_id;
+            let saved = scene.saved_wearables(&aid);
+            let wearable_data = if saved.is_empty() {
+                default_wearables()
+            } else {
+                saved
+                    .into_iter()
+                    .map(|(wt, uuid)| agent_wearables_update::WearableData {
+                        wearable_type: wt,
+                        item_id: uuid,
+                        asset_id: uuid,
+                    })
+                    .collect()
+            };
             let reply = AgentWearablesUpdate {
                 agent_data: agent_wearables_update::AgentData {
                     agent_id: session.agent_id,
                     session_id: session.session_id,
                     serial_num: 1,
                 },
-                wearable_data: default_wearables(),
+                wearable_data,
             };
             let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
             let _ = socket.send_to(&pkt_bytes, src).await;
@@ -2212,13 +2230,25 @@ async fn process_messages(
         if msg_id == EconomyDataRequest::ID
             && let Some(client) = &client
         {
+            let price_per_meter = estate_store
+                .get_estate_for_region(&region_id)
+                .await
+                .ok()
+                .flatten()
+                .map(|e| e.price_per_meter)
+                .unwrap_or(0);
+            let summary = welkin_modules::economy::build_economy_summary(
+                price_per_meter,
+                15000,
+                0,
+            );
             let mut session = client.lock().await;
             let reply = EconomyData {
                 info: economy_data::Info {
-                    object_capacity: 15000,
+                    object_capacity: summary.available_script_capacity as i32,
                     object_count: 0,
                     price_energy_unit: 0,
-                    price_object_claim: 0,
+                    price_object_claim: summary.price_per_meter,
                     price_public_object_decay: 0,
                     price_public_object_delete: 0,
                     price_parcel_claim: 0,
@@ -2784,9 +2814,9 @@ async fn process_messages(
                     y: gy,
                     name: ri.region_name.clone().into_bytes(),
                     access: 21,
-                    region_flags: 0,
+                    region_flags: ri.region_flags,
                     water_height: 20,
-                    agents: 0,
+                    agents: scene.presence_count() as u8,
                     map_image_id: Uuid::nil(),
                 });
                 sizes.push(map_block_reply::Size {
@@ -4060,15 +4090,56 @@ async fn process_messages(
             && let Ok(req) = RequestImage::decode(&pkt.body)
             && let Some(client) = &client
         {
-            let mut session = client.lock().await;
-            for img in &req.request_image {
-                let reply = ImageNotInDatabase {
-                    image_id: image_not_in_database::ImageID { id: img.image },
+            let requests = req.request_image.clone();
+            for img in requests {
+                let asset = match asset_connector.get_asset(&img.image.to_string()).await {
+                    Ok(Some(a)) => a,
+                    _ => {
+                        let mut session = client.lock().await;
+                        let reply = ImageNotInDatabase {
+                            image_id: image_not_in_database::ImageID { id: img.image },
+                        };
+                        let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                        let _ = socket.send_to(&pkt_bytes, src).await;
+                        continue;
+                    }
                 };
-                let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
-                let _ = socket.send_to(&pkt_bytes, src).await;
+
+                const CHUNK: usize = 1000;
+                let total_packets = if asset.data.is_empty() {
+                    1usize
+                } else {
+                    (asset.data.len() + CHUNK - 1) / CHUNK
+                };
+                let mut start = img.packet as usize;
+                if start >= total_packets {
+                    start = total_packets.saturating_sub(1);
+                }
+
+                let mut session = client.lock().await;
+                for p in start..total_packets {
+                    let off = p * CHUNK;
+                    let end = (off + CHUNK).min(asset.data.len());
+                    let chunk = if off < asset.data.len() {
+                        asset.data[off..end].to_vec()
+                    } else {
+                        Vec::new()
+                    };
+                    let reply = ImagePacket {
+                        image_id: image_packet::ImageID {
+                            id: img.image,
+                            packet: p as u16,
+                        },
+                        image_data: image_packet::ImageData { data: chunk },
+                    };
+                    let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                    let _ = socket.send_to(&pkt_bytes, src).await;
+                    if end >= asset.data.len() {
+                        break;
+                    }
+                }
             }
-            tracing::debug!(agent = %agent_id, count = req.request_image.len(), "RequestImage: replied ImageNotInDatabase");
+            tracing::debug!(agent = %agent_id, count = req.request_image.len(), "RequestImage: streamed available textures");
         }
 
         if msg_id == AgentDataUpdateRequest::ID
@@ -4121,21 +4192,29 @@ async fn process_messages(
             let (first, last) = scene.get_presence(&target)
                 .map(|p| (p.first_name.clone(), p.last_name.clone()))
                 .unwrap_or_else(|| ("Unknown".to_string(), "User".to_string()));
-            let born_str = "2024-01-01";
-            let about = format!("{} {}", first, last);
+            let mut born_str = "2024-01-01".to_string();
+            let mut about = format!("{} {}", first, last);
+            let mut image_id = Uuid::nil();
+            let mut web_url = String::new();
+            if let Ok(Some(props)) = welkin_services::profiles::fetch_avatar_properties(&profiles_store, &target.to_string()).await {
+                if !props.born_on.is_empty() { born_str = props.born_on; }
+                if !props.about_text.is_empty() { about = props.about_text; }
+                if !props.web_url.is_empty() { web_url = props.web_url; }
+                if let Ok(u) = Uuid::parse_str(&props.image_id) { image_id = u; }
+            }
             let reply = AvatarPropertiesReply {
                 agent_data: avatar_properties_reply::AgentData {
                     agent_id,
                     avatar_id: target,
                 },
                 properties_data: avatar_properties_reply::PropertiesData {
-                    image_id: Uuid::nil(),
+                    image_id,
                     fl_image_id: Uuid::nil(),
                     partner_id: Uuid::nil(),
                     about_text: about.into_bytes(),
                     fl_about_text: Vec::new(),
                     born_on: born_str.as_bytes().to_vec(),
-                    profile_url: Vec::new(),
+                    profile_url: web_url.into_bytes(),
                     charter_member: Vec::new(),
                     flags: 0,
                 },
@@ -4654,15 +4733,17 @@ async fn process_messages(
             && let Ok(req) = UUIDNameRequest::decode(&pkt.body)
             && let Some(client) = &client
         {
+            let ids: Vec<Uuid> = req.uuid_name_block.iter().map(|b| b.id).collect();
+            let names = accounts_connector.get_names(&ids).await.unwrap_or_default();
             let mut reply_blocks = Vec::new();
             for block in &req.uuid_name_block {
                 let target_id = block.id;
-                let mut first = b"Unknown".to_vec();
-                let mut last = b"User".to_vec();
-                if let Some(p) = scene.get_presence(&target_id) {
-                    first = p.first_name.as_bytes().to_vec();
-                    last = p.last_name.as_bytes().to_vec();
-                }
+                let full = names.get(&target_id).cloned().unwrap_or_else(|| "Unknown User".to_string());
+                let (first_str, last_str) = full.split_once(' ').unwrap_or(("Unknown", "User"));
+                let mut first = first_str.as_bytes().to_vec();
+                let mut last = last_str.as_bytes().to_vec();
+                if first.is_empty() { first = b"Unknown".to_vec(); }
+                if last.is_empty() { last = b"User".to_vec(); }
                 first.push(0);
                 last.push(0);
                 reply_blocks.push(uuid_name_reply::UUIDNameBlock {
@@ -4694,12 +4775,13 @@ async fn process_messages(
             && let Ok(req) = UUIDGroupNameRequest::decode(&pkt.body)
             && let Some(client) = &client
         {
-            let mut reply_blocks = Vec::new();
             let ids: Vec<Uuid> = req.uuid_name_block.iter().map(|b| b.id).collect();
-            let names: Vec<(Uuid, String)> = ids.iter().map(|id| (*id, "Unknown".to_string())).collect();
-            for (id, name) in names {
+            let names = accounts_connector.get_names(&ids).await.unwrap_or_default();
+            let mut reply_blocks = Vec::new();
+            for id in &ids {
+                let name = names.get(id).cloned().unwrap_or_else(|| "Unknown User".to_string());
                 reply_blocks.push(uuid_group_name_reply::UUIDNameBlock {
-                    id,
+                    id: *id,
                     group_name: groups_io::name_bytes(&name),
                 });
             }
