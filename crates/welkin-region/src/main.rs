@@ -3736,7 +3736,7 @@ async fn process_messages(
                                 let fail_msg = TeleportFailed {
                                     info: teleport_failed::Info {
                                         agent_id,
-                                        reason: b"Cross-region teleport: destination region not yet reachable (agent created on state machine)".to_vec(),
+                                        reason: b"Cross-region teleport is not supported yet: the destination region cannot accept incoming agents.".to_vec(),
                                     },
                                     alert_info: Vec::new(),
                                 };

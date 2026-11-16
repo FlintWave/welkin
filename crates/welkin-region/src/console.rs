@@ -106,32 +106,82 @@ fn parse(line: &str) -> Result<Sub, String> {
     Ok(cmd.sub)
 }
 
-fn find_presence(ctx: &ConsoleContext, query: &str) -> Option<PresenceSummary> {
-    let query = query.trim().to_lowercase();
-    let mut found = None;
+pub fn pick_match(query: &str, names: &[(String, String)]) -> Result<usize, String> {
+    let query_trimmed = query.trim();
+    let query_lower = query_trimmed.to_lowercase();
+
+    let full_matches: Vec<usize> = names
+        .iter()
+        .enumerate()
+        .filter(|(_, (first, last))| {
+            format!("{} {}", first, last).to_lowercase() == query_lower
+        })
+        .map(|(index, _)| index)
+        .collect();
+
+    if !full_matches.is_empty() {
+        if full_matches.len() == 1 {
+            return Ok(full_matches[0]);
+        }
+
+        let matched: Vec<String> = full_matches
+            .iter()
+            .map(|&index| format!("{} {}", names[index].0, names[index].1))
+            .collect();
+        return Err(format!(
+            "ambiguous name '{}': matches {}",
+            query,
+            matched.join(", ")
+        ));
+    }
+
+    let first_matches: Vec<usize> = names
+        .iter()
+        .enumerate()
+        .filter(|(_, (first, _))| first.to_lowercase() == query_lower)
+        .map(|(index, _)| index)
+        .collect();
+
+    if !first_matches.is_empty() {
+        if first_matches.len() == 1 {
+            return Ok(first_matches[0]);
+        }
+
+        let matched: Vec<String> = first_matches
+            .iter()
+            .map(|&index| format!("{} {}", names[index].0, names[index].1))
+            .collect();
+        return Err(format!(
+            "ambiguous name '{}': matches {}",
+            query,
+            matched.join(", ")
+        ));
+    }
+
+    Err(format!("no user named '{}'", query))
+}
+
+fn find_presence(ctx: &ConsoleContext, query: &str) -> Result<PresenceSummary, String> {
+    let mut names = Vec::new();
+    let mut summaries = Vec::new();
 
     ctx.scene.for_each_presence(|p: &ScenePresence| {
-        if found.is_some() {
-            return;
-        }
-
-        let full_name = format!("{} {}", p.first_name, p.last_name);
-        if full_name.to_lowercase() == query || p.first_name.to_lowercase() == query {
-            found = Some(PresenceSummary {
-                uuid: p.uuid,
-                first_name: p.first_name.clone(),
-                last_name: p.last_name.clone(),
-                x: p.position.x,
-                y: p.position.y,
-                z: p.position.z,
-                is_flying: p.is_flying,
-                is_sitting: p.is_sitting,
-                is_god: p.is_god,
-            });
-        }
+        names.push((p.first_name.clone(), p.last_name.clone()));
+        summaries.push(PresenceSummary {
+            uuid: p.uuid,
+            first_name: p.first_name.clone(),
+            last_name: p.last_name.clone(),
+            x: p.position.x,
+            y: p.position.y,
+            z: p.position.z,
+            is_flying: p.is_flying,
+            is_sitting: p.is_sitting,
+            is_god: p.is_god,
+        });
     });
 
-    found
+    let index = pick_match(query, &names)?;
+    Ok(summaries[index].clone())
 }
 
 pub async fn execute(ctx: &ConsoleContext, line: &str) -> String {
@@ -193,8 +243,8 @@ pub async fn execute(ctx: &ConsoleContext, line: &str) -> String {
             }
         }
         Sub::User { name } => match find_presence(ctx, &name) {
-            None => format!("unknown user: {}", name),
-            Some(p) => format!(
+            Err(err) => err,
+            Ok(p) => format!(
                 "name: {} {}\nuuid: {}\nposition: {:.1}, {:.1}, {:.1}\nflying: {}\nsitting: {}\ngod: {}",
                 p.first_name,
                 p.last_name,
@@ -235,18 +285,23 @@ pub async fn execute(ctx: &ConsoleContext, line: &str) -> String {
         }
         Sub::Alert { message } => {
             let message = message.join(" ");
-            let _ = ctx.actions.send(ConsoleAction::Alert(message));
-            "alert sent".to_string()
+            let n = ctx.scene.presence_count();
+            if n == 0 {
+                "no clients connected; alert not sent".to_string()
+            } else {
+                let _ = ctx.actions.send(ConsoleAction::Alert(message));
+                format!("alert queued for {} connected client(s)", n)
+            }
         }
         Sub::Kick { name, reason } => match find_presence(ctx, &name) {
-            None => format!("unknown user: {}", name),
-            Some(p) => {
+            Err(err) => err,
+            Ok(p) => {
                 let reason = reason.join(" ");
                 let _ = ctx.actions.send(ConsoleAction::Kick {
                     agent_id: p.uuid,
                     reason,
                 });
-                format!("kicked {} {}", p.first_name, p.last_name)
+                format!("kick queued for {} {}", p.first_name, p.last_name)
             }
         },
         Sub::Shutdown => {
@@ -272,5 +327,38 @@ mod tests {
     #[test]
     fn unknown_command_is_parse_error() {
         assert!(parse("definitely-not-a-command").is_err());
+    }
+
+    #[test]
+    fn pick_match_exact_full_name_wins_over_first_name_match() {
+        let names = vec![
+            ("Alice".to_string(), "Smith".to_string()),
+            ("Alice".to_string(), "Jones".to_string()),
+        ];
+
+        assert_eq!(pick_match("alice smith", &names), Ok(0));
+    }
+
+    #[test]
+    fn pick_match_ambiguous_first_name_errors() {
+        let names = vec![
+            ("Alice".to_string(), "Smith".to_string()),
+            ("Alice".to_string(), "Jones".to_string()),
+        ];
+
+        assert_eq!(
+            pick_match("alice", &names),
+            Err("ambiguous name 'alice': matches Alice Smith, Alice Jones".to_string())
+        );
+    }
+
+    #[test]
+    fn pick_match_none_errors() {
+        let names = vec![("Alice".to_string(), "Smith".to_string())];
+
+        assert_eq!(
+            pick_match("charlie", &names),
+            Err("no user named 'charlie'".to_string())
+        );
     }
 }
