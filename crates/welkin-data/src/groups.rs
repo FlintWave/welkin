@@ -139,11 +139,11 @@ pub struct GroupRow {
     #[sqlx(rename = "OpenEnrollment")]
     pub open_enrollment: String,
     #[sqlx(rename = "ShowInList")]
-    pub show_in_list: String,
+    pub show_in_list: i32,
     #[sqlx(rename = "AllowPublish")]
-    pub allow_publish: String,
+    pub allow_publish: i32,
     #[sqlx(rename = "MaturePublish")]
-    pub mature_publish: String,
+    pub mature_publish: i32,
     #[sqlx(rename = "OwnerRoleID")]
     pub owner_role_id: String,
     #[sqlx(rename = "Location")]
@@ -159,11 +159,11 @@ pub struct MembershipRow {
     #[sqlx(rename = "SelectedRoleID")]
     pub selected_role_id: String,
     #[sqlx(rename = "Contribution")]
-    pub contribution: String,
+    pub contribution: i32,
     #[sqlx(rename = "ListInProfile")]
-    pub list_in_profile: String,
+    pub list_in_profile: i32,
     #[sqlx(rename = "AcceptNotices")]
-    pub accept_notices: String,
+    pub accept_notices: i32,
     #[sqlx(rename = "AccessToken")]
     pub access_token: String,
 }
@@ -181,7 +181,7 @@ pub struct RoleRow {
     #[sqlx(rename = "Title")]
     pub title: String,
     #[sqlx(rename = "Powers")]
-    pub powers: String,
+    pub powers: i64,
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -223,7 +223,7 @@ pub struct NoticeRow {
     #[sqlx(rename = "NoticeID")]
     pub notice_id: String,
     #[sqlx(rename = "TMStamp")]
-    pub timestamp: String,
+    pub timestamp: i64,
     #[sqlx(rename = "FromName")]
     pub from_name: String,
     #[sqlx(rename = "Subject")]
@@ -231,9 +231,9 @@ pub struct NoticeRow {
     #[sqlx(rename = "Message")]
     pub message: String,
     #[sqlx(rename = "HasAttachment")]
-    pub has_attachment: String,
+    pub has_attachment: i32,
     #[sqlx(rename = "AttachmentType")]
-    pub attachment_type: String,
+    pub attachment_type: i32,
     #[sqlx(rename = "AttachmentName")]
     pub attachment_name: String,
     #[sqlx(rename = "AttachmentItemID")]
@@ -293,9 +293,9 @@ impl GroupsStore {
             .bind(row.founder_id.clone())
             .bind(row.membership_fee)
             .bind(row.open_enrollment.clone())
-            .bind(row.show_in_list.clone())
-            .bind(row.allow_publish.clone())
-            .bind(row.mature_publish.clone())
+            .bind(row.show_in_list)
+            .bind(row.allow_publish)
+            .bind(row.mature_publish)
             .bind(row.owner_role_id.clone())
             .bind(row.location.clone())
             .execute(&mut *tx)
@@ -388,9 +388,9 @@ impl GroupsStore {
             .bind(row.group_id.clone())
             .bind(row.principal_id.clone())
             .bind(row.selected_role_id.clone())
-            .bind(row.contribution.clone())
-            .bind(row.list_in_profile.clone())
-            .bind(row.accept_notices.clone())
+            .bind(row.contribution)
+            .bind(row.list_in_profile)
+            .bind(row.accept_notices)
             .bind(row.access_token.clone())
             .execute(&mut *tx)
             .await?;
@@ -470,7 +470,7 @@ impl GroupsStore {
             .bind(row.name.clone())
             .bind(row.description.clone())
             .bind(row.title.clone())
-            .bind(row.powers.clone())
+            .bind(row.powers)
             .execute(&mut *tx)
             .await?;
         tx.commit().await?;
@@ -747,12 +747,12 @@ impl GroupsStore {
         sqlx::query(&sql)
             .bind(row.group_id.clone())
             .bind(row.notice_id.clone())
-            .bind(row.timestamp.clone())
+            .bind(row.timestamp)
             .bind(row.from_name.clone())
             .bind(row.subject.clone())
             .bind(row.message.clone())
-            .bind(row.has_attachment.clone())
-            .bind(row.attachment_type.clone())
+            .bind(row.has_attachment)
+            .bind(row.attachment_type)
             .bind(row.attachment_name.clone())
             .bind(row.attachment_item_id.clone())
             .bind(row.attachment_owner_id.clone())
@@ -798,7 +798,7 @@ impl GroupsStore {
             .as_secs() as i64
             - 14 * 24 * 3600;
         sqlx::query("DELETE FROM os_groups_notices WHERE TMStamp < $1")
-            .bind(cutoff.to_string())
+            .bind(cutoff)
             .execute(&self.pool)
             .await?;
         Ok(())
@@ -808,6 +808,302 @@ impl GroupsStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use sqlx::pool::PoolOptions;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    struct TempDbGuard {
+        path: PathBuf,
+    }
+
+    impl Drop for TempDbGuard {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+
+    fn unique_path() -> PathBuf {
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let n = COUNTER.fetch_add(1, Ordering::SeqCst);
+        let mut path = std::env::temp_dir();
+        path.push(format!(
+            "welkin-groups-test-{}-{}.db",
+            std::process::id(),
+            n
+        ));
+        path
+    }
+
+    async fn make_pool(path: &std::path::Path) -> sqlx::AnyPool {
+        sqlx::any::install_default_drivers();
+        let url = format!("sqlite:{}?mode=rwc", path.display());
+        PoolOptions::<sqlx::Any>::new()
+            .max_connections(1)
+            .connect(&url)
+            .await
+            .expect("connect sqlite test database")
+    }
+
+    async fn create_tables(pool: &sqlx::AnyPool) {
+        static DDL: [&str; 7] = [
+            "CREATE TABLE IF NOT EXISTS os_groups_groups (\
+             GroupID CHAR(36) PRIMARY KEY, \
+             Location VARCHAR(255) NOT NULL DEFAULT '', \
+             Name VARCHAR(255) NOT NULL DEFAULT '', \
+             Charter TEXT NOT NULL DEFAULT '', \
+             InsigniaID CHAR(36) NOT NULL DEFAULT '', \
+             FounderID CHAR(36) NOT NULL DEFAULT '', \
+             MembershipFee INTEGER NOT NULL DEFAULT 0, \
+             OpenEnrollment VARCHAR(255) NOT NULL DEFAULT '', \
+             ShowInList INTEGER NOT NULL DEFAULT 0, \
+             AllowPublish INTEGER NOT NULL DEFAULT 0, \
+             MaturePublish INTEGER NOT NULL DEFAULT 0, \
+             OwnerRoleID CHAR(36) NOT NULL DEFAULT '')",
+            "CREATE TABLE IF NOT EXISTS os_groups_membership (\
+             GroupID CHAR(36) NOT NULL, \
+             PrincipalID VARCHAR(255) NOT NULL, \
+             SelectedRoleID CHAR(36) NOT NULL DEFAULT '', \
+             Contribution INTEGER NOT NULL DEFAULT 0, \
+             ListInProfile INTEGER NOT NULL DEFAULT 1, \
+             AcceptNotices INTEGER NOT NULL DEFAULT 1, \
+             AccessToken CHAR(36) NOT NULL DEFAULT '', \
+             PRIMARY KEY (GroupID, PrincipalID))",
+            "CREATE TABLE IF NOT EXISTS os_groups_roles (\
+             GroupID CHAR(36) NOT NULL, \
+             RoleID CHAR(36) NOT NULL, \
+             Name VARCHAR(255) NOT NULL DEFAULT '', \
+             Description VARCHAR(255) NOT NULL DEFAULT '', \
+             Title VARCHAR(255) NOT NULL DEFAULT '', \
+             Powers BIGINT NOT NULL DEFAULT 0, \
+             PRIMARY KEY (GroupID, RoleID))",
+            "CREATE TABLE IF NOT EXISTS os_groups_rolemembership (\
+             GroupID CHAR(36) NOT NULL, \
+             RoleID CHAR(36) NOT NULL, \
+             PrincipalID VARCHAR(255) NOT NULL, \
+             PRIMARY KEY (GroupID, RoleID, PrincipalID))",
+            "CREATE TABLE IF NOT EXISTS os_groups_invites (\
+             InviteID CHAR(36) PRIMARY KEY, \
+             GroupID CHAR(36) NOT NULL, \
+             RoleID CHAR(36) NOT NULL, \
+             PrincipalID VARCHAR(255) NOT NULL, \
+             TMStamp INTEGER NOT NULL DEFAULT 0)",
+            "CREATE TABLE IF NOT EXISTS os_groups_notices (\
+             GroupID CHAR(36) NOT NULL, \
+             NoticeID CHAR(36) PRIMARY KEY, \
+             TMStamp INTEGER NOT NULL DEFAULT 0, \
+             FromName VARCHAR(255) NOT NULL DEFAULT '', \
+             Subject VARCHAR(255) NOT NULL DEFAULT '', \
+             Message TEXT NOT NULL DEFAULT '', \
+             HasAttachment INTEGER NOT NULL DEFAULT 0, \
+             AttachmentType INTEGER NOT NULL DEFAULT 0, \
+             AttachmentName VARCHAR(128) NOT NULL DEFAULT '', \
+             AttachmentItemID CHAR(36) NOT NULL DEFAULT '', \
+             AttachmentOwnerID CHAR(36) NOT NULL DEFAULT '')",
+            "CREATE TABLE IF NOT EXISTS os_groups_principals (\
+             PrincipalID VARCHAR(255) PRIMARY KEY, \
+             ActiveGroupID CHAR(36) NOT NULL DEFAULT '')",
+        ];
+        for ddl in DDL {
+            sqlx::query(ddl)
+                .execute(pool)
+                .await
+                .expect("create test table");
+        }
+    }
+
+    #[tokio::test]
+    async fn sqlite_store_group_roundtrip() {
+        let path = unique_path();
+        let _guard = TempDbGuard { path: path.clone() };
+        let pool = make_pool(&path).await;
+        create_tables(&pool).await;
+        let store = GroupsStore::new(pool.clone());
+
+        let group_id = "11111111-2222-3333-4444-555555555555".to_string();
+        let group = GroupRow {
+            group_id: group_id.clone(),
+            name: "Test Group".to_string(),
+            charter: "charter".to_string(),
+            insignia_id: "00000000-0000-0000-0000-000000000000".to_string(),
+            founder_id: "22222222-3333-4444-5555-666666666666".to_string(),
+            membership_fee: 7,
+            open_enrollment: "1".to_string(),
+            show_in_list: 1,
+            allow_publish: 1,
+            mature_publish: 0,
+            owner_role_id: "33333333-4444-5555-6666-777777777777".to_string(),
+            location: String::new(),
+        };
+
+        assert!(store.store_group(&group).await.unwrap());
+
+        let by_id = store.retrieve_group_by_id(&group_id).await.unwrap().unwrap();
+        assert_eq!(by_id.name, group.name);
+        assert_eq!(by_id.membership_fee, 7);
+        assert_eq!(by_id.show_in_list, 1);
+        assert_eq!(by_id.allow_publish, 1);
+        assert_eq!(by_id.mature_publish, 0);
+        assert_eq!(by_id.open_enrollment, "1");
+
+        let by_name = store
+            .retrieve_group_by_name(&group.name)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(by_name.group_id, group.group_id);
+
+        drop(store);
+        drop(pool);
+    }
+
+    #[tokio::test]
+    async fn sqlite_membership_roundtrip() {
+        let path = unique_path();
+        let _guard = TempDbGuard { path: path.clone() };
+        let pool = make_pool(&path).await;
+        create_tables(&pool).await;
+        let store = GroupsStore::new(pool.clone());
+
+        let group = GroupRow {
+            group_id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee".to_string(),
+            name: "Membership Group".to_string(),
+            charter: String::new(),
+            insignia_id: "00000000-0000-0000-0000-000000000000".to_string(),
+            founder_id: "11111111-2222-3333-4444-555555555555".to_string(),
+            membership_fee: 0,
+            open_enrollment: "0".to_string(),
+            show_in_list: 0,
+            allow_publish: 0,
+            mature_publish: 0,
+            owner_role_id: "00000000-0000-0000-0000-000000000000".to_string(),
+            location: String::new(),
+        };
+        store.store_group(&group).await.unwrap();
+
+        let membership = MembershipRow {
+            group_id: group.group_id.clone(),
+            principal_id: "principal-1".to_string(),
+            selected_role_id: "role-1".to_string(),
+            contribution: 42,
+            list_in_profile: 1,
+            accept_notices: 0,
+            access_token: "token".to_string(),
+        };
+        assert!(store.store_member(&membership).await.unwrap());
+
+        let got = store
+            .retrieve_member(&membership.group_id, &membership.principal_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(got.contribution, 42);
+        assert_eq!(got.list_in_profile, 1);
+        assert_eq!(got.accept_notices, 0);
+        assert_eq!(got.access_token, "token");
+
+        drop(store);
+        drop(pool);
+    }
+
+    #[tokio::test]
+    async fn sqlite_role_roundtrip() {
+        let path = unique_path();
+        let _guard = TempDbGuard { path: path.clone() };
+        let pool = make_pool(&path).await;
+        create_tables(&pool).await;
+        let store = GroupsStore::new(pool.clone());
+
+        let group = GroupRow {
+            group_id: "99999999-8888-7777-6666-555555555555".to_string(),
+            name: "Role Group".to_string(),
+            charter: String::new(),
+            insignia_id: "00000000-0000-0000-0000-000000000000".to_string(),
+            founder_id: "11111111-2222-3333-4444-555555555555".to_string(),
+            membership_fee: 0,
+            open_enrollment: "1".to_string(),
+            show_in_list: 1,
+            allow_publish: 0,
+            mature_publish: 0,
+            owner_role_id: "00000000-0000-0000-0000-000000000000".to_string(),
+            location: String::new(),
+        };
+        store.store_group(&group).await.unwrap();
+
+        let role = RoleRow {
+            group_id: group.group_id.clone(),
+            role_id: "role-42".to_string(),
+            name: "Administrator".to_string(),
+            description: "desc".to_string(),
+            title: "Admin".to_string(),
+            powers: 0x7FFF_FFFF_FFFF_i64,
+        };
+        assert!(store.store_role(&role).await.unwrap());
+
+        let got = store
+            .retrieve_role(&role.group_id, &role.role_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(got.name, "Administrator");
+        assert_eq!(got.powers, 0x7FFF_FFFF_FFFF_i64);
+
+        drop(store);
+        drop(pool);
+    }
+
+    #[tokio::test]
+    async fn sqlite_notice_roundtrip() {
+        let path = unique_path();
+        let _guard = TempDbGuard { path: path.clone() };
+        let pool = make_pool(&path).await;
+        create_tables(&pool).await;
+        let store = GroupsStore::new(pool.clone());
+
+        let group = GroupRow {
+            group_id: "77777777-6666-5555-4444-333333333333".to_string(),
+            name: "Notice Group".to_string(),
+            charter: String::new(),
+            insignia_id: "00000000-0000-0000-0000-000000000000".to_string(),
+            founder_id: "11111111-2222-3333-4444-555555555555".to_string(),
+            membership_fee: 0,
+            open_enrollment: "1".to_string(),
+            show_in_list: 1,
+            allow_publish: 0,
+            mature_publish: 0,
+            owner_role_id: "00000000-0000-0000-0000-000000000000".to_string(),
+            location: String::new(),
+        };
+        store.store_group(&group).await.unwrap();
+
+        let notice = NoticeRow {
+            group_id: group.group_id.clone(),
+            notice_id: "notice-7".to_string(),
+            timestamp: 12345,
+            from_name: "From".to_string(),
+            subject: "Subject".to_string(),
+            message: "Message".to_string(),
+            has_attachment: 1,
+            attachment_type: 2,
+            attachment_name: "file.txt".to_string(),
+            attachment_item_id: "00000000-0000-0000-0000-000000000000".to_string(),
+            attachment_owner_id: "11111111-2222-3333-4444-555555555555".to_string(),
+        };
+        assert!(store.store_notice(&notice).await.unwrap());
+
+        let got = store
+            .retrieve_notice(&notice.notice_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(got.timestamp, 12345);
+        assert_eq!(got.has_attachment, 1);
+        assert_eq!(got.attachment_type, 2);
+        assert_eq!(got.subject, "Subject");
+
+        drop(store);
+        drop(pool);
+    }
 
     #[test]
     fn test_group_powers_default_everyone() {
@@ -860,9 +1156,9 @@ mod tests {
             founder_id: "00000000-0000-0000-0000-000000000002".to_string(),
             membership_fee: 0,
             open_enrollment: "1".to_string(),
-            show_in_list: "1".to_string(),
-            allow_publish: "1".to_string(),
-            mature_publish: "0".to_string(),
+            show_in_list: 1,
+            allow_publish: 1,
+            mature_publish: 0,
             owner_role_id: "00000000-0000-0000-0000-000000000003".to_string(),
             location: String::new(),
         };
@@ -876,12 +1172,12 @@ mod tests {
             group_id: "g1".to_string(),
             principal_id: "p1".to_string(),
             selected_role_id: "r1".to_string(),
-            contribution: "0".to_string(),
-            list_in_profile: "1".to_string(),
-            accept_notices: "1".to_string(),
+            contribution: 0,
+            list_in_profile: 1,
+            accept_notices: 1,
             access_token: String::new(),
         };
-        assert_eq!(row.list_in_profile, "1");
-        assert_eq!(row.accept_notices, "1");
+        assert_eq!(row.list_in_profile, 1);
+        assert_eq!(row.accept_notices, 1);
     }
 }

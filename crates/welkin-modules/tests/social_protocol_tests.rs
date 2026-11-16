@@ -28,9 +28,9 @@ CREATE TABLE os_groups_groups (
     FounderID TEXT NOT NULL DEFAULT '',
     MembershipFee INTEGER NOT NULL DEFAULT 0,
     OpenEnrollment TEXT NOT NULL DEFAULT '',
-    ShowInList TEXT NOT NULL DEFAULT '0',
-    AllowPublish TEXT NOT NULL DEFAULT '0',
-    MaturePublish TEXT NOT NULL DEFAULT '0',
+    ShowInList INTEGER NOT NULL DEFAULT 0,
+    AllowPublish INTEGER NOT NULL DEFAULT 0,
+    MaturePublish INTEGER NOT NULL DEFAULT 0,
     OwnerRoleID TEXT NOT NULL DEFAULT ''
 );
 
@@ -38,9 +38,9 @@ CREATE TABLE os_groups_membership (
     GroupID TEXT NOT NULL DEFAULT '',
     PrincipalID TEXT NOT NULL DEFAULT '',
     SelectedRoleID TEXT NOT NULL DEFAULT '',
-    Contribution TEXT NOT NULL DEFAULT '0',
-    ListInProfile TEXT NOT NULL DEFAULT '1',
-    AcceptNotices TEXT NOT NULL DEFAULT '1',
+    Contribution INTEGER NOT NULL DEFAULT 0,
+    ListInProfile INTEGER NOT NULL DEFAULT 1,
+    AcceptNotices INTEGER NOT NULL DEFAULT 1,
     AccessToken TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (GroupID, PrincipalID)
 );
@@ -51,7 +51,7 @@ CREATE TABLE os_groups_roles (
     Name TEXT NOT NULL DEFAULT '',
     Description TEXT NOT NULL DEFAULT '',
     Title TEXT NOT NULL DEFAULT '',
-    Powers TEXT NOT NULL DEFAULT '0',
+    Powers BIGINT NOT NULL DEFAULT 0,
     PRIMARY KEY (GroupID, RoleID)
 );
 
@@ -73,12 +73,12 @@ CREATE TABLE os_groups_invites (
 CREATE TABLE os_groups_notices (
     GroupID TEXT NOT NULL DEFAULT '',
     NoticeID TEXT NOT NULL DEFAULT '' PRIMARY KEY,
-    TMStamp TEXT NOT NULL DEFAULT '0',
+    TMStamp INTEGER NOT NULL DEFAULT 0,
     FromName TEXT NOT NULL DEFAULT '',
     Subject TEXT NOT NULL DEFAULT '',
     Message TEXT NOT NULL DEFAULT '',
-    HasAttachment TEXT NOT NULL DEFAULT '0',
-    AttachmentType TEXT NOT NULL DEFAULT '0',
+    HasAttachment INTEGER NOT NULL DEFAULT 0,
+    AttachmentType INTEGER NOT NULL DEFAULT 0,
     AttachmentName TEXT NOT NULL DEFAULT '',
     AttachmentItemID TEXT NOT NULL DEFAULT '',
     AttachmentOwnerID TEXT NOT NULL DEFAULT ''

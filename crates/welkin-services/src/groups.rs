@@ -78,21 +78,75 @@ fn list_to_xml(prefix: &str, items: &[String]) -> String {
     out
 }
 
+trait BoolLike {
+    fn to_bool_int(&self) -> i32;
+}
+
+impl BoolLike for i32 {
+    fn to_bool_int(&self) -> i32 {
+        *self
+    }
+}
+
+impl BoolLike for &i32 {
+    fn to_bool_int(&self) -> i32 {
+        **self
+    }
+}
+
+impl BoolLike for &str {
+    fn to_bool_int(&self) -> i32 {
+        if *self == "1" || self.eq_ignore_ascii_case("true") {
+            1
+        } else {
+            0
+        }
+    }
+}
+
+impl BoolLike for String {
+    fn to_bool_int(&self) -> i32 {
+        if self == "1" || self.eq_ignore_ascii_case("true") {
+            1
+        } else {
+            0
+        }
+    }
+}
+
+impl BoolLike for &String {
+    fn to_bool_int(&self) -> i32 {
+        if *self == "1" || self.eq_ignore_ascii_case("true") {
+            1
+        } else {
+            0
+        }
+    }
+}
+
+fn bool_str<T: BoolLike>(val: T) -> String {
+    if val.to_bool_int() != 0 {
+        "True".to_string()
+    } else {
+        "False".to_string()
+    }
+}
+
 fn group_row_to_xml(row: &GroupRow, member_count: i64, role_count: i64) -> String {
     dict_to_xml(&[
-        ("AllowPublish", &bool_str(&row.allow_publish)),
+        ("AllowPublish", &bool_str(row.allow_publish)),
         ("Charter", &row.charter),
         ("FounderID", &row.founder_id),
         ("FounderUUI", ""),
         ("GroupID", &row.group_id),
         ("GroupName", &row.name),
         ("InsigniaID", &row.insignia_id),
-        ("MaturePublish", &bool_str(&row.mature_publish)),
+        ("MaturePublish", &bool_str(row.mature_publish)),
         ("MembershipFee", &row.membership_fee.to_string()),
         ("OpenEnrollment", &bool_str(&row.open_enrollment)),
         ("OwnerRoleID", &row.owner_role_id),
         ("ServiceLocation", &row.location),
-        ("ShownInList", &bool_str(&row.show_in_list)),
+        ("ShownInList", &bool_str(row.show_in_list)),
         ("MemberCount", &member_count.to_string()),
         ("RoleCount", &role_count.to_string()),
     ])
@@ -109,9 +163,9 @@ fn membership_to_xml(
         ("AccessToken", &membership.access_token),
         ("Active", "True"),
         ("ActiveRole", &membership.selected_role_id),
-        ("AllowPublish", &bool_str(&group.allow_publish)),
+        ("AllowPublish", &bool_str(group.allow_publish)),
         ("Charter", &group.charter),
-        ("Contribution", &membership.contribution),
+        ("Contribution", &membership.contribution.to_string()),
         ("FounderID", &group.founder_id),
         ("GroupID", &group.group_id),
         ("GroupName", &group.name),
@@ -119,22 +173,22 @@ fn membership_to_xml(
         ("GroupPowers", &role_powers.to_string()),
         ("GroupTitle", role_title),
         ("ListInProfile", &bool_str(&membership.list_in_profile)),
-        ("MaturePublish", &bool_str(&group.mature_publish)),
+        ("MaturePublish", &bool_str(group.mature_publish)),
         ("MembershipFee", &group.membership_fee.to_string()),
         ("OpenEnrollment", &bool_str(&group.open_enrollment)),
-        ("ShowInList", &bool_str(&group.show_in_list)),
+        ("ShowInList", &bool_str(group.show_in_list)),
     ])
 }
 
 fn member_to_xml(m: &MembershipRow, title: &str, powers: u64, is_owner: bool) -> String {
     dict_to_xml(&[
-        ("AcceptNotices", &bool_str(&m.accept_notices)),
+        ("AcceptNotices", &bool_str(m.accept_notices)),
         ("AccessToken", &m.access_token),
         ("AgentID", &m.principal_id),
         ("AgentPowers", &powers.to_string()),
-        ("Contribution", &m.contribution),
+        ("Contribution", &m.contribution.to_string()),
         ("IsOwner", if is_owner { "True" } else { "False" }),
-        ("ListInProfile", &bool_str(&m.list_in_profile)),
+        ("ListInProfile", &bool_str(m.list_in_profile)),
         ("OnlineStatus", ""),
         ("Title", title),
     ])
@@ -145,7 +199,7 @@ fn role_to_xml(r: &RoleRow, members: i64) -> String {
         ("Description", &r.description),
         ("Members", &members.to_string()),
         ("Name", &r.name),
-        ("Powers", &r.powers),
+        ("Powers", &r.powers.to_string()),
         ("RoleID", &r.role_id),
         ("Title", &r.title),
     ])
@@ -167,13 +221,13 @@ fn invite_to_xml(inv: &InvitationRow) -> String {
 fn notice_to_xml(n: &NoticeRow) -> String {
     dict_to_xml(&[
         ("NoticeID", &n.notice_id),
-        ("Timestamp", &n.timestamp),
+        ("Timestamp", &n.timestamp.to_string()),
         ("FromName", &n.from_name),
         ("Subject", &n.subject),
-        ("HasAttachment", &bool_str(&n.has_attachment)),
+        ("HasAttachment", &bool_str(n.has_attachment)),
         ("AttachmentItemID", &n.attachment_item_id),
         ("AttachmentName", &n.attachment_name),
-        ("AttachmentType", &n.attachment_type),
+        ("AttachmentType", &n.attachment_type.to_string()),
         ("AttachmentOwnerID", &n.attachment_owner_id),
     ])
 }
@@ -195,14 +249,6 @@ fn dir_group_to_xml(row: &GroupRow, members: i64) -> String {
         ("NMembers", &members.to_string()),
         ("SearchOrder", "0"),
     ])
-}
-
-fn bool_str(val: &str) -> String {
-    if val == "1" || val.eq_ignore_ascii_case("true") {
-        "True".to_string()
-    } else {
-        "False".to_string()
-    }
 }
 
 fn parse_bool(val: &str) -> bool {
@@ -268,7 +314,7 @@ async fn has_power(
     };
     for rm in &rmemberships {
         if let Ok(Some(role)) = store.retrieve_role(group_id, &rm.role_id).await {
-            let bits: u64 = role.powers.parse().unwrap_or(0);
+            let bits: u64 = role.powers as u64;
             if bits & power.bits() != 0 {
                 return true;
             }
@@ -315,7 +361,7 @@ async fn add_or_update_role(
         name: name.to_string(),
         description: description.to_string(),
         title: title.to_string(),
-        powers: powers.to_string(),
+        powers: powers as i64,
     };
     store.store_role(&row).await.unwrap_or(false)
 }
@@ -370,9 +416,9 @@ async fn add_agent_to_group(
         group_id: group_id.to_string(),
         principal_id: agent_id.to_string(),
         selected_role_id: role_id.to_string(),
-        contribution: "0".to_string(),
-        list_in_profile: "1".to_string(),
-        accept_notices: "1".to_string(),
+        contribution: 0,
+        list_in_profile: 1,
+        accept_notices: 1,
         access_token: access_token.to_string(),
     };
     let _ = store.store_member(&membership).await;
@@ -410,7 +456,7 @@ async fn get_membership_data(
         .ok()
         .flatten();
     let (title, powers) = match role {
-        Some(r) => (r.title.clone(), r.powers.parse::<u64>().unwrap_or(0)),
+        Some(r) => (r.title.clone(), r.powers as u64),
         None => (String::new(), 0),
     };
     Some((membership, group, title, powers))
@@ -500,23 +546,20 @@ async fn handle_put_group(store: &GroupsStore, form: &HashMap<String, String>) -
             }
             .to_string(),
             show_in_list: if parse_bool(form_str(form, "ShownInList")) {
-                "1"
+                1
             } else {
-                "0"
-            }
-            .to_string(),
+                0
+            },
             allow_publish: if parse_bool(form_str(form, "AllowPublish")) {
-                "1"
+                1
             } else {
-                "0"
-            }
-            .to_string(),
+                0
+            },
             mature_publish: if parse_bool(form_str(form, "MaturePublish")) {
-                "1"
+                1
             } else {
-                "0"
-            }
-            .to_string(),
+                0
+            },
             owner_role_id: owner_role_id.clone(),
             location: String::new(),
         };
@@ -614,23 +657,20 @@ async fn handle_put_group(store: &GroupsStore, form: &HashMap<String, String>) -
             }
             .to_string(),
             show_in_list: if parse_bool(form_str(form, "ShownInList")) {
-                "1"
+                1
             } else {
-                "0"
-            }
-            .to_string(),
+                0
+            },
             allow_publish: if parse_bool(form_str(form, "AllowPublish")) {
-                "1"
+                1
             } else {
-                "0"
-            }
-            .to_string(),
+                0
+            },
             mature_publish: if parse_bool(form_str(form, "MaturePublish")) {
-                "1"
+                1
             } else {
-                "0"
-            }
-            .to_string(),
+                0
+            },
             owner_role_id: existing.owner_role_id,
             location: existing.location,
         };
@@ -823,7 +863,7 @@ async fn handle_get_group_members(store: &GroupsStore, form: &HashMap<String, St
             .ok()
             .flatten();
         let (title, powers) = match &role {
-            Some(r) => (r.title.as_str(), r.powers.parse::<u64>().unwrap_or(0)),
+            Some(r) => (r.title.as_str(), r.powers as u64),
             None => ("", 0),
         };
 
@@ -1162,14 +1202,14 @@ async fn handle_update_membership(store: &GroupsStore, form: &HashMap<String, St
 
     if let Ok(Some(mut member)) = store.retrieve_member(group_id, agent_id).await {
         member.accept_notices = if parse_bool(form_str(form, "AcceptNotices")) {
-            "1".to_string()
+            1
         } else {
-            "0".to_string()
+            0
         };
         member.list_in_profile = if parse_bool(form_str(form, "ListInProfile")) {
-            "1".to_string()
+            1
         } else {
-            "0".to_string()
+            0
         };
         let _ = store.store_member(&member).await;
     }
@@ -1266,15 +1306,15 @@ async fn handle_add_notice(store: &GroupsStore, form: &HashMap<String, String>) 
     let row = NoticeRow {
         group_id: group_id.to_string(),
         notice_id: notice_id.to_string(),
-        timestamp: unix_now().to_string(),
+        timestamp: unix_now(),
         from_name: form_str(form, "FromName").to_string(),
         subject: form_str(form, "Subject").to_string(),
         message: form_str(form, "Message").to_string(),
-        has_attachment: if has_att { "1" } else { "0" }.to_string(),
+        has_attachment: if has_att { 1 } else { 0 },
         attachment_type: if has_att {
-            form_str(form, "AttachmentType").to_string()
+            form_str(form, "AttachmentType").parse().unwrap_or(0)
         } else {
-            "0".to_string()
+            0
         },
         attachment_name: if has_att {
             form_str(form, "AttachmentName").to_string()
@@ -1370,6 +1410,8 @@ mod tests {
 
     #[test]
     fn test_bool_str() {
+        assert_eq!(bool_str(1), "True");
+        assert_eq!(bool_str(0), "False");
         assert_eq!(bool_str("1"), "True");
         assert_eq!(bool_str("0"), "False");
         assert_eq!(bool_str("true"), "True");
