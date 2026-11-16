@@ -12,7 +12,6 @@ welkin-llsd = { path = "../welkin-llsd" }
 welkin-script-compiler = { path = "../welkin-script-compiler" }
 axum = { workspace = true }
 tokio = { workspace = true }
-thiserror = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true }
 uuid = { workspace = true }

@@ -13,7 +13,6 @@ aurora-prim = { workspace = true }
 glam = { workspace = true }
 uuid = { workspace = true }
 serde = { workspace = true }
-thiserror = { workspace = true }
 bitflags = { workspace = true }
 
 [lints]

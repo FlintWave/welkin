@@ -8,7 +8,6 @@ publish.workspace = true
 
 [dependencies]
 welkin-script-compiler = { path = "../welkin-script-compiler" }
-thiserror = { workspace = true }
 tracing = { workspace = true }
 
 [lints]

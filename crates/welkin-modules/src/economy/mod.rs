@@ -16,6 +16,8 @@ use crate::module::{ModuleConfig, ModuleError, ModuleType, RegionModule};
 use crate::registry::SceneRef;
 
 pub use simple_money::SimpleMoneyModule;
+pub use dtl_proxy::DTLProxyModule;
+pub use gloebit::GloebitModule;
 
 // ---------------------------------------------------------------------------
 // MoneyTransactionType
@@ -39,7 +41,7 @@ pub enum MoneyTransactionType {
 // MoneyModule trait
 // ---------------------------------------------------------------------------
 
-pub trait MoneyModule: Send + Sync {
+pub trait MoneyModule: std::any::Any + Send + Sync {
     fn object_give_money(
         &self,
         object_id: Uuid,

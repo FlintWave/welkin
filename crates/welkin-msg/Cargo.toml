@@ -10,7 +10,6 @@ publish.workspace = true
 aurora-msg = { workspace = true }
 glam = { workspace = true }
 welkin-types = { path = "../welkin-types" }
-thiserror = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]

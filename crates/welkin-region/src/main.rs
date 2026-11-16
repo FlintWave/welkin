@@ -543,6 +543,42 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let process_avatars = Arc::new(welkin_services::remote::avatar::RemoteAvatarConnector::new(accounts_url));
     let process_friends = Arc::new(welkin_services::remote::friends::RemoteFriendsConnector::new(accounts_url));
     let process_egress = scene_ref.egress.clone();
+    let economy_type = config.get_string_or("Economy", "Type", "");
+    let legacy_type = config.get_string_or("Modules", "MoneyModule", "Simple");
+    let currency_url = config.get_string_or("Economy", "CurrencyServer", "");
+    let currency_url = if currency_url.trim().is_empty() {
+        config.get_string_or("Economy", "CurrencyURL", "")
+    } else {
+        currency_url
+    };
+    let selected_type = if !economy_type.trim().is_empty() {
+        economy_type
+    } else if !currency_url.trim().is_empty() {
+        "DTL".to_string()
+    } else {
+        legacy_type
+    };
+    let process_money_module: std::sync::Arc<dyn welkin_modules::economy::MoneyModule> = match selected_type
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "sample" | "samplemoneymodule" => {
+            std::sync::Arc::new(welkin_modules::economy::SampleMoneyModule::new())
+        }
+        "dtl" | "dtlproxy" | "dtlproxymodule" | "proxy" => {
+            let mut m = welkin_modules::economy::DTLProxyModule::new();
+            let _ = welkin_modules::RegionModule::initialise(&mut m, &ConfigBridge(&config));
+            std::sync::Arc::new(m)
+        }
+        "gloebit" | "gloebitmodule" => {
+            let mut m = welkin_modules::economy::GloebitModule::new();
+            let _ = welkin_modules::RegionModule::initialise(&mut m, &ConfigBridge(&config));
+            std::sync::Arc::new(m)
+        }
+        _ => std::sync::Arc::new(welkin_modules::economy::SimpleMoneyModule::from_pool(pool.clone())),
+    };
+    let process_money_module_any: std::sync::Arc<dyn std::any::Any + Send + Sync> = process_money_module.clone();
     let process_groups = region_config.groups_server_uri.as_deref().map(groups_io::GroupsCtx::new);
     if let Ok(Some(estate)) = process_estate_store.get_estate_for_region(&region_id_str).await {
         welkin_caps::handlers::set_estate_change_info(
@@ -578,6 +614,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             process_groups,
             process_friends,
             process_egress,
+            Some(process_money_module.clone()),
         )
         .await;
     });
@@ -838,15 +875,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         if raw <= 0 { 900 } else { raw.max(5) as u64 }
     };
     info!(backup_interval_secs, "periodic backup interval configured");
-    let money_module_name = config.get_string_or("Modules", "MoneyModule", "Simple");
-    let process_money_module: Option<std::sync::Arc<dyn std::any::Any + Send + Sync>> = Some(
-        if matches!(money_module_name.as_str(), "Sample" | "SampleMoneyModule" | "") {
-            std::sync::Arc::new(welkin_modules::economy::SampleMoneyModule::new())
-        } else {
-            std::sync::Arc::new(welkin_modules::economy::SimpleMoneyModule::from_pool(pool.clone()))
-        },
-    );
-
     let heartbeat_handle = tokio::spawn(async move {
         let mut interval =
             tokio::time::interval(std::time::Duration::from_millis(frame_time_ms.max(50)));
@@ -872,7 +900,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     owner_id,
                     region_name: heartbeat_scene.region_info.region_name.clone(),
                     position: [prim_pos.x as f64, prim_pos.y as f64, prim_pos.z as f64],
-                    money_module: process_money_module.clone(),
+                    money_module: Some(process_money_module_any.clone()),
                     chat_sender: Some(heartbeat_chat_tx.clone()),
                     timer_sender: Some(heartbeat_timer_tx.clone()),
                     event_sender: Some(heartbeat_event_tx.clone()),
@@ -1758,6 +1786,24 @@ fn default_wearables() -> Vec<agent_wearables_update::WearableData> {
 
 use welkin_caps::handlers::EventQueueMap;
 
+/// Helper describing an agent export for a remote teleport leg.
+#[derive(Debug, Clone)]
+struct AgentExport {
+    agent_id: Uuid,
+    session_id: Uuid,
+    region_handle: u64,
+}
+
+impl AgentExport {
+    fn new(agent_id: Uuid, session_id: Uuid, region_handle: u64) -> Self {
+        Self {
+            agent_id,
+            session_id,
+            region_handle,
+        }
+    }
+}
+
 async fn process_messages(
     mut msg_rx: tokio::sync::mpsc::UnboundedReceiver<(SocketAddr, welkin_msg::IncomingPacket)>,
     dispatcher: PacketDispatcher,
@@ -1782,6 +1828,7 @@ async fn process_messages(
     groups: Option<groups_io::GroupsCtx>,
     friends: Arc<welkin_services::remote::friends::RemoteFriendsConnector>,
     egress: welkin_modules::egress::SharedEgress,
+    money_module: Option<Arc<dyn welkin_modules::economy::MoneyModule>>,
 ) {
     let mut last_agent_update: HashMap<Uuid, Instant> = HashMap::new();
     // Persistent vertical velocity per avatar (jumping and falling).
@@ -2388,16 +2435,23 @@ async fn process_messages(
             && let Some(client) = &client
         {
             let object_id = req.object_data.object_id;
+            let info = scene
+                .with_object(&object_id, |g| g.root_part().pay_price_info())
+                .unwrap_or_default();
+            // keep the money module's in-memory pay price in sync when scripts set it
+            if let Some(mm) = &money_module {
+                mm.set_pay_price(object_id, info.default_pay_price, info.buttons);
+            }
             let reply = PayPriceReply {
                 object_data: pay_price_reply::ObjectData {
                     object_id,
-                    default_pay_price: -1,
+                    default_pay_price: info.default_pay_price,
                 },
                 button_data: vec![
-                    pay_price_reply::ButtonData { pay_button: -1 },
-                    pay_price_reply::ButtonData { pay_button: -1 },
-                    pay_price_reply::ButtonData { pay_button: -1 },
-                    pay_price_reply::ButtonData { pay_button: -1 },
+                    pay_price_reply::ButtonData { pay_button: info.buttons[0] },
+                    pay_price_reply::ButtonData { pay_button: info.buttons[1] },
+                    pay_price_reply::ButtonData { pay_button: info.buttons[2] },
+                    pay_price_reply::ButtonData { pay_button: info.buttons[3] },
                 ],
             };
             let mut session = client.lock().await;
@@ -2423,6 +2477,7 @@ async fn process_messages(
                 &scene,
                 &inventory_connector,
                 &asset_connector,
+                money_module.as_deref(),
                 agent_id,
                 buy.agent_data.category_id,
                 &entries,
@@ -2462,7 +2517,10 @@ async fn process_messages(
                     agent_id,
                     transaction_id: Uuid::new_v4(),
                     transaction_success: true,
-                    money_balance: 0,
+                    money_balance: money_module
+                        .as_ref()
+                        .map(|m| m.get_balance(agent_id))
+                        .unwrap_or(0),
                     square_meters_credit: 0,
                     square_meters_committed: 0,
                     description: b"Purchase complete\0".to_vec(),
@@ -2473,7 +2531,7 @@ async fn process_messages(
                     is_source_group: false,
                     dest_id: Uuid::nil(),
                     is_dest_group: false,
-                    amount: 0,
+                    amount: bought.total_paid,
                     item_description: b"\0".to_vec(),
                 },
             };
@@ -4382,51 +4440,112 @@ async fn process_messages(
                         info!(agent = %agent_id, pos = ?req.info.position, "local teleport complete");
                     }
                 } else {
-                    // Local fallback: resolve the destination region via the remote
-                    // grid connector. Send a progress notice when it can be found;
-                    // otherwise report an unsupported/unknown destination.
-                    let dest_found = match &grid_connector {
+                    // Cross-region teleport path. Only activated when the
+                    // destination resolves on a remote grid; otherwise fall
+                    // through to a TeleportFailed notice.
+                    let dest_region = match &grid_connector {
                         Some(conn) => match conn
                             .get_region_by_handle_u64("00000000-0000-0000-0000-000000000000", req.info.region_handle)
                             .await
                         {
-                            Ok(Some(_)) => true,
-                            Ok(None) => false,
+                            Ok(region) => region,
                             Err(e) => {
                                 warn!(agent = %agent_id, error = %e, "grid connector lookup failed");
-                                false
+                                None
                             }
                         },
-                        None => false,
+                        None => None,
                     };
 
                     if let Some(client) = &client {
                         let mut session = client.lock().await;
-                        if dest_found {
-                            info!(
-                                agent = %agent_id,
-                                dest_handle = req.info.region_handle,
-                                "cross-region destination resolved via grid connector"
-                            );
-                            let progress_msg = TeleportProgress {
-                                agent_data: teleport_progress::AgentData { agent_id },
-                                info: teleport_progress::Info {
-                                    teleport_flags: 0,
-                                    message: b"Destination region located; teleport in progress.".to_vec(),
-                                },
-                            };
-                            let (pkt_bytes, _) = session.circuit.send_msg(&progress_msg, true);
-                            let _ = socket.send_to(&pkt_bytes, src).await;
-                        } else {
-                            let fail_msg = TeleportFailed {
-                                info: teleport_failed::Info {
-                                    agent_id,
-                                    reason: b"Cross-region teleport is not supported: destination region unavailable.".to_vec(),
-                                },
-                                alert_info: Vec::new(),
-                            };
-                            let (pkt_bytes, _) = session.circuit.send_msg(&fail_msg, true);
-                            let _ = socket.send_to(&pkt_bytes, src).await;
+                        match dest_region {
+                            Some(dest) => {
+                                let export = AgentExport::new(agent_id, session_id, req.info.region_handle);
+                                info!(
+                                    agent = %agent_id,
+                                    dest_handle = req.info.region_handle,
+                                    dest_name = %dest.region_name,
+                                    "cross-region destination resolved via grid connector"
+                                );
+
+                                // TeleportStart
+                                let start_msg = TeleportStart {
+                                    info: teleport_start::Info { teleport_flags: 0 },
+                                };
+                                let (pkt_bytes, _) = session.circuit.send_msg(&start_msg, true);
+                                let _ = socket.send_to(&pkt_bytes, src).await;
+
+                                let mut remote_ok = true;
+
+                                // Gandalf CreateAgent at destination (best-effort).
+                                if let Ok(dest_uuid) = Uuid::parse_str(&dest.uuid) {
+                                    // Build the AgentExport payload handed to the
+                                    // destination gatekeeper.
+                                    let params = [
+                                        ("agent_id", export.agent_id.to_string().leak() as &str),
+                                        ("session_id", export.session_id.to_string().leak() as &str),
+                                        ("region_handle", export.region_handle.to_string().leak() as &str),
+                                        ("destination_uuid", dest_uuid.to_string().leak() as &str),
+                                    ];
+                                    let gandalf = welkin_services::remote::gandalf::Gandalf::new();
+                                    if let Err(e) = gandalf.create_agent(&dest.server_uri, &params).await {
+                                        warn!(agent = %agent_id, error = %e, "Gandalf create_agent failed");
+                                        remote_ok = false;
+                                    }
+                                } else {
+                                    remote_ok = false;
+                                }
+
+                                // UpdateSimulator redirect bytes.
+                                if remote_ok {
+                                    if let Ok(dest_uuid) = Uuid::parse_str(&dest.uuid) {
+                                        let (upd_bytes, _) = welkin_net::build_update_simulator(
+                                            dest_uuid,
+                                            &dest.region_name,
+                                            0,
+                                            0,
+                                            &mut session.circuit,
+                                        );
+                                        let _ = socket.send_to(&upd_bytes, src).await;
+                                    } else {
+                                        remote_ok = false;
+                                    }
+                                }
+
+                                if remote_ok {
+                                    let progress_msg = TeleportProgress {
+                                        agent_data: teleport_progress::AgentData { agent_id },
+                                        info: teleport_progress::Info {
+                                            teleport_flags: 0,
+                                            message: b"Destination region located; teleport in progress.".to_vec(),
+                                        },
+                                    };
+                                    let (pkt_bytes, _) = session.circuit.send_msg(&progress_msg, true);
+                                    let _ = socket.send_to(&pkt_bytes, src).await;
+                                } else {
+                                    let fail_msg = TeleportFailed {
+                                        info: teleport_failed::Info {
+                                            agent_id,
+                                            reason: b"Cross-region teleport failed.".to_vec(),
+                                        },
+                                        alert_info: Vec::new(),
+                                    };
+                                    let (pkt_bytes, _) = session.circuit.send_msg(&fail_msg, true);
+                                    let _ = socket.send_to(&pkt_bytes, src).await;
+                                }
+                            }
+                            None => {
+                                let fail_msg = TeleportFailed {
+                                    info: teleport_failed::Info {
+                                        agent_id,
+                                        reason: b"Cross-region teleport is not supported: destination region unavailable.".to_vec(),
+                                    },
+                                    alert_info: Vec::new(),
+                                };
+                                let (pkt_bytes, _) = session.circuit.send_msg(&fail_msg, true);
+                                let _ = socket.send_to(&pkt_bytes, src).await;
+                            }
                         }
                     }
                 }
@@ -5653,7 +5772,7 @@ fn build_default_prim_te() -> Vec<u8> {
 
 fn build_default_avatar_te() -> Vec<u8> {
     let img_default_avatar =
-        uuid::Uuid::parse_str("c228d1cf-4b5d-4ba8-84f4-899a0796aa97").unwrap();
+        Uuid::parse_str("c228d1cf-4b5d-4ba8-84f4-899a0796aa97").unwrap();
     let mut te = TextureEntry::default();
     for &idx in &[8, 9, 10, 11, 20] {
         te.faces[idx].texture = img_default_avatar;

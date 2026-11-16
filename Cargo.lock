@@ -4722,7 +4722,6 @@ dependencies = [
  "quick-xml",
  "reqwest 0.12.28",
  "serde",
- "thiserror 2.0.21",
  "tokio",
  "tower",
  "tracing",
@@ -4853,7 +4852,6 @@ dependencies = [
  "aurora-msg",
  "aurora-net",
  "glam 0.34.3",
- "thiserror 2.0.21",
  "uuid",
  "welkin-types",
 ]
@@ -4891,7 +4889,6 @@ dependencies = [
  "rapier3d",
  "serde",
  "serde_json",
- "thiserror 2.0.21",
  "tracing",
  "welkin-physics",
  "welkin-types",
@@ -4997,6 +4994,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "uuid",
  "welkin-config",
  "welkin-data",
  "welkin-runtime",
@@ -5011,7 +5009,6 @@ dependencies = [
  "metrics",
  "metrics-exporter-prometheus",
  "serde",
- "thiserror 2.0.21",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -5041,7 +5038,6 @@ dependencies = [
 name = "welkin-script-api"
 version = "0.1.0"
 dependencies = [
- "thiserror 2.0.21",
  "tracing",
  "welkin-script-compiler",
 ]
@@ -5050,7 +5046,6 @@ dependencies = [
 name = "welkin-script-compiler"
 version = "0.1.0"
 dependencies = [
- "thiserror 2.0.21",
  "tracing",
 ]
 
@@ -5115,7 +5110,6 @@ dependencies = [
  "bitflags 2.13.2",
  "glam 0.34.3",
  "serde",
- "thiserror 2.0.21",
  "uuid",
 ]
 
