@@ -12,7 +12,7 @@ use glam::Vec3;
 pub const AVATAR_STAND_OFFSET: f32 = 1.0;
 
 /// Gravity applied to a non-flying avatar in the air (m/s^2).
-pub const GRAVITY: f32 = 9.8;
+pub const GRAVITY: f32 = 9.80665;
 
 /// Upward speed given by a jump (about 1.3 m of height).
 pub const JUMP_SPEED: f32 = 5.0;
