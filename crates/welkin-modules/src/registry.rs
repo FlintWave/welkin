@@ -101,6 +101,19 @@ impl ModuleRegistry {
         self.modules.len()
     }
 
+    /// Mutably look up a registered module by name.
+    pub fn find_module_mut(&mut self, name: &str) -> Option<&mut dyn RegionModule> {
+        self.modules
+            .iter_mut()
+            .find(|m| m.name() == name)
+            .map(|m| m.as_mut())
+    }
+
+    /// Whether a module with the given name is registered.
+    pub fn has_module(&self, name: &str) -> bool {
+        self.modules.iter().any(|m| m.name() == name)
+    }
+
     /// Initialise every module in registration order.
     pub fn initialise_all(&mut self, config: &dyn ModuleConfig) -> Result<(), ModuleError> {
         for module in &mut self.modules {

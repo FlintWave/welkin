@@ -1262,13 +1262,7 @@ pub async fn estate_change_info(body: Bytes) -> Response {
 }
 
 pub async fn environment_settings_get() -> Response {
-    let mut entry = Map::new();
-    entry.insert("type".into(), Llsd::String("default".into()));
-    entry.insert(
-        "regionID".into(),
-        Llsd::String("00000000-0000-0000-0000-000000000000".into()),
-    );
-    llsd_response(Llsd::Array(vec![Llsd::Map(entry)]))
+    llsd_response(default_environment_settings())
 }
 
 pub async fn environment_settings_post(body: Bytes) -> Response {
@@ -1430,6 +1424,10 @@ pub fn cap_routes(
             "EnvironmentSettings",
             get(environment_settings_get).post(environment_settings_post),
         ),
+        (
+            "ExtEnvironment",
+            get(environment_settings_get).post(environment_settings_post),
+        ),
         ("LandResources", post(land_resources)),
         (
             "UpdateGestureAgentInventory",
@@ -1573,7 +1571,7 @@ mod tests {
     #[tokio::test]
     async fn test_cap_routes_count() {
         let routes = cap_routes(test_asset_state(), test_inv_state(), test_bake_state(), test_script_upload_state());
-        assert_eq!(routes.len(), 42);
+        assert_eq!(routes.len(), 43);
     }
 
     #[tokio::test]

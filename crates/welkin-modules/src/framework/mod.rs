@@ -356,6 +356,11 @@ impl RegionModule for SearchModule {
         Ok(())
     }
 
+    fn index_search_places(&mut self, query: &str) {
+        let _ = self.index.search_places(query, 0);
+        let _ = self.search_places(query, 0);
+    }
+
     fn remove_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
         tracing::info!(region = %scene.region_name, "SearchModule detached");
         Ok(())

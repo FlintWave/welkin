@@ -406,6 +406,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         info!(count = registry.module_count(), "modules initialised");
     }
 
+    // On region initialisation, warm the place search index if SearchModule is
+    // loaded; only log when it is absent.
+    {
+        let mut registry = scene_ref.registry.write();
+        if let Some(module) = registry.find_module_mut("SearchModule") {
+            module.index_search_places(&scene.region_info.region_name);
+        } else {
+            info!("SearchModule not loaded");
+        }
+    }
+
     // --- Script scheduler ---
     let script_scheduler = Arc::new(parking_lot::Mutex::new(ScriptScheduler::new(10_000)));
     let scripts_enabled = scene.config.scripts_enabled;
@@ -5967,6 +5978,8 @@ const KNOWN_CAPS: &[&str] = &[
     "ParcelVoiceInfoRequest",
     "ProvisionVoiceAccountRequest",
     "EstateChangeInfo",
+    "EnvironmentSettings",
+    "ExtEnvironment",
 ];
 
 async fn seed_caps_handler(
