@@ -38,12 +38,7 @@ impl PcampBotConfig {
         Ok(cfg)
     }
 
-    /// Save configuration to a JSON file.
-    pub fn save(&self, path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
-        let json = serde_json::to_string_pretty(self)?;
-        std::fs::write(path, json)?;
-        Ok(())
-    }
+
 }
 
 impl Default for PcampBotConfig {
@@ -84,7 +79,6 @@ pub enum BotAction {
 /// Internal state of a single bot.
 #[derive(Debug, Clone)]
 pub struct Bot {
-    pub agent_id: Uuid,
     pub session_id: Uuid,
     pub name: String,
     pub position: [f32; 3],
@@ -97,7 +91,6 @@ impl Bot {
     /// Create a new bot with a generated identity.
     pub fn new(first_name: &str, last_name: &str) -> Self {
         Self {
-            agent_id: Uuid::new_v4(),
             session_id: Uuid::nil(),
             name: format!("{first_name} {last_name}"),
             position: [128.0, 128.0, 25.0],
