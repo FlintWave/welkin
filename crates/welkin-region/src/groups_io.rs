@@ -15,20 +15,56 @@ use welkin_msg::msgs::alert_message as alert_message_msg;
 use welkin_services::remote::RemoteError;
 use welkin_services::remote::groups::{RemoteGroupsConnector, MembershipRecord, GroupRecord};
 
+#[derive(Clone, Default)]
+pub struct GroupDataSequencer {
+    inner: Arc<parking_lot::Mutex<std::collections::HashMap<Uuid, (u64, u64)>>>,
+}
+
+impl GroupDataSequencer {
+    pub fn ticket(&self, agent: Uuid) -> u64 {
+        let mut inner = self.inner.lock();
+        let entry = inner.entry(agent).or_insert((0, 0));
+        entry.0 += 1;
+        entry.0
+    }
+
+    pub fn try_publish(&self, agent: Uuid, ticket: u64) -> bool {
+        let mut inner = self.inner.lock();
+        let entry = inner.entry(agent).or_insert((0, 0));
+        if ticket > entry.1 {
+            entry.1 = ticket;
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn forget(&self, agent: Uuid) {
+        let mut inner = self.inner.lock();
+        inner.remove(&agent);
+    }
+}
+
 #[derive(Clone)]
 pub struct GroupsCtx {
     connector: Arc<RemoteGroupsConnector>,
+    sequencer: GroupDataSequencer,
 }
 
 impl GroupsCtx {
     pub fn new(server_uri: &str) -> Self {
         Self {
             connector: Arc::new(RemoteGroupsConnector::new(server_uri)),
+            sequencer: GroupDataSequencer::default(),
         }
     }
 
     pub fn connector(&self) -> &Arc<RemoteGroupsConnector> {
         &self.connector
+    }
+
+    pub fn sequencer(&self) -> &GroupDataSequencer {
+        &self.sequencer
     }
 }
 
@@ -155,12 +191,15 @@ pub fn agent_group_data_event(agent: Uuid, memberships: &[MembershipRecord]) -> 
 }
 
 pub async fn send_agent_group_data(ctx: &GroupsCtx, agent: Uuid, eq: &EventQueue) {
+    let ticket = ctx.sequencer().ticket(agent);
     let memberships = agent_memberships(ctx, agent).await;
-    eq.enqueue(
-        "AgentGroupDataUpdate",
-        agent_group_data_event(agent, &memberships),
-    )
-    .await;
+    if ctx.sequencer().try_publish(agent, ticket) {
+        eq.enqueue(
+            "AgentGroupDataUpdate",
+            agent_group_data_event(agent, &memberships),
+        )
+        .await;
+    }
 }
 
 pub fn name_bytes(name: &str) -> Vec<u8> {
@@ -900,6 +939,55 @@ mod tests {
                 }
             }
             _ => panic!("expected root map"),
+        }
+    }
+
+    #[test]
+    fn group_data_sequencer_tickets_and_publish() {
+        let sequencer = GroupDataSequencer::default();
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let c = Uuid::new_v4();
+
+        assert_eq!(sequencer.ticket(a), 1);
+        assert_eq!(sequencer.ticket(a), 2);
+        assert_eq!(sequencer.ticket(b), 1);
+
+        assert!(sequencer.try_publish(a, 2));
+        assert!(!sequencer.try_publish(a, 1));
+
+        assert!(sequencer.try_publish(c, 1));
+        assert!(sequencer.try_publish(c, 2));
+
+        sequencer.forget(a);
+        assert_eq!(sequencer.ticket(a), 1);
+        assert!(sequencer.try_publish(a, 1));
+    }
+
+    #[tokio::test]
+    async fn stale_ticket_is_dropped_by_send() {
+        let (base, _guard) = start_service().await;
+        let ctx = GroupsCtx::new(&base);
+        let agent = Uuid::new_v4();
+        let created = create_test_group(&ctx, agent, "Queued Group").await;
+
+        let queue = EventQueue::new();
+        let stale = ctx.sequencer().ticket(agent);
+        send_agent_group_data(&ctx, agent, &queue).await;
+
+        assert!(!ctx.sequencer().try_publish(agent, stale));
+
+        match queue.poll(Duration::from_millis(200)).await {
+            EventQueueResponse::Events { events, .. } => {
+                let text = String::from_utf8_lossy(&events);
+                assert!(text.contains("AgentGroupDataUpdate"));
+                assert!(text.contains(&created.group_name));
+            }
+            _ => panic!("expected queued events"),
+        }
+        match queue.poll(Duration::from_millis(200)).await {
+            EventQueueResponse::Timeout => {}
+            _ => panic!("expected timeout"),
         }
     }
 

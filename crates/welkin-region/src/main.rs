@@ -1985,6 +1985,9 @@ async fn process_messages(
             && let Some(client) = &client
         {
             modify_throttle.forget(&agent_id);
+            if let Some(g) = &groups {
+                g.sequencer().forget(agent_id);
+            }
             let leaving = {
                 let mut session = client.lock().await;
                 let reply = LogoutReply {

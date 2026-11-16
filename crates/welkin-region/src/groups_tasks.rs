@@ -115,10 +115,14 @@ pub fn spawn_login_group_data(
     addr: SocketAddr,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
+        let ticket = ctx.sequencer().ticket(agent);
         let (active, memberships) = tokio::join!(
             active_group(&ctx, agent),
             agent_memberships(&ctx, agent)
         );
+        if !ctx.sequencer().try_publish(agent, ticket) {
+            return;
+        }
         eq.enqueue(
             "AgentGroupDataUpdate",
             agent_group_data_event(agent, &memberships),
