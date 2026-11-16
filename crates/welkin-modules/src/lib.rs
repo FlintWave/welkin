@@ -11,6 +11,7 @@ pub mod avatar;
 pub mod chat;
 pub mod concierge;
 pub mod economy;
+pub mod egress;
 pub mod environment;
 pub mod estate;
 pub mod events;

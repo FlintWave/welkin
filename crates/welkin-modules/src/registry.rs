@@ -29,6 +29,8 @@ pub struct SceneRef {
     pub region_size_y: u32,
     pub events: Arc<SceneEvents>,
     pub registry: Arc<RwLock<ModuleRegistry>>,
+    /// Outbound path to connected viewers (null until the region installs one).
+    pub egress: crate::egress::SharedEgress,
 }
 
 impl SceneRef {
@@ -42,6 +44,7 @@ impl SceneRef {
             region_size_y: 256,
             events: Arc::new(SceneEvents::new()),
             registry: Arc::new(RwLock::new(registry)),
+            egress: crate::egress::null_egress(),
         }
     }
 }
