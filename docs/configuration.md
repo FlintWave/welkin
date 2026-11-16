@@ -107,6 +107,66 @@ SQLite is the default for local development and single-server grids.
 MariaDB or PostgreSQL is recommended for production grids with multiple
 regions.
 
+## Logging
+
+The region simulator reads a `[Logging]` section at startup. Welkin does
+not read OpenSimulator's log4net XML file, so the `logconfig` key under
+`[Startup]` has no effect. Every key below is optional.
+
+| Key | Type | Default | Purpose |
+|---|---|---|---|
+| Directory | string | logs | Folder for log files; created if absent |
+| FilePrefix | string | region.log | Start of each log file name; the rotation date is appended |
+| Rotation | string | daily | `hourly`, `daily`, or `never`; any other value means `daily` |
+| MaxFiles | int | 14 | Rotated files to keep; `0` keeps all of them |
+| Level | string | info | Base level: `error`, `warn`, `info`, `debug`, or `trace` |
+| Filter | string | (empty) | Extra per-module directives, appended to `Level` |
+| Json | bool | false | Write JSON lines instead of plain text, to the console and the file |
+| Console | bool | true | Write logs to standard error |
+| File | bool | true | Write logs to rotating files |
+
+`Filter` takes comma-separated `target=level` pairs. With `Level = "info"`
+and `Filter = "welkin_net=debug,welkin_scene=warn"`, Welkin logs at info
+level, with debug output from the network crate and only warnings from the
+scene crate.
+
+```toml
+[Logging]
+Directory = "logs"
+Rotation = "hourly"
+MaxFiles = 48
+Level = "info"
+Filter = "welkin_net=debug"
+```
+
+If the `RUST_LOG` environment variable is set, it replaces both `Level`
+and `Filter`. An invalid `RUST_LOG` or `Filter` value falls back to `info`.
+`MaxFiles` and `Rotation` apply only when `File` is true. File output goes
+through a background writer, so lines written just before a crash can be
+lost.
+
+## Backup
+
+The region simulator saves changed objects to the database on a timer.
+
+| Key | Type | Default | Purpose |
+|---|---|---|---|
+| IntervalSeconds | int | 900 | Seconds between saves; values below 5 are raised to 5, and values of 0 or less use the default |
+
+```toml
+[Backup]
+IntervalSeconds = 300
+```
+
+Each save writes only objects that changed since the last one, and logs
+the count at info level when it is above zero.
+
+OpenSimulator saves on a frame count instead: the scene writes to storage
+every `UpdateStorageEveryNFrames` frames, 200 by default. Welkin uses
+wall-clock time on purpose, so the save interval does not shift with the
+frame rate. If you are migrating, set `IntervalSeconds` for the delay you
+want and drop `UpdateStorageEveryNFrames`; Welkin ignores that key.
+
 ## Module configuration
 
 Region modules read their settings through the `ModuleConfig` trait,
