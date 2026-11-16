@@ -12,6 +12,13 @@ for the region simulator and `robust.toml` for grid services.
 Standard TOML. Top-level tables become config sections; keys inside them
 are typed as string, integer, boolean, or float.
 
+Welkin checks the type of boolean, integer and float settings. A value of the
+wrong type, such as `PhysicsEnabled = "false"` (a string) where a boolean is
+expected, is logged as an error naming the section, key and value, and Welkin
+uses the setting's default instead. Watch the startup log after editing a
+config file. An integer is accepted wherever a float is expected, so
+`Gain = 10` works for a float setting.
+
 ```toml
 [Region]
 RegionName = "My Region"
@@ -84,6 +91,12 @@ multi-region setups.
 CLI: `welkin-robust --config <path> [--public-port <port>] [--private-port <port>]`
 
 Defaults: `--config robust.toml`, `--public-port 8002`, `--private-port 8003`.
+The private port binds to `127.0.0.1` by default, because it serves account and
+authentication endpoints without authentication. To bind another address, pass
+`--private-bind <address>` or set `WELKIN_PRIVATE_BIND`. The container image
+sets `WELKIN_PRIVATE_BIND=0.0.0.0` so other containers can reach it; keep the
+published port off the public network. A region on a different host cannot
+reach the private port until you change the bind address.
 The public port handles viewer login (XMLRPC) and user-facing caps. The
 private port handles inter-service traffic (grid registration, asset
 storage, inventory queries).

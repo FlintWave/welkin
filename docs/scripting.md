@@ -406,6 +406,10 @@ OpenSimulator. The region relays them from `sound_io.rs`.
   broadcast a full object update, so avatars who arrive later still hear the
   loop. Loop flags are LOOP (0x01), MASTER (0x02) and SLAVE (0x04), plus QUEUE
   (0x10) when queueing is on. llStopSound sets STOP (0x20).
+- Scripts in child prims drive the one-shot and range sounds (play, trigger,
+  preload) through the prim's linkset root. llLoopSound and llStopSound on a
+  child prim are not supported yet: the region logs a warning and ignores the
+  command, so put looping sounds in the root prim.
 
 ## Differences from OpenSimulator
 

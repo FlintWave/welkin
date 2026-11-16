@@ -565,6 +565,15 @@ development `robust.toml` and compose file enable it for local testing; do not
 copy that into a production grid. See the
 [configuration reference](configuration.md#welkin-robust-grid-services).
 
+### Private service port
+
+`welkin-robust` binds its private port (8003 by default) to `127.0.0.1`. That
+port serves account and authentication endpoints with no authentication, so
+treat any wider bind as a decision. Use `--private-bind` or
+`WELKIN_PRIVATE_BIND` only to reach it from a region host or container network,
+and restrict it by firewall to those hosts. See the
+[configuration reference](configuration.md#welkin-robust-grid-services).
+
 ### Rate limiting
 
 Apply rate limiting at the reverse proxy layer. Key endpoints to protect:
