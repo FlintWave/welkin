@@ -70,15 +70,21 @@ Create the first account from the region console. Start `welkin-robust`, then
 `welkin-region`, and at the `welkin>` prompt run:
 
 ```text
-create-user <first> <last> <password> [email]
+create-user <first> <last>
 ```
 
-For example, `create-user Alice Smith correct-horse-battery`.
+For example, `create-user Alice Smith`. The console then asks for the password
+twice (`Password:` and `Confirm password:`) and does not echo what you type.
+The console refuses a password typed on the command line, such as
+`create-user Alice Smith secret123`, and tells you to use the prompt instead.
 
 - The first and last name must be non-empty and contain no whitespace.
-- The password must be at least 8 characters.
-- The email is optional.
-- The grid rejects a name or ID that already exists.
+- The password must be at least 8 characters and must not contain a double
+  quote (`"`).
+- The console prompt does not take an email address.
+- The grid rejects a name or ID that already exists. Names are compared without
+  regard to case or Unicode form, so `Alice Smith` and `alice smith` are the
+  same account, and two simultaneous requests cannot both create it.
 
 The grid refuses the request unless `welkin-robust` has `AllowCreateUser = true`
 under `[UserAccountService]` in `robust.toml`. It defaults to false. The
@@ -92,10 +98,10 @@ reachable from the region. On success the console prints
 `created user First Last (<uuid>)`. Failures start with `error:`.
 
 The console does not save `create-user` lines in its command history, and the
-password is not written to the logs. The terminal still shows what you type,
-so do not run the command on a shared screen. The admin REST API runs the same
-command, and over that API the password travels in the request body; see the
-[admin API note](configuration.md#admin-api) before using it.
+password is not written to the logs. The admin REST API runs the same command
+with the password inline in the request body, and the console's refusal does
+not apply there; see the [admin API note](configuration.md#admin-api) before
+using it.
 
 The web portal and its first-run wizard are a scaffold and do not create
 accounts.
