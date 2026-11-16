@@ -175,6 +175,10 @@ async fn main() {
         error!("Region simulator failed: {e}");
         std::process::exit(1);
     }
+    // The console REPL blocks in a terminal read that cannot be cancelled; exit
+    // explicitly so a TTY run shuts down instead of waiting on readline. Logging
+    // guards were dropped when run() returned, so buffered logs are flushed.
+    std::process::exit(0);
 }
 
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -1123,7 +1127,6 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         scene: scene.clone(),
         sim_store: sim_store.clone(),
         region_id: region_id_str.clone(),
-        config: Arc::new(config.clone()),
         started: Instant::now(),
         actions: console_tx,
     });

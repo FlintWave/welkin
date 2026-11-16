@@ -9,7 +9,6 @@ use axum::routing::{get, post};
 use axum::{Json as AxumJson, Router};
 use serde_json::json;
 use tokio_util::sync::CancellationToken;
-use uuid::Uuid;
 
 use crate::console::{ConsoleAction, ConsoleContext};
 

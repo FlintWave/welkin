@@ -22,7 +22,6 @@ pub struct ConsoleContext {
     pub scene: Arc<Scene>,
     pub sim_store: Arc<welkin_data::simulation::SimulationDataStore>,
     pub region_id: String,
-    pub config: Arc<welkin_config::Config>,
     pub started: std::time::Instant,
     pub actions: UnboundedSender<ConsoleAction>,
 }
@@ -100,6 +99,7 @@ fn split_args(line: &str) -> Vec<String> {
     args
 }
 
+#[cfg(test)]
 fn parse(line: &str) -> Result<Sub, String> {
     let args = split_args(line);
     let cmd = Cmd::try_parse_from(&args).map_err(|e| e.to_string())?;

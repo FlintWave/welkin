@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 #
 # Full production deployment with grid services (Robust), region simulator,
-# web admin portal, voice sidecar, and MySQL database.
+# voice sidecar, and MySQL database.
 #
 # Usage:
 #   cp .env.example .env        # edit with real credentials
@@ -15,10 +15,10 @@
 #   - Or use pre-built images by setting IMAGE_TAG in .env
 #
 # Architecture:
-#   ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌───────────┐
-#   │ Portal  │──▶│ Robust  │◀──│ Region  │   │ WolfVoice │
-#   │  :8080  │   │  :8002  │   │  :9000  │   │   :8090   │
-#   └─────────┘   └────┬────┘   └────┬────┘   └───────────┘
+#                 ┌─────────┐   ┌─────────┐   ┌───────────┐
+#                 │ Robust  │◀──│ Region  │   │ WolfVoice │
+#                 │  :8002  │   │  :9000  │   │   :8090   │
+#                 └────┬────┘   └────┬────┘   └───────────┘
 #                      │             │
 #                      ▼             ▼
 #                 ┌─────────────────────┐
@@ -149,31 +149,6 @@ services:
       - oar-backups:/data/backups
 
   # =========================================================================
-  # portal — Web admin portal (osim-portal)
-  # =========================================================================
-  # Browser-based administration interface for managing users, regions,
-  # estates, and grid configuration.
-  # =========================================================================
-  portal:
-    image: welkin:${IMAGE_TAG:-latest}
-    command: ["welkin-portal"]
-    <<: *default-restart
-    logging: *default-logging
-    networks:
-      - welkin-net
-    env_file: .env
-    depends_on:
-      robust:
-        condition: service_started
-    ports:
-      - "${PORTAL_PORT:-8080}:8080"
-    environment:
-      RUST_LOG: "${RUST_LOG:-info}"
-      OPENSIM__Database__ConnectionString: >-
-        Server=db;Port=3306;Database=${MYSQL_DATABASE:-opensim};User=${MYSQL_USER:-opensim};Password=${MYSQL_PASSWORD}
-      OPENSIM__GridService__GridServerURI: "http://robust:8002"
-
-  # =========================================================================
   # wolfvoice — WebRTC voice sidecar
   # =========================================================================
   # Provides spatial voice chat via WebRTC.  This is a separate Docker image
@@ -246,7 +221,7 @@ volumes:
 # =============================================================================
 # All services communicate over a single bridge network.  The database is not
 # exposed to the host, reducing attack surface.  Only the application ports
-# (Robust, Region, Portal, Voice) are published.
+# (Robust, Region, Voice) are published.
 # =============================================================================
 networks:
   welkin-net:
