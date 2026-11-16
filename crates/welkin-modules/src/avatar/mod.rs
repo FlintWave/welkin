@@ -206,13 +206,40 @@ impl AvatarFactoryModule {
         self.bake_cache.get(&agent_id).cloned().unwrap_or_default()
     }
 
-    /// Persist baked textures to the asset service (stub).
+    /// Persist baked avatar textures into the local bake cache.
+    ///
+    /// Mirrors the OpenSim checks that can be performed in this module: a tracked
+    /// region requires an agent presence, and bakes that are nil or use the default
+    /// avatar texture are skipped. Remaining bakes are cached and `true` is
+    /// returned only if at least one bake survives validation.
     pub fn save_baked_textures(
         &mut self,
         agent_id: Uuid,
         textures: HashMap<BakeType, Uuid>,
     ) -> bool {
-        self.bake_cache.insert(agent_id, textures);
+        if let Some(scene) = &self.scene {
+            let has_presence =
+                scene.egress.is_connected(agent_id) || self.appearances.contains_key(&agent_id);
+            if !has_presence {
+                return false;
+            }
+        }
+
+        let default_avatar_texture =
+            Uuid::parse_str("c228d1cf-4b5d-4ba8-84f4-899a0796acbb").unwrap_or_else(|_| Uuid::nil());
+
+        let baked: HashMap<BakeType, Uuid> = textures
+            .into_iter()
+            .filter(|(_, texture_id)| {
+                !texture_id.is_nil() && *texture_id != default_avatar_texture
+            })
+            .collect();
+
+        if baked.is_empty() {
+            return false;
+        }
+
+        self.bake_cache.insert(agent_id, baked);
         true
     }
 
@@ -1271,5 +1298,112 @@ mod stub_tests_dialog {
         );
         module.send_text_box_to_user(agent, "hello", 1, "object", Uuid::new_v4(), Uuid::new_v4());
         assert!(rec.events().is_empty());
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_s_avatarfactorymodule_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn save_baked_textures_caches_valid_bakes() {
+        use std::collections::HashMap;
+
+        let agent = Uuid::new_v4();
+        let mut module = AvatarFactoryModule {
+            appearances: HashMap::new(),
+            bake_cache: HashMap::new(),
+            scene: None,
+        };
+
+        let head = Uuid::new_v4();
+        let mut textures = HashMap::new();
+        textures.insert(BakeType::Head, head);
+
+        assert!(module.save_baked_textures(agent, textures));
+        let cached = module
+            .bake_cache
+            .get(&agent)
+            .expect("baked textures should be cached");
+        assert_eq!(cached.get(&BakeType::Head), Some(&head));
+    }
+
+    #[test]
+    fn save_baked_textures_stores_multiple_bake_types() {
+        use std::collections::HashMap;
+
+        let agent = Uuid::new_v4();
+        let mut module = AvatarFactoryModule {
+            appearances: HashMap::new(),
+            bake_cache: HashMap::new(),
+            scene: None,
+        };
+
+        let head = Uuid::new_v4();
+        let upper_body = Uuid::new_v4();
+        let mut textures = HashMap::new();
+        textures.insert(BakeType::Head, head);
+        textures.insert(BakeType::UpperBody, upper_body);
+
+        assert!(module.save_baked_textures(agent, textures));
+        let cached = module.bake_cache.get(&agent).expect("cache entry");
+        assert_eq!(cached.len(), 2);
+        assert_eq!(cached.get(&BakeType::UpperBody), Some(&upper_body));
+    }
+
+    #[test]
+    fn save_baked_textures_requires_presence_for_tracked_scene() {
+        use std::collections::HashMap;
+
+        let agent = Uuid::new_v4();
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+
+        let mut module = AvatarFactoryModule {
+            appearances: HashMap::new(),
+            bake_cache: HashMap::new(),
+            scene: None,
+        };
+        let _ = module.add_region(&scene);
+
+        let mut textures = HashMap::new();
+        textures.insert(BakeType::Head, Uuid::new_v4());
+
+        assert!(!module.save_baked_textures(agent, textures.clone()));
+        assert!(module.bake_cache.is_empty());
+
+        rec.connect(agent);
+        assert!(module.save_baked_textures(agent, textures));
+        assert!(module.bake_cache.contains_key(&agent));
+    }
+
+    #[test]
+    fn save_baked_textures_rejects_nil_default_and_empty_bakes() {
+        use std::collections::HashMap;
+
+        let agent = Uuid::new_v4();
+        let mut module = AvatarFactoryModule {
+            appearances: HashMap::new(),
+            bake_cache: HashMap::new(),
+            scene: None,
+        };
+
+        let default_texture =
+            Uuid::parse_str("c228d1cf-4b5d-4ba8-84f4-899a0796acbb").unwrap_or(Uuid::nil());
+
+        let mut only_default = HashMap::new();
+        only_default.insert(BakeType::Head, default_texture);
+        assert!(!module.save_baked_textures(agent, only_default));
+
+        let mut only_nil = HashMap::new();
+        only_nil.insert(BakeType::Head, Uuid::nil());
+        assert!(!module.save_baked_textures(agent, only_nil));
+
+        assert!(!module.save_baked_textures(agent, HashMap::new()));
+        assert!(module.bake_cache.is_empty());
     }
 }
