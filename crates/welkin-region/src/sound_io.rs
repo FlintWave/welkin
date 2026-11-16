@@ -21,8 +21,40 @@ pub async fn relay_sound(
                 prim_id,
                 sound_id,
                 volume,
+            } => {
+                if let Some((group_uuid, owner_id, sound_queueing)) =
+                    scene.with_object(&prim_id, |g| (g.uuid(), g.root_part().owner_id, g.root_part().sound_queueing))
+                {
+                    let flags = play_flags(sound_queueing);
+                    let msg = AttachedSound {
+                        data_block: attached_sound::DataBlock {
+                            sound_id,
+                            object_id: group_uuid,
+                            owner_id,
+                            gain: volume as f32,
+                            flags,
+                        },
+                    };
+
+                    let snapshot: Vec<(
+                        std::net::SocketAddr,
+                        std::sync::Arc<tokio::sync::Mutex<welkin_net::server::ClientSession>>,
+                    )> = {
+                        let g = clients.read().await;
+                        g.iter().map(|(a, c)| (*a, c.clone())).collect()
+                    };
+
+                    for (addr, client) in snapshot {
+                        let pkt = {
+                            let mut s = client.lock().await;
+                            s.circuit.send_msg(&msg, true).0
+                        };
+                        let _ = socket.send_to(&pkt, addr).await;
+                    }
+                }
             }
-            | welkin_script_vm::builtins::SoundCommand::TriggerSound {
+
+            welkin_script_vm::builtins::SoundCommand::TriggerSound {
                 prim_id,
                 sound_id,
                 volume,
@@ -317,6 +349,14 @@ pub fn loop_flags(master: bool, slave: bool) -> u8 {
     flags
 }
 
+pub fn play_flags(queueing: bool) -> u8 {
+    if queueing {
+        0x10
+    } else {
+        0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -376,5 +416,15 @@ mod tests {
     #[test]
     fn loop_flags_both() {
         assert_eq!(loop_flags(true, true), 7);
+    }
+
+    #[test]
+    fn play_flags_false() {
+        assert_eq!(play_flags(false), 0);
+    }
+
+    #[test]
+    fn play_flags_true() {
+        assert_eq!(play_flags(true), 0x10);
     }
 }
