@@ -12,6 +12,7 @@ mod groups_admin;
 mod groups_chat;
 mod groups_queries;
 mod groups_queue;
+mod parcel_io;
 mod groups_tasks;
 mod inventory_rez;
 mod object_add;
@@ -1614,6 +1615,8 @@ async fn process_messages(
     let mut always_run: HashSet<Uuid> = HashSet::new();
     let mut group_sessions = ChatSessionState::new();
     let group_chat = groups_chat::GroupChat::new();
+    let region_parcel =
+        parcel_io::RegionParcel::new(scene.region_info.region_size_x, Uuid::nil());
     loop {
         let (src, pkt) = tokio::select! {
             _ = cancel.cancelled() => break,
@@ -1692,6 +1695,15 @@ async fn process_messages(
                 let mut session = client.lock().await;
                 let sent = scene_sync::send_scene_objects(&scene, &mut session, &socket, src).await;
                 info!(agent = %agent_id, objects = sent, "sent existing scene objects to new viewer");
+                // Tell the viewer which parcel it stands on (flying needs AllowFly).
+                let parcel_msg = region_parcel.properties(
+                    parcel_io::SEQ_AGENT_PARCEL,
+                    false,
+                    scene.prim_stats().0 as i32,
+                    agent_id,
+                );
+                let (parcel_bytes, _) = session.circuit.send_msg(&parcel_msg, true);
+                let _ = socket.send_to(&parcel_bytes, src).await;
             }
 
             // --- Issue 2A: Announce new avatar to all OTHER connected clients ---
@@ -2296,6 +2308,20 @@ async fn process_messages(
                 tracing::debug!(agent = %agent_id, "ModifyLand refused: no terraform permission");
             }
             terraform::broadcast_patches(&scene, &changed, &socket, &clients).await;
+        }
+
+        if parcel_io::is_parcel_request(pkt.id)
+            && let Some(client) = &client
+            && let Some(props) = parcel_io::handle_parcel_request(
+                &region_parcel,
+                agent_id,
+                &pkt.body,
+                scene.prim_stats().0 as i32,
+            )
+        {
+            let mut session = client.lock().await;
+            let (parcel_bytes, _) = session.circuit.send_msg(&props, true);
+            let _ = socket.send_to(&parcel_bytes, src).await;
         }
 
         if msg_id == AgentUpdate::ID
