@@ -5,6 +5,7 @@ mod console;
 mod console_io;
 mod persist;
 mod script_persist;
+mod scene_sync;
 mod sim_stats;
 mod sound_io;
 
@@ -1507,6 +1508,13 @@ async fn process_messages(
                 &accounts_connector,
             )
             .await;
+
+            // --- Deliver the existing scene (prims and linkset children) to the new viewer ---
+            {
+                let mut session = client.lock().await;
+                let sent = scene_sync::send_scene_objects(&scene, &mut session, &socket, src).await;
+                info!(agent = %agent_id, objects = sent, "sent existing scene objects to new viewer");
+            }
 
             // --- Issue 2A: Announce new avatar to all OTHER connected clients ---
             if let Some(new_presence) = scene.get_presence(&agent_id) {
