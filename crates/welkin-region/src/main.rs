@@ -12,6 +12,7 @@ mod groups_admin;
 mod groups_chat;
 mod groups_queries;
 mod groups_queue;
+mod object_buy;
 mod parcel_io;
 mod groups_tasks;
 mod inventory_rez;
@@ -2192,13 +2193,48 @@ async fn process_messages(
             && let Ok(buy) = ObjectBuy::decode(&pkt.body)
             && let Some(client) = &client
         {
-            for obj in &buy.object_data {
-                info!(
-                    agent = %agent_id,
-                    local_id = obj.object_local_id,
-                    sale_type = obj.sale_type,
-                    "ObjectBuy: accepted (sample economy)"
-                );
+            let entries: Vec<object_buy::BuyEntry> = buy
+                .object_data
+                .iter()
+                .map(|o| object_buy::BuyEntry {
+                    local_id: o.object_local_id,
+                    sale_type: o.sale_type,
+                    sale_price: o.sale_price,
+                })
+                .collect();
+            let bought = object_buy::buy_objects(
+                &scene,
+                &inventory_connector,
+                &asset_connector,
+                agent_id,
+                buy.agent_data.category_id,
+                &entries,
+            )
+            .await;
+            for reason in &bought.errors {
+                warn!(agent = %agent_id, %reason, "ObjectBuy: purchase refused");
+            }
+            for item in &bought.items {
+                info!(agent = %agent_id, item = %item.inventory_id, "ObjectBuy: delivered (sample economy)");
+                let update = inventory_item_update(agent_id, item);
+                let mut sess = client.lock().await;
+                let (pkt_bytes, _) = sess.circuit.send_msg(&update, true);
+                let _ = socket.send_to(&pkt_bytes, src).await;
+            }
+            if !bought.removed_local_ids.is_empty() {
+                let kill = KillObject {
+                    object_data: bought
+                        .removed_local_ids
+                        .iter()
+                        .map(|&id| kill_object::ObjectData { id })
+                        .collect(),
+                };
+                let all_clients = clients.read().await;
+                for (addr, c) in all_clients.iter() {
+                    let mut sess = c.lock().await;
+                    let (pkt_bytes, _) = sess.circuit.send_msg(&kill, true);
+                    let _ = socket.send_to(&pkt_bytes, *addr).await;
+                }
             }
             let reply = MoneyBalanceReply {
                 money_data: money_balance_reply::MoneyData {
