@@ -69,6 +69,19 @@ can import your existing `.ini` configuration files.
 See the [configuration reference](configuration.md) for all
 available sections and keys.
 
+## Default assets
+
+Welkin does not include the default avatar assets (body parts, clothing,
+animations and sounds). They are Linden Lab viewer art under CC BY-SA 2.5, which
+the OpenSimulator source tree labels in `bin/data/LICENSE-README-IMPORTANT.txt`,
+and that license does not fit LGPL-3.0-or-later. Copy the `bin/assets` folder from
+an OpenSimulator 0.9.3.0 install so that it sits beside `welkin-robust`, as
+`assets/AssetSets.xml`, or set `[AssetService] AssetLoaderArgs` in `robust.toml` to
+the path of your `AssetSets.xml`. On start, `welkin-robust` loads the sets into a
+fresh `robust.db` (432 assets, 12.6 MB) and skips anything already stored, so
+restarts are safe. Without the folder it logs a warning and avatars stay
+untextured. `AssetLoaderEnabled = false` turns the loader off.
+
 ## Run
 
 Start the grid services first, then the region simulator:

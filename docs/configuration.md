@@ -145,9 +145,11 @@ names a control file in OpenSimulator's `AssetSets.xml` format; each section in 
 points to a set file that lists the assets. The loader adds every asset that is
 not already in the store, so it is safe to run on every start.
 
-This repository does not include `AssetSets.xml` or the set files. Copy the
-`assets` folder from an OpenSimulator 0.9.3.0 installation to the directory you
-start `welkin-robust` from, or point `AssetLoaderArgs` at your copy. If the control
+This repository does not include `AssetSets.xml` or the set files, because the
+assets are Linden Lab viewer art under CC BY-SA 2.5. Copy the `bin/assets` folder
+from an OpenSimulator 0.9.3.0 installation to `assets/` in the directory you start
+`welkin-robust` from, or point `AssetLoaderArgs` at your copy. See the
+[quick start](quick-start.md#default-assets). If the control
 file is missing, the grid logs a warning (`AssetSets.xml not found; default avatar
 assets are not seeded`) and starts anyway. Set `AssetLoaderEnabled = false` to skip
 the loader.
