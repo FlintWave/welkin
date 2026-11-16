@@ -22,8 +22,14 @@ pub async fn relay_sound(
                 sound_id,
                 volume,
             } => {
+                let group_id = scene.resolve_group_for_prim(&prim_id);
+                let Some(group_id) = group_id else {
+                    tracing::warn!(prim = %prim_id, "sound command for unknown prim dropped");
+                    continue;
+                };
+
                 if let Some((group_uuid, owner_id, sound_queueing)) =
-                    scene.with_object(&prim_id, |g| (g.uuid(), g.root_part().owner_id, g.root_part().sound_queueing))
+                    scene.with_object(&group_id, |g| (g.uuid(), g.root_part().owner_id, g.root_part().sound_queueing))
                 {
                     let flags = play_flags(sound_queueing);
                     let msg = AttachedSound {
@@ -59,12 +65,18 @@ pub async fn relay_sound(
                 sound_id,
                 volume,
             } => {
+                let group_id = scene.resolve_group_for_prim(&prim_id);
+                let Some(group_id) = group_id else {
+                    tracing::warn!(prim = %prim_id, "sound command for unknown prim dropped");
+                    continue;
+                };
+
                 if let Some((group_uuid, position, owner_id, sound_radius)) =
-                    scene.with_object(&prim_id, |g| (g.uuid(), g.position(), g.root_part().owner_id, g.root_part().sound_radius))
+                    scene.with_object(&group_id, |g| (g.uuid(), g.position(), g.root_part().owner_id, g.root_part().sound_radius))
                 {
                     let radius = effective_radius(sound_radius);
                     if sound_radius == 0.0 {
-                        let _ = scene.with_object_mut(&prim_id, |g| g.root_part_mut().sound_radius = 100.0);
+                        let _ = scene.with_object_mut(&group_id, |g| g.root_part_mut().sound_radius = 100.0);
                     }
 
                     let snapshot: Vec<(
@@ -115,8 +127,14 @@ pub async fn relay_sound(
                 top_ne,
                 bottom_sw,
             } => {
+                let group_id = scene.resolve_group_for_prim(&prim_id);
+                let Some(group_id) = group_id else {
+                    tracing::warn!(prim = %prim_id, "sound command for unknown prim dropped");
+                    continue;
+                };
+
                 if let Some((group_uuid, position, owner_id)) =
-                    scene.with_object(&prim_id, |g| (g.uuid(), g.position(), g.root_part().owner_id))
+                    scene.with_object(&group_id, |g| (g.uuid(), g.position(), g.root_part().owner_id))
                 {
                     let snapshot: Vec<(
                         std::net::SocketAddr,
@@ -171,6 +189,17 @@ pub async fn relay_sound(
                 master,
                 slave,
             } => {
+                let group_id = scene.resolve_group_for_prim(&prim_id);
+                let Some(group_id) = group_id else {
+                    tracing::warn!(prim = %prim_id, "sound command for unknown prim dropped");
+                    continue;
+                };
+
+                if group_id != prim_id {
+                    tracing::warn!(prim = %prim_id, "looped sounds on child prims are not supported yet; command ignored");
+                    continue;
+                }
+
                 let _ = scene.with_object_mut(&prim_id, |g| {
                     let p = g.root_part_mut();
                     p.sound_id = sound_id;
@@ -187,6 +216,17 @@ pub async fn relay_sound(
             }
 
             welkin_script_vm::builtins::SoundCommand::StopSound { prim_id } => {
+                let group_id = scene.resolve_group_for_prim(&prim_id);
+                let Some(group_id) = group_id else {
+                    tracing::warn!(prim = %prim_id, "sound command for unknown prim dropped");
+                    continue;
+                };
+
+                if group_id != prim_id {
+                    tracing::warn!(prim = %prim_id, "looped sounds on child prims are not supported yet; command ignored");
+                    continue;
+                }
+
                 let _ = scene.with_object_mut(&prim_id, |g| {
                     let p = g.root_part_mut();
                     p.sound_id = uuid::Uuid::nil();
@@ -200,10 +240,16 @@ pub async fn relay_sound(
             }
 
             welkin_script_vm::builtins::SoundCommand::AdjustVolume { prim_id, volume } => {
+                let group_id = scene.resolve_group_for_prim(&prim_id);
+                let Some(group_id) = group_id else {
+                    tracing::warn!(prim = %prim_id, "sound command for unknown prim dropped");
+                    continue;
+                };
+
                 if let Some((group_uuid, _position, _owner_id)) =
-                    scene.with_object(&prim_id, |g| (g.uuid(), g.position(), g.root_part().owner_id))
+                    scene.with_object(&group_id, |g| (g.uuid(), g.position(), g.root_part().owner_id))
                 {
-                    let _ = scene.with_object_mut(&prim_id, |g| {
+                    let _ = scene.with_object_mut(&group_id, |g| {
                         let p = g.root_part_mut();
                         p.sound_gain = volume as f32;
                     });
@@ -234,12 +280,18 @@ pub async fn relay_sound(
             }
 
             welkin_script_vm::builtins::SoundCommand::PreloadSound { prim_id, sound_id } => {
+                let group_id = scene.resolve_group_for_prim(&prim_id);
+                let Some(group_id) = group_id else {
+                    tracing::warn!(prim = %prim_id, "sound command for unknown prim dropped");
+                    continue;
+                };
+
                 if let Some((group_uuid, position, owner_id, sound_radius)) =
-                    scene.with_object(&prim_id, |g| (g.uuid(), g.position(), g.root_part().owner_id, g.root_part().sound_radius))
+                    scene.with_object(&group_id, |g| (g.uuid(), g.position(), g.root_part().owner_id, g.root_part().sound_radius))
                 {
                     let radius = effective_radius(sound_radius);
                     if sound_radius == 0.0 {
-                        let _ = scene.with_object_mut(&prim_id, |g| g.root_part_mut().sound_radius = 100.0);
+                        let _ = scene.with_object_mut(&group_id, |g| g.root_part_mut().sound_radius = 100.0);
                     }
 
                     let msg = PreloadSound {
@@ -280,20 +332,38 @@ pub async fn relay_sound(
             }
 
             welkin_script_vm::builtins::SoundCommand::SetRadius { prim_id, radius } => {
-                let _ = scene.with_object_mut(&prim_id, |g| {
+                let group_id = scene.resolve_group_for_prim(&prim_id);
+                let Some(group_id) = group_id else {
+                    tracing::warn!(prim = %prim_id, "sound command for unknown prim dropped");
+                    continue;
+                };
+
+                let _ = scene.with_object_mut(&group_id, |g| {
                     let p = g.root_part_mut();
                     p.sound_radius = radius as f32;
                 });
             }
             welkin_script_vm::builtins::SoundCommand::CollisionSound { prim_id, sound_id, volume } => {
-                let _ = scene.with_object_mut(&prim_id, |g| {
+                let group_id = scene.resolve_group_for_prim(&prim_id);
+                let Some(group_id) = group_id else {
+                    tracing::warn!(prim = %prim_id, "sound command for unknown prim dropped");
+                    continue;
+                };
+
+                let _ = scene.with_object_mut(&group_id, |g| {
                     let p = g.root_part_mut();
                     p.collision_sound = sound_id;
                     p.collision_sound_volume = volume as f32;
                 });
             }
             welkin_script_vm::builtins::SoundCommand::SetQueueing { prim_id, enabled } => {
-                let _ = scene.with_object_mut(&prim_id, |g| {
+                let group_id = scene.resolve_group_for_prim(&prim_id);
+                let Some(group_id) = group_id else {
+                    tracing::warn!(prim = %prim_id, "sound command for unknown prim dropped");
+                    continue;
+                };
+
+                let _ = scene.with_object_mut(&group_id, |g| {
                     let p = g.root_part_mut();
                     p.sound_queueing = enabled;
                 });

@@ -182,6 +182,18 @@ impl Scene {
         self.objects.read().unwrap().get(uuid).cloned()
     }
 
+    /// Resolve a prim UUID (root or child) to the UUID of the object group that owns it.
+    pub fn resolve_group_for_prim(&self, prim_id: &Uuid) -> Option<Uuid> {
+        let objects = self.objects.read().unwrap();
+        if objects.contains_key(prim_id) {
+            return Some(*prim_id);
+        }
+        objects
+            .iter()
+            .find(|(_, g)| g.get_part(prim_id).is_some())
+            .map(|(id, _)| *id)
+    }
+
     pub fn get_object_by_local_id(&self, local_id: u32) -> Option<Uuid> {
         self.objects_by_local_id
             .read()
@@ -519,6 +531,22 @@ mod tests {
         assert_eq!(scene.frame_number(), 0);
         assert!(!scene.is_active());
         assert!(!scene.is_shutting_down());
+    }
+
+    #[test]
+    fn resolve_group_for_prim_handles_root_child_and_unknown() {
+        let scene = test_scene();
+        let owner = Uuid::new_v4();
+        let mut group = test_group("Linkset", owner, Vec3::ZERO);
+        let group_id = group.uuid();
+        let child = test_part("Child", owner);
+        let child_id = child.uuid;
+        group.add_part(child);
+        scene.add_object(group);
+
+        assert_eq!(scene.resolve_group_for_prim(&group_id), Some(group_id));
+        assert_eq!(scene.resolve_group_for_prim(&child_id), Some(group_id));
+        assert_eq!(scene.resolve_group_for_prim(&Uuid::new_v4()), None);
     }
 
     #[test]
