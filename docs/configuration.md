@@ -12,6 +12,13 @@ for the region simulator and `robust.toml` for grid services.
 Standard TOML. Top-level tables become config sections; keys inside them
 are typed as string, integer, boolean, or float.
 
+Welkin checks the type of boolean, integer and float settings. A value of the
+wrong type, such as `PhysicsEnabled = "false"` (a string) where a boolean is
+expected, is logged as an error naming the section, key and value, and Welkin
+uses the setting's default instead. Watch the startup log after editing a
+config file. An integer is accepted wherever a float is expected, so
+`Gain = 10` works for a float setting.
+
 ```toml
 [Region]
 RegionName = "My Region"
@@ -92,6 +99,12 @@ logs a warning at start-up when no owner is configured.
 CLI: `welkin-robust --config <path> [--public-port <port>] [--private-port <port>]`
 
 Defaults: `--config robust.toml`, `--public-port 8002`, `--private-port 8003`.
+The private port binds to `127.0.0.1` by default, because it serves account and
+authentication endpoints without authentication. To bind another address, pass
+`--private-bind <address>` or set `WELKIN_PRIVATE_BIND`. The container image
+sets `WELKIN_PRIVATE_BIND=0.0.0.0` so other containers can reach it; keep the
+published port off the public network. A region on a different host cannot
+reach the private port until you change the bind address.
 The public port handles viewer login (XMLRPC) and user-facing caps. The
 private port handles inter-service traffic (grid registration, asset
 storage, inventory queries).
@@ -100,6 +113,19 @@ storage, inventory queries).
 |---|---|---|---|---|
 | DatabaseService | ConnectionString | string | sqlite:robust.db | Database URL for all grid services |
 | DatabaseService | RobustConnectionString | string | (from ConnectionString) | Override when grid services need a separate database |
+| UserAccountService | AllowCreateUser | bool | false | Let the `createuser` grid method create accounts |
+
+`AllowCreateUser` matches OpenSimulator's default. While it is false, the
+`create-user` console command in `welkin-region` fails with "grid refused to
+create the user". Set it to `true` only on a development or test grid, or
+briefly while you create the first account. When it is true, anyone who can
+reach the private service port (8003 by default) can create accounts, so keep
+that port off the public network.
+
+```toml
+[UserAccountService]
+AllowCreateUser = true
+```
 
 ## Database URLs
 
@@ -111,9 +137,25 @@ All database URLs use the same format across both binaries:
 | MariaDB/MySQL | `mysql://user:pass@host/db` | Via sqlx with the MySQL driver |
 | PostgreSQL | `postgres://user:pass@host/db` | Via sqlx with the Postgres driver |
 
-SQLite is the default for local development and single-server grids.
-MariaDB or PostgreSQL is recommended for production grids with multiple
-regions.
+The migration runner and the region's identity and saved-script storage use the
+placeholder style of the backend in use (`$1` for PostgreSQL, `?` for SQLite and
+MariaDB), and the key columns of the region identity and saved-script tables are
+`VARCHAR` so they work on MariaDB.
+
+SQLite is the only backend that has been run and verified. The code supports
+MariaDB and PostgreSQL, but no one has run the region or grid services against
+either of them yet, and these problems are known:
+
+- The `welkin-data` crate still has about 158 hardcoded `$n` placeholders, which
+  work on PostgreSQL and SQLite but not on MariaDB. A sweep to make them
+  backend-aware is pending.
+- The `script_states` table stores scripts in a `BLOB` column, which needs
+  `BYTEA` on PostgreSQL and `LONGBLOB` on MariaDB.
+- The `loc_x` and `loc_y` columns of the region identity table need `BIGINT` on
+  PostgreSQL (issue #79).
+
+Use SQLite until these are fixed. The MariaDB and PostgreSQL instructions in the
+operator guide describe the intended setup, not a verified one.
 
 ## Logging
 
@@ -152,6 +194,36 @@ and `Filter`. An invalid `RUST_LOG` or `Filter` value falls back to `info`.
 `MaxFiles` and `Rotation` apply only when `File` is true. File output goes
 through a background writer, so lines written just before a crash can be
 lost.
+
+## Admin API
+
+The region simulator can expose a small REST API for console commands. It
+stays off until you set a token.
+
+| Section | Key | Type | Default | Purpose |
+|---|---|---|---|---|
+| Admin | Token | string | (empty) | Bearer token; an empty value disables the API |
+| Admin | BindAddress | string | 127.0.0.1 | Interface the API listens on |
+| Admin | Port | int | 9100 | TCP port for the API |
+| Admin | AllowRemoteBind | bool | false | Permit `BindAddress` to be a non-loopback address |
+
+```toml
+[Admin]
+Token = "a-long-random-string"
+BindAddress = "127.0.0.1"
+Port = 9100
+```
+
+Clients call `POST /admin/console` with the header
+`Authorization: Bearer <token>`.
+
+> [!WARNING]
+> The admin API uses plain HTTP, with no TLS. The token and every command,
+> including passwords typed into `create-user`, travel in cleartext. For that
+> reason the region refuses to start the API on a non-loopback `BindAddress`
+> and logs an error, unless you also set `AllowRemoteBind = true`. Keep
+> `BindAddress` at `127.0.0.1`, or put the API behind a reverse proxy that
+> terminates TLS. See the [operator guide](operator-guide.md#admin-api).
 
 ## Backup
 
