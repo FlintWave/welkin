@@ -159,7 +159,10 @@ impl RemoteGroupsConnector {
             ("GroupID", group_id.to_string()),
         ];
 
-        let _ = self.call(&params).await?;
+        let nodes = self.call(&params).await?;
+        if result_text(&nodes).eq_ignore_ascii_case("NULL") {
+            return Err(RemoteError::Server(reason_text(&nodes)));
+        }
         Ok(())
     }
 
@@ -1716,5 +1719,41 @@ mod tests {
         let unknown = Uuid::new_v4();
         let empty = conn.get_all_memberships(unknown).await.unwrap();
         assert!(empty.is_empty());
+    }
+
+    #[tokio::test]
+    async fn founder_is_owner_not_officer() {
+        let (conn, _guard) = setup().await;
+        let agent = Uuid::new_v4();
+        let group = GroupRecord {
+            group_id: Uuid::nil(),
+            group_name: "Test Group".to_string(),
+            charter: "charter".to_string(),
+            insignia_id: Uuid::new_v4(),
+            founder_id: agent,
+            membership_fee: 42,
+            open_enrollment: true,
+            show_in_list: true,
+            allow_publish: false,
+            mature_publish: true,
+            owner_role_id: Uuid::nil(),
+            member_count: 0,
+            role_count: 0,
+        };
+
+        let created = conn.create_group(agent, &group).await.unwrap();
+
+        let memberships = conn.get_membership(agent, Some(created.group_id)).await.unwrap();
+        assert_eq!(memberships.len(), 1);
+        let membership = &memberships[0];
+        assert_eq!(membership.active_role, created.owner_role_id);
+        assert_eq!(membership.group_title, format!("Owner of {}", created.group_name));
+        assert_eq!(membership.group_powers, welkin_data::groups::GroupPowers::OWNERS.bits());
+
+        let roles = conn.get_agent_roles(agent, agent, created.group_id).await.unwrap();
+        let mut names: Vec<&str> = roles.iter().map(|role| role.name.as_str()).collect();
+        names.sort();
+        assert_eq!(names, vec!["Everyone", "Owners"]);
+        assert!(!roles.iter().any(|role| role.name == "Officers"));
     }
 }

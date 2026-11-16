@@ -760,13 +760,7 @@ fn worn_items_groups_items_by_point() {
 
     // A group whose item id is nil is skipped.
     let g_nil = Uuid::new_v4();
-    let out_nil = worn_items(&[(2, g_nil)], |g| {
-        if *g == g_nil {
-            Uuid::nil()
-        } else {
-            Uuid::nil()
-        }
-    });
+    let out_nil = worn_items(&[(2, g_nil)], |_g| Uuid::nil());
     assert!(out_nil.is_empty());
 
     // Empty input gives an empty vec.
