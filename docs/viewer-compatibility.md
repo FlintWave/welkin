@@ -13,6 +13,33 @@ Current viewer compatibility status, updated as live testing progresses.
 | Firestorm (OpenSim build) | Yes | Working | Tested 2026-11-14 |
 | LibreMetaverse bot | Yes | 10/10 steps pass | Automated test client |
 
+## Avatar movement and physics
+
+These behaviours come from the region code and its tests; they are not yet
+confirmed in a live viewer session.
+
+- Avatars stand on the real terrain. The avatar movement code and the physics
+  engine read one terrain source, so an avatar and a dropped prim agree on where
+  the ground is. A standing avatar's centre sits 1.0 m above the ground.
+- A walking avatar can jump. Pressing jump (the UP_POS control while walking)
+  gives an upward speed of 5.0 m/s, about 1.3 m of height. An avatar that is in
+  the air, including one that stops flying, falls under gravity of 9.80665 m/s^2
+  (OpenSimulator's standard value) to a terminal speed of 54 m/s and lands on
+  the terrain. A flying avatar cannot go below the ground.
+- Each avatar keeps its vertical velocity between updates, and the region sends
+  it to viewers. Jump and fall are integrated in fixed 0.02 s sub-steps, so
+  jump height does not depend on how often the viewer sends AgentUpdate.
+- Physical prims move under the Rapier physics engine. The region copies the
+  simulated position and motion back into the scene and sends terse updates to
+  viewers, including a final update with zero velocity when an object comes to
+  rest. When a script or an edit moves an object, the move is pushed into the
+  physics engine so the collider follows.
+- The terrain collider is built at the full region size and orientation. An
+  earlier version covered only 1 m by 1 m and was transposed, so objects fell
+  through the ground.
+- Script physics commands reach the physics bodies; see the
+  [script engine](scripting.md#physics-19) page.
+
 ## Scene delivery and object creation
 
 These behaviours come from the region code and its tests (including a UDP

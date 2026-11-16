@@ -296,6 +296,14 @@ llStopMoveToTarget, llTarget, llTargetRemove, llWater
 Forces, impulses, velocity, hover, move-to-target, position/rotation targets
 and terrain height queries.
 
+llApplyImpulse, llApplyRotationalImpulse, llSetForce, llSetTorque,
+llSetBuoyancy, llMoveToTarget and llStopMoveToTarget act on the physics body of
+the object that owns the script, including when the script sits in a child
+prim. llSetStatus handles STATUS_PHANTOM. Changing STATUS_PHYSICS at runtime,
+any other STATUS_* flag, and llSetHoverHeight are not supported by the physics
+backend yet; the region logs the reason instead of dropping the command
+silently.
+
 ### Avatar (16)
 
 llAttachToAvatar, llAttachToAvatarTemp, llAvatarOnSitTarget,
@@ -414,6 +422,15 @@ OpenSimulator. The region relays them from `sound_io.rs`.
   starts. The region allows one such sound per object every 200 ms and skips
   collisions at a speed of 0.2 m/s or less. llCollisionSound with an empty
   string disables the sound, as in OpenSimulator.
+
+### Constants
+
+The VM defines the LSL constants as globals at runtime, because the compiler
+emits their names as they are. They include TRUE, FALSE, PI, NULL_KEY,
+ZERO_VECTOR, and the STATUS_*, CHANGED_*, PSYS_* and CAMERA_* families. The
+values come from the script API constants table, plus a generated table taken
+from OpenSimulator's `LSL_Constants.cs` for names the first table lacks
+(particles, camera, media, NPC and vectors).
 
 ## Differences from OpenSimulator
 

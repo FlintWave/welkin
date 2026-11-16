@@ -30,6 +30,22 @@ it from the protocol specification or observed behavior.
 - All CI checks must pass before merge.
 - PRs require one approving review.
 
+## Continuous integration
+
+The CI workflow (`.github/workflows/ci.yml`) runs on pushes to `dev` and on pull
+requests to `main` or `dev`. It sets `RUSTFLAGS=-D warnings`, so any compiler
+warning fails the build. It has three jobs:
+
+- Check and Clippy: `cargo check --workspace --all-targets` and
+  `cargo clippy --workspace --all-targets`.
+- Test: `cargo test --workspace`.
+- No stubs or placeholders: fails if any `.rs` file under `crates/` contains
+  `todo!()`, `unimplemented!()`, `STUB` or `PLACEHOLDER`. Handlers must do real
+  work.
+
+Run the same commands locally before you push. The documentation workflow
+(`mdbook.yml`) also runs on pushes to `dev` that change `docs/`.
+
 ## Reporting bugs
 
 Use the bug report template in the issue tracker. Include your Welkin
