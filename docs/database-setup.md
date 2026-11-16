@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Database setup
 
-[← Back to docs](README.md) · [Configuration reference](configuration.md) · [Operator guide](operator-guide.md)
+[← Back to docs](index.md) · [Configuration reference](configuration.md) · [Operator guide](operator-guide.md)
 
 Welkin stores objects, terrain, estate settings, accounts, inventory and groups
 in a SQL database. The region and the grid services each take a database URL.

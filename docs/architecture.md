@@ -17,7 +17,7 @@ Cargo workspace (`Cargo.toml`, edition 2024, `members = ["crates/*"]`). All
 crates are prefixed `opensim-`.
 
 <details>
-<summary>Full crate table (26 crates — click to expand)</summary>
+<summary>Full crate table (26 crates, click to expand)</summary>
 
 | Crate | Role | State |
 |---|---|---|

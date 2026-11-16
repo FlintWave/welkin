@@ -61,16 +61,16 @@ vector is still needed to prove interoperability.
 ## Security review findings
 
 > [!WARNING]
-> **CONDITIONAL PASS** — 1 HIGH, 2 MEDIUM tracked for remediation.
+> **CONDITIONAL PASS**: 1 HIGH, 2 MEDIUM tracked for remediation.
 > See [security review](security-review-ossl-api.md) for details.
 
 0 CRITICAL, 1 HIGH, 2 MEDIUM, 2 LOW, 3 INFO.
 
 | ID | Sev | Finding |
 |---|---|---|
-| S1 | ~~HIGH~~ | ~~PBKDF2 used SHA256, not SHA1~~ — RESOLVED (074b1af) |
+| S1 | ~~HIGH~~ | ~~PBKDF2 used SHA256, not SHA1~~: RESOLVED (074b1af) |
 | S2 | MEDIUM | Role-based per-function permissions are not enforced, because gating runs at registration when no caller context exists |
-| S3 | ~~MEDIUM~~ | ~~`expect()` panics in crypto primitives~~ — RESOLVED |
+| S3 | ~~MEDIUM~~ | ~~`expect()` panics in crypto primitives~~: RESOLVED |
 | S4 | LOW | `OsslRole` membership is flat, not hierarchical |
 | S5 | LOW | Distinct AES error messages could form a padding oracle once functions are no longer stubs |
 | S6 | INFO | `OsslRole::Anyone` not parseable from INI |

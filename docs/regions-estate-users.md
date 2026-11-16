@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Regions, estate and users
 
-[← Back to docs](README.md) · [Configuration reference](configuration.md) · [Quick start](quick-start.md)
+[← Back to docs](index.md) · [Configuration reference](configuration.md) · [Quick start](quick-start.md)
 
 This page covers the day-to-day tasks of running a region: naming it, setting an
 estate owner, creating accounts and using the region console.

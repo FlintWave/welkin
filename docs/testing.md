@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Testing
 
-[← Back to docs](README.md) · [Crate structure](crate-structure.md) · [Viewer compatibility](viewer-compatibility.md)
+[← Back to docs](index.md) · [Crate structure](crate-structure.md) · [Viewer compatibility](viewer-compatibility.md)
 
 Welkin has four layers of testing. Cheap tests run on every change; the heavier
 ones need a running server.

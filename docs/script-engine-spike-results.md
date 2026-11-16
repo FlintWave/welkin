@@ -135,7 +135,7 @@ LSL script execution in Welkin.
    YEngine's `CheckRun()` mechanism.
 4. **Memory isolation**: per-instance memory limits give us the same safety as
    YEngine's heap tracking.
-5. **Simpler architecture**: transpiling to Luau lets us leverage the Luau
+5. **Simpler architecture**: transpiling to Luau lets us use the Luau
    compiler and VM instead of writing and maintaining a CIL backend.
 
 **Caveats (required work):**

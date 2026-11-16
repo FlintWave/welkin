@@ -174,7 +174,7 @@ standards.
   - `crates/welkin-services/src/estate.rs`
 - **Tests:** 0 in the estate module file itself; estate tests exist in parent module integration tests
 - **Findings:**
-  - `EstateSettings`: comprehensive data model -- 25+ fields including estate_id, name, owner, abuse_email, all access control flags (deny_anonymous, deny_identified, allow_voice, allow_direct_teleport, deny_transacted, deny_age_unverified, deny_minors), economy (price_per_meter), redirect grid coordinates, sun/time (use_global_time, fixed_sun, sun_position), covenant (UUID + timestamp), terrain textures (4), elevation bounds (4 pairs), water height.
+  - `EstateSettings`: full data model -- 25+ fields including estate_id, name, owner, abuse_email, all access control flags (deny_anonymous, deny_identified, allow_voice, allow_direct_teleport, deny_transacted, deny_age_unverified, deny_minors), economy (price_per_meter), redirect grid coordinates, sun/time (use_global_time, fixed_sun, sun_position), covenant (UUID + timestamp), terrain textures (4), elevation bounds (4 pairs), water height.
   - **Access lists**: `estate_managers`, `estate_users`, `estate_banned`, `estate_groups` (all `HashSet<Uuid>`).
   - `EstateSettingsUpdate`: partial update pattern with `Option` fields and `apply_update`.
   - `TelehubManager`: spawn point management with add/remove and default landing point.
@@ -290,7 +290,7 @@ not fundamental design flaws.
 
 ### Documentation
 
-Comprehensive operator-facing documentation:
+Operator-facing documentation:
 
 - `operator-guide.md` -- deployment and configuration guide
 - `migration-guide.md` -- C# to Rust migration procedures

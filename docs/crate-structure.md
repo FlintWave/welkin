@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Crate structure
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Module development guide](module-development.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Module development guide](module-development.md)
 
 This page is a map for someone who is about to change the code. The
 [architecture page](architecture.md) has the full crate table and the dependency

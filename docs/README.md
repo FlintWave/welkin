@@ -42,14 +42,14 @@ For people and AI agents who develop Welkin.
 
 | Phase | Summary | Security review |
 |---|---|---|
-| 0 | [Foundation and audit](phase-0-summary.md) | — |
-| 1 | [Protocol core](protocol-core-summary.md) | — |
-| 1 | [Physics backend](physics-backend-summary.md) | — |
-| 2 | [Grid services](grid-services-summary.md) | — |
-| 2 | [Capacity assessor](capacity-assessor-summary.md) | — |
-| 2 | [Grid portal](grid-portal-summary.md) | — |
-| 3 | [Region simulator core](region-simulator-core-summary.md) | — |
-| 3 | [Prim meshing](prim-meshing-summary.md) | — |
+| 0 | [Foundation and audit](phase-0-summary.md) | - |
+| 1 | [Protocol core](protocol-core-summary.md) | - |
+| 1 | [Physics backend](physics-backend-summary.md) | - |
+| 2 | [Grid services](grid-services-summary.md) | - |
+| 2 | [Capacity assessor](capacity-assessor-summary.md) | - |
+| 2 | [Grid portal](grid-portal-summary.md) | - |
+| 3 | [Region simulator core](region-simulator-core-summary.md) | - |
+| 3 | [Prim meshing](prim-meshing-summary.md) | - |
 | 4 | [Script engine](script-engine-summary.md) | [Sandboxing](security-review-script-sandboxing.md) |
 | 4 | [OSSL API](ossl-api-summary.md) | [OSSL API](security-review-ossl-api.md) |
 | 5 | [Region modules](region-modules-summary.md) | [Permissions](security-review-permissions.md) |
@@ -58,12 +58,12 @@ For people and AI agents who develop Welkin.
 | 6 | [External grid mode](external-grid-mode-summary.md) | [Remote writes](security-review-remote-writes.md) |
 | 6 | [Hypergrid](hypergrid-summary.md) | [Hypergrid](security-review-hypergrid.md) |
 | 6 | [WebRTC voice](webrtc-voice-summary.md) | [Voice](security-review-voice.md) |
-| — | [Object interaction](object-interaction-summary.md) | — |
-| — | [Module activation](module-activation-summary.md) | — |
-| — | [Viewer messaging](viewer-messaging-summary.md) | — |
-| — | [Currency module](currency-module-summary.md) | — |
-| — | [Remaining parity](remaining-parity-summary.md) | — |
-| — | [Cutover](cutover-summary.md) | — |
+| - | [Object interaction](object-interaction-summary.md) | - |
+| - | [Module activation](module-activation-summary.md) | - |
+| - | [Viewer messaging](viewer-messaging-summary.md) | - |
+| - | [Currency module](currency-module-summary.md) | - |
+| - | [Remaining parity](remaining-parity-summary.md) | - |
+| - | [Cutover](cutover-summary.md) | - |
 
 ## Reference
 

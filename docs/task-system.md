@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Task system
 
-[← Back to docs](README.md) · [OpenSpec workflow](openspec-workflow.md) · [Testing](testing.md)
+[← Back to docs](index.md) · [OpenSpec workflow](openspec-workflow.md) · [Testing](testing.md)
 
 Work is tracked in `tasks.md` files, one per change under `openspec/changes/`.
 The files are plain Markdown checklists, so people and agents read and update

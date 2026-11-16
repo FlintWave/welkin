@@ -66,7 +66,7 @@ filter, and multi-region support. Ported from `ArchiverTests.cs` and
 ## Security review
 
 > [!WARNING]
-> **CONDITIONAL PASS** — 0 critical, 0 high, 5 medium tracked for remediation.
+> **CONDITIONAL PASS**: 0 critical, 0 high, 5 medium tracked for remediation.
 > See [security review](security-review-archives.md) for details.
 
 Full report: [security-review-archives.md](security-review-archives.md).

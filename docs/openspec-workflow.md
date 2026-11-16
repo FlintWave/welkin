@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # OpenSpec workflow
 
-[← Back to docs](README.md) · [Task system](task-system.md) · [Crate structure](crate-structure.md)
+[← Back to docs](index.md) · [Task system](task-system.md) · [Crate structure](crate-structure.md)
 
 Welkin uses OpenSpec, a spec-driven planning tool with a command line client, to plan work.
 Each piece of work is a change with a written proposal, a design and a task list,

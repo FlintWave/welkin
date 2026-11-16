@@ -88,7 +88,7 @@ profiles to `social-modules`.
 ## Security review
 
 > [!CAUTION]
-> **CONDITIONAL PASS** — 1 CRITICAL (nil UUID ownership bypass), 3 HIGH.
+> **CONDITIONAL PASS**: 1 CRITICAL (nil UUID ownership bypass), 3 HIGH.
 > See [security review](security-review-permissions.md) for details.
 
 [security-review-permissions.md](security-review-permissions.md) (Opus, adversarial, task 13.1):

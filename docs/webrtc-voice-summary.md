@@ -38,7 +38,7 @@ Aurora Viewer
 
 wolfvoice runs as a Docker sidecar and handles WebRTC, TURN/STUN, and audio
 mixing. The server only implements the two voice capabilities and the
-JSON-RPC bridge — no audio processing in the simulator.
+JSON-RPC bridge: no audio processing in the simulator.
 
 ### Module breakdown
 
@@ -50,18 +50,18 @@ JSON-RPC bridge — no audio processing in the simulator.
 | `voice/ossl_integration.rs` | 192 | 8 | Wire to `osSetParcelSIPAddress` |
 | `voice/docker.rs` | 176 | 6 | Docker Compose service definition, health check |
 | `voice/portal_integration.rs` | 185 | 7 | Admin dashboard voice status, estate voice toggle |
-| Integration tests | — | 43 | Mock wolfvoice, provision flow, parcel crossing, concurrency |
+| Integration tests | - | 43 | Mock wolfvoice, provision flow, parcel crossing, concurrency |
 
 ## Key decisions
 
-- **V1:** JSON-RPC over HTTP to wolfvoice, not gRPC — simpler, no protobuf
+- **V1:** JSON-RPC over HTTP to wolfvoice, not gRPC: simpler, no protobuf
   dependency, matches wolfvoice's documented API.
 - **V2:** Channel URIs use `webrtc:region/parcel` format instead of SIP URIs.
   Aurora Viewer expects this format.
 - **V3:** Voice credentials are ephemeral (per-session), not stored in the
   database. wolfvoice manages credential lifecycle.
 - **V4:** Estate and parcel voice-enable checks reuse existing flags from
-  region-modules — no new database columns.
+  region-modules: no new database columns.
 
 ## Tests
 
@@ -73,15 +73,15 @@ and concurrent provisioning.
 ## Security review
 
 > [!WARNING]
-> **CONDITIONAL PASS** — 0 critical, 2 high, 3 medium, 3 low tracked for remediation.
+> **CONDITIONAL PASS**: 0 critical, 2 high, 3 medium, 3 low tracked for remediation.
 > See [security review](security-review-voice.md) for details.
 
 Full report: [security-review-voice.md](security-review-voice.md).
 
 | ID | Severity | Finding |
 |---|---|---|
-| H-1 | HIGH | wolfvoice JSON-RPC auth — shared secret or mTLS required, not open access |
-| H-2 | HIGH | Voice provisioning rate limiting missing — credential exhaustion possible |
+| H-1 | HIGH | wolfvoice JSON-RPC auth: shared secret or mTLS required, not open access |
+| H-2 | HIGH | Voice provisioning rate limiting missing: credential exhaustion possible |
 
 Both HIGH findings must be resolved before production deployment. The wolfvoice
 sidecar must not accept unauthenticated JSON-RPC in a multi-user grid.

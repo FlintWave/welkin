@@ -54,7 +54,7 @@ OSSL `osNpc*` functions call into `NPCModule`.
 | `groups/hg_connector.rs` | 1,262 | 20 | HG federation, ForeignImporter, cache wrapper |
 | `offline_im.rs` | 929 | 17 | Service + module, store/retrieve, login delivery |
 | `profiles.rs` | 951 | 11 | Data model, service, BasicProfileModule, picks, classifieds |
-| `npc_avatar.rs` | 241 | — | IClientAPI fake viewer |
+| `npc_avatar.rs` | 241 | - | IClientAPI fake viewer |
 | `npc/mod.rs` | 742 | 12 | Create/move/say/sit/stand/remove, appearance cloning |
 | `concierge.rs` | 536 | 10 | Lobby announcements, HTTP broker notifications |
 | `irc_bridge.rs` | 761 | 13 | IRC-to-in-world chat, channel mapping, reconnect |
@@ -66,7 +66,7 @@ OSSL `osNpc*` functions call into `NPCModule`.
 - **SM1:** Port Groups V2 only. The V2 implementation is cleaner, supports HG,
   and is the default in 0.9.3.0. The XmlRpc connector is legacy (3,991 lines
   dropped).
-- **SM2:** NPC avatar stubs — `NPCAvatar` has ~1,400 lines of `IClientAPI`
+- **SM2:** NPC avatar stubs: `NPCAvatar` has ~1,400 lines of `IClientAPI`
   stubs in C#. Only methods actually called by NPCModule are implemented; the
   rest are no-ops (241 lines vs 1,400).
 - **SM3:** IRC bridge uses the `irc` crate (MPL-2.0, GPLv3-compatible) instead
@@ -84,7 +84,7 @@ compatibility against C# recordings.
 ## Security review
 
 > [!WARNING]
-> **CONDITIONAL PASS** — 0 critical, 3 high, 10 medium tracked for remediation.
+> **CONDITIONAL PASS**: 0 critical, 3 high, 10 medium tracked for remediation.
 > See [security review](security-review-social-modules.md) for details.
 
 Full report: [security-review-social-modules.md](security-review-social-modules.md).
@@ -104,5 +104,5 @@ and input sanitization.
 | Hash | Description |
 |---|---|
 | `e3dc382` | Sections 1, 3-6: Groups V2 service, OfflineIM, Profiles, NPCs, Concierge, IRC bridge |
-| `4061c14` | Section 2: Groups V2 region modules — GroupsModule, messaging, HG connector |
+| `4061c14` | Section 2: Groups V2 region modules: GroupsModule, messaging, HG connector |
 | `e5997a1` | Section 7: integration tests, protocol replay, security review |

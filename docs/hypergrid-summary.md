@@ -63,9 +63,9 @@ modules extend their base counterparts via trait composition.
 | `connectors/` | 811 | 10 | HTTP clients for Gatekeeper, UserAgent, HGFriends, HELO |
 | `hg/entity_transfer.rs` | 578 | 9 | Cross-grid teleport, appearance restriction |
 | `hg/inventory_access.rs` | 548 | 8 | Route inventory to local/remote, suitcase enforcement |
-| `hg/` (lure, map, users) | — | 28 | Lures, map blocks, UUID-to-name for foreign users |
+| `hg/` (lure, map, users) | - | 28 | Lures, map blocks, UUID-to-name for foreign users |
 | `hg/connector_in.rs` | 326 | 5 | Expose HG endpoints in simulator |
-| Integration tests | — | 50 | HG teleport round-trip, suitcase, IM, hyperlinks, friends |
+| Integration tests | - | 50 | HG teleport round-trip, suitcase, IM, hyperlinks, friends |
 
 ## Key decisions
 
@@ -91,7 +91,7 @@ Full suite after this phase: 1,679 tests passing.
 ## Security review
 
 > [!CAUTION]
-> **CRITICAL RISK — CONDITIONAL PASS** — 3 critical, 3 high, 3 medium, 2 low
+> **CRITICAL RISK: CONDITIONAL PASS**: 3 critical, 3 high, 3 medium, 2 low
 > findings. All CRITICAL and HIGH findings must be fixed before any
 > public-facing deployment.
 > See [security review](security-review-hypergrid.md) for details.
@@ -102,7 +102,7 @@ Full report: [security-review-hypergrid.md](security-review-hypergrid.md).
 
 | ID | Severity | Finding |
 |---|---|---|
-| F-01 | CRITICAL | Suitcase folder escape via `get_item` — no suitcase-tree check |
+| F-01 | CRITICAL | Suitcase folder escape via `get_item`: no suitcase-tree check |
 | F-02 | CRITICAL | `VerifyAgent` callback not implemented in gatekeeper |
 | F-03 | CRITICAL | UUID impersonation check not implemented |
 

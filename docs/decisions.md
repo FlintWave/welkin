@@ -9,7 +9,7 @@ dates recorded in the source, or the ROADMAP's last-updated date (2026-11-13)
 where none is given.
 
 <details>
-<summary>Full decision table (97 entries — click to expand)</summary>
+<summary>Full decision table (97 entries, click to expand)</summary>
 
 | ID | Decision | Rationale | Date |
 |---|---|---|---|
