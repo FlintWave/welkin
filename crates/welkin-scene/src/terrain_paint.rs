@@ -294,6 +294,108 @@ pub fn paint_effect(
     }
 }
 
+/// Apply an area ("flood") terraform over the rectangle west..=east, south..=north
+/// (region metres), as OpenSim's FloodBrushes do. `height` is the target height
+/// (flatten), `strength` the viewer's `seconds` value.
+pub fn flood_effect(
+    terrain: &mut crate::terrain::TerrainChannel,
+    baked: Option<&[f32]>,
+    action: PaintAction,
+    height: f32,
+    strength: f32,
+    west: f32,
+    south: f32,
+    east: f32,
+    north: f32,
+) {
+    let width = terrain.size_x() as i32;
+    let rows = terrain.size_y() as i32;
+    if width == 0 || rows == 0 {
+        return;
+    }
+    let clamp = |v: f32, max: i32| (v as i32).clamp(0, max - 1);
+    let (sx, ex) = (clamp(west, width), clamp(east, width));
+    let (sy, ey) = (clamp(south, rows), clamp(north, rows));
+    if sx > ex || sy > ey {
+        return;
+    }
+    let cells = || (sy..=ey).flat_map(move |y| (sx..=ex).map(move |x| (x as u32, y as u32)));
+
+    match action {
+        PaintAction::Raise => {
+            for (x, y) in cells() {
+                let cur = terrain.get(x, y);
+                terrain.set(x, y, cur + strength);
+            }
+        }
+        PaintAction::Lower => {
+            for (x, y) in cells() {
+                let cur = terrain.get(x, y);
+                terrain.set(x, y, (cur - strength).max(0.0));
+            }
+        }
+        PaintAction::Flatten => {
+            let k = (strength * 0.04).min(1.0);
+            for (x, y) in cells() {
+                let cur = terrain.get(x, y);
+                terrain.set(x, y, cur * (1.0 - k) + height * k);
+            }
+        }
+        PaintAction::Noise => {
+            let k = strength * 0.08;
+            let (w, h) = (terrain.size_x() as f64, terrain.size_y() as f64);
+            for (x, y) in cells() {
+                let n = perlin_noise_2d(x as f64 / w, y as f64 / h, 8, 1.0) as f32;
+                let cur = terrain.get(x, y);
+                terrain.set(x, y, cur + n * k);
+            }
+        }
+        PaintAction::Revert => {
+            let Some(baked) = baked else { return };
+            let k = (strength * 2.0).min(1.0);
+            let w = terrain.size_x();
+            for (x, y) in cells() {
+                let Some(&b) = baked.get((y * w + x) as usize) else { continue };
+                let cur = terrain.get(x, y);
+                terrain.set(x, y, cur * (1.0 - k) + b * k);
+            }
+        }
+        PaintAction::Smooth => {
+            let rx = ((ex - sx + 1) / 2).min(4);
+            let ry = ((ey - sy + 1) / 2).min(4);
+            let k = (strength * 0.002).min(1.0);
+            // Averages are taken from the unmodified map, then blended in.
+            let mut targets: Vec<(u32, u32, f32)> = Vec::new();
+            for (x, y) in cells() {
+                let (mut sum, mut n) = (0.0f32, 0u32);
+                for xx in (x as i32 - rx)..=(x as i32 + rx) {
+                    if xx < 0 || xx >= width {
+                        continue;
+                    }
+                    // OpenSim's inner loop is `l < y + sy` (exclusive upper bound).
+                    for yy in (y as i32 - ry)..(y as i32 + ry) {
+                        if yy < 0 || yy >= rows {
+                            continue;
+                        }
+                        sum += terrain.get(xx as u32, yy as u32);
+                        n += 1;
+                    }
+                }
+                if n > 0 {
+                    targets.push((x, y, sum / n as f32));
+                }
+            }
+            for (x, y, avg) in targets {
+                if avg == 0.0 {
+                    continue;
+                }
+                let cur = terrain.get(x, y);
+                terrain.set(x, y, (1.0 - k) * cur + k * avg);
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -380,6 +482,32 @@ mod tests {
             paint_effect(&mut t, None, action, 255.0, 255.0, 0.0, 5.0, 1.0);
             paint_effect(&mut t, None, action, -50.0, 400.0, 0.0, 5.0, 1.0);
             paint_effect(&mut t, None, action, 10.0, 10.0, 0.0, 0.0, 1.0);
+        }
+    }
+
+    #[test]
+    fn flood_raise_lower_flatten_cover_the_rectangle_only() {
+        let mut t = flat(10.0);
+        flood_effect(&mut t, None, PaintAction::Raise, 0.0, 2.0, 4.0, 4.0, 8.0, 8.0);
+        assert_eq!(t.get(4, 4), 12.0);
+        assert_eq!(t.get(8, 8), 12.0);
+        assert_eq!(t.get(9, 8), 10.0);
+        flood_effect(&mut t, None, PaintAction::Lower, 0.0, 20.0, 4.0, 4.0, 4.0, 4.0);
+        assert_eq!(t.get(4, 4), 0.0);
+        flood_effect(&mut t, None, PaintAction::Flatten, 30.0, 25.0, 5.0, 5.0, 5.0, 5.0);
+        assert_eq!(t.get(5, 5), 30.0, "strength*0.04 clamps to 1");
+    }
+
+    #[test]
+    fn flood_revert_and_out_of_range_rectangles_are_safe() {
+        let baked = vec![3.0f32; 32 * 32];
+        let mut t = flat(9.0);
+        flood_effect(&mut t, Some(&baked), PaintAction::Revert, 0.0, 1.0, 0.0, 0.0, 31.0, 31.0);
+        assert_eq!(t.get(31, 31), 3.0);
+        for a in 0..6u8 {
+            let action = PaintAction::from_u8(a).unwrap();
+            flood_effect(&mut t, None, action, 1.0, 1.0, -10.0, -10.0, 1000.0, 1000.0);
+            flood_effect(&mut t, None, action, 1.0, 1.0, 20.0, 20.0, 5.0, 5.0);
         }
     }
 }

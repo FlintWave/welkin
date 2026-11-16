@@ -548,31 +548,13 @@ impl Scene {
         }
     }
 
-    /// Apply a terraform brush (a viewer `ModifyLand` click). Returns the patches
-    /// that changed, as (patch_x, patch_y), and clears their dirty flags. The
-    /// physics height field is updated to match.
-    pub fn modify_terrain(
-        &self,
-        action: crate::terrain_paint::PaintAction,
-        x: f32,
-        y: f32,
-        height: f32,
-        brush_size: f32,
-        strength: f32,
-    ) -> Vec<(u32, u32)> {
+    /// Run a terrain edit; returns the patches that changed (and clears their
+    /// dirty flags). The physics height field follows the change.
+    fn edit_terrain(&self, edit: impl FnOnce(&mut TerrainChannel, &[f32])) -> Vec<(u32, u32)> {
         let (changed, heights) = {
             let mut terrain = self.terrain.write().unwrap();
             let baked = self.baked_terrain.read().unwrap();
-            crate::terrain_paint::paint_effect(
-                &mut terrain,
-                Some(baked.as_slice()),
-                action,
-                x,
-                y,
-                height,
-                brush_size,
-                strength,
-            );
+            edit(&mut terrain, baked.as_slice());
             let changed = terrain.dirty_patches();
             terrain.clear_dirty();
             let heights = if changed.is_empty() { Vec::new() } else { terrain.heights().to_vec() };
@@ -585,6 +567,64 @@ impl Scene {
             physics.set_terrain(&heights);
         }
         changed
+    }
+
+    /// Apply a terraform brush (a viewer `ModifyLand` click). Returns the changed
+    /// patches as (patch_x, patch_y).
+    pub fn modify_terrain(
+        &self,
+        action: crate::terrain_paint::PaintAction,
+        x: f32,
+        y: f32,
+        height: f32,
+        brush_size: f32,
+        strength: f32,
+    ) -> Vec<(u32, u32)> {
+        self.edit_terrain(|terrain, baked| {
+            crate::terrain_paint::paint_effect(terrain, Some(baked), action, x, y, height, brush_size, strength)
+        })
+    }
+
+    /// Apply an area terraform over a rectangle (west, south, east, north in region metres).
+    #[allow(clippy::too_many_arguments)]
+    pub fn flood_terrain(
+        &self,
+        action: crate::terrain_paint::PaintAction,
+        height: f32,
+        strength: f32,
+        west: f32,
+        south: f32,
+        east: f32,
+        north: f32,
+    ) -> Vec<(u32, u32)> {
+        self.edit_terrain(|terrain, baked| {
+            crate::terrain_paint::flood_effect(terrain, Some(baked), action, height, strength, west, south, east, north)
+        })
+    }
+
+    /// LayerData payloads (the `LayerData` block bytes) for the given patches, split
+    /// so every payload fits in one UDP packet.
+    pub fn terrain_layer_payloads(&self, patches: &[(u32, u32)]) -> Vec<Vec<u8>> {
+        const MAX_PAYLOAD: usize = 1000;
+        let terrain = self.terrain.read().unwrap();
+        let mut out = Vec::new();
+        let mut rest = patches;
+        while !rest.is_empty() {
+            let mut take = rest.len().min(8);
+            loop {
+                let data = crate::terrain_layer::encode_land_layer(&terrain, &rest[..take]);
+                if data.is_empty() {
+                    return out; // region size the encoder does not support
+                }
+                if data.len() <= MAX_PAYLOAD || take == 1 {
+                    out.push(data);
+                    break;
+                }
+                take = take.div_ceil(2);
+            }
+            rest = &rest[take..];
+        }
+        out
     }
 
     pub fn get_top_colliders(&self) -> Vec<(u32, f32)> {
@@ -828,6 +868,29 @@ mod tests {
         // Revert restores the baked (loaded) height.
         scene.modify_terrain(PaintAction::Revert, 100.0, 100.0, 0.0, 4.0, 1.0);
         assert!((scene.terrain_height_at(100.0, 100.0) - before).abs() < 1e-3);
+    }
+
+    #[test]
+    fn terrain_layer_payloads_cover_all_patches_and_fit_a_packet() {
+        let scene = test_scene();
+        let all: Vec<(u32, u32)> = (0..16).flat_map(|py| (0..16).map(move |px| (px, py))).collect();
+        let payloads = scene.terrain_layer_payloads(&all);
+        let decoded: usize = payloads
+            .iter()
+            .map(|p| crate::terrain_layer::decode_land_layer(p).unwrap().len())
+            .sum();
+        assert_eq!(decoded, 256);
+        assert!(payloads.iter().all(|p| p.len() <= 1000));
+        // Rough terrain still fits: many patches, each possibly large.
+        let mut map = vec![0.0f32; 256 * 256];
+        for (i, h) in map.iter_mut().enumerate() {
+            *h = ((i * 7919) % 97) as f32;
+        }
+        scene.set_terrain(&map);
+        let payloads = scene.terrain_layer_payloads(&all);
+        assert!(payloads.iter().all(|p| p.len() <= 1000 || crate::terrain_layer::decode_land_layer(p).unwrap().len() == 1));
+        let decoded: usize = payloads.iter().map(|p| crate::terrain_layer::decode_land_layer(p).unwrap().len()).sum();
+        assert_eq!(decoded, 256);
     }
 
     #[test]
