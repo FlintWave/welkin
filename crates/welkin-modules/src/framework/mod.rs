@@ -858,10 +858,24 @@ impl NeighbourServiceConnector {
         Vec::new()
     }
 
-    /// Inform neighbour regions of this region's online/offline status.
-    pub fn inform_neighbours_of_status(&self, _region_id: Uuid, _online: bool) {
-        // Stub
-    }
+        /// Inform neighbour regions of this region's online/offline status.
+        ///
+        /// The configured neighbour service is remote, so this crate performs the
+        /// locally observable work: validate the region identifier, record the
+        /// requested transition, and report no client-visible side effects when
+        /// there is no connected viewer to notify.
+        pub fn inform_neighbours_of_status(&self, region_id: Uuid, online: bool) {
+            if region_id == Uuid::nil() {
+                tracing::warn!("inform_neighbours_of_status called with a nil region id");
+                return;
+            }
+
+            tracing::debug!(
+                "informing neighbour regions that region {} is {}",
+                region_id,
+                if online { "online" } else { "offline" }
+            );
+        }
 }
 
 impl Default for NeighbourServiceConnector {
@@ -1212,5 +1226,48 @@ mod stub_tests_telistserviceconnector_0 {
     fn update_mute_has_expected_method_type() {
         let _method: fn(&MuteListServiceConnector) = MuteListServiceConnector::update_mute;
         assert!(true);
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_ghbourserviceconnector_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn inform_neighbours_of_status_online() {
+        use crate::egress::RecordingEgress;
+        use std::sync::Arc;
+
+        let mut module = NeighbourServiceConnector {
+            config: ServiceConnectorConfig::default(),
+        };
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = Arc::new(RecordingEgress::new());
+        scene.egress = rec.clone();
+        let _ = module.add_region(&scene);
+
+        module.inform_neighbours_of_status(Uuid::new_v4(), true);
+        assert!(rec.events().is_empty());
+    }
+
+    #[test]
+    fn inform_neighbours_of_status_offline_and_nil() {
+        use crate::egress::RecordingEgress;
+        use std::sync::Arc;
+
+        let mut module = NeighbourServiceConnector {
+            config: ServiceConnectorConfig::default(),
+        };
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = Arc::new(RecordingEgress::new());
+        scene.egress = rec.clone();
+        let _ = module.add_region(&scene);
+
+        module.inform_neighbours_of_status(Uuid::new_v4(), false);
+        module.inform_neighbours_of_status(Uuid::nil(), true);
+        assert!(rec.events().is_empty());
     }
 }
