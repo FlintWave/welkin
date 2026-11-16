@@ -686,6 +686,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         let mut last_backup = Instant::now();
         let backup_interval = Duration::from_secs(backup_interval_secs);
         let mut prev_colliding: HashSet<u32> = HashSet::new();
+        let mut collision_sound_throttle = sound_io::CollisionSoundThrottle::new();
         let mut sensor_repeats: HashMap<Uuid, (welkin_script_vm::SensorRequest, std::time::Instant, std::time::Duration)> = HashMap::new();
         let mut control_registrations: HashMap<Uuid, (Uuid, u32, bool, bool)> = HashMap::new();
         loop {
@@ -970,11 +971,13 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         // Post collision events with start/end tracking
                         let colliders = heartbeat_scene.get_top_colliders();
                         let cur_colliding: HashSet<u32> = colliders.iter().map(|(id, _)| *id).collect();
+                        let mut started_collisions: Vec<u32> = Vec::new();
                         if !cur_colliding.is_empty() || !prev_colliding.is_empty() {
                             let mut sched = heartbeat_scheduler.lock();
                             for &local_id in &cur_colliding {
                                 if let Some(obj_uuid) = heartbeat_scene.get_object_by_local_id(local_id) {
                                     if !prev_colliding.contains(&local_id) {
+                                        started_collisions.push(local_id);
                                         sched.post_event_to_prim(
                                             obj_uuid,
                                             ScriptEvent::CollisionStart { num_detected: 1 },
@@ -996,6 +999,18 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                     }
                                 }
                             }
+                        }
+                        // Script-selected collision sounds (llCollisionSound) on collision start.
+                        // The scheduler lock above is released before awaiting.
+                        for local_id in started_collisions {
+                            sound_io::relay_collision_sound(
+                                &heartbeat_scene,
+                                &heartbeat_socket,
+                                &heartbeat_clients,
+                                local_id,
+                                &mut collision_sound_throttle,
+                            )
+                            .await;
                         }
                         prev_colliding = cur_colliding;
                     }

@@ -23,6 +23,10 @@ fn resolve_sound(ctx: &ScriptContext, sound: &str) -> Uuid {
     Uuid::nil()
 }
 
+/// OpenSim's `invalidCollisionSoundUUID`: stored in a prim's collision sound to
+/// mean "script disabled collision sounds" (as opposed to nil = default sounds).
+pub const COLLISION_SOUND_DISABLED: Uuid = Uuid::from_u128(0xffffffff_ffff_ffff_ffff_ffffffffffff);
+
 fn vec3(t: &mlua::Table) -> mlua::Result<[f64; 3]> {
     let x = t
         .get::<f64>("x")
@@ -301,9 +305,14 @@ pub fn register_sound(
                 "llCollisionSound",
                 lua.create_function(move |_lua, (sound, volume): (Option<String>, f64)| {
                     let ctx = ctx.read();
-                    let sound_id = match sound {
-                        Some(sound) => resolve_sound(&ctx, &sound),
-                        None => Uuid::nil(),
+                    // OpenSim llCollisionSound: an empty string, or a sound that cannot be
+                    // resolved, DISABLES collision sounds (the "invalid" sentinel UUID).
+                    let sound_id = match sound.as_deref() {
+                        Some(name) if !name.is_empty() => {
+                            let id = resolve_sound(&ctx, name);
+                            if id.is_nil() { COLLISION_SOUND_DISABLED } else { id }
+                        }
+                        _ => COLLISION_SOUND_DISABLED,
                     };
                     let volume = volume.clamp(0.0, 1.0);
                     if let Some(sender) = &ctx.sound_sender {

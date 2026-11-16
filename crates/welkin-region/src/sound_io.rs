@@ -431,6 +431,97 @@ pub fn play_flags(queueing: bool) -> u8 {
     }
 }
 
+pub const COLLISION_SOUND_DISABLED: uuid::Uuid = uuid::Uuid::from_u128(0xffffffff_ffff_ffff_ffff_ffffffffffff);
+
+pub fn collision_sound_decision(
+    collision_sound: uuid::Uuid,
+    volume: f32,
+    speed: f32,
+) -> Option<(uuid::Uuid, f32)> {
+    if collision_sound.is_nil()
+        || collision_sound == COLLISION_SOUND_DISABLED
+        || speed.abs() <= 0.2
+        || volume <= 0.0
+    {
+        None
+    } else {
+        Some((collision_sound, volume.clamp(0.0, 1.0)))
+    }
+}
+
+#[derive(Default)]
+pub struct CollisionSoundThrottle {
+    last: std::collections::HashMap<uuid::Uuid, std::time::Instant>,
+}
+
+impl CollisionSoundThrottle {
+    pub fn new() -> Self {
+        Self {
+            last: std::collections::HashMap::new(),
+        }
+    }
+
+    pub fn allow(&mut self, object: uuid::Uuid, now: std::time::Instant) -> bool {
+        if let Some(previous) = self.last.get(&object) {
+            if now.saturating_duration_since(*previous) < std::time::Duration::from_millis(200) {
+                return false;
+            }
+        }
+        self.last.insert(object, now);
+        true
+    }
+
+    pub fn forget(&mut self, object: &uuid::Uuid) {
+        self.last.remove(object);
+    }
+}
+
+pub async fn relay_collision_sound(
+    scene: &welkin_scene::scene::Scene,
+    socket: &std::sync::Arc<tokio::net::UdpSocket>,
+    clients: &std::sync::Arc<
+        tokio::sync::RwLock<
+            std::collections::HashMap<
+                std::net::SocketAddr,
+                std::sync::Arc<tokio::sync::Mutex<welkin_net::server::ClientSession>>,
+            >,
+        >,
+    >,
+    local_id: u32,
+    throttle: &mut CollisionSoundThrottle,
+) {
+    let Some(group_id) = scene.get_object_by_local_id(local_id) else {
+        return;
+    };
+
+    let Some((collision_sound, volume, speed)) = scene.with_object(&group_id, |g| {
+        let p = g.root_part();
+        (p.collision_sound, p.collision_sound_volume, p.velocity.length())
+    }) else {
+        return;
+    };
+
+    let Some((sound_id, volume)) = collision_sound_decision(collision_sound, volume, speed) else {
+        return;
+    };
+
+    if !throttle.allow(group_id, std::time::Instant::now()) {
+        return;
+    }
+
+    relay_sound(
+        vec![welkin_script_vm::builtins::SoundCommand::TriggerSound {
+            prim_id: group_id,
+            sound_id,
+            volume: volume as f64,
+        }],
+        scene,
+        socket,
+        clients,
+    )
+    .await;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -567,5 +658,70 @@ mod tests {
     #[test]
     fn loop_flags_with_queue_true() {
         assert_eq!(loop_flags_with_queue(false, false, true), loop_flags(false, false) | 0x10);
+    }
+
+    #[test]
+    fn collision_sound_decision_nil_none() {
+        assert!(collision_sound_decision(uuid::Uuid::nil(), 1.0, 1.0).is_none());
+    }
+
+    #[test]
+    fn collision_sound_decision_disabled_none() {
+        assert!(collision_sound_decision(COLLISION_SOUND_DISABLED, 1.0, 1.0).is_none());
+    }
+
+    #[test]
+    fn collision_sound_decision_slow_none() {
+        assert!(collision_sound_decision(uuid::Uuid::new_v4(), 1.0, 0.1).is_none());
+    }
+
+    #[test]
+    fn collision_sound_decision_zero_volume_none() {
+        assert!(collision_sound_decision(uuid::Uuid::new_v4(), 0.0, 1.0).is_none());
+    }
+
+    #[test]
+    fn collision_sound_decision_valid_clamps() {
+        let id = uuid::Uuid::new_v4();
+        assert_eq!(
+            collision_sound_decision(id, 2.0, 1.0),
+            Some((id, 1.0))
+        );
+    }
+
+    #[test]
+    fn collision_sound_throttle_first_allow_true() {
+        let mut throttle = CollisionSoundThrottle::new();
+        let object = uuid::Uuid::new_v4();
+        let now = std::time::Instant::now();
+        assert!(throttle.allow(object, now));
+    }
+
+    #[test]
+    fn collision_sound_throttle_second_within_100ms_false() {
+        let mut throttle = CollisionSoundThrottle::new();
+        let object = uuid::Uuid::new_v4();
+        let now = std::time::Instant::now();
+        assert!(throttle.allow(object, now));
+        assert!(!throttle.allow(object, now + std::time::Duration::from_millis(100)));
+    }
+
+    #[test]
+    fn collision_sound_throttle_after_250ms_true() {
+        let mut throttle = CollisionSoundThrottle::new();
+        let object = uuid::Uuid::new_v4();
+        let now = std::time::Instant::now();
+        assert!(throttle.allow(object, now));
+        assert!(throttle.allow(object, now + std::time::Duration::from_millis(250)));
+    }
+
+    #[test]
+    fn collision_sound_throttle_different_object_independent() {
+        let mut throttle = CollisionSoundThrottle::new();
+        let first = uuid::Uuid::new_v4();
+        let second = uuid::Uuid::new_v4();
+        let now = std::time::Instant::now();
+        assert!(throttle.allow(first, now));
+        assert!(throttle.allow(second, now));
     }
 }

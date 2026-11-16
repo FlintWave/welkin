@@ -196,6 +196,18 @@ fn ll_collision_sound() {
 }
 
 #[test]
+fn ll_collision_sound_empty_string_disables() {
+    let src = r#"default { state_entry() { llCollisionSound("", 1.0); } }"#;
+    let (_prim_id, cmd) = run(src);
+    match cmd {
+        SoundCommand::CollisionSound { sound_id, .. } => {
+            assert_eq!(sound_id.to_string(), "ffffffff-ffff-ffff-ffff-ffffffffffff");
+        }
+        _ => panic!("unexpected sound command"),
+    }
+}
+
+#[test]
 fn ll_set_sound_queueing() {
     let src = r#"default { state_entry() { llSetSoundQueueing(1); } }"#;
     let (prim_id, cmd) = run(src);
