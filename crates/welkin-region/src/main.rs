@@ -8,6 +8,7 @@ mod estate_config;
 mod inventory_rez;
 mod object_add;
 mod persist;
+mod region_identity;
 mod physics_cmd;
 mod script_persist;
 mod scene_sync;
@@ -151,8 +152,9 @@ impl RegionConfig {
         }
     }
 
-    fn build_region_info(&self) -> SceneRegionInfo {
+    fn build_region_info(&self, region_id: Uuid) -> SceneRegionInfo {
         let mut info = SceneRegionInfo::new(&self.region_name, self.region_loc_x, self.region_loc_y);
+        info.region_id = region_id;
         info.external_host_name = self.external_host_name.clone();
         info.internal_port = self.internal_port;
         info
@@ -248,7 +250,19 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     info!("Database connection established");
 
     // --- Scene creation ---
-    let region_info = region_config.build_region_info();
+    let region_id = match region_identity::resolve(
+        pool.inner(),
+        &region_config.region_name,
+        region_config.region_loc_x,
+        region_config.region_loc_y,
+        config.get_string("Region", "RegionUUID"),
+    )
+    .await
+    {
+        Ok(id) => id,
+        Err(e) => return Err(e.into()),
+    };
+    let region_info = region_config.build_region_info(region_id);
     info!(
         region_id = %region_info.region_id,
         handle = region_info.region_handle,
@@ -5147,7 +5161,9 @@ mod tests {
     fn test_build_region_info() {
         let config = Config::default();
         let rc = RegionConfig::from_config(&config);
-        let info = rc.build_region_info();
+        let id = Uuid::new_v4();
+        let info = rc.build_region_info(id);
+        assert_eq!(info.region_id, id);
         assert_eq!(info.region_name, "My Region");
         assert_eq!(info.region_loc_x, 1000);
         assert_eq!(info.region_loc_y, 1000);
