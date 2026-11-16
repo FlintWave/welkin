@@ -410,6 +410,10 @@ OpenSimulator. The region relays them from `sound_io.rs`.
   preload) through the prim's linkset root. llLoopSound and llStopSound on a
   child prim are not supported yet: the region logs a warning and ignores the
   command, so put looping sounds in the root prim.
+- A collision sound chosen with llCollisionSound plays when a collision
+  starts. The region allows one such sound per object every 200 ms and skips
+  collisions at a speed of 0.2 m/s or less. llCollisionSound with an empty
+  string disables the sound, as in OpenSimulator.
 
 ## Differences from OpenSimulator
 

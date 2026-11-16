@@ -13,6 +13,27 @@ Current viewer compatibility status, updated as live testing progresses.
 | Firestorm (OpenSim build) | Yes | Working | Tested 2026-11-14 |
 | LibreMetaverse bot | Yes | 10/10 steps pass | Automated test client |
 
+## Scene delivery and object creation
+
+These behaviours come from the region code and its tests (including a UDP
+round trip that parses the sent datagrams); they are not yet confirmed in a
+live viewer session.
+
+- When a viewer arrives, the region sends it every object already in the scene.
+  The root prim and every linkset child are sent as full object updates, in
+  batched ObjectUpdate packets, with their sound fields and texture entry.
+  Before this change a new arrival saw an empty region until something moved.
+- `ObjectAdd` builds the new prim from the shape the viewer sends: prim code,
+  state, scale, rotation, and every path and profile field (curve, begin, end,
+  scale, shear, twist, taper, revolutions, skew, radius offset, hollow). A
+  tube, torus or hollow prim made in the viewer keeps its shape. The state
+  value is also copied into the last attach point, as OpenSimulator does. The
+  texture entry is left empty, so the prim uses the default plywood texture.
+- A full object update, for example after a script changes a sound, sends the
+  root and every linkset child, batched. It no longer sends the root alone.
+- All three paths build their updates through one function in `scene_sync.rs`,
+  so a prim looks the same whichever path sent it.
+
 ## Firestorm session (2026-11-14)
 
 Tested with the Firestorm OpenSim build against a local Welkin grid
