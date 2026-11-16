@@ -133,7 +133,7 @@ automatically using the coordinates stored in the archive.
 1. Download [Aurora Viewer](https://github.com/Aurora-Viewer/Aurora-Viewer)
    (pinned commit `3d523b14` for tested compatibility).
 2. Add a grid entry:
-   - **Login URI:** `http://<host>:8003`
+   - **Login URI:** `http://<host>:8002`
    - **Grid name:** any name you like
 3. Log in with an account that exists in the grid database.
 
@@ -189,7 +189,7 @@ OPENSIM__Voice__WolfvoiceURI=http://wolfvoice:7880
 
 ### Hypergrid
 
-If the grid has a public IP and ports 8003/9000 are reachable:
+If the grid has a public IP and ports 8002 and 9000 are reachable:
 
 - [ ] Enable hypergrid in the profile (`[Hypergrid] Enabled = true`)
 - [ ] Teleport to a remote grid via `hop://grid.example.com:8002/RegionName`

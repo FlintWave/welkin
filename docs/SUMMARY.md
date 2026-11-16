@@ -2,20 +2,43 @@
 
 [Introduction](README.md)
 
----
+# Operator guide
 
-# Architecture
+- [Quick start](quick-start.md)
+- [Configuration reference](configuration.md)
+- [Database setup](database-setup.md)
+- [Regions, estate and users](regions-estate-users.md)
+- [ROBUST grid services server](robust-server.md)
+- [Container deployment](container-guide.md)
+- [Operator guide](operator-guide.md)
+- [Test grid deployment](test-grid-deployment.md)
+- [Migration guide (C# to Rust)](migration-guide.md)
+- [OSgrid compatibility](osgrid-compatibility.md)
+- [Viewer compatibility](viewer-compatibility.md)
+- [Security: permissions](security-review-permissions.md)
+- [Security: OSSL API](security-review-ossl-api.md)
+- [Security: script sandboxing](security-review-script-sandboxing.md)
+- [Security: remote writes](security-review-remote-writes.md)
+- [Security: archives](security-review-archives.md)
+- [Security: social modules](security-review-social-modules.md)
+- [Security: Hypergrid](security-review-hypergrid.md)
+- [Security: voice](security-review-voice.md)
+- [Security: terraforming](security-review-terraforming.md)
+
+# Agent build guide
 
 - [Architecture](architecture.md)
+- [Crate structure](crate-structure.md)
 - [Integration architecture](integration-architecture.md)
+- [Module development guide](module-development.md)
+- [Extension modules](extensions.md)
 - [Script engine](scripting.md)
 - [OSSL function reference](ossl.md)
-- [Extension modules](extensions.md)
-- [Module development guide](module-development.md)
+- [Testing](testing.md)
+- [OpenSpec workflow](openspec-workflow.md)
+- [Task system](task-system.md)
 - [RealmWalker bot SDK](realmwalker.md)
 - [Decision log](decisions.md)
-
----
 
 # Phase summaries
 
@@ -42,40 +65,10 @@
 - [Remaining parity](remaining-parity-summary.md)
 - [Cutover](cutover-summary.md)
 
----
-
-# Security reviews
-
-- [Permissions](security-review-permissions.md)
-- [OSSL API](security-review-ossl-api.md)
-- [Script sandboxing](security-review-script-sandboxing.md)
-- [Remote writes](security-review-remote-writes.md)
-- [Archives](security-review-archives.md)
-- [Social modules](security-review-social-modules.md)
-- [Hypergrid](security-review-hypergrid.md)
-- [Voice](security-review-voice.md)
-- [Terraforming](security-review-terraforming.md)
-
----
-
-# Operator documentation
-
-- [Quick start](quick-start.md)
-- [Configuration reference](configuration.md)
-- [ROBUST grid services server](robust-server.md)
-- [Test grid deployment](test-grid-deployment.md)
-- [Container deployment](container-guide.md)
-- [Operator guide](operator-guide.md)
-- [Migration guide (C# to Rust)](migration-guide.md)
-
----
-
 # Reference
 
 - [Licence audit](licence-audit.md)
 - [LSL corpus analysis](lsl-corpus-analysis.md)
 - [Naming and trademarks](naming-and-trademarks.md)
-- [OSgrid compatibility](osgrid-compatibility.md)
 - [Script engine spike results](script-engine-spike-results.md)
-- [Viewer compatibility](viewer-compatibility.md)
 - [Final acceptance review](final-acceptance-review.md)
