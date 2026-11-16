@@ -4606,20 +4606,22 @@ async fn broadcast_full_object_update(
     socket: &UdpSocket,
     clients: &ClientMap,
 ) {
-    let root = obj.root_part();
-    let prim_obj = scene_sync::full_update_for_part(root, root.parent_id, true);
-    let obj_msg = ObjectUpdate {
-        region_data: object_update::RegionData {
-            region_handle,
-            time_dilation: 65535,
-        },
-        object_data: vec![prim_obj.to_object_data()],
-    };
+    // Root prim plus every linkset child, batched to stay under the MTU.
+    let batches = scene_sync::batch_updates(scene_sync::group_updates(obj), 3);
     let all_clients = clients.read().await;
-    for (addr, c) in all_clients.iter() {
-        let mut sess = c.lock().await;
-        let (pkt_bytes, _) = sess.circuit.send_msg(&obj_msg, true);
-        let _ = socket.send_to(&pkt_bytes, *addr).await;
+    for batch in batches {
+        let obj_msg = ObjectUpdate {
+            region_data: object_update::RegionData {
+                region_handle,
+                time_dilation: 65535,
+            },
+            object_data: batch.iter().map(|u| u.to_object_data()).collect(),
+        };
+        for (addr, c) in all_clients.iter() {
+            let mut sess = c.lock().await;
+            let (pkt_bytes, _) = sess.circuit.send_msg(&obj_msg, true);
+            let _ = socket.send_to(&pkt_bytes, *addr).await;
+        }
     }
 }
 

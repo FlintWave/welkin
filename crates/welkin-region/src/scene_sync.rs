@@ -78,29 +78,31 @@ pub fn full_update_for_part(
     }
 }
 
+/// Updates for one object group: the root prim first, then every child part
+/// (children carry the root's local id as their parent and their offset position).
+pub fn group_updates(group: &welkin_scene::group::SceneObjectGroup) -> Vec<FullObjectUpdate> {
+    let mut updates = Vec::new();
+    let root = group.root_part();
+
+    if root.local_id != 0 {
+        updates.push(full_update_for_part(root, root.parent_id, true));
+    }
+
+    let root_local_id = root.local_id;
+    for part in group.parts() {
+        if part.local_id == 0 || part.uuid == root.uuid {
+            continue;
+        }
+        updates.push(full_update_for_part(part, root_local_id, false));
+    }
+    updates
+}
+
 pub fn scene_object_updates(scene: &welkin_scene::scene::Scene) -> Vec<FullObjectUpdate> {
     let mut updates = Vec::new();
-
     scene.for_each_object(|group: &welkin_scene::group::SceneObjectGroup| {
-        let root = group.root_part();
-
-        if root.local_id != 0 {
-            updates.push(full_update_for_part(root, 0, true));
-        }
-
-        let root_local_id = root.local_id;
-
-        for part in group.parts() {
-            if part.local_id == 0 {
-                continue;
-            }
-            if (part as *const SceneObjectPart) == (root as *const SceneObjectPart) {
-                continue;
-            }
-            updates.push(full_update_for_part(part, root_local_id, false));
-        }
+        updates.extend(group_updates(group));
     });
-
     updates
 }
 
@@ -152,6 +154,26 @@ mod tests {
     use glam::Vec3;
     use uuid::Uuid;
     use welkin_scene::part::SceneObjectPart;
+
+    #[test]
+    fn group_updates_include_children_with_parent_link() {
+        use welkin_scene::group::SceneObjectGroup;
+        let owner = Uuid::new_v4();
+        let mut root = SceneObjectPart::new("Root", owner);
+        root.local_id = 10;
+        let mut group = SceneObjectGroup::new(root);
+        let mut child_a = SceneObjectPart::new("A", owner);
+        child_a.local_id = 11;
+        let mut child_b = SceneObjectPart::new("B", owner);
+        child_b.local_id = 12;
+        group.add_part(child_a);
+        group.add_part(child_b);
+
+        let updates = group_updates(&group);
+        assert_eq!(updates.len(), 3);
+        assert_eq!(updates[0].local_id, 10);
+        assert!(updates[1..].iter().all(|u| u.parent_id == 10));
+    }
 
     #[test]
     fn batch_updates_chunks() {
