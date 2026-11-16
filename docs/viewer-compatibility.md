@@ -32,6 +32,13 @@ Working:
   titles the avatar may pick, and which members hold which role. The member list
   goes out in replies of up to 25 members, and only to members of the group: a
   request from an avatar that is not a member gets no reply.
+- A member with the right to invite can invite another avatar to the group. The
+  region stores the invitation in the groups database, so it survives a restart,
+  and sends the invitee an instant message. The invitee can accept, which adds
+  them to the group and refreshes their group state, or decline. A refused
+  invitation shows the inviter "Unable to invite that agent (no permission, or
+  already a member)."
+- The group founder holds the Owner role only, not Owner and Officer both.
 
 How it differs from OpenSimulator:
 
@@ -52,15 +59,15 @@ How it differs from OpenSimulator:
   speaks the XML protocol that ROBUST's groups service uses.
 
 Not covered by this work: changing roles or their powers, assigning members to
-roles, inviting and ejecting members, group notices and group proposals. The
-region answers the read-only queries above but has no handlers for these
-changes. Treat them as missing until a later change adds them.
+roles, ejecting members, group notices and group proposals. The region has no
+handlers for these changes. Treat them as missing until a later change adds
+them.
 
 Limits to know about:
 
 - Groups are grid-only. Hypergrid avatar IDs are not supported.
-- There is no notice or invite handling yet (planned as later milestones), so a
-  closed-enrollment group cannot be joined until invites exist.
+- There is no notice handling yet (a planned milestone). A group with closed
+  enrollment can be joined only by accepting an invitation.
 - Only SQLite has been used, as with the rest of Welkin.
 - The tests ran in process against the groups router, not against a launched
   `welkin-robust` binary, so the full path from a viewer to a running grid is
