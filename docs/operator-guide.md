@@ -2,7 +2,7 @@
 
 # Operator guide
 
-[<- Back to docs](README.md) | [Architecture](architecture.md) | [Test grid deployment](test-grid-deployment.md) | [Migration guide](migration-guide.md)
+[<- Back to docs](index.md) | [Architecture](architecture.md) | [Test grid deployment](test-grid-deployment.md) | [Migration guide](migration-guide.md)
 
 Complete reference for installing, configuring, running, and maintaining an
 OpenSimulator grid using the Rust implementation. For a quick test deployment,
@@ -66,7 +66,8 @@ curl -sSf https://raw.githubusercontent.com/.../install/install.sh | bash
 ```
 
 The installer detects the distribution, sets up the database, writes
-configuration, creates the systemd unit, and runs the first-run wizard.
+configuration, and creates the systemd unit. The first-run wizard is part of the portal
+scaffold and does not run.
 `install/upgrade.sh` and `install/uninstall.sh` handle upgrades (preserving
 data) and removal.
 
@@ -284,8 +285,8 @@ OPENSIM__GridService__GridServerURI=http://localhost:8003 \
 ### Multi-region
 
 A single `welkin-region` process can host multiple regions. Each region needs
-a unique UDP port for LLUDP traffic. Configure additional regions through the
-portal or configuration.
+a unique UDP port for LLUDP traffic. Configure additional regions through
+configuration files.
 
 ### Docker Compose
 
@@ -548,7 +549,8 @@ LLUDP (UDP 9000) is not proxied; it must be reachable directly.
 
 ### Authentication
 
-- Portal staff passwords use Argon2id (decision G2)
+- Planned: portal staff passwords use Argon2id (decision G2); the portal is a
+  scaffold and not deployed
 - Grid user passwords are MD5 by default (C# compatibility); upgrade to
   Argon2id with `osim-migrate upgrade-passwords`
 - OSSL function access is gated by threat level with per-function overrides
@@ -559,7 +561,6 @@ Apply rate limiting at the reverse proxy layer. Key endpoints to protect:
 
 - `/login` (XML-RPC login)
 - `/assets` (asset upload/download)
-- `/portal` (staff portal)
 
 ### Firewall recommendations
 

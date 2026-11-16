@@ -2,7 +2,7 @@
 
 # Migration guide: C# OpenSimulator to Rust
 
-[<- Back to docs](README.md) | [Architecture](architecture.md) | [Operator guide](operator-guide.md) | [Test grid deployment](test-grid-deployment.md)
+[<- Back to docs](index.md) | [Architecture](architecture.md) | [Operator guide](operator-guide.md) | [Test grid deployment](test-grid-deployment.md)
 
 Step-by-step guide for migrating an existing C# OpenSimulator 0.9.x grid to
 the Rust implementation. The migration is incremental: C# and Rust services

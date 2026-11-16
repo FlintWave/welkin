@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Object interaction summary
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Viewer compatibility](viewer-compatibility.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Viewer compatibility](viewer-compatibility.md)
 
 Status: complete (24 of 24 tasks, 3 phases). Change:
 `openspec/changes/object-interaction/`.

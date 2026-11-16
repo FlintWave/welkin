@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Viewer messaging and interaction
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Viewer compatibility](viewer-compatibility.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Viewer compatibility](viewer-compatibility.md)
 
 Status: complete (23 of 23 tasks, 3 phases). Change:
 `openspec/changes/viewer-messaging/`.

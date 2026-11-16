@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # ROBUST grid services server
 
-[← Back to docs](README.md) · [Operator guide](operator-guide.md) · [Integration architecture](integration-architecture.md) · [Container deployment](container-guide.md)
+[← Back to docs](index.md) · [Operator guide](operator-guide.md) · [Integration architecture](integration-architecture.md) · [Container deployment](container-guide.md)
 
 ROBUST is the grid services process. It handles login, asset storage,
 inventory, user accounts, presence, grid registration and every other
@@ -109,8 +109,8 @@ ports for in-world traffic.
 
 ### With Podman Compose
 
-The repository's `docker-compose.prod.yml` starts the full stack (database,
-ROBUST, region, portal). See the [container guide](container-guide.md)
+The repository's `compose.prod.yaml` starts the full stack (database,
+ROBUST, region). See the [container guide](container-guide.md)
 for details.
 
 ### With systemd
