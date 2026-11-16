@@ -1,4 +1,4 @@
-/target
+**/target/
 /recordings/
 docs/book/
 robust.db
@@ -6,3 +6,33 @@ tests/script-testing/corpus/
 tests/script-testing/results/
 tests/script-testing/scanner/target/
 tests/script-testing/runner/target/
+
+# Secrets
+.env
+
+# Database files
+*.db
+*.db-wal
+*.db-shm
+*.sqlite*
+
+# Logs and runtime output
+*.log
+/logs/
+/maptiles/
+
+# C# build artifacts (bot tests)
+**/bin/
+**/obj/
+*.csproj.user
+*.suo
+
+# IDE and OS
+.vs/
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*~
+*.orig
+*.rej
