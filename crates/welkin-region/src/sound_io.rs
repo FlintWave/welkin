@@ -59,20 +59,13 @@ pub async fn relay_sound(
                 sound_id,
                 volume,
             } => {
-                if let Some((group_uuid, position, owner_id)) =
-                    scene.with_object(&prim_id, |g| (g.uuid(), g.position(), g.root_part().owner_id))
+                if let Some((group_uuid, position, owner_id, sound_radius)) =
+                    scene.with_object(&prim_id, |g| (g.uuid(), g.position(), g.root_part().owner_id, g.root_part().sound_radius))
                 {
-                    let msg = SoundTrigger {
-                        sound_data: sound_trigger::SoundData {
-                            sound_id,
-                            owner_id,
-                            object_id: group_uuid,
-                            parent_id: uuid::Uuid::nil(),
-                            handle: scene.region_info.region_handle,
-                            position,
-                            gain: volume as f32,
-                        },
-                    };
+                    let radius = effective_radius(sound_radius);
+                    if sound_radius == 0.0 {
+                        let _ = scene.with_object_mut(&prim_id, |g| g.root_part_mut().sound_radius = 100.0);
+                    }
 
                     let snapshot: Vec<(
                         std::net::SocketAddr,
@@ -90,9 +83,21 @@ pub async fn relay_sound(
                         let Some(presence) = scene.get_presence(&agent_id) else {
                             continue;
                         };
-                        if presence.position.distance(position) > 100.0 {
+                        if !in_trigger_range(presence.position.distance_squared(position), radius) {
                             continue;
                         }
+
+                        let msg = SoundTrigger {
+                            sound_data: sound_trigger::SoundData {
+                                sound_id,
+                                owner_id,
+                                object_id: group_uuid,
+                                parent_id: uuid::Uuid::nil(),
+                                handle: scene.region_info.region_handle,
+                                position,
+                                gain: volume as f32,
+                            },
+                        };
 
                         let pkt = {
                             let mut s = client.lock().await;
@@ -113,18 +118,6 @@ pub async fn relay_sound(
                 if let Some((group_uuid, position, owner_id)) =
                     scene.with_object(&prim_id, |g| (g.uuid(), g.position(), g.root_part().owner_id))
                 {
-                    let msg = SoundTrigger {
-                        sound_data: sound_trigger::SoundData {
-                            sound_id,
-                            owner_id,
-                            object_id: group_uuid,
-                            parent_id: uuid::Uuid::nil(),
-                            handle: scene.region_info.region_handle,
-                            position,
-                            gain: volume as f32,
-                        },
-                    };
-
                     let snapshot: Vec<(
                         std::net::SocketAddr,
                         std::sync::Arc<tokio::sync::Mutex<welkin_net::server::ClientSession>>,
@@ -144,6 +137,23 @@ pub async fn relay_sound(
                         if !within_box(presence.position, top_ne, bottom_sw) {
                             continue;
                         }
+
+                        let dist = presence.position.distance(position) as f64;
+                        if dist > 100.0 {
+                            continue;
+                        }
+
+                        let msg = SoundTrigger {
+                            sound_data: sound_trigger::SoundData {
+                                sound_id,
+                                owner_id,
+                                object_id: group_uuid,
+                                parent_id: uuid::Uuid::nil(),
+                                handle: scene.region_info.region_handle,
+                                position,
+                                gain: limited_gain(volume as f64, dist) as f32,
+                            },
+                        };
 
                         let pkt = {
                             let mut s = client.lock().await;
@@ -274,9 +284,14 @@ pub async fn relay_sound(
             }
 
             welkin_script_vm::builtins::SoundCommand::PreloadSound { prim_id, sound_id } => {
-                if let Some((group_uuid, _position, owner_id)) =
-                    scene.with_object(&prim_id, |g| (g.uuid(), g.position(), g.root_part().owner_id))
+                if let Some((group_uuid, position, owner_id, sound_radius)) =
+                    scene.with_object(&prim_id, |g| (g.uuid(), g.position(), g.root_part().owner_id, g.root_part().sound_radius))
                 {
+                    let radius = effective_radius(sound_radius);
+                    if sound_radius == 0.0 {
+                        let _ = scene.with_object_mut(&prim_id, |g| g.root_part_mut().sound_radius = 100.0);
+                    }
+
                     let msg = PreloadSound {
                         data_block: vec![preload_sound::DataBlock {
                             object_id: group_uuid,
@@ -294,6 +309,17 @@ pub async fn relay_sound(
                     };
 
                     for (addr, client) in snapshot {
+                        let agent_id = {
+                            let s = client.lock().await;
+                            s.agent_id
+                        };
+                        let Some(presence) = scene.get_presence(&agent_id) else {
+                            continue;
+                        };
+                        if !in_preload_range(presence.position.distance_squared(position), radius) {
+                            continue;
+                        }
+
                         let pkt = {
                             let mut s = client.lock().await;
                             s.circuit.send_msg(&msg, true).0
@@ -324,6 +350,30 @@ pub async fn relay_sound(
             }
         }
     }
+}
+
+pub fn effective_radius(radius: f32) -> f32 {
+    if radius <= 0.0 {
+        100.0
+    } else {
+        radius
+    }
+}
+
+pub fn limited_gain(volume: f64, dist: f64) -> f64 {
+    if dist >= 100.0 {
+        0.0
+    } else {
+        (volume * ((100.0 - dist) / 100.0)).max(0.0)
+    }
+}
+
+pub fn in_trigger_range(dist_sq: f32, radius: f32) -> bool {
+    dist_sq <= radius * radius
+}
+
+pub fn in_preload_range(dist_sq: f32, radius: f32) -> bool {
+    dist_sq < 4.0 * radius * radius
 }
 
 pub fn within_box(p: glam::Vec3, top_ne: [f64; 3], bottom_sw: [f64; 3]) -> bool {
@@ -426,5 +476,62 @@ mod tests {
     #[test]
     fn play_flags_true() {
         assert_eq!(play_flags(true), 0x10);
+    }
+
+    #[test]
+    fn effective_radius_zero() {
+        assert_eq!(effective_radius(0.0), 100.0);
+    }
+
+    #[test]
+    fn effective_radius_negative() {
+        assert_eq!(effective_radius(-1.0), 100.0);
+    }
+
+    #[test]
+    fn effective_radius_positive() {
+        assert_eq!(effective_radius(25.0), 25.0);
+    }
+
+    #[test]
+    fn limited_gain_half() {
+        assert!((limited_gain(1.0, 50.0) - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn limited_gain_at_max_distance() {
+        assert_eq!(limited_gain(1.0, 100.0), 0.0);
+    }
+
+    #[test]
+    fn limited_gain_beyond_max_distance() {
+        assert_eq!(limited_gain(1.0, 150.0), 0.0);
+    }
+
+    #[test]
+    fn limited_gain_clamps_negative_volume() {
+        assert_eq!(limited_gain(-1.0, 50.0), 0.0);
+    }
+
+    #[test]
+    fn in_trigger_range_true() {
+        assert!(in_trigger_range(2500.0, 50.0));
+    }
+
+    #[test]
+    fn in_trigger_range_boundary() {
+        assert!(in_trigger_range(2500.0, 50.0));
+        assert!(!in_trigger_range(2501.0, 50.0));
+    }
+
+    #[test]
+    fn in_preload_range_true() {
+        assert!(in_preload_range(9999.0, 50.0));
+    }
+
+    #[test]
+    fn in_preload_range_boundary() {
+        assert!(!in_preload_range(10000.0, 50.0));
+        assert!(in_preload_range(9999.999, 50.0));
     }
 }
