@@ -3,7 +3,7 @@
 **Date:** 2024-11  
 **Spike goal:** Determine whether Luau (via mlua 0.12) is a viable runtime for
 LSL script execution in Welkin, and identify the work needed to make it
-production-ready.
+production-ready (spike document; see the README for current status).
 
 ---
 

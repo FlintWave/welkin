@@ -5,7 +5,7 @@
 
 ## Requirements
 
-- Rust 1.85 or later (edition 2024)
+- Rust 1.88 or later (edition 2024)
 - SQLite (MariaDB and PostgreSQL are supported in the code but not yet verified)
 - A viewer: [Aurora Viewer](https://aurora-viewer.org) or
   [Firestorm](https://www.firestormviewer.org/) (OpenSim build)

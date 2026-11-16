@@ -7,7 +7,7 @@ This page is a map for someone who is about to change the code. The
 [architecture page](architecture.md) has the full crate table and the dependency
 graph. Here you find where things live.
 
-Welkin is a Cargo workspace of 25 crates, edition 2024, Rust 1.85 or later.
+Welkin is a Cargo workspace of 25 crates, edition 2024, Rust 1.88 or later.
 `welkin-companion` (a Tauri desktop app) lives beside them and builds
 separately. Two crates produce programs: `welkin-region` and `welkin-robust`.
 

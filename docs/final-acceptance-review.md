@@ -1,5 +1,10 @@
 # Final Acceptance Review
 
+> [!WARNING]
+> Historical document from 2026-11-14. Superseded by the README and the roadmap for
+> current status. Its PASS verdict, test counts and security statements describe
+> that date only, and the README's warning to run on trusted networks applies today.
+
 **Date:** 2026-11-14
 **Reviewer:** Claude Opus 4.6 (automated, end-to-end)
 **Scope:** All 18 phases, 333 tasks (task 333 of 333)

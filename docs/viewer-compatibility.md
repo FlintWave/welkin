@@ -11,7 +11,7 @@ Current viewer compatibility status, updated as live testing progresses.
 |---|---|---|---|
 | Aurora Viewer | Yes | Partial | First connected 2026-11-14 |
 | Firestorm (OpenSim build) | Yes | Working | Tested 2026-11-14 |
-| LibreMetaverse bot | Yes | 10/10 steps pass | Automated test client |
+| LibreMetaverse bot | Yes | 10/10 steps on a fresh region | Automated test client |
 
 ## Groups
 
@@ -92,7 +92,8 @@ data finishes after a newer change, such as creating a group, the region drops
 the stale list instead of sending it, so the viewer does not show the old set of
 groups. The region tracks this per avatar and forgets it at logout.
 
-Not covered yet: group notices, which are queued as the next milestone.
+Group notices work (send, store, delivery and list), except notice attachments,
+which are not supported yet.
 Group proposals and votes are out of scope: they belong to a separate
 OpenSimulator module that has no service support in `welkin-robust`, and the
 approved design leaves them out.
@@ -265,8 +266,8 @@ prevents unnecessary broadcasts.
 
 The bot test validates the full scripting chain: rez a prim, upload LSL,
 confirm state_entry fires llSay, send ObjectGrab, confirm touch_start fires
-llSay. All 10 bot test steps pass (login, region connect, chat send, chat
-echo, movement, rez prim, script upload, script alive, touch event, logout).
+llSay. The bot test has 10 steps (login, region connect, chat send, chat
+echo, movement, rez prim, script upload, script alive, touch event, logout). The bot test passes 10/10 on a fresh region; on a region that already holds objects from earlier runs the touch step can fail. The cause is under investigation; probably the test picks a stale prim.
 
 ### Known limitations
 

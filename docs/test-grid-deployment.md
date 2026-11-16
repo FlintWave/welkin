@@ -162,7 +162,7 @@ Work through this checklist after first login:
 
 - [x] Create a prim, upload a script via two-step LLSD protocol (UpdateScriptAgent cap)
 - [x] "ALIVE" appears in chat when the script loads (state_entry fires llSay, bot-verified)
-- [x] Touch the prim; "touched" appears in chat (touch_start fires llSay, bot-verified)
+- [x] Touch the prim; "touched" appears in chat (touch_start fires llSay, bot-verified). The bot test passes 10/10 on a fresh region; on a region that already holds objects from earlier runs the touch step can fail. The cause is under investigation; probably the test picks a stale prim.
 - [ ] Script state survives region restart (checkpoint/restore)
 
 ### Voice

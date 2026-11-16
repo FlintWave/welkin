@@ -72,7 +72,8 @@ and creates a `ScriptInstance`. The region's heartbeat loop constructs a
 timer, sensor, control and link-message events. `register_builtins()` calls
 `builtins::register_all()`, which registers all 206 ll\* functions, 236 os\*
 functions, and extension APIs (LightShare, MOD, JsonStore) as Luau globals
-on the VM. The bytecode is then executed once to register the script's own
+on the VM. Registered in the VM does not mean connected to the running region;
+see the README for which functions are wired. The bytecode is then executed once to register the script's own
 handler functions, and a `state_entry` event is queued.
 
 The full chain from upload to execution:

@@ -5,8 +5,8 @@
 
 ## Current project state
 
-26 Rust crates, 145k lines, 2,209 tests. 643 of 757 tracked tasks complete
-(85%) across 22 completed changes and 6 active ones. The archived changes
+This summary is a snapshot from an earlier date. See the README and the roadmap
+for current counts and status. It covers 22 completed changes and 6 active ones. The archived changes
 cover: port foundation, open-source audit, protocol core, physics backend,
 grid services, capacity assessor, grid portal, region simulator core, prim
 meshing, script engine, OSSL API, region modules, object interaction, viewer
@@ -72,45 +72,19 @@ not yet user-tested:
 - Grid portal (scaffold only: the first-run wizard, staff auth and RBAC have code, but most handlers return fake success and the portal is not wired into any binary)
 - Animation overrides (viewer-driven animation replacement)
 - Real attachments from inventory (forced attachments work, viewer-initiated pending)
-- Groups database persistence (in-memory only)
 - Script state checkpoint and restore across region restarts
 - Some LSL functions are not wired into the running region: llEmail, llHTTPRequest, llRezObject, llAttachToAvatar and others (see the README)
 - Full Firestorm re-test after chat/map/stub fixes
 - A 10-minute soak test on either viewer (no completed run is on record)
 - Local teleport between regions (code exists, not user-tested)
 
-### Feature comparison vs OpenSimulator 0.9.3.0
+### Feature comparison
 
-A rough breakdown by subsystem, counting parity by implemented protocol
-handlers and viewer-visible behavior, not by line count:
-
-| Subsystem | Parity | Notes |
-|---|---|---|
-| Login and circuit | 100% | XMLRPC, LLSD, UseCircuitCode, RegionHandshake |
-| Grid services (ROBUST) | 100% | 14 service handlers, replay-tested |
-| Region simulator core | 95% | Scene, terrain, presences; pathfinding deferred |
-| Object interaction | 95% | Full CRUD, link, rez, properties; MOAP missing |
-| Inventory | 90% | Folder tree, caps, transfers; viewer-initiated attach pending |
-| Scripting (LSL) | 85% | 206/~310 SL-spec ll* functions; compiler handles 68% of real scripts |
-| Scripting (OSSL) | 90% | 236/258 os* functions; 22 are deprecated aliases |
-| Physics | 90% | Rapier backend, collisions, vehicles; pathfinding deferred |
-| Communication | 95% | Chat, IM, groups messaging, ViewerEffect relay |
-| Social | 90% | Groups, friends, profiles, NPCs; groups DB is in-memory |
-| Economy | 90% | MoneyModule, Gloebit; DTL/NSL proxy mode |
-| Teleport | 90% | Local, cross-region, hypergrid; user validation pending |
-| Voice | 100% | WebRTC via wolfvoice (Vivox/FreeSWITCH not ported, Aurora-only) |
-| Archives | 100% | OAR/IAR single and multi-region |
-| Estate admin | 95% | 11 sub-commands, freeze/eject/god; ban persistence partial |
-| Avatar rendering | 70% | Baked textures work; PBR, BoM, Animesh, glTF missing |
-| Environment | 60% | Windlight partial; EEP, dynamic sky not ported |
-| HTTP capabilities | 80% | 42/~55 standard caps implemented |
-| Portal/admin | 100% | Grid portal, wizard, companion app |
-
-Estimated overall parity: ~85% of user-visible features.
-
-The main gaps are in avatar rendering (PBR, Bakes on Mesh, Animesh, glTF),
-environment (EEP), and a few viewer-facing features (search, MOAP, animation
-overrides). These are tracked in the modern-avatar-features change (25 tasks).
+An earlier version of this section gave a percentage for each subsystem and an
+overall parity figure of about 85%. Those numbers were not measured and
+overstated what runs (for example the portal, teleport and voice), so they are
+removed. See the [README](index.md) and the roadmap for what works and what does
+not.
 
 ---
 

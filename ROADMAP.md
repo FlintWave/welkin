@@ -39,7 +39,7 @@ Known limits of this release:
   NPC functions and dynamic textures are not wired either.
 - The LSL compiler rejects some valid scripts, such as a float literal that
   starts with a dot (`.4`).
-- Group notices are not finished, and group proposals are out of scope. In group
+- Group notice attachments are not supported, and group proposals are out of scope. In group
   chat, the event for a second avatar joining a session can arrive late.
 - Attachments are saved at logout, not on a timer, so a region crash loses
   attachment changes made since login.
@@ -212,7 +212,7 @@ None of these is started. The task counts come from each change's `tasks.md`.
 
 - Smooth region crossing: predictive handshake, dual presence
 - A working web portal and first-run setup
-- Group notices
+- Group notice attachments
 - MariaDB and PostgreSQL support, verified
 - Welkin project website
 - Ink NPC dialogue system (Python or Rust, no LLMs)

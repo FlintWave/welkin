@@ -54,7 +54,7 @@ but have not been through a live viewer session. The
   at runtime. A threat-level model gates the `os*` functions.
 - Estate settings and object permissions, enforced by default
 - Groups: create, join, leave, invitations, roles and powers, titles, eject, and
-  group chat (group notices are not finished)
+  group chat and group notices (notice attachments are not supported yet)
 - OAR and IAR archive import and export
 - Account creation from the region console (`create-user`)
 
@@ -76,7 +76,7 @@ with Gloebit.
   textures are not wired into the running region.
 - The LSL compiler fails on some valid scripts. For example, the lexer rejects a
   float literal that starts with a dot, such as `.4`.
-- Group notices. Group proposals and votes are out of scope. In group chat, the
+- Group notice attachments. Group proposals and votes are out of scope. In group chat, the
   event for a second avatar that joins a session can arrive late.
 - Attachments are saved when an avatar logs out, not on a timer, so a region crash
   loses attachment changes made since login.
@@ -88,6 +88,7 @@ with Gloebit.
 
 ## Known limits
 
+- The LibreMetaverse bot test passes 10/10 on a fresh region; on a region that already holds objects from earlier runs the touch step can fail. The cause is under investigation; probably the test picks a stale prim.
 - **Run Welkin on a trusted network only.** The grid's authentication and account
   service endpoints have no access-control gates yet. For example, there is no
   `AllowSetPassword` check, so anyone who can reach the private service port can
@@ -106,7 +107,7 @@ with Gloebit.
 
 ## Quick start
 
-You need Rust 1.85 or later and a viewer
+You need Rust 1.88 or later and a viewer
 ([Aurora Viewer](https://aurora-viewer.org) or
 [Firestorm](https://www.firestormviewer.org/), OpenSim build). The steps below
 use SQLite and one region on one machine.
