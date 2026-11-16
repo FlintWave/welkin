@@ -350,29 +350,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let scripts_enabled = scene.config.scripts_enabled;
     info!(scripts_enabled, "script scheduler initialised");
 
-    // Restore persisted script states from DB
+    // Persisted script states are loaded here and restored (with builtins) by the
+    // heartbeat task, which owns the channels scripts need.
+    let mut pending_script_restore: Vec<(Uuid, Uuid, welkin_script_vm::ScriptState)> = Vec::new();
     if scripts_enabled {
         match script_persist::load_script_states(pool.inner()).await {
-            Ok(states) if !states.is_empty() => {
-                let mut sched = script_scheduler.lock();
-                let mut restored = 0usize;
-                for (script_id, prim_id, state) in &states {
-                    match welkin_script_vm::ScriptInstance::restore_from(
-                        *script_id, *prim_id, state, 10_000,
-                    ) {
-                        Ok(instance) => {
-                            sched.add_script(instance);
-                            sched.post_event(*script_id, ScriptEvent::StateEntry);
-                            restored += 1;
-                        }
-                        Err(e) => {
-                            warn!(script = %script_id, error = %e, "failed to restore script state");
-                        }
-                    }
-                }
-                info!(restored, total = states.len(), "restored script states from DB");
-            }
-            Ok(_) => {}
+            Ok(states) => pending_script_restore = states,
             Err(e) => warn!(error = %e, "failed to load script states from DB"),
         }
     }
@@ -715,6 +698,53 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         let mut collision_sound_throttle = sound_io::CollisionSoundThrottle::new();
         let mut sensor_repeats: HashMap<Uuid, (welkin_script_vm::SensorRequest, std::time::Instant, std::time::Duration)> = HashMap::new();
         let mut control_registrations: HashMap<Uuid, (Uuid, u32, bool, bool)> = HashMap::new();
+        // Everything a script needs to talk to the region (chat, timers, sound, physics, ...).
+        let make_script_context = |script_id: Uuid, prim_id: Uuid, prim_pos: glam::Vec3| {
+            std::sync::Arc::new(parking_lot::RwLock::new(
+                welkin_script_vm::builtins::ScriptContext {
+                    script_id,
+                    prim_id,
+                    position: [prim_pos.x as f64, prim_pos.y as f64, prim_pos.z as f64],
+                    chat_sender: Some(heartbeat_chat_tx.clone()),
+                    timer_sender: Some(heartbeat_timer_tx.clone()),
+                    event_sender: Some(heartbeat_event_tx.clone()),
+                    sensor_sender: Some(heartbeat_sensor_tx.clone()),
+                    control_sender: Some(heartbeat_control_tx.clone()),
+                    sound_sender: Some(heartbeat_sound_tx.clone()),
+                    physics_sender: Some(heartbeat_physics_tx.clone()),
+                    ..Default::default()
+                },
+            ))
+        };
+
+        // Bring back the scripts saved at the last shutdown/backup.
+        if scripts_enabled && !pending_script_restore.is_empty() {
+            let total = pending_script_restore.len();
+            let mut restored = 0usize;
+            for (script_id, prim_id, state) in std::mem::take(&mut pending_script_restore) {
+                // No memory cap, like freshly loaded scripts.
+                let mut instance = match welkin_script_vm::ScriptInstance::restore_from(script_id, prim_id, &state, 0) {
+                    Ok(instance) => instance,
+                    Err(e) => {
+                        warn!(script = %script_id, error = %e, "failed to restore script state");
+                        continue;
+                    }
+                };
+                let prim_pos = heartbeat_scene
+                    .with_object(&prim_id, |g| g.position())
+                    .unwrap_or(glam::Vec3::new(128.0, 128.0, 22.0));
+                if let Err(e) = instance.register_builtins(make_script_context(script_id, prim_id, prim_pos)) {
+                    warn!(script = %script_id, error = %e, "failed to register builtins for restored script");
+                    continue;
+                }
+                let mut sched = heartbeat_scheduler.lock();
+                sched.add_script(instance);
+                sched.post_event(script_id, ScriptEvent::StateEntry);
+                restored += 1;
+            }
+            info!(restored, total, "restored script states from DB");
+        }
+
         loop {
             tokio::select! {
                 _ = heartbeat_cancel.cancelled() => break,
@@ -764,21 +794,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                     let prim_pos = heartbeat_scene
                                         .with_object(&load_req.prim_id, |g| g.position())
                                         .unwrap_or(glam::Vec3::new(128.0, 128.0, 22.0));
-                                    let ctx = std::sync::Arc::new(parking_lot::RwLock::new(
-                                        welkin_script_vm::builtins::ScriptContext {
-                                            script_id: load_req.script_id,
-                                            prim_id: load_req.prim_id,
-                                            position: [prim_pos.x as f64, prim_pos.y as f64, prim_pos.z as f64],
-                                            chat_sender: Some(heartbeat_chat_tx.clone()),
-                                            timer_sender: Some(heartbeat_timer_tx.clone()),
-                                            event_sender: Some(heartbeat_event_tx.clone()),
-                                            sensor_sender: Some(heartbeat_sensor_tx.clone()),
-                                            control_sender: Some(heartbeat_control_tx.clone()),
-                                            sound_sender: Some(heartbeat_sound_tx.clone()),
-                                            physics_sender: Some(heartbeat_physics_tx.clone()),
-                                            ..Default::default()
-                                        }
-                                    ));
+                                    let ctx = make_script_context(load_req.script_id, load_req.prim_id, prim_pos);
                                     if let Err(e) = instance.register_builtins(ctx) {
                                         tracing::warn!(
                                             script = %load_req.script_id,
