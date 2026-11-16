@@ -50,6 +50,7 @@ Elsewhere:
 | Terrain heights, brushes, LayerData encoder | `welkin-scene/src/terrain*.rs` |
 | Object XML (XML2) | `welkin-scene/src/xml2.rs` |
 | The `RegionModule` trait and registry | `welkin-modules/src/module.rs`, `registry.rs` |
+| The `ClientEgress` trait and test doubles | `welkin-modules/src/egress.rs` |
 | Grid services (login, accounts, groups and others) | `welkin-services/src/` |
 | Clients for those services, used by the region | `welkin-services/src/remote/` |
 | SQL stores and migrations | `welkin-data/src/` |

@@ -3,104 +3,147 @@
 ![Status](https://img.shields.io/badge/status-alpha-orange)
 ![License](https://img.shields.io/badge/license-LGPL--3.0-blue)
 ![Rust](https://img.shields.io/badge/rust-edition%202024-orange)
-![Tests](https://img.shields.io/badge/tests-2%2C652%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-2%2C688%20passing-brightgreen)
 [![Docs](https://img.shields.io/badge/docs-flintwave.github.io%2Fwelkin-purple)](https://flintwave.github.io/welkin/)
 
 A Rust implementation of the [OpenSimulator](http://opensimulator.org/) 0.9.3.0
-virtual-world server. It speaks the same viewer and grid protocols. Built from
-scratch with no OpenSimulator code.
+virtual-world server, written from scratch with no OpenSimulator code.
 
 > **Alpha release (v0.1.0-alpha).** Welkin builds, runs, and lets a viewer log in
-> to a single-region grid on SQLite. It is not ready for a production grid. Read
-> [What works](#what-works), [What does not work yet](#what-does-not-work-yet)
-> and [Known limits](#known-limits) before you run it.
+> to a single-region grid on SQLite. It is for trusted networks and experiments,
+> not for a production grid. A lot is unfinished, and this page lists it. Read
+> [What works today](#what-works-today), [What does not work yet](#what-does-not-work-yet)
+> and [Stubs and gaps](#stubs-and-gaps) before you decide whether to try it.
 
 ## What is Welkin
 
-Welkin is a virtual-world server that aims to be compatible with
-OpenSimulator 0.9.3.0. It has two programs: `welkin-robust` runs the grid
-services (login, inventory, assets, groups and others), and `welkin-region` runs
-a region that viewers connect to. The goal is your existing grid, content and
-viewer on a server that is easier to run and harder to break.
+Welkin is two programs. `welkin-robust` runs the grid services: login, inventory,
+assets, groups and others. `welkin-region` runs a region that viewers connect to.
+They aim to speak the same protocols as OpenSimulator 0.9.3.0, so that your
+existing viewer works, and later your existing grid and content.
 
-Welkin is an alternative to OpenSimulator, not a replacement. Both projects
-serve the same community. The name comes from Old English: "the sky" or "the
-firmament."
+It is an alternative to OpenSimulator, not a replacement. The name comes from Old
+English: "the sky" or "the firmament."
 
-## What works
+## What works today
 
-The release build produces both binaries, and the workspace test suite passes:
-2,652 tests, 0 failures, 2 ignored.
+At the current head, `cargo test --workspace` runs 2,688 tests with 0 failures
+and 2 ignored. The release build produces both binaries.
 
 Login, movement, chat and basic scripting were tried in a live session with the
 Firestorm OpenSim build and with a LibreMetaverse bot. An
 [Aurora Viewer](https://aurora-viewer.org) connection is reported, but no
-recording or log of it is on record. The features below that came later are
-tested in code, including end-to-end tests against real services,
-but have not been through a live viewer session. The
-[viewer compatibility page](docs/viewer-compatibility.md) says which is which.
+recording or log of it is on record. Everything else below is tested in code,
+including end-to-end tests against real services, and has not been through a live
+viewer session. The [viewer compatibility page](docs/viewer-compatibility.md)
+says which is which.
 
-- Login (XMLRPC and LLSD), region handshake, avatar movement (walk, run, fly,
-  sit), jumping and falling on the real terrain
+- Login (XMLRPC and LLSD), region handshake, avatar movement (walk, run, fly, sit),
+  jumping and falling on the real terrain, with jump, fall and crouch animations
 - Chat, instant messages, friends and profiles
-- Objects: create, edit, link, take, return and rez from inventory, attachments,
-  all saved to the database and loaded again at start
+- Objects: create, edit, link, take, return, buy, rez from inventory and attach;
+  saved to the database and loaded again at start (attachments are saved at logout)
 - Terraforming with the viewer's land tools, with real terrain data sent to
   viewers and saved across restarts
+- One whole-region parcel that lets avatars fly
 - Physics with Rapier 3D, including physical prims and script physics commands
-- Scripts: LSL compiled to Luau and run in a sandboxed VM. The compiler handles
-  the common LSL patterns; in a sample of 25 real-world scripts, about 60% (15)
-  compile. Chat, timers, events, sensors, controls, sound and physics calls work
-  at runtime. A threat-level model gates the `os*` functions.
+- Scripts: LSL compiled to Luau and run in a sandboxed VM. About 60% of a sample
+  of 25 real-world scripts compile. Chat, timers, events, sensors, controls, sound
+  and physics calls work at runtime
 - Estate settings and object permissions, enforced by default
-- Groups: create, join, leave, invitations, roles and powers, titles, eject, and
-  group chat and group notices (notice attachments are not supported yet)
-- OAR and IAR archive import and export
+- Groups: create, join, leave, invitations, roles and powers, titles, eject,
+  notices (without attachments) and group chat
 - Account creation from the region console (`create-user`)
-
-Also implemented in code but not yet checked in a live session: Hypergrid
-friends, WebRTC voice through the `wolfvoice` sidecar, and the currency module
-with Gloebit.
+- Loading an OAR from the region console (`load oar <file>`): its assets, objects
+  and `.r32` terrain
+- Default avatar assets loaded into the grid at start, from files you supply
 
 ## What does not work yet
 
-- **The web portal is a scaffold.** Most handlers do nothing and no binary
-  mounts it. There is no first-run wizard. Create accounts with the console.
+- **The web portal is a scaffold.** Most handlers do nothing and no binary mounts
+  it. There is no first-run wizard. Create accounts with the console.
 - **Many LSL functions exist in the VM but are not connected to the running
   region, so they do nothing at runtime:** `llEmail` (no mail sender),
   `llHTTPRequest`, `llHTTPResponse` and `llRequestURL`, `llRezObject` and
   `llRezAtRoot`, and `llAttachToAvatar` and its detach call. `llRequestAgentData`
-  returns fixed placeholder data, not real account data, and `llSetHTTPBody` does
-  not exist. A script that calls these runs without an error and gets no result.
+  returns fixed placeholder data, and `llSetHTTPBody` does not exist. A script that
+  calls these runs without an error and gets no result.
 - Teleport between regions and Hypergrid teleport, NPC functions and dynamic
   textures are not wired into the running region.
 - The LSL compiler fails on some valid scripts. For example, the lexer rejects a
   float literal that starts with a dot, such as `.4`.
-- Group notice attachments. Group proposals and votes are out of scope. In group chat, the
-  event for a second avatar that joins a session can arrive late.
-- Attachments are saved when an avatar logs out, not on a timer, so a region crash
-  loses attachment changes made since login.
+- The avatar factory, gods and dialog modules send alerts, kicks, URL and text
+  dialogs and appearance updates through a `ClientEgress` interface that the region
+  does not connect yet, so those messages are dropped.
+- Land: there is one parcel and no way to divide, edit, buy or sell land.
+- Saving an OAR, and IAR import and export, have no console command.
+- Group notice attachments. Group proposals and votes are out of scope. In group
+  chat, the event for a second avatar that joins a session can arrive late.
 - PBR materials, Bakes on Mesh, Animesh, Extended Environment (EEP) day cycles,
   viewer search, and media on a prim.
-- Separate-host setups: the grid's private service port listens on `127.0.0.1`
-  by default, so a region on another machine cannot reach it until you change
-  the bind address.
+- Money: the sample economy charges nothing, so a purchase is free.
+- Separate-host setups: the grid's private service port listens on `127.0.0.1` by
+  default, so a region on another machine cannot reach it until you change the
+  bind address.
+
+## Stubs and gaps
+
+Welkin has code that looks finished and is not. The no-stubs check in CI only
+catches `todo!()`, `unimplemented!()` and the words `STUB` and `PLACEHOLDER` in
+upper case, and none of those appear. Lower-case stubs do, and some of them report
+success without doing the work.
+
+A search of the Rust sources counts 233 lines that mention "stub": 138 in
+`welkin-modules`, 53 in the script VM, 28 in `welkin-services` and 11 in the
+conformance tool. It also finds 24 `TODO` comments, 10 of them in `welkin-capacity`
+and 8 in the unused `welkin-portal`. Some of the 233 lines are test helpers or
+comments, so the number overstates the real count, but nobody has sorted them
+yet. Examples:
+
+- A set of OSSL functions for notecards, textures, parcels, agents, teleport and
+  NPCs is documented in the source as stubs.
+- The concierge module's HTTP notification, the asset cache's file tier and the
+  Hypergrid groups connector operations are stubs.
+- `rez_coalesced` logs "stub" and returns success without rezzing anything.
+- A region module for wearing attachments is a stub that creates a placeholder
+  object ID. The region's own attachment code is separate and is the one that works.
+- Several NPC avatar methods are documented as no-ops.
+
+A feature in the list above has code behind it and a test, but a test of a stub
+passes too. Treat a feature that no viewer session has exercised as unproven.
+
+## What is coming
+
+Nothing here has a date. The [roadmap](ROADMAP.md) has the detail, and most of it
+is paused after this release, so help is welcome.
+
+- Sort the stubs: connect the real code or delete the fake, starting with the LSL
+  functions above
+- Fix the LSL compiler failures and measure the compile rate again
+- A web portal that works, with first-run setup
+- Check the MariaDB and PostgreSQL paths, then fix what breaks
+- Access-control gates on the grid's authentication and account endpoints
+- A live viewer soak test, and a recorded Aurora Viewer session
+- Teleport, NPC functions and dynamic textures in the running region
+- Land management, group notice attachments, and a real economy
+- PBR, Bakes on Mesh, Animesh and Extended Environment day cycles
 
 ## Known limits
 
-- The LibreMetaverse bot test passes 10/10 on a fresh region; on a region that already holds objects from earlier runs the touch step can fail. The cause is under investigation; probably the test picks a stale prim.
 - **Run Welkin on a trusted network only.** The grid's authentication and account
   service endpoints have no access-control gates yet. For example, there is no
   `AllowSetPassword` check, so anyone who can reach the private service port can
   change account data. The portal handlers do not validate their input. Keep the
   private port on `127.0.0.1` (the default) or behind a firewall, and do not put
   an alpha grid on the open internet.
+- The LibreMetaverse bot test passes 10/10 on a fresh region; on a region that
+  already holds objects from earlier runs the touch step can fail. The cause is
+  under investigation; probably the test picks a stale prim.
 - **SQLite is the only database that has been run.** MariaDB and PostgreSQL are
   supported in the code but have never been tried, and some SQL is known to need
   work. See [Database setup](docs/database-setup.md).
-- The container stack in `docker-compose.prod.yml` uses MySQL, so it is
-  untested for the same reason.
-- Several features above were tested in code only. Expect bugs in them.
+- The container stack in `docker-compose.prod.yml` uses MySQL, so it is untested
+  for the same reason.
 - Account creation is off by default in the grid (`AllowCreateUser`). The
   development `robust.toml` in this repository turns it on; do not copy that
   setting into a grid that others can reach.
@@ -119,6 +162,7 @@ cargo build --release
 ```
 
 That builds `target/release/welkin-robust` and `target/release/welkin-region`.
+
 Before the first start, copy the default avatar assets: Welkin cannot ship them
 (Linden Lab viewer art under CC BY-SA 2.5). Copy the `bin/assets` folder from an
 OpenSimulator 0.9.3.0 install to `assets/` beside `welkin-robust`, or set
@@ -141,7 +185,8 @@ create-user Alice Smith
 
 Then point your viewer at the login URI `http://127.0.0.1:8002/` and log in as
 `Alice Smith`. The [quick start guide](docs/quick-start.md) has the details,
-including Firestorm's grid manager.
+including Firestorm's grid manager. To load content, run `load oar <file>` at the
+same prompt.
 
 To make an avatar the estate owner, set `[Estate] EstateOwner` in `welkin.toml`
 to the avatar's UUID. Without an owner nobody can terraform or use the estate
@@ -180,7 +225,7 @@ release and what is paused.
 
 ## Contributing
 
-Contributions are welcome, especially on the paused work in the roadmap. See
+Contributions are welcome, especially on the unfinished work above. See
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License

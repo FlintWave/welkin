@@ -94,12 +94,23 @@ The `welkin>` prompt accepts:
 | `alert <message>` | Broadcast an alert to every avatar |
 | `kick <name> [reason]` | Disconnect a user |
 | `create-user <first> <last>` | Create a grid account |
+| `load oar <file>` | Load an OpenSimulator region archive (see below) |
 | `shutdown`, `quit` | Shut the region down, or close the console |
 
 The same commands are available over a small REST API (`POST /admin/console`).
 It is off until you set `[Admin] Token`, uses plain HTTP, and refuses to bind a
 non-loopback address unless `[Admin] AllowRemoteBind = true`. See the
 [configuration reference](configuration.md#admin-api) before you turn it on.
+
+## Loading an OAR
+
+`load oar <file>` loads an OpenSimulator region archive into the running region.
+It stores the archive's assets in the asset service, adds its objects to the
+scene, and applies its terrain if the terrain is a 256 by 256 `.r32` file. Other
+terrain formats are skipped with a warning. Progress goes to the log, and the
+command prints a short note and returns while the load runs. Assets that already
+exist are left alone, and a failed asset or object is counted, not fatal. There is
+no console command for saving an OAR, and none for IAR files.
 
 ## Groups
 
