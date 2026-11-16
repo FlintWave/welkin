@@ -427,16 +427,19 @@ impl SimulationDataStore {
     ) -> Result<(), DataError> {
         let _ = (region_id, group_id); // row carries both; params kept for API symmetry
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM primshapes WHERE UUID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM primshapes WHERE UUID = $1");
+        sqlx::query(&q)
             .bind(&prim.uuid)
             .execute(&mut *tx)
             .await?;
-        sqlx::query("DELETE FROM prims WHERE UUID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM prims WHERE UUID = $1");
+        sqlx::query(&q)
             .bind(&prim.uuid)
             .execute(&mut *tx)
             .await?;
 
-        sqlx::query(
+        let q = crate::portable::sql(
+            &self.pool,
             "INSERT INTO prims (\
                 UUID,RegionUUID,SceneGroupID,CreationDate,Name,Text,Description,\
                 SitName,TouchName,ObjectFlags,CreatorID,OwnerID,GroupID,LastOwnerID,\
@@ -466,96 +469,98 @@ impl SimulationDataStore {
                 $57,$58,$59,$60,$61,$62,$63,$64,$65,$66,$67,$68,$69,$70,$71,$72,$73,$74,\
                 $75,$76,$77,$78,$79,$80,$81,$82,$83,$84,$85\
             )",
-        )
-        .bind(&prim.uuid)
-        .bind(&prim.region_uuid)
-        .bind(&prim.scene_group_id)
-        .bind(prim.creation_date)
-        .bind(&prim.name)
-        .bind(&prim.text)
-        .bind(&prim.description)
-        .bind(&prim.sit_name)
-        .bind(&prim.touch_name)
-        .bind(prim.object_flags)
-        .bind(&prim.creator_id)
-        .bind(&prim.owner_id)
-        .bind(&prim.group_id)
-        .bind(&prim.last_owner_id)
-        .bind(&prim.rezzer_id)
-        .bind(prim.owner_mask)
-        .bind(prim.next_owner_mask)
-        .bind(prim.group_mask)
-        .bind(prim.everyone_mask)
-        .bind(prim.base_mask)
-        .bind(prim.position_x)
-        .bind(prim.position_y)
-        .bind(prim.position_z)
-        .bind(prim.group_position_x)
-        .bind(prim.group_position_y)
-        .bind(prim.group_position_z)
-        .bind(prim.velocity_x)
-        .bind(prim.velocity_y)
-        .bind(prim.velocity_z)
-        .bind(prim.angular_velocity_x)
-        .bind(prim.angular_velocity_y)
-        .bind(prim.angular_velocity_z)
-        .bind(prim.acceleration_x)
-        .bind(prim.acceleration_y)
-        .bind(prim.acceleration_z)
-        .bind(prim.rotation_x)
-        .bind(prim.rotation_y)
-        .bind(prim.rotation_z)
-        .bind(prim.rotation_w)
-        .bind(prim.sit_target_offset_x)
-        .bind(prim.sit_target_offset_y)
-        .bind(prim.sit_target_offset_z)
-        .bind(prim.sit_target_orient_w)
-        .bind(prim.sit_target_orient_x)
-        .bind(prim.sit_target_orient_y)
-        .bind(prim.sit_target_orient_z)
-        .bind(prim.pay_price)
-        .bind(prim.pay_button1)
-        .bind(prim.pay_button2)
-        .bind(prim.pay_button3)
-        .bind(prim.pay_button4)
-        .bind(&prim.looped_sound)
-        .bind(prim.looped_sound_gain)
-        .bind(&prim.texture_animation)
-        .bind(prim.camera_eye_offset_x)
-        .bind(prim.camera_eye_offset_y)
-        .bind(prim.camera_eye_offset_z)
-        .bind(prim.camera_at_offset_x)
-        .bind(prim.camera_at_offset_y)
-        .bind(prim.camera_at_offset_z)
-        .bind(prim.force_mouselook)
-        .bind(prim.script_access_pin)
-        .bind(prim.allowed_drop)
-        .bind(prim.die_at_edge)
-        .bind(prim.sale_price)
-        .bind(prim.sale_type)
-        .bind(prim.color_r)
-        .bind(prim.color_g)
-        .bind(prim.color_b)
-        .bind(prim.color_a)
-        .bind(&prim.particle_system)
-        .bind(prim.click_action)
-        .bind(prim.material)
-        .bind(&prim.collision_sound)
-        .bind(prim.collision_sound_volume)
-        .bind(prim.pass_touches)
-        .bind(prim.pass_collisions)
-        .bind(prim.link_number)
-        .bind(&prim.media_url)
-        .bind(prim.physics_shape_type)
-        .bind(prim.density)
-        .bind(prim.gravity_modifier)
-        .bind(prim.friction)
-        .bind(prim.restitution)
-        .bind(&prim.dyn_attrs)
-        .execute(&mut *tx)
-        .await?;
+        );
+        sqlx::query(&q)
+            .bind(&prim.uuid)
+            .bind(&prim.region_uuid)
+            .bind(&prim.scene_group_id)
+            .bind(prim.creation_date)
+            .bind(&prim.name)
+            .bind(&prim.text)
+            .bind(&prim.description)
+            .bind(&prim.sit_name)
+            .bind(&prim.touch_name)
+            .bind(prim.object_flags)
+            .bind(&prim.creator_id)
+            .bind(&prim.owner_id)
+            .bind(&prim.group_id)
+            .bind(&prim.last_owner_id)
+            .bind(&prim.rezzer_id)
+            .bind(prim.owner_mask)
+            .bind(prim.next_owner_mask)
+            .bind(prim.group_mask)
+            .bind(prim.everyone_mask)
+            .bind(prim.base_mask)
+            .bind(prim.position_x)
+            .bind(prim.position_y)
+            .bind(prim.position_z)
+            .bind(prim.group_position_x)
+            .bind(prim.group_position_y)
+            .bind(prim.group_position_z)
+            .bind(prim.velocity_x)
+            .bind(prim.velocity_y)
+            .bind(prim.velocity_z)
+            .bind(prim.angular_velocity_x)
+            .bind(prim.angular_velocity_y)
+            .bind(prim.angular_velocity_z)
+            .bind(prim.acceleration_x)
+            .bind(prim.acceleration_y)
+            .bind(prim.acceleration_z)
+            .bind(prim.rotation_x)
+            .bind(prim.rotation_y)
+            .bind(prim.rotation_z)
+            .bind(prim.rotation_w)
+            .bind(prim.sit_target_offset_x)
+            .bind(prim.sit_target_offset_y)
+            .bind(prim.sit_target_offset_z)
+            .bind(prim.sit_target_orient_w)
+            .bind(prim.sit_target_orient_x)
+            .bind(prim.sit_target_orient_y)
+            .bind(prim.sit_target_orient_z)
+            .bind(prim.pay_price)
+            .bind(prim.pay_button1)
+            .bind(prim.pay_button2)
+            .bind(prim.pay_button3)
+            .bind(prim.pay_button4)
+            .bind(&prim.looped_sound)
+            .bind(prim.looped_sound_gain)
+            .bind(&prim.texture_animation)
+            .bind(prim.camera_eye_offset_x)
+            .bind(prim.camera_eye_offset_y)
+            .bind(prim.camera_eye_offset_z)
+            .bind(prim.camera_at_offset_x)
+            .bind(prim.camera_at_offset_y)
+            .bind(prim.camera_at_offset_z)
+            .bind(prim.force_mouselook)
+            .bind(prim.script_access_pin)
+            .bind(prim.allowed_drop)
+            .bind(prim.die_at_edge)
+            .bind(prim.sale_price)
+            .bind(prim.sale_type)
+            .bind(prim.color_r)
+            .bind(prim.color_g)
+            .bind(prim.color_b)
+            .bind(prim.color_a)
+            .bind(&prim.particle_system)
+            .bind(prim.click_action)
+            .bind(prim.material)
+            .bind(&prim.collision_sound)
+            .bind(prim.collision_sound_volume)
+            .bind(prim.pass_touches)
+            .bind(prim.pass_collisions)
+            .bind(prim.link_number)
+            .bind(&prim.media_url)
+            .bind(prim.physics_shape_type)
+            .bind(prim.density)
+            .bind(prim.gravity_modifier)
+            .bind(prim.friction)
+            .bind(prim.restitution)
+            .bind(&prim.dyn_attrs)
+            .execute(&mut *tx)
+            .await?;
 
-        sqlx::query(
+        let q = crate::portable::sql(
+            &self.pool,
             "INSERT INTO primshapes (\
                 UUID,Shape,ScaleX,ScaleY,ScaleZ,PCode,\
                 PathBegin,PathEnd,PathScaleX,PathScaleY,PathShearX,PathShearY,\
@@ -567,39 +572,40 @@ impl SimulationDataStore {
                 $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,\
                 $16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30\
             )",
-        )
-        .bind(&shape.uuid)
-        .bind(shape.shape)
-        .bind(shape.scale_x)
-        .bind(shape.scale_y)
-        .bind(shape.scale_z)
-        .bind(shape.pcode)
-        .bind(shape.path_begin)
-        .bind(shape.path_end)
-        .bind(shape.path_scale_x)
-        .bind(shape.path_scale_y)
-        .bind(shape.path_shear_x)
-        .bind(shape.path_shear_y)
-        .bind(shape.path_skew)
-        .bind(shape.path_curve)
-        .bind(shape.path_radius_offset)
-        .bind(shape.path_revolutions)
-        .bind(shape.path_taper_x)
-        .bind(shape.path_taper_y)
-        .bind(shape.path_twist)
-        .bind(shape.path_twist_begin)
-        .bind(shape.profile_begin)
-        .bind(shape.profile_end)
-        .bind(shape.profile_curve)
-        .bind(shape.profile_hollow)
-        .bind(&shape.texture)
-        .bind(&shape.extra_params)
-        .bind(shape.state)
-        .bind(shape.last_attach_point)
-        .bind(&shape.media)
-        .bind(&shape.mat_ovrd)
-        .execute(&mut *tx)
-        .await?;
+        );
+        sqlx::query(&q)
+            .bind(&shape.uuid)
+            .bind(shape.shape)
+            .bind(shape.scale_x)
+            .bind(shape.scale_y)
+            .bind(shape.scale_z)
+            .bind(shape.pcode)
+            .bind(shape.path_begin)
+            .bind(shape.path_end)
+            .bind(shape.path_scale_x)
+            .bind(shape.path_scale_y)
+            .bind(shape.path_shear_x)
+            .bind(shape.path_shear_y)
+            .bind(shape.path_skew)
+            .bind(shape.path_curve)
+            .bind(shape.path_radius_offset)
+            .bind(shape.path_revolutions)
+            .bind(shape.path_taper_x)
+            .bind(shape.path_taper_y)
+            .bind(shape.path_twist)
+            .bind(shape.path_twist_begin)
+            .bind(shape.profile_begin)
+            .bind(shape.profile_end)
+            .bind(shape.profile_curve)
+            .bind(shape.profile_hollow)
+            .bind(&shape.texture)
+            .bind(&shape.extra_params)
+            .bind(shape.state)
+            .bind(shape.last_attach_point)
+            .bind(&shape.media)
+            .bind(&shape.mat_ovrd)
+            .execute(&mut *tx)
+            .await?;
 
         tx.commit().await?;
         Ok(())
@@ -608,11 +614,13 @@ impl SimulationDataStore {
     /// Remove a prim and its shape from both tables.
     pub async fn remove_object(&self, uuid: &str) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM primshapes WHERE UUID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM primshapes WHERE UUID = $1");
+        sqlx::query(&q)
             .bind(uuid)
             .execute(&mut *tx)
             .await?;
-        sqlx::query("DELETE FROM prims WHERE UUID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM prims WHERE UUID = $1");
+        sqlx::query(&q)
             .bind(uuid)
             .execute(&mut *tx)
             .await?;
@@ -628,7 +636,8 @@ impl SimulationDataStore {
         let prim_sql = format!(
             "SELECT {PRIM_COLS} FROM prims WHERE RegionUUID = $1 ORDER BY SceneGroupID,LinkNumber"
         );
-        let prims: Vec<PrimRow> = sqlx::query_as::<_, PrimRow>(&prim_sql)
+        let q = crate::portable::sql(&self.pool, &prim_sql);
+        let prims: Vec<PrimRow> = sqlx::query_as::<_, PrimRow>(&q)
             .bind(region_id)
             .fetch_all(&self.pool)
             .await?;
@@ -637,7 +646,8 @@ impl SimulationDataStore {
             "SELECT {SHAPE_COLS} FROM primshapes \
              WHERE UUID IN (SELECT UUID FROM prims WHERE RegionUUID = $1)"
         );
-        let shapes: Vec<PrimShapeRow> = sqlx::query_as::<_, PrimShapeRow>(&shape_sql)
+        let q = crate::portable::sql(&self.pool, &shape_sql);
+        let shapes: Vec<PrimShapeRow> = sqlx::query_as::<_, PrimShapeRow>(&q)
             .bind(region_id)
             .fetch_all(&self.pool)
             .await?;
@@ -655,7 +665,8 @@ impl SimulationDataStore {
 
     /// Return just the UUIDs of all prims in a region.
     pub async fn get_object_ids(&self, region_id: &str) -> Result<Vec<String>, DataError> {
-        let rows: Vec<(String,)> = sqlx::query_as("SELECT UUID FROM prims WHERE RegionUUID = $1")
+        let q = crate::portable::sql(&self.pool, "SELECT UUID FROM prims WHERE RegionUUID = $1");
+        let rows: Vec<(String,)> = sqlx::query_as(&q)
             .bind(region_id)
             .fetch_all(&self.pool)
             .await?;
@@ -672,11 +683,13 @@ impl SimulationDataStore {
         heightfield: &[u8],
     ) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM terrain WHERE RegionUUID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM terrain WHERE RegionUUID = $1");
+        sqlx::query(&q)
             .bind(region_id)
             .execute(&mut *tx)
             .await?;
-        sqlx::query("INSERT INTO terrain (RegionUUID,Revision,Heightfield) VALUES ($1,$2,$3)")
+        let q = crate::portable::sql(&self.pool, "INSERT INTO terrain (RegionUUID,Revision,Heightfield) VALUES ($1,$2,$3)");
+        sqlx::query(&q)
             .bind(region_id)
             .bind(revision)
             .bind(heightfield)
@@ -688,13 +701,15 @@ impl SimulationDataStore {
 
     /// Load the latest terrain revision for a region.
     pub async fn load_terrain(&self, region_id: &str) -> Result<Option<TerrainRow>, DataError> {
-        Ok(sqlx::query_as::<_, TerrainRow>(
+        let q = crate::portable::sql(
+            &self.pool,
             "SELECT RegionUUID,Revision,Heightfield FROM terrain \
              WHERE RegionUUID = $1 ORDER BY Revision DESC LIMIT 1",
-        )
-        .bind(region_id)
-        .fetch_optional(&self.pool)
-        .await?)
+        );
+        Ok(sqlx::query_as::<_, TerrainRow>(&q)
+            .bind(region_id)
+            .fetch_optional(&self.pool)
+            .await?)
     }
 
     // -- region settings -----------------------------------------------------
@@ -702,11 +717,13 @@ impl SimulationDataStore {
     /// Store region settings (DELETE+INSERT upsert).
     pub async fn store_region_settings(&self, s: &RegionSettingsRow) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM regionsettings WHERE regionUUID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM regionsettings WHERE regionUUID = $1");
+        sqlx::query(&q)
             .bind(&s.region_uuid)
             .execute(&mut *tx)
             .await?;
-        sqlx::query(
+        let q = crate::portable::sql(
+            &self.pool,
             "INSERT INTO regionsettings (\
                 regionUUID,block_terraform,block_fly,allow_damage,restrict_pushing,\
                 allow_land_resell,allow_land_join_divide,block_show_in_search,\
@@ -722,49 +739,50 @@ impl SimulationDataStore {
                 $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,\
                 $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40\
             )",
-        )
-        .bind(&s.region_uuid)
-        .bind(s.block_terraform)
-        .bind(s.block_fly)
-        .bind(s.allow_damage)
-        .bind(s.restrict_pushing)
-        .bind(s.allow_land_resell)
-        .bind(s.allow_land_join_divide)
-        .bind(s.block_show_in_search)
-        .bind(s.agent_limit)
-        .bind(s.object_bonus)
-        .bind(s.maturity)
-        .bind(s.disable_scripts)
-        .bind(s.disable_collisions)
-        .bind(s.disable_physics)
-        .bind(&s.terrain_texture_1)
-        .bind(&s.terrain_texture_2)
-        .bind(&s.terrain_texture_3)
-        .bind(&s.terrain_texture_4)
-        .bind(s.elevation_1_nw)
-        .bind(s.elevation_1_ne)
-        .bind(s.elevation_1_se)
-        .bind(s.elevation_1_sw)
-        .bind(s.elevation_2_nw)
-        .bind(s.elevation_2_ne)
-        .bind(s.elevation_2_se)
-        .bind(s.elevation_2_sw)
-        .bind(s.water_height)
-        .bind(s.terrain_raise_limit)
-        .bind(s.terrain_lower_limit)
-        .bind(s.use_estate_sun)
-        .bind(s.fixed_sun)
-        .bind(s.sun_position)
-        .bind(&s.covenant)
-        .bind(s.covenant_datetime)
-        .bind(s.sandbox)
-        .bind(&s.map_tile_id)
-        .bind(&s.telehub_object)
-        .bind(&s.parcel_tile_id)
-        .bind(&s.cache_id)
-        .bind(s.block_search)
-        .execute(&mut *tx)
-        .await?;
+        );
+        sqlx::query(&q)
+            .bind(&s.region_uuid)
+            .bind(s.block_terraform)
+            .bind(s.block_fly)
+            .bind(s.allow_damage)
+            .bind(s.restrict_pushing)
+            .bind(s.allow_land_resell)
+            .bind(s.allow_land_join_divide)
+            .bind(s.block_show_in_search)
+            .bind(s.agent_limit)
+            .bind(s.object_bonus)
+            .bind(s.maturity)
+            .bind(s.disable_scripts)
+            .bind(s.disable_collisions)
+            .bind(s.disable_physics)
+            .bind(&s.terrain_texture_1)
+            .bind(&s.terrain_texture_2)
+            .bind(&s.terrain_texture_3)
+            .bind(&s.terrain_texture_4)
+            .bind(s.elevation_1_nw)
+            .bind(s.elevation_1_ne)
+            .bind(s.elevation_1_se)
+            .bind(s.elevation_1_sw)
+            .bind(s.elevation_2_nw)
+            .bind(s.elevation_2_ne)
+            .bind(s.elevation_2_se)
+            .bind(s.elevation_2_sw)
+            .bind(s.water_height)
+            .bind(s.terrain_raise_limit)
+            .bind(s.terrain_lower_limit)
+            .bind(s.use_estate_sun)
+            .bind(s.fixed_sun)
+            .bind(s.sun_position)
+            .bind(&s.covenant)
+            .bind(s.covenant_datetime)
+            .bind(s.sandbox)
+            .bind(&s.map_tile_id)
+            .bind(&s.telehub_object)
+            .bind(&s.parcel_tile_id)
+            .bind(&s.cache_id)
+            .bind(s.block_search)
+            .execute(&mut *tx)
+            .await?;
         tx.commit().await?;
         Ok(())
     }
@@ -776,7 +794,8 @@ impl SimulationDataStore {
     ) -> Result<Option<RegionSettingsRow>, DataError> {
         let sql =
             format!("SELECT {REGION_SETTINGS_COLS} FROM regionsettings WHERE regionUUID = $1");
-        Ok(sqlx::query_as::<_, RegionSettingsRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        Ok(sqlx::query_as::<_, RegionSettingsRow>(&q)
             .bind(region_id)
             .fetch_optional(&self.pool)
             .await?)
