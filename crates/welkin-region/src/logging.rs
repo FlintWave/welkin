@@ -59,9 +59,13 @@ pub fn init(config: &welkin_config::Config) -> Option<WorkerGuard> {
             builder = builder.max_log_files(max_files as usize);
         }
 
-        let _ = std::fs::create_dir_all(&directory);
+        if let Err(e) = std::fs::create_dir_all(&directory) {
+            eprintln!("logging: cannot create log directory '{directory}': {e}");
+        }
 
-        if let Ok(appender) = builder.build(&directory) {
+        match builder.build(&directory) {
+            Err(e) => eprintln!("logging: cannot open log file in '{directory}': {e}"),
+            Ok(appender) => {
             let (writer, worker_guard) = tracing_appender::non_blocking(appender);
             let layer: Box<dyn Layer<Registry> + Send + Sync> = if json {
                 Box::new(fmt::layer().json().with_writer(writer).with_ansi(false))
@@ -70,15 +74,19 @@ pub fn init(config: &welkin_config::Config) -> Option<WorkerGuard> {
             };
             file_layer = Some(layer);
             guard = Some(worker_guard);
+            }
         }
     }
 
     let layers: Vec<Box<dyn Layer<Registry> + Send + Sync>> =
         console_layer.into_iter().chain(file_layer).collect();
-    let _ = tracing_subscriber::registry()
+    if let Err(e) = tracing_subscriber::registry()
         .with(layers)
         .with(env_filter)
-        .try_init();
+        .try_init()
+    {
+        eprintln!("logging: subscriber already installed, keeping existing one: {e}");
+    }
 
     guard
 }
