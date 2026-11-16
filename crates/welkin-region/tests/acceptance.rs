@@ -281,3 +281,72 @@ async fn shutdown_coordination() {
         .expect("HTTP server did not shut down in time")
         .expect("HTTP task panicked");
 }
+
+// ---------------------------------------------------------------------------
+// Mock grid connector — cross-region branch validation
+// ---------------------------------------------------------------------------
+
+use axum::response::IntoResponse;
+use welkin_services::remote::grid::RemoteGridConnector;
+
+async fn mock_grid_null(_req: axum::http::Request<axum::body::Body>) -> impl IntoResponse {
+    axum::http::Response::builder()
+        .status(200)
+        .header("content-type", "text/xml")
+        .body(r#"<?xml version="1.0"?><ServerResponse><result>null</result></ServerResponse>"#.to_string())
+        .unwrap()
+}
+
+async fn mock_grid_found(_req: axum::http::Request<axum::body::Body>) -> impl IntoResponse {
+    axum::http::Response::builder()
+        .status(200)
+        .header("content-type", "text/xml")
+        .body(r#"<?xml version="1.0"?><ServerResponse><result type="List"><uuid>aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee</uuid><locX>256000</locX><locY>256000</locY><sizeX>256</sizeX><sizeY>256</sizeY><regionName>Remote Region</regionName><flags>8</flags><serverIP>127.0.0.1</serverIP><serverHttpPort>9000</serverHttpPort><serverURI>http://127.0.0.1:9000</serverURI><serverPort>9000</serverPort><regionMapTexture>00000000-0000-0000-0000-000000000000</regionMapTexture><parcelMapTexture>00000000-0000-0000-0000-000000000000</parcelMapTexture><access>1</access><regionSecret>secret</regionSecret><owner_uuid>11111111-2222-3333-4444-555555555555</owner_uuid><Token>tok</Token></result></ServerResponse>"#.to_string())
+        .unwrap()
+}
+
+async fn spawn_mock(handler: axum::routing::MethodRouter<()>) -> String {
+    let app = axum::Router::new().fallback(handler);
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.ok() });
+    format!("http://{}", addr)
+}
+
+#[tokio::test]
+async fn cross_region_branch_no_connector() {
+    let grid_connector: Option<std::sync::Arc<RemoteGridConnector>> = None;
+    let handle: u64 = (256000u64 << 32) | 256000u64;
+    let dest_region = match &grid_connector {
+        Some(conn) => conn.get_region_by_handle_u64("0", handle).await.ok().flatten(),
+        None => None,
+    };
+    assert!(dest_region.is_none(), "no connector -> no cross-region target");
+}
+
+#[tokio::test]
+async fn cross_region_branch_connector_missing() {
+    let base = spawn_mock(axum::routing::any(mock_grid_null)).await;
+    let conn = std::sync::Arc::new(RemoteGridConnector::new(&base));
+    let grid_connector = Some(conn);
+    let handle: u64 = (256000u64 << 32) | 256000u64;
+    let dest_region = match &grid_connector {
+        Some(conn) => conn.get_region_by_handle_u64("0", handle).await.ok().flatten(),
+        None => None,
+    };
+    assert!(dest_region.is_none(), "missing region -> no cross-region target");
+}
+
+#[tokio::test]
+async fn cross_region_branch_connector_found() {
+    let base = spawn_mock(axum::routing::any(mock_grid_found)).await;
+    let conn = std::sync::Arc::new(RemoteGridConnector::new(&base));
+    let grid_connector = Some(conn);
+    let handle: u64 = (256000u64 << 32) | 256000u64;
+    let dest_region = match &grid_connector {
+        Some(conn) => conn.get_region_by_handle_u64("0", handle).await.ok().flatten(),
+        None => None,
+    };
+    let dest = dest_region.expect("region should resolve");
+    assert_eq!(dest.region_name, "Remote Region");
+}

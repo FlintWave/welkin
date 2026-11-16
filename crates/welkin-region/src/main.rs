@@ -4335,12 +4335,25 @@ async fn process_messages(
             let mut born_str = "2024-01-01".to_string();
             let mut about = format!("{} {}", first, last);
             let mut image_id = Uuid::nil();
-            let mut web_url = String::new();
-            if let Ok(Some(props)) = welkin_services::profiles::fetch_avatar_properties(&profiles_store, &target.to_string()).await {
-                if !props.born_on.is_empty() { born_str = props.born_on; }
-                if !props.about_text.is_empty() { about = props.about_text; }
-                if !props.web_url.is_empty() { web_url = props.web_url; }
-                if let Ok(u) = Uuid::parse_str(&props.image_id) { image_id = u; }
+            let mut profile_url = String::new();
+            let mut partner_id = Uuid::nil();
+            let mut charter_member: Vec<u8> = Vec::new();
+            let mut flags: u32 = 0;
+            match welkin_services::profiles::fetch_avatar_properties(&profiles_store, &target.to_string()).await {
+                Ok(Some(props)) => {
+                    if !props.born_on.is_empty() { born_str = props.born_on; }
+                    if !props.about_text.is_empty() { about = props.about_text; }
+                    if !props.profile_url.is_empty() { profile_url = props.profile_url; }
+                    else if !props.web_url.is_empty() { profile_url = props.web_url; }
+                    if let Ok(u) = Uuid::parse_str(&props.image_id) { image_id = u; }
+                    if let Ok(u) = Uuid::parse_str(&props.partner_id) { partner_id = u; }
+                    if !props.charter_member.is_empty() { charter_member = props.charter_member; }
+                    flags = props.flags;
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    tracing::warn!(error = %e, target = %target, "avatar properties lookup failed; using defaults");
+                }
             }
             let reply = AvatarPropertiesReply {
                 agent_data: avatar_properties_reply::AgentData {
@@ -4350,13 +4363,13 @@ async fn process_messages(
                 properties_data: avatar_properties_reply::PropertiesData {
                     image_id,
                     fl_image_id: Uuid::nil(),
-                    partner_id: Uuid::nil(),
+                    partner_id,
                     about_text: about.into_bytes(),
                     fl_about_text: Vec::new(),
                     born_on: born_str.as_bytes().to_vec(),
-                    profile_url: web_url.into_bytes(),
-                    charter_member: Vec::new(),
-                    flags: 0,
+                    profile_url: profile_url.into_bytes(),
+                    charter_member,
+                    flags,
                 },
             };
             let mut session = client.lock().await;
@@ -4790,32 +4803,38 @@ async fn process_messages(
                 );
                 if scene.get_presence(&target_id).is_some() {
                     // Region policy: authorised freeze now also constrains physics/movement.
-                    let _ = policy::apply_freeze_policy(&scene, &perms, agent_id, target_id, freeze);
-                    let alert_text = if freeze {
-                        "You have been frozen by an administrator."
-                    } else {
-                        "You have been unfrozen."
-                    };
-                    let all_clients = clients.read().await;
-                    for (peer_addr, peer_client) in all_clients.iter() {
-                        let is_target = {
-                            let peer = peer_client.lock().await;
-                            peer.agent_id == target_id
-                        };
-                        if is_target {
-                            let alert = AgentAlertMessage {
-                                agent_data: agent_alert_message::AgentData {
-                                    agent_id: target_id,
-                                },
-                                alert_data: agent_alert_message::AlertData {
-                                    modal: false,
-                                    message: alert_text.as_bytes().to_vec(),
-                                },
+                    match policy::apply_freeze_policy(&scene, &perms, agent_id, target_id, freeze) {
+                        Ok(_) => {
+                            let alert_text = if freeze {
+                                "You have been frozen by an administrator."
+                            } else {
+                                "You have been unfrozen."
                             };
-                            let mut peer = peer_client.lock().await;
-                            let (pkt_bytes, _) = peer.circuit.send_msg(&alert, true);
-                            let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
-                            break;
+                            let all_clients = clients.read().await;
+                            for (peer_addr, peer_client) in all_clients.iter() {
+                                let is_target = {
+                                    let peer = peer_client.lock().await;
+                                    peer.agent_id == target_id
+                                };
+                                if is_target {
+                                    let alert = AgentAlertMessage {
+                                        agent_data: agent_alert_message::AgentData {
+                                            agent_id: target_id,
+                                        },
+                                        alert_data: agent_alert_message::AlertData {
+                                            modal: false,
+                                            message: alert_text.as_bytes().to_vec(),
+                                        },
+                                    };
+                                    let mut peer = peer_client.lock().await;
+                                    let (pkt_bytes, _) = peer.circuit.send_msg(&alert, true);
+                                    let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                                    break;
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            warn!(target = %target_id, error = ?err, "FreezeUser: policy rejected");
                         }
                     }
                 } else {
