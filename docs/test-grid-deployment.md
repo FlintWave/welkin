@@ -66,11 +66,33 @@ The first build compiles static musl-linked binaries inside the container
 
 ## Create an account
 
-> [!WARNING]
-> The portal and its first-run wizard are a scaffold and do not work. No
-> supported account-creation procedure is documented yet. Until one exists,
-> test logins need a user account that already exists in the grid database, for
-> example one migrated with the [migration guide](migration-guide.md).
+Create the first account from the region console. Start `welkin-robust`, then
+`welkin-region`, and at the `welkin>` prompt run:
+
+```text
+create-user <first> <last> <password> [email]
+```
+
+For example, `create-user Alice Smith correct-horse-battery`.
+
+- The first and last name must be non-empty and contain no whitespace.
+- The password must be at least 8 characters.
+- The email is optional.
+- The grid rejects a name or ID that already exists.
+
+The command sends the request to the grid service at `GridServerURI` in the
+`[GridService]` section of `welkin.toml`, so ROBUST must be running and
+reachable from the region. On success the console prints
+`created user First Last (<uuid>)`. Failures start with `error:`.
+
+The console does not save `create-user` lines in its command history, and the
+password is not written to the logs. The terminal still shows what you type,
+so do not run the command on a shared screen. The admin REST API runs the same
+command, and over that API the password travels in the request body; see the
+[admin API note](configuration.md#admin-api) before using it.
+
+The web portal and its first-run wizard are a scaffold and do not create
+accounts.
 
 ## Importing OAR content
 
@@ -99,7 +121,7 @@ automatically using the coordinates stored in the archive.
 2. Add a grid entry:
    - **Login URI:** `http://<host>:8003`
    - **Grid name:** any name you like
-3. Log in with an account that exists in the grid database.
+3. Log in with the account you created above.
 
 The viewer should connect, rez your avatar, and display the region terrain.
 
