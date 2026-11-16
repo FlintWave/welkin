@@ -869,23 +869,33 @@ impl PhysicsScene for RapierPhysicsScene {
             return;
         }
 
-        // Parry HeightField: rows advance along Z, cols along X, heights along Y.
-        // Our world is Z-up (gravity along -Z). Rotate +90 around X so Y→Z.
-        // After rotation, rows (Z) map to -Y, so reverse row order.
+        // Parry HeightField: matrix rows advance along local Z, matrix columns along
+        // local X, heights along local Y. Our world is Z-up, so the body is rotated +90
+        // degrees about X (local Y -> world Z, local Z -> world -Y): matrix row i is
+        // therefore world y = (side - 1) - i, and matrix column j is world x = j.
+        // The input is row-major with index y * side + x. parry's `Array2` is
+        // COLUMN-major (element (i, j) lives at data[i + j * nrows]), so emit it
+        // column by column.
         let mut data = Vec::with_capacity(height_map.len());
-        for row in (0..side).rev() {
-            let start = row * side;
-            data.extend_from_slice(&height_map[start..start + side]);
+        for col in 0..side {
+            for i in 0..side {
+                let world_y = side - 1 - i;
+                data.push(height_map[world_y * side + col]);
+            }
         }
 
         let heights = Array2::new(side, side, data);
-        let shape = SharedShape::heightfield(heights, Vector::new(1.0, 1.0, 1.0));
+        // parry's heightfield `scale` is the TOTAL extent of the field (not per cell):
+        // (side - 1) cells of 1 m span the whole region; heights stay in metres.
+        let extent = (side - 1) as f32;
+        let shape = SharedShape::heightfield(heights, Vector::new(extent, 1.0, extent));
         let collider = ColliderBuilder::new(shape)
             .friction(0.5)
             .restitution(0.0)
             .build();
 
-        let half = side as f32 / 2.0;
+        // The field is centred on its local origin; vertex i sits at x = i metres.
+        let half = (side - 1) as f32 / 2.0;
         let body = RigidBodyBuilder::fixed()
             .translation(Vector::new(half, half, 0.0))
             .rotation(Vector::new(std::f32::consts::FRAC_PI_2, 0.0, 0.0))
