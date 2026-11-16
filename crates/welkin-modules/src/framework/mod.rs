@@ -306,8 +306,11 @@ impl SearchModule {
     }
 
     /// Search for places matching `query` with the given flags.
+    ///
+    /// OpenSim performs place search through an external directory service. This
+    /// module does not hold such a client, so the local, self-contained behavior
+    /// is to return no place results.
     pub fn search_places(&self, _query: &str, _flags: u32) -> Vec<SearchResult> {
-        // Stub — returns empty until connected to a directory service.
         Vec::new()
     }
 
@@ -1269,5 +1272,26 @@ mod stub_tests_ghbourserviceconnector_0 {
         module.inform_neighbours_of_status(Uuid::new_v4(), false);
         module.inform_neighbours_of_status(Uuid::nil(), true);
         assert!(rec.events().is_empty());
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_k_mod_rs_searchmodule_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn search_places_returns_no_results() {
+        let module = SearchModule {};
+        assert!(module.search_places("library", 0).is_empty());
+    }
+
+    #[test]
+    fn search_places_ignores_query_and_flags() {
+        let module = SearchModule {};
+        let results = module.search_places("   ", u32::MAX);
+        assert_eq!(results.len(), 0);
     }
 }
