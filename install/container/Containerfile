@@ -24,4 +24,6 @@ WORKDIR /var/lib/opensim
 
 EXPOSE 8002 8003
 
+# Private service port must be reachable from sibling containers.
+ENV WELKIN_PRIVATE_BIND=0.0.0.0
 ENTRYPOINT ["welkin-robust", "--config", "/etc/opensim/robust.ini"]

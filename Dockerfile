@@ -283,5 +283,8 @@ STOPSIGNAL SIGTERM
 #   docker run welkin:latest welkin-portal
 #   docker run welkin:latest osim-migrate --help
 # ---------------------------------------------------------------------------
+# The private service port must be reachable from sibling containers; the
+# container network is the trust boundary (do not publish 8003 to the host).
+ENV WELKIN_PRIVATE_BIND=0.0.0.0
 ENTRYPOINT []
 CMD ["welkin-robust"]

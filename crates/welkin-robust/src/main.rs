@@ -29,6 +29,12 @@ struct Cli {
 
     #[arg(long, default_value_t = 8003)]
     private_port: u16,
+
+    /// Address the private (trusted) service port binds to. It serves
+    /// unauthenticated account and auth endpoints, so it defaults to loopback.
+    /// Container images set WELKIN_PRIVATE_BIND=0.0.0.0 for the container network.
+    #[arg(long, env = "WELKIN_PRIVATE_BIND", default_value = "127.0.0.1")]
+    private_bind: String,
 }
 
 async fn get_only_filter(req: Request, next: Next) -> axum::response::Response {
@@ -385,7 +391,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // --- Start both listeners ---
 
     let public_listener = TcpListener::bind(("0.0.0.0", cli.public_port)).await?;
-    let private_listener = TcpListener::bind(("0.0.0.0", cli.private_port)).await?;
+    let private_listener = TcpListener::bind((cli.private_bind.as_str(), cli.private_port)).await?;
 
     info!(
         port = cli.public_port,
