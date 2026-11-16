@@ -70,6 +70,7 @@ pub enum ChatOut {
     },
     Alert(msgs::AlertMessage),
     NoticesList(msgs::GroupNoticesListReply),
+    Event { to: Uuid, name: &'static str, body: welkin_llsd::Llsd },
 }
 
 pub mod dialog {
@@ -152,6 +153,28 @@ fn make_notice_im(
     }
 }
 
+pub fn agent_list_update_event(group: Uuid, updates: &[(Uuid, bool)]) -> welkin_llsd::Llsd {
+    let mut agent_updates = welkin_llsd::Map::new();
+    for (uuid, enter) in updates {
+        let transition = if *enter { "ENTER" } else { "LEAVE" };
+        let mut info = welkin_llsd::Map::new();
+        info.insert("can_voice_chat".to_string(), welkin_llsd::Llsd::Boolean(false));
+        info.insert("is_moderator".to_string(), welkin_llsd::Llsd::Boolean(false));
+        let mut mutes = welkin_llsd::Map::new();
+        mutes.insert("text".to_string(), welkin_llsd::Llsd::Boolean(false));
+        info.insert("mutes".to_string(), welkin_llsd::Llsd::Map(mutes));
+        let mut entry = welkin_llsd::Map::new();
+        entry.insert("info".to_string(), welkin_llsd::Llsd::Map(info));
+        entry.insert("transition".to_string(), welkin_llsd::Llsd::String(transition.to_string()));
+        agent_updates.insert(uuid.to_string(), welkin_llsd::Llsd::Map(entry));
+    }
+    let mut top = welkin_llsd::Map::new();
+    top.insert("agent_updates".to_string(), welkin_llsd::Llsd::Map(agent_updates));
+    top.insert("updates".to_string(), welkin_llsd::Llsd::Map(welkin_llsd::Map::new()));
+    top.insert("session_id".to_string(), welkin_llsd::Llsd::Uuid(group));
+    welkin_llsd::Llsd::Map(top)
+}
+
 pub fn session_start_reply_event(group: Uuid, group_name: &str) -> welkin_llsd::Llsd {
     let mut moderated_mode = welkin_llsd::Map::new();
     moderated_mode.insert("voice".into(), welkin_llsd::Llsd::Boolean(false));
@@ -210,6 +233,7 @@ pub async fn process_chat_im(
                     )
                     .await;
                 }
+                out.extend(roster_events(chat, group, agent));
             } else {
                 out.push(ChatOut::Alert(gio::alert_message(
                     "You are not a member of that group.",
@@ -256,12 +280,27 @@ pub async fn process_chat_im(
         }
         (dialog::SESSION_DROP, _) => {
             let group = im.message_block.id;
-            chat.remove(group, agent);
+            if chat.is_fresh(group, agent) {
+                let others: Vec<Uuid> = chat
+                    .fresh_members(group)
+                    .into_iter()
+                    .filter(|a| *a != agent)
+                    .collect();
+                chat.remove(group, agent);
+                for other in others {
+                    out.push(ChatOut::Event {
+                        to: other,
+                        name: "ChatterBoxSessionAgentListUpdates",
+                        body: agent_list_update_event(group, &[(agent, false)]),
+                    });
+                }
+            }
         }
         (dialog::SESSION_ADD, _) => {
             let group = im.message_block.id;
             if is_member(ctx, agent, group).await {
                 chat.mark(group, agent);
+                out.extend(roster_events(chat, group, agent));
             }
         }
         (32, _) => {
@@ -452,7 +491,7 @@ pub fn spawn_chat_im(
     let _ = queue.submit(agent, async move {
         let eq = { let guard = event_queues.read().await; guard.get(&agent).cloned() };
         let outputs = process_chat_im(&ctx, &chat, agent, &first, &last, region_id, &im, eq.as_deref()).await;
-        deliver(outputs, agent, clients, client, socket, addr).await;
+        deliver(outputs, agent, clients, event_queues.clone(), client, socket, addr).await;
     });
 }
 
@@ -468,21 +507,49 @@ pub fn spawn_notices_list(
     tokio::spawn(async move {
         if let Some(outputs) = process_notices_list(&ctx, agent, msg_id, &body).await {
             let clients = Arc::new(RwLock::new(HashMap::new()));
-            deliver(outputs, agent, clients, client, socket, addr).await;
+            deliver(outputs, agent, clients, Arc::new(RwLock::new(HashMap::new())), client, socket, addr).await;
         }
     });
+}
+
+fn roster_events(chat: &GroupChat, group: Uuid, agent: Uuid) -> Vec<ChatOut> {
+    let members = chat.fresh_members(group);
+    let all: Vec<(Uuid, bool)> = members.iter().map(|u| (*u, true)).collect();
+    let mut outs = Vec::new();
+    outs.push(ChatOut::Event {
+        to: agent,
+        name: "ChatterBoxSessionAgentListUpdates",
+        body: agent_list_update_event(group, &all),
+    });
+    for &other in &members {
+        if other != agent {
+            outs.push(ChatOut::Event {
+                to: other,
+                name: "ChatterBoxSessionAgentListUpdates",
+                body: agent_list_update_event(group, &[(agent, true)]),
+            });
+        }
+    }
+    outs
 }
 
 async fn deliver(
     outs: Vec<ChatOut>,
     agent: Uuid,
     clients: Arc<RwLock<HashMap<SocketAddr, Arc<Mutex<welkin_net::server::ClientSession>>>>>,
+    event_queues: Arc<RwLock<HashMap<Uuid, Arc<welkin_caps::event_queue::EventQueue>>>>,
     client: Arc<Mutex<welkin_net::server::ClientSession>>,
     socket: Arc<tokio::net::UdpSocket>,
     addr: SocketAddr,
 ) {
     for out in outs {
         match out {
+            ChatOut::Event { to, name, body } => {
+                let eq = { let guard = event_queues.read().await; guard.get(&to).cloned() };
+                if let Some(eq) = eq {
+                    eq.enqueue(name, body).await;
+                }
+            }
             ChatOut::Alert(message) => {
                 let bytes = {
                     let mut guard = client.lock().await;
@@ -1097,5 +1164,93 @@ mod tests {
         let im_drop = mk_im(crate::groups_chat::dialog::SESSION_DROP, false, group, group, "bye", Vec::new());
         process_chat_im(&ctx, &chat, agent, "First", "Last", Uuid::nil(), &im_drop, None).await;
         assert!(!chat.is_fresh(group, agent));
+    }
+
+    #[tokio::test]
+    async fn agent_list_update_event_shape() {
+        let group = Uuid::new_v4();
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let ev = agent_list_update_event(group, &[(a, true), (b, false)]);
+        let welkin_llsd::Llsd::Map(top) = ev else { panic!("top"); };
+        let agent_updates = top.get("agent_updates").cloned().expect("agent_updates");
+        let welkin_llsd::Llsd::Map(au) = agent_updates else { panic!("au"); };
+        assert_eq!(au.len(), 2);
+        let ae = au.get(&a.to_string()).cloned().expect("a");
+        let welkin_llsd::Llsd::Map(aem) = ae else { panic!("aem"); };
+        let welkin_llsd::Llsd::String(at) = aem.get("transition").cloned().expect("at") else { panic!(); };
+        assert_eq!(at, "ENTER");
+        let welkin_llsd::Llsd::Map(info) = aem.get("info").cloned().expect("info") else { panic!(); };
+        assert!(matches!(info.get("can_voice_chat"), Some(welkin_llsd::Llsd::Boolean(false))));
+        assert!(matches!(info.get("is_moderator"), Some(welkin_llsd::Llsd::Boolean(false))));
+        let welkin_llsd::Llsd::Map(mutes) = info.get("mutes").cloned().expect("mutes") else { panic!(); };
+        assert!(matches!(mutes.get("text"), Some(welkin_llsd::Llsd::Boolean(false))));
+        let be = au.get(&b.to_string()).cloned().expect("b");
+        let welkin_llsd::Llsd::Map(bem) = be else { panic!(); };
+        let welkin_llsd::Llsd::String(bt) = bem.get("transition").cloned().expect("bt") else { panic!(); };
+        assert_eq!(bt, "LEAVE");
+        let updates = top.get("updates").cloned().expect("updates");
+        let welkin_llsd::Llsd::Map(um) = updates else { panic!(); };
+        assert!(um.is_empty());
+        let session_id = top.get("session_id").cloned().expect("sid");
+        assert!(matches!(session_id, welkin_llsd::Llsd::Uuid(x) if x == group));
+    }
+
+    #[tokio::test]
+    async fn start_and_drop_emit_roster_events() {
+        let (ctx, _guard) = make_ctx().await;
+        let founder = Uuid::new_v4();
+        let member = Uuid::new_v4();
+        let group = create_group(&ctx, founder).await;
+        ctx.connector().add_agent_to_group(founder, member, group, Uuid::nil(), "").await.unwrap();
+
+        let chat = GroupChat::new();
+        let im = mk_im(15, false, group, Uuid::nil(), "", Vec::new());
+        let outs = process_chat_im(&ctx, &chat, founder, "First", "Last", Uuid::nil(), &im, None).await;
+        assert_eq!(outs.len(), 1);
+        let ChatOut::Event { to, name, body } = &outs[0] else { panic!("not event"); };
+        assert_eq!(*to, founder);
+        assert_eq!(*name, "ChatterBoxSessionAgentListUpdates");
+        let welkin_llsd::Llsd::Map(top) = body else { panic!(); };
+        let welkin_llsd::Llsd::Map(au) = top.get("agent_updates").cloned().unwrap() else { panic!(); };
+        assert_eq!(au.len(), 1);
+        assert!(au.contains_key(&founder.to_string()));
+
+        let im = mk_im(15, false, group, Uuid::nil(), "", Vec::new());
+        let outs = process_chat_im(&ctx, &chat, member, "First", "Last", Uuid::nil(), &im, None).await;
+        assert_eq!(outs.len(), 2);
+        let ChatOut::Event { to: t0, body: b0, .. } = &outs[0] else { panic!(); };
+        assert_eq!(*t0, member);
+        let welkin_llsd::Llsd::Map(top0) = b0 else { panic!(); };
+        let welkin_llsd::Llsd::Map(au0) = top0.get("agent_updates").cloned().unwrap() else { panic!(); };
+        assert_eq!(au0.len(), 2);
+        let ChatOut::Event { to: t1, body: b1, .. } = &outs[1] else { panic!(); };
+        assert_eq!(*t1, founder);
+        let welkin_llsd::Llsd::Map(top1) = b1 else { panic!(); };
+        let welkin_llsd::Llsd::Map(au1) = top1.get("agent_updates").cloned().unwrap() else { panic!(); };
+        assert_eq!(au1.len(), 1);
+        assert!(au1.contains_key(&member.to_string()));
+        let welkin_llsd::Llsd::Map(e) = au1.get(&member.to_string()).cloned().unwrap() else { panic!(); };
+        let welkin_llsd::Llsd::String(tr) = e.get("transition").cloned().unwrap() else { panic!(); };
+        assert_eq!(tr, "ENTER");
+
+        let im = mk_im(18, false, group, Uuid::nil(), "", Vec::new());
+        let outs = process_chat_im(&ctx, &chat, member, "First", "Last", Uuid::nil(), &im, None).await;
+        assert_eq!(outs.len(), 1);
+        let ChatOut::Event { to, name, body } = &outs[0] else { panic!(); };
+        assert_eq!(*to, founder);
+        assert_eq!(*name, "ChatterBoxSessionAgentListUpdates");
+        let welkin_llsd::Llsd::Map(top) = body else { panic!(); };
+        let welkin_llsd::Llsd::Map(au) = top.get("agent_updates").cloned().unwrap() else { panic!(); };
+        assert_eq!(au.len(), 1);
+        let welkin_llsd::Llsd::Map(e) = au.get(&member.to_string()).cloned().unwrap() else { panic!(); };
+        let welkin_llsd::Llsd::String(tr) = e.get("transition").cloned().unwrap() else { panic!(); };
+        assert_eq!(tr, "LEAVE");
+        assert!(outs.iter().all(|o| !matches!(o, ChatOut::Event { to: x, .. } if *x == member)));
+
+        let stranger = Uuid::new_v4();
+        let im = mk_im(15, false, group, Uuid::nil(), "", Vec::new());
+        let outs = process_chat_im(&ctx, &chat, stranger, "First", "Last", Uuid::nil(), &im, None).await;
+        assert!(outs.iter().all(|o| !matches!(o, ChatOut::Event { .. })));
     }
 }
