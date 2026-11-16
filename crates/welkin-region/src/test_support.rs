@@ -36,6 +36,8 @@ pub async fn spawn_services(tag: &str) -> Services {
     runner.ensure_migrations_table().await.expect("migrations table");
     let sql = welkin_data::migrations::migration_content("AssetStore", backend).unwrap();
     runner.run_migrations("AssetStore", sql).await.expect("asset migrations");
+    let sql = welkin_data::migrations::migration_content("Avatar", backend).unwrap();
+    runner.run_migrations("Avatar", sql).await.expect("avatar migrations");
     for ddl in [
         "CREATE TABLE inventoryitems(\
          assetID varchar(36), assetType integer, inventoryName varchar(64), \
@@ -64,7 +66,10 @@ pub async fn spawn_services(tag: &str) -> Services {
     .merge(welkin_services::assets::router(welkin_services::assets::AssetServiceState::new(
         AssetStore::new(pool.inner().clone()),
         welkin_services::assets::DeleteAllowed::None,
-    )));
+    )))
+    .merge(welkin_services::avatar::router(welkin_services::avatar::AvatarServiceState {
+        store: Arc::new(welkin_data::avatar::AvatarStore::new(pool.inner().clone())),
+    }));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     tokio::spawn(async move { axum::serve(listener, app).await.ok() });

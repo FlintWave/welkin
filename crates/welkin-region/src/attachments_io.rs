@@ -19,6 +19,7 @@ use welkin_net::server::ClientSession;
 use welkin_scene::scene::{MAX_ATTACHMENT_POINT, Scene};
 use welkin_scene::xml2::serialize_group;
 use welkin_services::remote::asset::RemoteAssetConnector;
+use welkin_services::remote::avatar::RemoteAvatarConnector;
 use welkin_services::remote::inventory::RemoteInventoryConnector;
 
 use crate::inventory_rez::{self, DeRezAction};
@@ -40,6 +41,7 @@ pub struct AttachCtx<'a> {
     pub perms: &'a DefaultPermissionsModule,
     pub inventory: &'a RemoteInventoryConnector,
     pub assets: &'a RemoteAssetConnector,
+    pub avatars: &'a RemoteAvatarConnector,
     pub socket: &'a UdpSocket,
     pub clients: &'a ClientMap,
 }
@@ -180,6 +182,90 @@ async fn save_group_into_item(
     Ok(())
 }
 
+/// Prefix of the avatar-service keys that remember what is worn where (`_ap_<point>`).
+const WORN_KEY_PREFIX: &str = "_ap_";
+
+/// The avatar-service items for a set of worn attachments: one `_ap_<point>` per point whose
+/// value lists the inventory item ids there (comma separated when several are worn).
+pub fn worn_items(worn: &[(u8, Uuid)], item_of: impl Fn(&Uuid) -> Uuid) -> Vec<(String, String)> {
+    let mut by_point: std::collections::BTreeMap<u8, Vec<Uuid>> = std::collections::BTreeMap::new();
+    for (point, group) in worn {
+        let item = item_of(group);
+        if !item.is_nil() {
+            by_point.entry(*point).or_default().push(item);
+        }
+    }
+    by_point
+        .into_iter()
+        .map(|(point, items)| {
+            let value = items.iter().map(Uuid::to_string).collect::<Vec<_>>().join(",");
+            (format!("{WORN_KEY_PREFIX}{point}"), value)
+        })
+        .collect()
+}
+
+/// Remember what the avatar wears so the next login can wear it again.
+async fn save_worn_list(ctx: &AttachCtx<'_>, agent: Uuid) {
+    let worn = ctx.scene.attachments_of(&agent);
+    let items = worn_items(&worn, |g| ctx.scene.get_object(g).map(|g| g.attachment_item_id).unwrap_or(Uuid::nil()));
+    let stale: Vec<String> = match ctx.avatars.get_avatar(&agent.to_string()).await {
+        Ok(existing) => existing
+            .into_iter()
+            .map(|(k, _)| k)
+            .filter(|k| k.starts_with(WORN_KEY_PREFIX) && !items.iter().any(|(n, _)| n == k))
+            .collect(),
+        Err(e) => {
+            tracing::warn!(agent = %agent, error = %e, "could not read the saved attachment list");
+            return;
+        }
+    };
+    if let Err(e) = ctx.avatars.remove_items(&agent.to_string(), &stale).await {
+        tracing::warn!(agent = %agent, error = %e, "could not clear old saved attachments");
+    }
+    if let Err(e) = ctx.avatars.set_items(&agent.to_string(), &items).await {
+        tracing::warn!(agent = %agent, error = %e, "could not save the attachment list");
+    }
+}
+
+/// Parse the saved list back into (point, item id) pairs, in point order.
+pub fn parse_worn_items(items: &[(String, String)]) -> Vec<(u8, Uuid)> {
+    let mut out = Vec::new();
+    for (key, value) in items {
+        let Some(point) = key.strip_prefix(WORN_KEY_PREFIX).and_then(|p| p.parse::<u8>().ok()) else { continue };
+        for id in value.split(',') {
+            // Older data may carry "<item>:<asset>" or similar; the item id comes first.
+            let id = id.split([':', ';']).next().unwrap_or("").trim();
+            if let Ok(id) = Uuid::parse_str(id) {
+                out.push((point, id));
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// At login: wear again what the avatar wore last time. Returns how many were worn.
+pub async fn restore_saved_attachments(ctx: &AttachCtx<'_>, agent: Uuid) -> usize {
+    let items = match ctx.avatars.get_avatar(&agent.to_string()).await {
+        Ok(items) => items,
+        Err(e) => {
+            tracing::warn!(agent = %agent, error = %e, "could not read the saved attachment list");
+            return 0;
+        }
+    };
+    let mut worn = 0;
+    let mut seen_points: std::collections::HashSet<u8> = std::collections::HashSet::new();
+    for (point, item_id) in parse_worn_items(&items) {
+        // Several items on one point: after the first, add rather than replace.
+        let raw = if seen_points.insert(point) { point } else { point | APPEND_FLAG };
+        match rez_attachment_from_inventory_inner(ctx, agent, item_id, raw, false).await {
+            Ok(_) => worn += 1,
+            Err(e) => tracing::warn!(agent = %agent, item = %item_id, error = %e, "saved attachment not restored"),
+        }
+    }
+    worn
+}
+
 /// Attach an object that is already in the scene. Replaces what is worn at the same point
 /// unless `append`. Returns the attachment point used.
 pub async fn attach_scene_object(
@@ -239,6 +325,16 @@ pub async fn rez_attachment_from_inventory(
     item_id: Uuid,
     raw_point: u8,
 ) -> Result<u8, String> {
+    rez_attachment_from_inventory_inner(ctx, agent, item_id, raw_point, true).await
+}
+
+async fn rez_attachment_from_inventory_inner(
+    ctx: &AttachCtx<'_>,
+    agent: Uuid,
+    item_id: Uuid,
+    raw_point: u8,
+    save_list: bool,
+) -> Result<u8, String> {
     // Viewers ask again for what is already worn at login; ignore it.
     for (_, id) in ctx.scene.attachments_of(&agent) {
         if ctx.scene.get_object(&id).is_some_and(|g| g.attachment_item_id == item_id) {
@@ -251,7 +347,12 @@ pub async fn rez_attachment_from_inventory(
     let group_id = ctx.scene.add_object(group);
     let item_uuid = Uuid::parse_str(&item.inventory_id).unwrap_or(item_id);
     match attach_scene_object(ctx, agent, group_id, point, append, item_uuid).await {
-        Ok(point) => Ok(point),
+        Ok(point) => {
+            if save_list {
+                save_worn_list(ctx, agent).await;
+            }
+            Ok(point)
+        }
         Err(e) => {
             ctx.scene.remove_object(&group_id);
             Err(e)
@@ -282,7 +383,9 @@ pub async fn attach_from_world(
     drop(group);
     let item_id = Uuid::parse_str(&item.inventory_id).map_err(|_| "bad item id".to_string())?;
     notify_item(ctx, agent, &item).await;
-    attach_scene_object(ctx, agent, group_id, point, append, item_id).await
+    let point = attach_scene_object(ctx, agent, group_id, point, append, item_id).await?;
+    save_worn_list(ctx, agent).await;
+    Ok(point)
 }
 
 /// Take an attachment off and put it back into its inventory item.
@@ -301,6 +404,7 @@ pub async fn detach_to_inventory(ctx: &AttachCtx<'_>, agent: Uuid, group_id: Uui
     drop(group);
     ctx.scene.remove_attachment(&group_id);
     kill(ctx, ids).await;
+    save_worn_list(ctx, agent).await;
     Ok(())
 }
 
@@ -326,6 +430,7 @@ pub async fn detach_to_ground(ctx: &AttachCtx<'_>, agent: Uuid, local_id: u32) -
     if !item_id.is_nil() {
         set_item_worn_point(ctx, agent, item_id, 0).await;
     }
+    save_worn_list(ctx, agent).await;
     Ok(())
 }
 
@@ -398,6 +503,7 @@ mod tests {
         clients: ClientMap,
         inventory: RemoteInventoryConnector,
         assets: RemoteAssetConnector,
+        avatars: RemoteAvatarConnector,
         perms: DefaultPermissionsModule,
         svc: crate::test_support::Services,
     }
@@ -418,7 +524,8 @@ mod tests {
         clients.write().await.insert(addr, Arc::new(Mutex::new(session)));
         let inventory = RemoteInventoryConnector::new(&svc.base);
         let assets = RemoteAssetConnector::new(&svc.base);
-        Harness { scene, agent, avatar_local, viewer, server, clients, inventory, assets, perms: DefaultPermissionsModule::new(), svc }
+        let avatars = RemoteAvatarConnector::new(&svc.base);
+        Harness { scene, agent, avatar_local, viewer, server, clients, inventory, assets, avatars, perms: DefaultPermissionsModule::new(), svc }
     }
 
     impl Harness {
@@ -428,6 +535,7 @@ mod tests {
                 perms: &self.perms,
                 inventory: &self.inventory,
                 assets: &self.assets,
+                avatars: &self.avatars,
                 socket: &self.server,
                 clients: &self.clients,
             }

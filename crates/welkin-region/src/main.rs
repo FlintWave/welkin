@@ -496,6 +496,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let process_accounts = Arc::clone(&accounts_connector);
     let process_inventory = Arc::new(welkin_services::remote::inventory::RemoteInventoryConnector::new(accounts_url));
     let process_assets = Arc::new(welkin_services::remote::asset::RemoteAssetConnector::new(accounts_url));
+    let process_avatars = Arc::new(welkin_services::remote::avatar::RemoteAvatarConnector::new(accounts_url));
     let process_handle = tokio::spawn(async move {
         process_messages(
             msg_rx,
@@ -513,6 +514,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             process_accounts,
             process_inventory,
             process_assets,
+            process_avatars,
         )
         .await;
     });
@@ -1245,6 +1247,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let timeout_perms = Arc::clone(&perms);
     let timeout_inventory = Arc::new(welkin_services::remote::inventory::RemoteInventoryConnector::new(accounts_url));
     let timeout_assets = Arc::new(welkin_services::remote::asset::RemoteAssetConnector::new(accounts_url));
+    let timeout_avatars = Arc::new(welkin_services::remote::avatar::RemoteAvatarConnector::new(accounts_url));
     let timeout_handle = tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(5));
         loop {
@@ -1269,6 +1272,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                 perms: &timeout_perms,
                                 inventory: &timeout_inventory,
                                 assets: &timeout_assets,
+                                avatars: &timeout_avatars,
                                 socket: timeout_socket.as_ref(),
                                 clients: &timeout_clients,
                             },
@@ -1575,6 +1579,7 @@ async fn process_messages(
     accounts_connector: Arc<welkin_services::remote::accounts::RemoteAccountsConnector>,
     inventory_connector: Arc<welkin_services::remote::inventory::RemoteInventoryConnector>,
     asset_connector: Arc<welkin_services::remote::asset::RemoteAssetConnector>,
+    avatar_connector: Arc<welkin_services::remote::avatar::RemoteAvatarConnector>,
 ) {
     let mut last_agent_update: HashMap<Uuid, Instant> = HashMap::new();
     // Persistent vertical velocity per avatar (jumping and falling).
@@ -1873,6 +1878,25 @@ async fn process_messages(
                     info!(agent = %agent_id, count = existing_presences.len(), "sent existing avatars to new user");
                 }
             }
+
+            // Wear again what this avatar wore last time (viewers that rely on the
+            // server doing this; others ask for the same items, which are then ignored).
+            let restored = attachments_io::restore_saved_attachments(
+                &attachments_io::AttachCtx {
+                    scene: &scene,
+                    perms: &perms,
+                    inventory: &inventory_connector,
+                    assets: &asset_connector,
+                    avatars: &avatar_connector,
+                    socket: socket.as_ref(),
+                    clients: &clients,
+                },
+                agent_id,
+            )
+            .await;
+            if restored > 0 {
+                info!(agent = %agent_id, restored, "saved attachments worn again");
+            }
         }
 
         if msg_id == StartPingCheck::ID
@@ -1955,6 +1979,7 @@ async fn process_messages(
                     perms: &perms,
                     inventory: &inventory_connector,
                     assets: &asset_connector,
+                    avatars: &avatar_connector,
                     socket: socket.as_ref(),
                     clients: &clients,
                 },
@@ -2163,6 +2188,7 @@ async fn process_messages(
                 perms: &perms,
                 inventory: &inventory_connector,
                 assets: &asset_connector,
+                avatars: &avatar_connector,
                 socket: socket.as_ref(),
                 clients: &clients,
             };
@@ -4161,6 +4187,7 @@ async fn process_messages(
                         perms: &perms,
                         inventory: &inventory_connector,
                         assets: &asset_connector,
+                        avatars: &avatar_connector,
                         socket: socket.as_ref(),
                         clients: &clients,
                     },
