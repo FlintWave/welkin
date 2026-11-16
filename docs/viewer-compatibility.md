@@ -22,7 +22,6 @@ live viewer session.
 - When a viewer arrives, the region sends it every object already in the scene.
   The root prim and every linkset child are sent as full object updates, in
   batched ObjectUpdate packets, with their sound fields and texture entry.
-  Before this change a new arrival saw an empty region until something moved.
 - `ObjectAdd` builds the new prim from the shape the viewer sends: prim code,
   state, scale, rotation, and every path and profile field (curve, begin, end,
   scale, shear, twist, taper, revolutions, skew, radius offset, hollow). A
