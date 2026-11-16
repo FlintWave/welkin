@@ -8,6 +8,7 @@ mod console_io;
 mod estate_config;
 mod groups_invites;
 mod groups_io;
+mod egress_io;
 mod groups_admin;
 mod groups_chat;
 mod groups_queries;
@@ -329,6 +330,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     scene_ref.region_handle = scene.region_info.region_handle;
     scene_ref.region_size_x = scene.region_info.region_size_x;
     scene_ref.region_size_y = scene.region_info.region_size_y;
+    // Modules push alerts, kicks, dialogs and IMs to viewers through this channel;
+    // the delivery task is started once the UDP socket exists.
+    let (region_egress, egress_rx) = egress_io::RegionEgress::new(scene.clone());
+    scene_ref.egress = Arc::new(region_egress);
     {
         let mut registry = scene_ref.registry.write();
         registry.register(ChatModule::new());
@@ -1333,6 +1338,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         grid_uri: config.get_string_or("GridService", "GridServerURI", ""),
         http: reqwest::Client::new(),
     });
+    tokio::spawn(egress_io::run(
+        egress_rx,
+        udp_clients.clone(),
+        udp_socket.clone(),
+        scene.region_info.region_id,
+    ));
     tokio::spawn(console_io::run_actions(
         console_rx,
         udp_socket.clone(),
