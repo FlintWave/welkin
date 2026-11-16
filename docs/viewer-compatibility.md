@@ -39,6 +39,12 @@ Working:
   invitation shows the inviter "Unable to invite that agent (no permission, or
   already a member)."
 - The group founder holds the Owner role only, not Owner and Officer both.
+- Members can manage the group from the viewer's group window: create, update
+  and delete roles (including their powers), assign members to roles or remove
+  them, change the avatar's own title, set whether the avatar accepts group
+  notices, and eject a member. An ejected member's viewer drops the group, and a
+  request from an avatar that is not allowed to make the change is refused with
+  an alert message.
 
 How it differs from OpenSimulator:
 
@@ -58,10 +64,10 @@ How it differs from OpenSimulator:
   a request after 15 seconds and a connection attempt after 5 seconds, and
   speaks the XML protocol that ROBUST's groups service uses.
 
-Not covered by this work: changing roles or their powers, assigning members to
-roles, ejecting members, group notices and group proposals. The region has no
-handlers for these changes. Treat them as missing until a later change adds
-them.
+Not covered yet: group notices, which are queued as the next milestone.
+Group proposals and votes are out of scope: they belong to a separate
+OpenSimulator module that has no service support in `welkin-robust`, and the
+approved design leaves them out.
 
 Limits to know about:
 
