@@ -134,7 +134,7 @@ The web portal and first-run wizard are not working yet. See the
 | Scene | `welkin-scene`, `-prim`, `-modules` | Scene graph, prim meshing, 53 region modules |
 | Physics | `welkin-physics`, `-physics-rapier` | Physics traits, Rapier 3D backend |
 | Scripting | `welkin-script-compiler`, `-script-vm`, `-script-api` | LSL parser and Luau transpiler, VM with 442 builtins |
-| Services | `welkin-services`, `-data`, `-portal` | 14 ROBUST service handlers, sqlx data layer, web portal |
+| Services | `welkin-services`, `-data`, `-portal` | 14 ROBUST service handlers, sqlx data layer, web portal (scaffold) |
 | Archives | `welkin-archive`, `-migration` | OAR/IAR load/save, C# to Welkin migration tools |
 | Testing | `welkin-conformance`, `-capacity`, `-realmwalker` | Protocol replay, capacity benchmarks, Rust bot SDK |
 | Binaries | `welkin-region`, `-robust` | Region simulator, grid services server |
