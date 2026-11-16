@@ -190,7 +190,6 @@ mod tests {
     use crate::persist::{part_to_prim_row, shape_to_row};
     use glam::{Quat, Vec3};
     use uuid::Uuid;
-    use welkin_data::simulation::{PrimRow, PrimShapeRow};
     use welkin_scene::part::PartColor;
 
     #[test]

@@ -28,10 +28,6 @@ const OS_LISTEN_REGEX_MESSAGE: i32 = 0x2;
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn parse_uuid(s: &str) -> Uuid {
-    Uuid::parse_str(s).unwrap_or(Uuid::nil())
-}
-
 fn parse_vector(s: &str) -> [f64; 3] {
     let s = s.trim().trim_start_matches('<').trim_end_matches('>');
     let parts: Vec<&str> = s.split(',').collect();

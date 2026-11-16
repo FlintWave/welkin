@@ -341,8 +341,8 @@ fn deserialize_csharp_single_prim() {
     );
     assert!(vec3_close(p.group_position, Vec3::new(128.0, 128.0, 25.5)));
     // 45-degree rotation around Z
-    assert!(f32_close(p.rotation_offset.z, 0.7071068));
-    assert!(f32_close(p.rotation_offset.w, 0.7071068));
+    assert!(f32_close(p.rotation_offset.z, std::f32::consts::FRAC_1_SQRT_2));
+    assert!(f32_close(p.rotation_offset.w, std::f32::consts::FRAC_1_SQRT_2));
     assert_eq!(p.creation_date, 1609459200);
     assert_eq!(p.region_handle, 1099511628032);
     assert_eq!(p.inventory_serial, 3);
