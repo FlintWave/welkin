@@ -98,7 +98,7 @@ would. You can also run it as a standalone grid with its own ROBUST services.
 ### Requirements
 
 - Rust 1.85+ (edition 2024)
-- MariaDB, PostgreSQL, or SQLite for the data stores
+- SQLite for the data stores (MariaDB and PostgreSQL are supported in the code but not yet verified)
 - A viewer: [Aurora Viewer](https://aurora-viewer.org) or
   [Firestorm](https://www.firestormviewer.org/) (OpenSim build)
 

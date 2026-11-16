@@ -39,6 +39,11 @@ podman compose -f compose.prod.yaml up -d
 podman compose -f compose.prod.yaml ps
 ```
 
+> [!WARNING]
+> The stack uses MySQL, and Welkin has only been run on SQLite. Expect failures
+> until the MariaDB and PostgreSQL issues in the
+> [configuration reference](configuration.md#database-urls) are fixed.
+
 The production stack starts: MySQL 8.0, Robust (grid services), Region
 (simulator), and WolfVoice (voice sidecar).
 

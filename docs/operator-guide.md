@@ -195,7 +195,12 @@ Set `OPENSIM__Logging__json=true` to switch to structured JSON log output.
 Three backends are supported via `sqlx`. All use the same schema (the 53 C#
 migration files are embedded and applied automatically on startup).
 
-### MariaDB / MySQL (recommended for production)
+> [!WARNING]
+> Only SQLite has been run and verified. MariaDB and PostgreSQL are supported in
+> the code but untested, with known problems; see the
+> [configuration reference](configuration.md#database-urls).
+
+### MariaDB / MySQL (intended for production, not yet verified)
 
 ```sh
 # Create the database and user

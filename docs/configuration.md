@@ -163,9 +163,20 @@ placeholder style of the backend in use (`$1` for PostgreSQL, `?` for SQLite and
 MariaDB), and the key columns of the region identity and saved-script tables are
 `VARCHAR` so they work on MariaDB.
 
-SQLite is the default for local development and single-server grids.
-MariaDB or PostgreSQL is recommended for production grids with multiple
-regions.
+SQLite is the only backend that has been run and verified. The code supports
+MariaDB and PostgreSQL, but no one has run the region or grid services against
+either of them yet, and these problems are known:
+
+- The `welkin-data` crate still has about 158 hardcoded `$n` placeholders, which
+  work on PostgreSQL and SQLite but not on MariaDB. A sweep to make them
+  backend-aware is pending.
+- The `script_states` table stores scripts in a `BLOB` column, which needs
+  `BYTEA` on PostgreSQL and `LONGBLOB` on MariaDB.
+- The `loc_x` and `loc_y` columns of the region identity table need `BIGINT` on
+  PostgreSQL (issue #79).
+
+Use SQLite until these are fixed. The MariaDB and PostgreSQL instructions in the
+operator guide describe the intended setup, not a verified one.
 
 ## Logging
 
