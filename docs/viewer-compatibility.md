@@ -83,8 +83,14 @@ role in the group has no powers, so its requests are refused.
 | Invite | INVITE; the region also limits the inviter to offering the Everyone role or a role the inviter holds |
 | Send a notice | SEND_NOTICES |
 
-Choosing the avatar's own active role (its title) needs no power. The check that
-the avatar actually holds the role it selects is not enforced yet.
+Choosing the avatar's own active role (its title) needs no power, but the
+avatar must hold the role it selects. If it does not, the groups service refuses
+and the viewer shows the alert "Unable to update group title."
+
+An avatar's list of groups is kept current: if the slow login fetch of group
+data finishes after a newer change, such as creating a group, the region drops
+the stale list instead of sending it, so the viewer does not show the old set of
+groups. The region tracks this per avatar and forgets it at logout.
 
 Not covered yet: group notices, which are queued as the next milestone.
 Group proposals and votes are out of scope: they belong to a separate
@@ -168,7 +174,10 @@ described below.
 
 ### Avatar and presence
 
-- Avatar name resolution from ROBUST UserAccountService via RemoteAccountsConnector (POST METHOD=getaccount); falls back to "Unknown User" if unreachable
+- Avatar name resolution from ROBUST UserAccountService via RemoteAccountsConnector (POST METHOD=getaccount); falls back to "Unknown User" if unreachable. The reply nests the account data one level down, under
+  `<result type="List">`, and the region reads the tag at any depth; an earlier
+  version read only direct children, so every avatar name came back as "Unknown
+  User"
 - Avatar profile viewing
 - Multi-user presence (new users see existing avatars)
 - AgentUpdate and ViewerEffect flowing
