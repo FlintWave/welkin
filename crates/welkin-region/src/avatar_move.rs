@@ -20,6 +20,9 @@ pub const JUMP_SPEED: f32 = 5.0;
 /// Falling speed cap (m/s).
 pub const TERMINAL_VELOCITY: f32 = 54.0;
 
+/// Longest single integration step for ballistic motion (seconds).
+const MAX_SUBSTEP: f32 = 0.02;
+
 /// Region edge length in metres.
 const REGION_SIZE: f32 = 256.0;
 
@@ -67,11 +70,19 @@ pub fn place_on_ground(
     }
 
     // Airborne (or just jumped): ballistic motion.
-    *vz = (*vz - GRAVITY * dt).max(-TERMINAL_VELOCITY);
-    pos.z += *vz * dt;
-    if pos.z <= floor {
-        pos.z = floor;
-        *vz = 0.0;
+    // Integrate in small fixed sub-steps so the result does not depend on how
+    // long ago the last AgentUpdate arrived (viewers send them sparsely when idle).
+    let mut remaining = dt;
+    while remaining > 0.0 {
+        let h = remaining.min(MAX_SUBSTEP);
+        remaining -= h;
+        *vz = (*vz - GRAVITY * h).max(-TERMINAL_VELOCITY);
+        pos.z += *vz * h;
+        if pos.z <= floor {
+            pos.z = floor;
+            *vz = 0.0;
+            break;
+        }
     }
     pos
 }
@@ -127,6 +138,30 @@ mod tests {
         assert!((peak - expected_peak).abs() < 0.1, "peak {peak}, expected ~{expected_peak}");
         assert_eq!(pos.z, 22.0, "must be back on the ground");
         assert_eq!(vz, 0.0);
+    }
+
+    /// Highest point reached when the jump frame and the following frames are
+    /// separated by `dt` seconds, sampled at those frames.
+    fn peak_with_dt(dt: f32) -> f32 {
+        let mut vz = 0.0;
+        let mut pos = place_on_ground(at(22.0), false, true, 21.0, dt, &mut vz);
+        let mut peak = pos.z;
+        let steps = (2.0 / dt) as usize;
+        for _ in 0..steps {
+            pos = place_on_ground(pos, false, false, 21.0, dt, &mut vz);
+            peak = peak.max(pos.z);
+        }
+        peak
+    }
+
+    #[test]
+    fn jump_height_does_not_depend_on_update_interval() {
+        let fast = peak_with_dt(0.02);
+        let slow = peak_with_dt(0.5);
+        let mid = peak_with_dt(0.25);
+        assert!((fast - slow).abs() < 0.1, "fast {fast}, slow {slow}");
+        assert!((fast - mid).abs() < 0.1, "fast {fast}, mid {mid}");
+        assert!(slow - 22.0 > 1.1, "slow jump must still rise ~1.3 m, got {}", slow - 22.0);
     }
 
     #[test]
