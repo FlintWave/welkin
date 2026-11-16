@@ -20,6 +20,7 @@ pub mod physics;
 pub mod control;
 pub mod prim_params;
 pub mod sensor;
+pub mod sound;
 pub mod string;
 pub mod timer;
 pub mod vehicle;
@@ -852,6 +853,7 @@ pub fn register_all(lua: &mlua::Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result
     string::register_string(lua)?;
     list::register_list(lua)?;
     communication::register_communication(lua, ctx)?;
+    sound::register_sound(lua, ctx)?;
     physics::register_physics(lua, ctx)?;
     object::register_object(lua, ctx)?;
     avatar::register_avatar(lua, ctx)?;
