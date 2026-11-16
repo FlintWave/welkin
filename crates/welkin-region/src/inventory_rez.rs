@@ -5,10 +5,11 @@
 
 use glam::Vec3;
 use uuid::Uuid;
+use welkin_data::assets::AssetRow;
 use welkin_data::inventory::InventoryItemRow;
 use welkin_msg::welkin_types::PermissionMask;
 use welkin_scene::group::SceneObjectGroup;
-use welkin_scene::xml2::deserialize_group;
+use welkin_scene::xml2::{deserialize_group, serialize_group};
 use welkin_services::remote::asset::RemoteAssetConnector;
 use welkin_services::remote::inventory::RemoteInventoryConnector;
 
@@ -76,6 +77,164 @@ pub async fn rez_from_inventory(
         .ok_or_else(|| "the item's asset was not found".to_string())?;
     let group = group_from_asset(&item, &asset.data, agent, position)?;
     Ok((item, group))
+}
+
+/// `FolderType` codes of the standard inventory folders.
+const FOLDER_OBJECTS: i32 = 6;
+const FOLDER_TRASH: i32 = 14;
+const FOLDER_LOST_AND_FOUND: i32 = 16;
+
+/// What a take/delete/return does with the object's copy in inventory (OpenSim `DeRezAction`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeRezAction {
+    TakeCopy,
+    Take,
+    Delete,
+    Return,
+}
+
+impl DeRezAction {
+    /// From the viewer's `DeRezObject.AgentBlock.Destination` code.
+    pub fn from_destination(code: u8) -> Option<Self> {
+        match code {
+            1 => Some(Self::TakeCopy),
+            4 => Some(Self::Take),
+            6 => Some(Self::Delete),
+            9 => Some(Self::Return),
+            _ => None,
+        }
+    }
+}
+
+/// Permission bits an inventory item may carry (OpenSim's AddPermissions mask).
+fn effective_mask() -> u32 {
+    (PermissionMask::COPY | PermissionMask::TRANSFER | PermissionMask::MODIFY | PermissionMask::MOVE).bits()
+}
+
+/// Inventory permissions for a copy of `group` going to `taker` (OpenSim `AddPermissions`):
+/// the owner keeps the object's permissions; anyone else gets them cut down to the
+/// next-owner permissions.
+pub fn item_permissions(group: &SceneObjectGroup, taker: Uuid) -> (u32, u32, u32, u32, u32) {
+    let root = group.root_part();
+    let effective = root.owner_mask.bits() & effective_mask();
+    if taker != root.owner_id {
+        let base = effective & root.next_owner_mask.bits();
+        (base, base, base & root.next_owner_mask.bits(), base & root.everyone_mask.bits(), base & root.group_mask.bits())
+    } else {
+        (
+            effective,
+            effective,
+            root.next_owner_mask.bits() & effective,
+            root.everyone_mask.bits() & effective,
+            root.group_mask.bits() & effective,
+        )
+    }
+}
+
+/// Build the inventory item for `group`, placed in `folder`, to be owned by `owner`.
+pub fn item_for_group(
+    group: &SceneObjectGroup,
+    asset_id: Uuid,
+    owner: Uuid,
+    taker: Uuid,
+    folder: Uuid,
+    now: i32,
+) -> InventoryItemRow {
+    let root = group.root_part();
+    let (base, current, next, everyone, group_perm) = item_permissions(group, taker);
+    InventoryItemRow {
+        asset_id: asset_id.to_string(),
+        asset_type: ASSET_TYPE_OBJECT,
+        inventory_name: root.name.clone(),
+        inventory_description: root.description.clone(),
+        next_permissions: next as i64,
+        current_permissions: current as i64,
+        inv_type: 6,
+        creator_id: root.creator_id.to_string(),
+        base_permissions: base as i64,
+        everyone_permissions: everyone as i64,
+        sale_price: root.sale_price,
+        sale_type: i32::from(root.object_sale_type),
+        creation_date: now,
+        group_id: Uuid::nil().to_string(),
+        group_owned: 0,
+        flags: 0,
+        inventory_id: Uuid::new_v4().to_string(),
+        avatar_id: owner.to_string(),
+        parent_folder_id: folder.to_string(),
+        group_permissions: group_perm as i64,
+    }
+}
+
+/// Save `group` into an avatar's inventory as an object item: store the object XML as an
+/// asset, find the destination folder, add the item. Nothing is removed from the scene
+/// here; callers remove the object only after this succeeds.
+///
+/// * `taker` is the avatar who asked (it receives Take/TakeCopy items).
+/// * `folder_hint` is the viewer's chosen folder (nil = default for the action).
+pub async fn save_group_to_inventory(
+    inventory: &RemoteInventoryConnector,
+    assets: &RemoteAssetConnector,
+    action: DeRezAction,
+    taker: Uuid,
+    folder_hint: Uuid,
+    group: &SceneObjectGroup,
+) -> Result<InventoryItemRow, String> {
+    let object_owner = group.root_part().owner_id;
+    // Take and TakeCopy go to the taker; return and delete go to the object's owner.
+    let owner = match action {
+        DeRezAction::Take | DeRezAction::TakeCopy => taker,
+        DeRezAction::Delete | DeRezAction::Return => object_owner,
+    };
+    if owner.is_nil() {
+        return Err("no inventory owner for this object".to_string());
+    }
+
+    let folder = if !folder_hint.is_nil() && matches!(action, DeRezAction::Take | DeRezAction::TakeCopy) {
+        folder_hint
+    } else {
+        let folder_type = match action {
+            DeRezAction::Return => FOLDER_LOST_AND_FOUND,
+            DeRezAction::Delete if taker == object_owner => FOLDER_TRASH,
+            DeRezAction::Delete => FOLDER_LOST_AND_FOUND,
+            _ => FOLDER_OBJECTS,
+        };
+        let found = inventory
+            .get_folder_for_type(&owner.to_string(), folder_type)
+            .await
+            .map_err(|e| format!("inventory service: {e}"))?
+            .ok_or_else(|| format!("inventory folder type {folder_type} not found"))?;
+        Uuid::parse_str(found.folder_id.trim()).map_err(|_| "inventory folder id is invalid".to_string())?
+    };
+
+    let xml = serialize_group(group).map_err(|e| format!("serialising the object: {e}"))?;
+    let asset_id = Uuid::new_v4();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i32)
+        .unwrap_or(0);
+    assets
+        .store_asset(&AssetRow {
+            name: group.root_part().name.clone(),
+            description: group.root_part().description.clone(),
+            asset_type: ASSET_TYPE_OBJECT,
+            local: 0,
+            temporary: 0,
+            data: xml.into_bytes(),
+            id: asset_id.to_string(),
+            create_time: now,
+            access_time: now,
+            asset_flags: 0,
+            creator_id: group.root_part().creator_id.to_string(),
+        })
+        .await
+        .map_err(|e| format!("asset service: {e}"))?;
+
+    let item = item_for_group(group, asset_id, owner, taker, folder, now);
+    if !inventory.add_item(&item).await.map_err(|e| format!("inventory service: {e}"))? {
+        return Err("the inventory service refused the new item".to_string());
+    }
+    Ok(item)
 }
 
 #[cfg(test)]
@@ -186,6 +345,16 @@ mod tests {
         .execute(pool.inner())
         .await
         .expect("inventoryitems table");
+        sqlx::query(
+            "CREATE TABLE inventoryfolders(\
+             folderName varchar(64), type integer, version integer, \
+             folderID varchar(36) primary key, \
+             agentID varchar(36) not null default '00000000-0000-0000-0000-000000000000', \
+             parentFolderID varchar(36) not null default '00000000-0000-0000-0000-000000000000')",
+        )
+        .execute(pool.inner())
+        .await
+        .expect("inventoryfolders table");
 
         let agent = Uuid::new_v4();
         let (xml, _) = two_prim_xml(agent);
@@ -237,6 +406,72 @@ mod tests {
         let other = Uuid::new_v4();
         assert!(rez_from_inventory(&inv, &assets, other, item_id, pos).await.unwrap_err().contains("another avatar"));
         assert!(rez_from_inventory(&inv, &assets, agent, Uuid::new_v4(), pos).await.unwrap_err().contains("not found"));
+
+        // Take it back into inventory (to the Objects folder), then rez the new item.
+        let objects_folder = Uuid::new_v4();
+        let trash_folder = Uuid::new_v4();
+        let lost_folder = Uuid::new_v4();
+        for (id, kind) in [(objects_folder, 6), (trash_folder, 14), (lost_folder, 16)] {
+            sqlx::query("INSERT INTO inventoryfolders (folderName,type,version,folderID,agentID,parentFolderID) VALUES ('f',$1,1,$2,$3,$4)")
+                .bind(kind)
+                .bind(id.to_string())
+                .bind(agent.to_string())
+                .bind(Uuid::nil().to_string())
+                .execute(pool.inner())
+                .await
+                .unwrap();
+        }
+        let taken = save_group_to_inventory(&inv, &assets, DeRezAction::Take, agent, Uuid::nil(), &group)
+            .await
+            .expect("take");
+        assert_eq!(taken.parent_folder_id, objects_folder.to_string());
+        assert_eq!(taken.avatar_id, agent.to_string());
+        assert_eq!(taken.inventory_name, "Hat");
+        let (_, again) = rez_from_inventory(&inv, &assets, agent, Uuid::parse_str(&taken.inventory_id).unwrap(), pos)
+            .await
+            .expect("rez the taken item");
+        assert_eq!(again.part_count(), 2);
+        assert_ne!(again.uuid(), group.uuid());
+
+        // Deleting your own object goes to the trash; returning goes to lost and found.
+        let deleted = save_group_to_inventory(&inv, &assets, DeRezAction::Delete, agent, Uuid::nil(), &group).await.expect("delete");
+        assert_eq!(deleted.parent_folder_id, trash_folder.to_string());
+        let returned = save_group_to_inventory(&inv, &assets, DeRezAction::Return, other, Uuid::nil(), &group).await.expect("return");
+        assert_eq!(returned.parent_folder_id, lost_folder.to_string());
+        assert_eq!(returned.avatar_id, agent.to_string(), "returned objects go to their owner");
+        // A viewer-chosen folder is used for Take.
+        let chosen = Uuid::new_v4();
+        let to_chosen = save_group_to_inventory(&inv, &assets, DeRezAction::Take, agent, chosen, &group).await.expect("take to folder");
+        assert_eq!(to_chosen.parent_folder_id, chosen.to_string());
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn item_permissions_follow_opensim_add_permissions() {
+        let owner = Uuid::new_v4();
+        let other = Uuid::new_v4();
+        let mut root = SceneObjectPart::new("Box", owner);
+        root.owner_mask = PermissionMask::from_bits_truncate(0x7fffffff);
+        root.next_owner_mask = PermissionMask::MODIFY | PermissionMask::MOVE;
+        root.everyone_mask = PermissionMask::MOVE;
+        let g = SceneObjectGroup::new(root);
+        let all = effective_mask();
+        let (base, cur, next, every, _) = item_permissions(&g, owner);
+        assert_eq!((base, cur), (all, all));
+        assert_eq!(next, (PermissionMask::MODIFY | PermissionMask::MOVE).bits());
+        assert_eq!(every, PermissionMask::MOVE.bits());
+        // Someone else taking it only gets what the next owner may have.
+        let (base, cur, _, _, _) = item_permissions(&g, other);
+        assert_eq!(base, (PermissionMask::MODIFY | PermissionMask::MOVE).bits());
+        assert_eq!(base, cur);
+    }
+
+    #[test]
+    fn derez_destination_codes_match_opensim() {
+        assert_eq!(DeRezAction::from_destination(1), Some(DeRezAction::TakeCopy));
+        assert_eq!(DeRezAction::from_destination(4), Some(DeRezAction::Take));
+        assert_eq!(DeRezAction::from_destination(6), Some(DeRezAction::Delete));
+        assert_eq!(DeRezAction::from_destination(9), Some(DeRezAction::Return));
+        assert_eq!(DeRezAction::from_destination(3), None);
     }
 }

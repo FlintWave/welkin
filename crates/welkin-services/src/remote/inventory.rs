@@ -80,6 +80,61 @@ impl RemoteInventoryConnector {
         parse_item_response(&body)
     }
 
+    /// The folder of a standard type (e.g. Trash 14, Lost And Found 16, Objects 6) for a principal.
+    pub async fn get_folder_for_type(
+        &self,
+        principal: &str,
+        folder_type: i32,
+    ) -> Result<Option<InventoryFolderRow>, RemoteError> {
+        let type_text = folder_type.to_string();
+        let params = [("METHOD", "GETFOLDERFORTYPE"), ("PRINCIPAL", principal), ("TYPE", type_text.as_str())];
+        let body = self
+            .client
+            .post(&self.inventory_uri)
+            .form(&params)
+            .send()
+            .await?
+            .text()
+            .await?;
+        Ok(parse_folders_from_response(&body)?.into_iter().next())
+    }
+
+    /// Add an inventory item. Returns whether the service accepted it.
+    pub async fn add_item(&self, item: &InventoryItemRow) -> Result<bool, RemoteError> {
+        let params = [
+            ("METHOD", "ADDITEM".to_string()),
+            ("AssetID", item.asset_id.clone()),
+            ("AssetType", item.asset_type.to_string()),
+            ("Name", item.inventory_name.clone()),
+            ("Description", item.inventory_description.clone()),
+            ("NextPermissions", item.next_permissions.to_string()),
+            ("CurrentPermissions", item.current_permissions.to_string()),
+            ("InvType", item.inv_type.to_string()),
+            ("CreatorId", item.creator_id.clone()),
+            ("BasePermissions", item.base_permissions.to_string()),
+            ("EveryOnePermissions", item.everyone_permissions.to_string()),
+            ("SalePrice", item.sale_price.to_string()),
+            ("SaleType", item.sale_type.to_string()),
+            ("CreationDate", item.creation_date.to_string()),
+            ("GroupID", item.group_id.clone()),
+            ("GroupOwned", if item.group_owned != 0 { "True" } else { "False" }.to_string()),
+            ("Flags", item.flags.to_string()),
+            ("ID", item.inventory_id.clone()),
+            ("Owner", item.avatar_id.clone()),
+            ("Folder", item.parent_folder_id.clone()),
+            ("GroupPermissions", item.group_permissions.to_string()),
+        ];
+        let body = self
+            .client
+            .post(&self.inventory_uri)
+            .form(&params)
+            .send()
+            .await?
+            .text()
+            .await?;
+        Ok(body.contains(">True<") || body.to_ascii_lowercase().contains(">true<"))
+    }
+
     /// Fetch only the items inside a folder (no sub-folders).
     pub async fn get_folder_items(
         &self,

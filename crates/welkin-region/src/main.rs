@@ -3171,69 +3171,67 @@ async fn process_messages(
             }
         }
 
-        // ---- DeRezObject handler ----
+        // ---- DeRezObject handler (take, take copy, delete, return) ----
         if msg_id == DeRezObject::ID
+            && agent_id != Uuid::nil()
             && let Ok(msg) = DeRezObject::decode(&pkt.body)
         {
-            let destination = msg.agent_block.destination;
+            let Some(action) = inventory_rez::DeRezAction::from_destination(msg.agent_block.destination) else {
+                warn!(destination = msg.agent_block.destination, "DeRezObject: unsupported destination");
+                continue;
+            };
+            let parcel = estate_config::default_parcel(&perms);
             let mut kill_ids: Vec<u32> = Vec::new();
+            let mut new_items: Vec<welkin_data::inventory::InventoryItemRow> = Vec::new();
             for entry in &msg.object_data {
                 let local_id = entry.object_local_id;
-                let uuid = match scene.get_object_by_local_id(local_id) {
-                    Some(u) => u,
-                    None => {
-                        warn!(local_id, "DeRezObject: unknown local_id");
-                        continue;
+                let Some(uuid) = scene.get_object_by_local_id(local_id) else {
+                    warn!(local_id, "DeRezObject: unknown local_id");
+                    continue;
+                };
+                let Some(group) = scene.get_object(&uuid) else { continue };
+                let root = group.root_part();
+                let allowed = match action {
+                    inventory_rez::DeRezAction::TakeCopy => {
+                        perms.can_take_object(agent_id, root.owner_id, root.group_id)
+                            && perms.can_copy_object(agent_id, root.owner_id, root.group_id, root.owner_mask)
+                    }
+                    inventory_rez::DeRezAction::Take => perms.can_take_object(agent_id, root.owner_id, root.group_id),
+                    inventory_rez::DeRezAction::Delete => perms.can_delete_object(agent_id, root.owner_id, root.group_id),
+                    inventory_rez::DeRezAction::Return => {
+                        perms.can_return_object(agent_id, root.owner_id, root.group_id, Some(&parcel))
                     }
                 };
-                // Save script state before removal (for inventory persistence)
-                if scripts_enabled && destination != 1 {
-                    let sched = script_scheduler.lock();
-                    for sid in sched.scripts_on_prim(&uuid) {
-                        if let Some(inst) = sched.get_script(&sid) {
-                            match inst.save_state() {
-                                Ok(_state) => {
-                                    tracing::debug!(script = %sid, object = %uuid, "saved script state before derez");
-                                }
-                                Err(e) => {
-                                    tracing::warn!(script = %sid, error = %e, "failed to save script state before derez");
-                                }
-                            }
-                        }
+                if !allowed {
+                    warn!(agent = %agent_id, object = %uuid, ?action, "DeRezObject: permission denied");
+                    continue;
+                }
+                // The copy in inventory comes first; the object leaves the scene only once
+                // it is safely saved, so a service failure never destroys it.
+                let saved = inventory_rez::save_group_to_inventory(
+                    &inventory_connector,
+                    &asset_connector,
+                    action,
+                    agent_id,
+                    msg.agent_block.destination_id,
+                    &group,
+                )
+                .await;
+                drop(group);
+                match saved {
+                    Ok(item) => {
+                        info!(local_id, object = %uuid, ?action, item = %item.inventory_id, "DeRezObject: saved to inventory");
+                        new_items.push(item);
+                    }
+                    Err(reason) => {
+                        warn!(local_id, object = %uuid, ?action, %reason, "DeRezObject: could not save to inventory; object left in place");
+                        continue;
                     }
                 }
-                match destination {
-                    1 => {
-                        // TakeCopy: copy to inventory, leave in scene
-                        info!(local_id, object = %uuid, "DeRezObject: copied to inventory (TakeCopy)");
-                    }
-                    4 => {
-                        // Take: remove from scene, take to inventory
-                        if let Some(_removed) = scene.remove_object(&uuid) {
-                            kill_ids.push(local_id);
-                            info!(local_id, object = %uuid, "DeRezObject: taken to inventory");
-                        }
-                    }
-                    6 => {
-                        // Delete
-                        if let Some(_removed) = scene.remove_object(&uuid) {
-                            kill_ids.push(local_id);
-                            info!(local_id, object = %uuid, "DeRezObject: deleted");
-                        }
-                    }
-                    9 => {
-                        // ReturnToOwner
-                        if let Some(_removed) = scene.remove_object(&uuid) {
-                            kill_ids.push(local_id);
-                            info!(local_id, object = %uuid, "DeRezObject: returned to owner");
-                        }
-                    }
-                    other => {
-                        if let Some(_removed) = scene.remove_object(&uuid) {
-                            kill_ids.push(local_id);
-                            info!(local_id, object = %uuid, destination = other, "DeRezObject: removed with destination code");
-                        }
-                    }
+                if action != inventory_rez::DeRezAction::TakeCopy
+                    && scene.remove_object(&uuid).is_some()
+                {
+                    kill_ids.push(local_id);
                 }
             }
             if !kill_ids.is_empty() {
@@ -3245,6 +3243,15 @@ async fn process_messages(
                     let mut sess = c.lock().await;
                     let (pkt_bytes, _) = sess.circuit.send_msg(&kill, true);
                     let _ = socket.send_to(&pkt_bytes, *addr).await;
+                }
+            }
+            // Tell the viewer about items it now has in its own inventory.
+            if let Some(client) = &client {
+                for item in new_items.iter().filter(|i| Uuid::parse_str(&i.avatar_id).ok() == Some(agent_id)) {
+                    let update = inventory_item_update(agent_id, item);
+                    let mut sess = client.lock().await;
+                    let (pkt_bytes, _) = sess.circuit.send_msg(&update, true);
+                    let _ = socket.send_to(&pkt_bytes, src).await;
                 }
             }
         }
@@ -4771,6 +4778,42 @@ async fn broadcast_terse_object_update(
         let mut sess = c.lock().await;
         let (pkt_bytes, _) = sess.circuit.send_msg(&terse_msg, false);
         let _ = socket.send_to(&pkt_bytes, *addr).await;
+    }
+}
+
+/// The viewer message announcing a new inventory item.
+fn inventory_item_update(agent_id: Uuid, item: &welkin_data::inventory::InventoryItemRow) -> UpdateCreateInventoryItem {
+    let id = |s: &str| Uuid::parse_str(s.trim()).unwrap_or(Uuid::nil());
+    UpdateCreateInventoryItem {
+        agent_data: update_create_inventory_item::AgentData {
+            agent_id,
+            sim_approved: true,
+            transaction_id: Uuid::nil(),
+        },
+        inventory_data: vec![update_create_inventory_item::InventoryData {
+            item_id: id(&item.inventory_id),
+            folder_id: id(&item.parent_folder_id),
+            callback_id: 0,
+            creator_id: id(&item.creator_id),
+            owner_id: id(&item.avatar_id),
+            group_id: id(&item.group_id),
+            base_mask: item.base_permissions as u32,
+            owner_mask: item.current_permissions as u32,
+            group_mask: item.group_permissions as u32,
+            everyone_mask: item.everyone_permissions as u32,
+            next_owner_mask: item.next_permissions as u32,
+            group_owned: item.group_owned != 0,
+            asset_id: id(&item.asset_id),
+            type_: item.asset_type as i8,
+            inv_type: item.inv_type as i8,
+            flags: item.flags as u32,
+            sale_type: item.sale_type as u8,
+            sale_price: item.sale_price,
+            name: item.inventory_name.as_bytes().to_vec(),
+            description: item.inventory_description.as_bytes().to_vec(),
+            creation_date: item.creation_date,
+            crc: 0,
+        }],
     }
 }
 
