@@ -66,6 +66,14 @@ pub fn spawn_repl(
                         let _ = editor.add_history_entry(l);
                     }
 
+                    if is_inline_password_form(l) {
+                        eprintln!(
+                            "console: refusing a password on the command line (it would be visible on screen). \
+                             Type `create-user <first> <last>` and you will be prompted."
+                        );
+                        continue;
+                    }
+
                     if let Some((first, last)) = needs_password_prompt(l) {
                         let password = match rpassword::prompt_password("Password: ") {
                             Ok(password) => password,
@@ -123,6 +131,12 @@ pub fn spawn_repl(
 /// Case-insensitive and tolerant of leading whitespace.
 fn is_password_command(line: &str) -> bool {
     line.trim_start().to_ascii_lowercase().starts_with("create-user")
+}
+
+/// `create-user First Last Password [email]`: a password typed inline in the REPL.
+fn is_inline_password_form(line: &str) -> bool {
+    let words = line.split_whitespace().collect::<Vec<_>>();
+    words.len() >= 4 && words[0].eq_ignore_ascii_case("create-user")
 }
 
 fn words(line: &str) -> Vec<&str> {
@@ -305,6 +319,15 @@ mod tests {
         assert!(is_password_command("  create-user a b pw"));
         assert!(is_password_command("Create-User a b pw"));
         assert!(!is_password_command("users"));
+    }
+
+    #[test]
+    fn inline_password_form_is_detected() {
+        assert!(is_inline_password_form("create-user Ann Lee hunter2hunter2"));
+        assert!(is_inline_password_form("  Create-User Ann Lee pw a@b.c"));
+        assert!(!is_inline_password_form("create-user Ann Lee"));
+        assert!(!is_inline_password_form("create-user Ann"));
+        assert!(!is_inline_password_form("users a b c d"));
     }
 
     #[test]
