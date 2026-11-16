@@ -67,6 +67,25 @@ How it differs from OpenSimulator:
   a request after 15 seconds and a connection attempt after 5 seconds, and
   speaks the XML protocol that ROBUST's groups service uses.
 
+Who may do what: the grid groups service (`welkin-services`) checks each change
+against the powers of the roles the requesting avatar holds. The region relays
+the request using the authenticated avatar as the requester. An avatar with no
+role in the group has no powers, so its requests are refused.
+
+| Action | Power required |
+|---|---|
+| Create a role | CREATE_ROLE |
+| Update a role | CHANGE_ACTIONS |
+| Delete a role | DELETE_ROLE |
+| Update group info (charter, fee, enrollment) | CHANGE_ACTIONS |
+| Assign or remove another member's role | ASSIGN_MEMBER, or ASSIGN_MEMBER_LIMITED, which also requires holding the role being assigned or removed; group owners always pass |
+| Eject a member | EJECT, unless the avatar ejects itself |
+| Invite | INVITE; the region also limits the inviter to offering the Everyone role or a role the inviter holds |
+| Send a notice | SEND_NOTICES |
+
+Choosing the avatar's own active role (its title) needs no power. The check that
+the avatar actually holds the role it selects is not enforced yet.
+
 Not covered yet: group notices, which are queued as the next milestone.
 Group proposals and votes are out of scope: they belong to a separate
 OpenSimulator module that has no service support in `welkin-robust`, and the
