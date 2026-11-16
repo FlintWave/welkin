@@ -109,6 +109,13 @@ yet. Examples:
   object ID. The region's own attachment code is separate and is the one that works.
 - Several NPC avatar methods are documented as no-ops.
 
+On 2026-11-16 ten commits titled "real implementations" reworked stubs in
+`welkin-modules`. After reading them, most only reword a comment or add a log line,
+and the region does not call any of those methods. The count of lines that mention
+"stub" did not fall: it is still 233, because the commits added test modules whose
+names contain "stub". The [module guide](docs/module-development.md#thin-module-methods)
+lists what each method does.
+
 A feature in the list above has code behind it and a test, but a test of a stub
 passes too. Treat a feature that no viewer session has exercised as unproven.
 

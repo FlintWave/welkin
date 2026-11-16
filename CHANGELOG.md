@@ -11,7 +11,8 @@ before the project is anywhere near production-ready.
 
 - **Grid login**: ROBUST grid services (asset, inventory, authentication,
   user-account, grid-info, avatar, presence, friends, map) accept viewer
-  logins. Aurora Viewer and Firestorm both connect successfully.
+  logins. Firestorm connects; an Aurora Viewer connection is reported, but no
+  recording or log of it is on record.
 - **Region simulator**: a single region loads, sends terrain and object data to
   viewers, and handles avatar movement (walk, run, fly, jump, fall, crouch).
 - **Terrain**: real DCT-based LayerData encoding, terraform brushes (raise,
@@ -28,7 +29,8 @@ before the project is anywhere near production-ready.
   stored notices, membership-gated queries, and per-avatar task queues.
 - **OAR loading**: `load oar <file>` console command imports assets, objects,
   and .r32 terrain from OpenSim OAR archives.
-- **Default assets**: 5,683 default asset sets seeded at ROBUST startup.
+- **Default assets**: default avatar assets are loaded at ROBUST startup from an
+  `assets/` folder you supply. The repository does not ship them.
 - **Parcels**: ParcelProperties sent via both UDP and event queue (modern
   viewers need the event queue path for fly permissions).
 - **Animations**: walk, run, stand, sit, jump, fall, crouch, crouchwalk, and
@@ -53,6 +55,8 @@ Measured stub counts as of this tag:
 - 53 in the script VM (LSL builtins that log and return a default)
 - 28 in welkin-services
 - 24 TODO comments (10 in welkin-capacity, 8 in welkin-portal)
+- Ten "real implementation" commits of 2026-11-16 reworded stubs in welkin-modules
+  without lowering the count; see docs/module-development.md
 - 0 `todo!()` or `unimplemented!()` macros
 
 Notable gaps:
@@ -77,7 +81,7 @@ Notable gaps:
   appearance updates) are silently dropped at runtime.
 - **Postgres/MySQL**: SQLite is the only tested backend. Placeholder syntax is
   ported but the column types have known issues (#79).
-- **Web UI**: none. Configuration is INI files and a console REPL.
+- **Web UI**: none. Configuration is TOML files and a console REPL.
 
 ### Known limits
 
@@ -101,6 +105,6 @@ See docs/quick-start.md for setup and first login.
 ### Stats
 
 - 527 commits over 3 days (project started 2026-11-13)
-- 26 crates, ~198,000 lines of Rust
+- 25 crates in the workspace plus the companion app, ~198,000 lines of Rust
 - 2,688 tests passing
 - LGPL-3.0-or-later
