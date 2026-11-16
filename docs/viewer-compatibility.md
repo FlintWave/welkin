@@ -292,6 +292,31 @@ do not indicate server bugs:
 - "Could not put on outfit" (no clothing items in inventory)
 - "Could not load settings" (no viewer settings in inventory)
 
+## Parcels
+
+These behaviours come from the region code and its tests; they are not yet
+confirmed in a live viewer session.
+
+- A viewer will not let an avatar fly in a region unless it receives a parcel
+  with the AllowFly flag. The region now sends `ParcelProperties` when an avatar
+  enters and in reply to every `ParcelPropertiesRequest`.
+- The region has one parcel that covers the whole region: local ID 1, named "Your
+  Parcel", owned by the estate owner, with room for 15,000 prims and OpenSimulator's
+  default parcel flags (flying allowed).
+- Land management is not implemented. Parcels cannot be divided, joined, edited,
+  sold or bought, and the other parcel requests (`ParcelInfoRequest`,
+  `ParcelDwellRequest` and the access list requests) are not handled.
+
+## Instant messages
+
+- The region no longer forwards the sender's circuit session ID to the recipient
+  of an instant message. That ID is a secret of the sender's connection, and the
+  recipient's viewer had been able to read it. The relayed message now carries a
+  nil session ID.
+- The session ID of a person-to-person conversation is the XOR of the two agents'
+  IDs, which is how viewers compute it, so both viewers file the messages in the
+  same conversation.
+
 ## Terraforming
 
 These behaviours come from the region code and its tests, including

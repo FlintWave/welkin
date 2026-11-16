@@ -134,7 +134,7 @@ correct result, not when the code exists.
 
 | Packet group | Packets needed |
 |---|---|
-| Parcel system | ParcelPropertiesRequest, ParcelInfoRequest, ParcelDwellRequest, ParcelAccessListRequest/Update |
+| Parcel system | ParcelPropertiesRequest (handled for the single whole-region parcel, e6f5461), ParcelInfoRequest, ParcelDwellRequest, ParcelAccessListRequest/Update |
 | Asset transfer | TransferRequest, AssetUploadRequest, SendXferPacket, ConfirmXferPacket |
 | Mute list | MuteListRequest, UpdateMuteListEntry, RemoveMuteListEntry |
 | Search/directory | DirFindQuery, DirPlacesQuery, DirLandQuery, DirClassifiedQuery, DirEventsQuery |
