@@ -1,0 +1,52 @@
+name: Bug Report
+description: Report a bug in Welkin
+type: Bug
+body:
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to reproduce
+      description: What steps are required to reproduce the problem?
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual behavior
+      description: What actually happened.
+    validations:
+      required: true
+
+  - type: input
+    id: welkin-version
+    attributes:
+      label: Welkin version and system info
+      placeholder: "0.1.0, Fedora 45, connected via Aurora Viewer 0.6.0"
+    validations:
+      required: true
+
+  - type: input
+    id: viewer
+    attributes:
+      label: Viewer used
+      placeholder: "Aurora Viewer 0.6.0 / Firestorm 7.1.12"
+    validations:
+      required: true
+
+  - type: upload
+    id: attachments
+    attributes:
+      label: Attachments (logs, screenshots)
+      description: |
+        All uploaded files are public. Do not upload passwords, tokens, or private data.
+    validations:
+      required: false
