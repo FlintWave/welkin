@@ -11,7 +11,7 @@ use sqlx::{AnyPool, Row};
 use uuid::Uuid;
 use welkin_data::migrations::Backend;
 
-pub async fn create_table(pool: &AnyPool, backend: Backend) -> Result<(), sqlx::Error> {
+pub async fn create_table(pool: &AnyPool, _backend: Backend) -> Result<(), sqlx::Error> {
     let sql = "CREATE TABLE IF NOT EXISTS region_identity (
             region_name VARCHAR(255) NOT NULL,
             loc_x INTEGER NOT NULL,

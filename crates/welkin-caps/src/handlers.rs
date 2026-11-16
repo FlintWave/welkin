@@ -481,10 +481,7 @@ fn parse_xinventory_xml(xml_bytes: &[u8]) -> XInventoryResponse {
                 } else if tag.starts_with("item_") && is_list {
                     cur_item = Some(XItem::default());
                     cur_field = None;
-                } else if cur_folder.is_some() || cur_item.is_some() {
-                    cur_field = Some(tag.to_string());
-                    text_buf.clear();
-                } else if tag == "VERSION" {
+                } else if cur_folder.is_some() || cur_item.is_some() || tag == "VERSION" {
                     cur_field = Some(tag.to_string());
                     text_buf.clear();
                 }
