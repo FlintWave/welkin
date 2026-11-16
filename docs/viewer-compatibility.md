@@ -47,6 +47,8 @@ Attachments: an attachment is an object worn by an avatar.
 - When an avatar logs out, times out or is ejected, the region saves each
   attachment into its inventory item and removes it from the scene and from
   every viewer.
+- The region checks that an attach can succeed before it copies a world object
+  into inventory, so a failed attach does not leave a stray inventory copy.
 - The region remembers what each avatar wears in the grid's avatar service, in
   one `_ap_<point>` entry per attachment point, and wears the same items again at
   the avatar's next login.
@@ -268,6 +270,9 @@ echo, movement, rez prim, script upload, script alive, touch event, logout).
 
 - Terrain edits made in the viewer: see [Terraforming](#terraforming) for what is and is not supported
 - Avatar animations on Aurora Viewer (needs AgentAnimation packet)
+- Groups: `welkin-services` has a client for the grid's groups service
+  (`RemoteGroupsConnector`), but the region does not call it yet, so group data
+  does not come from the grid's groups service
 
 ### Not yet user-tested
 
@@ -393,6 +398,9 @@ Sound messages follow OpenSimulator's behaviour:
 - PreloadSound goes to avatars inside twice the sound radius.
 - A looping or stopped sound is carried in a full ObjectUpdate for the root
   prim, so avatars who enter the region later hear the loop. STOP is flag 0x20.
+- A prim that has a saved sound comes back from a restart looping, with the
+  LOOP flag set and a radius of 100 m. The saved data does not keep the loop
+  flag or the radius, so the region restores both for any prim with a sound.
 
 See the [script engine](scripting.md#sound) page for the LSL side.
 

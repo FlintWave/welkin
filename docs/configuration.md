@@ -158,6 +158,11 @@ All database URLs use the same format across both binaries:
 | MariaDB/MySQL | `mysql://user:pass@host/db` | Via sqlx with the MySQL driver |
 | PostgreSQL | `postgres://user:pass@host/db` | Via sqlx with the Postgres driver |
 
+The region and grid services build their SQL with the placeholder style of the
+backend in use (`$1` for PostgreSQL, `?` for SQLite and MariaDB), and the key
+columns of the region's own tables (region identity, saved scripts) are
+`VARCHAR` so they work on MariaDB.
+
 SQLite is the default for local development and single-server grids.
 MariaDB or PostgreSQL is recommended for production grids with multiple
 regions.
