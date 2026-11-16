@@ -62,6 +62,7 @@ impl UserLocationCache {
         );
     }
 
+    #[cfg(test)]
     fn remove(&mut self, user_id: &Uuid) {
         self.entries.remove(user_id);
     }
@@ -444,11 +445,6 @@ mod tests {
         fn set_string(&mut self, section: &str, key: &str, value: &str) {
             self.strings
                 .insert((section.to_string(), key.to_string()), value.to_string());
-        }
-
-        fn set_bool(&mut self, section: &str, key: &str, value: bool) {
-            self.bools
-                .insert((section.to_string(), key.to_string()), value);
         }
 
         #[allow(dead_code)]

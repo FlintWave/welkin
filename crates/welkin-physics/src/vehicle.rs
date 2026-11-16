@@ -434,9 +434,9 @@ impl VehicleState {
             if !self.flags.contains(VehicleFlags::HOVER_GLOBAL_HEIGHT) {
                 if self.flags.contains(VehicleFlags::HOVER_WATER_ONLY) {
                     perr += water_height;
-                } else if self.flags.contains(VehicleFlags::HOVER_TERRAIN_ONLY) {
-                    perr += terrain_height;
-                } else if terrain_height > water_height {
+                } else if self.flags.contains(VehicleFlags::HOVER_TERRAIN_ONLY)
+                    || terrain_height > water_height
+                {
                     perr += terrain_height;
                 } else {
                     perr += water_height;

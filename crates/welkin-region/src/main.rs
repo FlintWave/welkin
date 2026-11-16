@@ -6,7 +6,11 @@ mod avatar_move;
 mod console;
 mod console_io;
 mod estate_config;
+mod groups_invites;
 mod groups_io;
+mod groups_admin;
+mod groups_queries;
+mod groups_tasks;
 mod inventory_rez;
 mod object_add;
 mod persist;
@@ -1978,6 +1982,7 @@ async fn process_messages(
         if msg_id == LogoutRequest::ID
             && let Some(client) = &client
         {
+            modify_throttle.forget(&agent_id);
             let leaving = {
                 let mut session = client.lock().await;
                 let reply = LogoutReply {
@@ -3800,12 +3805,27 @@ async fn process_messages(
         }
 
         if msg_id == AgentDataUpdateRequest::ID
+            && let Some(g) = &groups
+            && let Some(client) = &client
+            && let Some(pres) = scene.get_presence(&agent_id)
+        {
+            // Group lookups run in their own task: the packet loop never awaits HTTP.
+            groups_tasks::spawn_agent_data_update(
+                g.clone(),
+                agent_id,
+                pres.first_name.clone(),
+                pres.last_name.clone(),
+                client.clone(),
+                socket.clone(),
+                src,
+            );
+        }
+
+        if msg_id == AgentDataUpdateRequest::ID
+            && groups.is_none()
             && let Some(client) = &client
         {
-            let active = match &groups {
-                Some(g) => groups_io::active_group(g, agent_id).await,
-                None => groups_io::ActiveGroup::default(),
-            };
+            let active = groups_io::ActiveGroup::default();
             let mut session = client.lock().await;
             let name = scene
                 .get_presence(&session.agent_id)
@@ -4316,15 +4336,22 @@ async fn process_messages(
         }
 
         if msg_id == UUIDGroupNameRequest::ID
+            && let Some(g) = &groups
+            && let Ok(req) = UUIDGroupNameRequest::decode(&pkt.body)
+            && let Some(client) = &client
+        {
+            let ids: Vec<Uuid> = req.uuid_name_block.iter().map(|b| b.id).collect();
+            groups_tasks::spawn_group_name_reply(g.clone(), ids, client.clone(), socket.clone(), src);
+        }
+
+        if msg_id == UUIDGroupNameRequest::ID
+            && groups.is_none()
             && let Ok(req) = UUIDGroupNameRequest::decode(&pkt.body)
             && let Some(client) = &client
         {
             let mut reply_blocks = Vec::new();
             let ids: Vec<Uuid> = req.uuid_name_block.iter().map(|b| b.id).collect();
-            let names = match &groups {
-                Some(g) => groups_io::group_names(g, &ids).await,
-                None => ids.iter().map(|id| (*id, "Unknown".to_string())).collect(),
-            };
+            let names: Vec<(Uuid, String)> = ids.iter().map(|id| (*id, "Unknown".to_string())).collect();
             for (id, name) in names {
                 reply_blocks.push(uuid_group_name_reply::UUIDNameBlock {
                     id,
@@ -4341,28 +4368,62 @@ async fn process_messages(
         }
 
         if let Some(g) = &groups
+            && groups_invites::is_invite_packet(pkt.id)
             && let Some(client) = &client
             && let Some(pres) = scene.get_presence(&agent_id)
         {
-            let first = pres.first_name.clone();
-            let last = pres.last_name.clone();
-            let eq = event_queues.read().await.get(&agent_id).cloned();
-            if let Some(outs) = groups_io::process_group_packet(
-                g,
+            groups_invites::spawn_invite_packet(
+                g.clone(),
+                agent_id,
+                format!("{} {}", pres.first_name, pres.last_name),
+                scene.region_info.region_id,
+                pkt.id,
+                pkt.body.clone(),
+                clients.clone(),
+                client.clone(),
+                socket.clone(),
+                src,
+            );
+        }
+
+        if let Some(g) = &groups
+            && groups_admin::is_admin_packet(pkt.id)
+            && let Some(client) = &client
+            && let Some(pres) = scene.get_presence(&agent_id)
+        {
+            groups_admin::spawn_admin_packet(
+                g.clone(),
                 agent_id,
                 pkt.id,
-                &pkt.body,
-                &first,
-                &last,
-                eq.as_deref(),
-            )
-            .await
-            {
-                let mut session = client.lock().await;
-                for out in outs {
-                    groups_io::send_group_out(&mut *session, &socket, src, out).await;
-                }
-            }
+                pkt.body.clone(),
+                pres.first_name.clone(),
+                pres.last_name.clone(),
+                event_queues.clone(),
+                clients.clone(),
+                client.clone(),
+                socket.clone(),
+                src,
+            );
+        }
+
+        if let Some(g) = &groups
+            && groups_tasks::is_group_packet(pkt.id)
+            && let Some(client) = &client
+            && let Some(pres) = scene.get_presence(&agent_id)
+        {
+            let eq = event_queues.read().await.get(&agent_id).cloned();
+            groups_tasks::spawn_group_packet(
+                g.clone(),
+                agent_id,
+                pkt.id,
+                pkt.body.clone(),
+                pres.first_name.clone(),
+                pres.last_name.clone(),
+                eq,
+                client.clone(),
+                socket.clone(),
+                src,
+            );
         }
 
         if msg_id == ViewerEffect::ID
@@ -4490,6 +4551,26 @@ async fn process_messages(
                         info!(from = %agent_id, to = %to_agent, "IM: personal message relayed");
                     } else {
                         warn!(from = %agent_id, to = %to_agent, "IM: target not online in region, offline storage pending");
+                    }
+                }
+                // 35/36: GroupInvitationAccept / GroupInvitationDecline
+                35 | 36 => {
+                    if let Some(g) = &groups
+                        && let Some(client) = &client
+                        && let Some(pres) = scene.get_presence(&agent_id)
+                    {
+                        groups_invites::spawn_invite_reply(
+                            g.clone(),
+                            agent_id,
+                            pres.first_name.clone(),
+                            pres.last_name.clone(),
+                            im.clone(),
+                            event_queues.clone(),
+                            clients.clone(),
+                            client.clone(),
+                            socket.clone(),
+                            src,
+                        );
                     }
                 }
                 // 4: InventoryOffered
@@ -4765,13 +4846,8 @@ async fn send_movement_complete(
             tracing::warn!(error = %e, "failed to resolve avatar name from ROBUST");
             ("Unknown".to_string(), "User".to_string())
         });
-    let (active, memberships) = match groups {
-        Some(g) => (
-            groups_io::active_group(g, agent_id).await,
-            groups_io::agent_memberships(g, agent_id).await,
-        ),
-        None => (groups_io::ActiveGroup::default(), Vec::new()),
-    };
+    // Group data is fetched by a spawned task after login; the inline update is empty.
+    let active = groups_io::ActiveGroup::default();
     let mut session = client.lock().await;
 
     let movement = AgentMovementComplete {
@@ -4940,12 +5016,17 @@ async fn send_movement_complete(
         eq.enqueue("EstablishAgentCommunication", Llsd::Map(eq_body))
             .await;
     }
-    if groups.is_some() {
-        eq.enqueue(
-            "AgentGroupDataUpdate",
-            groups_io::agent_group_data_event(session.agent_id, &memberships),
-        )
-        .await;
+    if let Some(g) = groups {
+        groups_tasks::spawn_login_group_data(
+            g.clone(),
+            session.agent_id,
+            first_name.clone(),
+            last_name.clone(),
+            eq.clone(),
+            client.clone(),
+            socket.clone(),
+            addr,
+        );
     }
     event_queues.write().await.insert(session.agent_id, eq);
     info!(agent = %session.agent_id, "event queue created with initial event");
