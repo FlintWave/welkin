@@ -201,39 +201,12 @@ async fn handle_owner(
     Json(serde_json::json!({"step": "network"})).into_response()
 }
 
-async fn handle_network(State(s): State<WizardServiceState>) -> Response {
-    // TODO: actual network probe — TCP/UDP reachability, external IP detection
-    let result = NetworkCheckResult {
-        external_ip: None,
-        tcp_reachable: false,
-        udp_reachable: false,
-        nat_detected: false,
-        details: vec!["Network probe not yet implemented — configure manually".into()],
-    };
-
-    let mut state = s.state.lock().await;
-    *state = WizardState::InProgress {
-        step: WizardStep::Capacity,
-    };
-    Json(serde_json::json!({"step": "capacity", "network": result})).into_response()
+async fn handle_network(State(_s): State<WizardServiceState>) -> Response {
+    return crate::error::not_implemented("network probe is not implemented yet");
 }
 
-async fn handle_capacity(State(s): State<WizardServiceState>) -> Response {
-    // TODO: integrate with welkin-capacity crate for real assessment
-    let mut state = s.state.lock().await;
-    *state = WizardState::InProgress {
-        step: WizardStep::Placement,
-    };
-    Json(serde_json::json!({
-        "step": "placement",
-        "estimate": {
-            "islands": {"min": 1, "max": 4},
-            "users": {"min": 10, "max": 40},
-            "limiting_resource": "unmeasured",
-            "is_measured": false
-        }
-    }))
-    .into_response()
+async fn handle_capacity(State(_s): State<WizardServiceState>) -> Response {
+    return crate::error::not_implemented("capacity assessment is not implemented yet");
 }
 
 #[derive(Deserialize)]
@@ -317,23 +290,6 @@ async fn handle_content(
     Json(serde_json::json!({"step": "finish"})).into_response()
 }
 
-async fn handle_finish(State(s): State<WizardServiceState>) -> Response {
-    // TODO: actually create regions, start islands, create owner account
-    let mut state = s.state.lock().await;
-    *state = WizardState::Completed;
-
-    let config = s.config.lock().await;
-    let world = &config.world_name;
-    let island_count = config.islands.len();
-
-    tracing::info!(world_name = %world, islands = island_count, "wizard completed");
-
-    Json(serde_json::json!({
-        "status": "completed",
-        "world_name": world,
-        "islands_created": island_count,
-        "portal_url": "http://localhost:8002/portal",
-        "viewer_address": "localhost:8002"
-    }))
-    .into_response()
+async fn handle_finish(State(_s): State<WizardServiceState>) -> Response {
+    return crate::error::not_implemented("wizard completion and provisioning is not implemented yet");
 }

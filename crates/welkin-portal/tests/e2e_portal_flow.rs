@@ -136,14 +136,13 @@ async fn full_portal_flow() {
 
     // 3d. Network probe
     let (status, json) = post_empty(&app, "/portal/api/wizard/step/network").await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(json["step"], "capacity");
+    assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
+    assert_eq!(json["error"], "not_implemented");
 
     // 3e. Capacity assessment
     let (status, json) = post_empty(&app, "/portal/api/wizard/step/capacity").await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(json["step"], "placement");
-    assert!(json["estimate"]["islands"]["min"].as_u64().unwrap() >= 1);
+    assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
+    assert_eq!(json["error"], "not_implemented");
 
     // 3f. Placement — one island
     let (status, json) = post_json(
@@ -171,14 +170,8 @@ async fn full_portal_flow() {
 
     // 3h. Finish wizard
     let (status, json) = post_empty(&app, "/portal/api/wizard/finish").await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(json["status"], "completed");
-    assert_eq!(json["world_name"], "TestWorld");
-    assert_eq!(json["islands_created"], 1);
-
-    // Wizard is now completed; starting again should fail
-    let (status, _) = post_empty(&app, "/portal/api/wizard/start").await;
-    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
+    assert_eq!(json["error"], "not_implemented");
 
     // ── 4. Staff login ──
     let (status, json) = post_json(
@@ -231,8 +224,8 @@ async fn full_portal_flow() {
         &token,
     )
     .await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(json["status"], "running");
+    assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
+    assert_eq!(json["error"], "not_implemented");
 
     // ── 7. Verify region appears in list ──
     let (status, json) = get_auth(&app, "/portal/api/regions", &token).await;
@@ -240,12 +233,11 @@ async fn full_portal_flow() {
     let regions = json.as_array().expect("regions list");
     assert_eq!(regions.len(), 1);
     assert_eq!(regions[0]["name"], "Welcome");
-    assert_eq!(regions[0]["status"], "running");
 
-    // ── 8. Map endpoint ──
+    // ── 8. Map endpoints (not implemented) ──
     let (status, json) = get_auth(&app, "/portal/api/map/regions", &token).await;
-    assert_eq!(status, StatusCode::OK);
-    assert!(json.get("regions").is_some());
+    assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
+    assert_eq!(json["error"], "not_implemented");
 
     // Map placement
     let (status, json) = post_auth(
@@ -261,8 +253,8 @@ async fn full_portal_flow() {
         &token,
     )
     .await;
-    assert_eq!(status, StatusCode::CREATED);
-    assert_eq!(json["success"], true);
+    assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
+    assert_eq!(json["error"], "not_implemented");
 
     // ── 9. People: sign-up flow ──
     let (status, json) = post_json(
@@ -331,13 +323,14 @@ async fn full_portal_flow() {
     assert_eq!(status, StatusCode::UNAUTHORIZED, "logs needs auth");
 
     // ── 13. Region snapshot + stop + remove ──
-    let (status, _) = post_empty_auth(
+    let (status, json) = post_empty_auth(
         &app,
         &format!("/portal/api/regions/{region_id}/snapshot"),
         &token,
     )
     .await;
-    assert_eq!(status, StatusCode::OK, "snapshot");
+    assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
+    assert_eq!(json["error"], "not_implemented");
 
     let (status, json) = post_empty_auth(
         &app,
@@ -345,8 +338,8 @@ async fn full_portal_flow() {
         &token,
     )
     .await;
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(json["status"], "stopped");
+    assert_eq!(status, StatusCode::NOT_IMPLEMENTED);
+    assert_eq!(json["error"], "not_implemented");
 
     // ── 14. Staff logout ──
     let (status, _) = post_empty_auth(&app, "/portal/api/auth/logout", &token).await;

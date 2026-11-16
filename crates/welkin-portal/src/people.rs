@@ -317,13 +317,7 @@ where
     if let Err(e) = require_admin(&staff) {
         return e.into_response();
     }
-    // TODO: query UserAccountStore
-    let accounts: Vec<AccountSummary> = Vec::new();
-    (
-        StatusCode::OK,
-        Json(serde_json::json!({ "accounts": accounts, "total": 0 })),
-    )
-        .into_response()
+    return crate::error::not_implemented("account search is not implemented yet");
 }
 
 async fn handle_get_account<S>(
@@ -352,8 +346,7 @@ where
     if let Err(e) = require_admin(&staff) {
         return e.into_response();
     }
-    // TODO: set UserLevel = -1 in UserAccountStore, audit log
-    (StatusCode::OK, Json(serde_json::json!({ "success": true }))).into_response()
+    return crate::error::not_implemented("account suspension is not implemented yet");
 }
 
 async fn handle_unsuspend<S>(
@@ -367,53 +360,25 @@ where
     if let Err(e) = require_admin(&staff) {
         return e.into_response();
     }
-    // TODO: restore UserLevel in UserAccountStore, audit log
-    (StatusCode::OK, Json(serde_json::json!({ "success": true }))).into_response()
+    return crate::error::not_implemented("account unsuspension is not implemented yet");
 }
 
 async fn handle_password_reset<S>(
-    State(state): State<S>,
-    Json(req): Json<PasswordResetRequest>,
+    State(_state): State<S>,
+    Json(_req): Json<PasswordResetRequest>,
 ) -> Response
 where
     S: Clone + Send + Sync + 'static + AsRef<SignUpStore>,
 {
-    // TODO: look up account by email, generate token, send email
-    tracing::info!(email = %req.email, "password reset requested; email not yet implemented");
-
-    let store: &SignUpStore = state.as_ref();
-    let token = PasswordResetToken {
-        token: uuid::Uuid::new_v4().to_string(),
-        principal_id: String::new(),
-        expires_at: time::OffsetDateTime::now_utc().unix_timestamp() + 3600,
-    };
-    store.store_reset_token(token);
-
-    (
-        StatusCode::OK,
-        Json(serde_json::json!({ "message": "if an account exists, a reset email has been sent" })),
-    )
-        .into_response()
+    return crate::error::not_implemented("password reset is not implemented yet");
 }
 
 async fn handle_password_reset_confirm<S>(
-    State(state): State<S>,
-    Json(req): Json<PasswordResetConfirm>,
+    State(_state): State<S>,
+    Json(_req): Json<PasswordResetConfirm>,
 ) -> Response
 where
     S: Clone + Send + Sync + 'static + AsRef<SignUpStore>,
 {
-    let store: &SignUpStore = state.as_ref();
-    match store.consume_reset_token(&req.token) {
-        Some(_token_data) => {
-            // TODO: update password via AuthStore
-            tracing::info!("password reset confirmed; password update not yet wired");
-            (StatusCode::OK, Json(serde_json::json!({ "success": true }))).into_response()
-        }
-        None => (
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({ "error": "invalid or expired token" })),
-        )
-            .into_response(),
-    }
+    return crate::error::not_implemented("password reset confirmation is not implemented yet");
 }

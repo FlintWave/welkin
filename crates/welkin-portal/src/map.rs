@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use axum::Router;
 use axum::extract::{Json, Path, State};
-use axum::http::StatusCode;
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use axum::routing::{delete, get, post, put};
 use serde::{Deserialize, Serialize};
 
@@ -135,51 +134,18 @@ async fn handle_list_regions<S>(_staff: RequireStaff, State(_state): State<S>) -
 where
     S: Clone + Send + Sync + 'static,
 {
-    // TODO: query GridStore for all regions
-    let regions: Vec<MapRegion> = Vec::new();
-    (
-        StatusCode::OK,
-        Json(serde_json::json!({ "regions": regions })),
-    )
-        .into_response()
+    return crate::error::not_implemented("listing map regions is not implemented yet");
 }
 
 async fn handle_place<S>(
     _staff: RequireStaff,
     State(_state): State<S>,
-    Json(req): Json<PlacementRequest>,
+    Json(_req): Json<PlacementRequest>,
 ) -> Response
 where
     S: Clone + Send + Sync + 'static,
 {
-    // TODO: query GridStore for existing regions, check conflicts
-    let occupied: Vec<(i32, i32, i32, i32)> = Vec::new();
-    let conflict = occupied.iter().any(|&(ox, oy, osx, osy)| {
-        overlaps(
-            req.loc_x, req.loc_y, req.size_x, req.size_y, ox, oy, osx, osy,
-        )
-    });
-
-    if conflict {
-        let suggested = find_free_coords(&occupied, req.loc_x, req.loc_y, req.size_x, req.size_y);
-        let result = PlacementResult {
-            success: false,
-            region_id: None,
-            error: Some("coordinates occupied".into()),
-            suggested_coords: Some(suggested),
-        };
-        return (StatusCode::CONFLICT, Json(result)).into_response();
-    }
-
-    // TODO: create region in GridStore
-    let region_id = uuid::Uuid::new_v4().to_string();
-    let result = PlacementResult {
-        success: true,
-        region_id: Some(region_id),
-        error: None,
-        suggested_coords: None,
-    };
-    (StatusCode::CREATED, Json(result)).into_response()
+    return crate::error::not_implemented("placing map regions is not implemented yet");
 }
 
 async fn handle_move<S>(
@@ -191,8 +157,7 @@ async fn handle_move<S>(
 where
     S: Clone + Send + Sync + 'static,
 {
-    // TODO: check conflicts, update region coordinates in GridStore
-    (StatusCode::OK, Json(serde_json::json!({ "success": true }))).into_response()
+    return crate::error::not_implemented("moving map regions is not implemented yet");
 }
 
 async fn handle_remove<S>(
@@ -203,28 +168,18 @@ async fn handle_remove<S>(
 where
     S: Clone + Send + Sync + 'static,
 {
-    // TODO: remove region from GridStore
-    (StatusCode::OK, Json(serde_json::json!({ "success": true }))).into_response()
+    return crate::error::not_implemented("removing map regions is not implemented yet");
 }
 
 async fn handle_get_settings<S>(
     _staff: RequireStaff,
     State(_state): State<S>,
-    Path(id): Path<String>,
+    Path(_id): Path<String>,
 ) -> Response
 where
     S: Clone + Send + Sync + 'static,
 {
-    // TODO: read from GridStore + EstateStore
-    let settings = IslandSettings {
-        region_id: id,
-        estate_id: 1,
-        physics_engine: "BulletSim".into(),
-        max_prims: 15000,
-        max_agents: 100,
-        terrain_preset: None,
-    };
-    (StatusCode::OK, Json(settings)).into_response()
+    return crate::error::not_implemented("reading island settings is not implemented yet");
 }
 
 async fn handle_set_settings<S>(
@@ -236,20 +191,14 @@ async fn handle_set_settings<S>(
 where
     S: Clone + Send + Sync + 'static,
 {
-    // TODO: update GridStore + EstateStore
-    (StatusCode::OK, Json(serde_json::json!({ "success": true }))).into_response()
+    return crate::error::not_implemented("updating island settings is not implemented yet");
 }
 
 async fn handle_overlay<S>(_staff: RequireStaff, State(_state): State<S>) -> Response
 where
     S: Clone + Send + Sync + 'static,
 {
-    // TODO: fetch occupied coordinates from an external grid
-    let overlay = ExternalGridOverlay {
-        grid_uri: String::new(),
-        occupied_coords: Vec::new(),
-    };
-    (StatusCode::OK, Json(overlay)).into_response()
+    return crate::error::not_implemented("fetching external grid overlay is not implemented yet");
 }
 
 #[cfg(test)]

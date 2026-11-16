@@ -29,6 +29,7 @@ pub struct CatalogueEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct ImportOptions {
     #[serde(default)]
     pub merge: bool,
@@ -124,6 +125,7 @@ async fn handle_catalogue(State(s): State<ContentServiceState>) -> Response {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct ImportBody {
     region_id: String,
     source: String,
@@ -134,29 +136,10 @@ struct ImportBody {
 }
 
 async fn handle_import_start(
-    State(s): State<ContentServiceState>,
-    Json(body): Json<ImportBody>,
+    State(_s): State<ContentServiceState>,
+    Json(_body): Json<ImportBody>,
 ) -> Response {
-    // TODO: actually download and load the archive
-    let id = uuid::Uuid::new_v4().to_string();
-    let status = ImportStatus {
-        id: id.clone(),
-        state: ImportState::Pending,
-        progress_pct: 0.0,
-        region_name: body.region_id.clone(),
-    };
-
-    tracing::info!(
-        import_id = %id,
-        region = %body.region_id,
-        source = %body.source,
-        path = %body.path_or_id,
-        "import requested"
-    );
-
-    s.imports.lock().await.push(status.clone());
-
-    (StatusCode::ACCEPTED, Json(status)).into_response()
+    return crate::error::not_implemented("importing and loading archives is not implemented yet");
 }
 
 async fn handle_import_status(
@@ -184,19 +167,14 @@ async fn handle_terrain_presets() -> Response {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct TerrainApplyBody {
     region_id: String,
     preset: TerrainPreset,
 }
 
-async fn handle_terrain_apply(Json(body): Json<TerrainApplyBody>) -> Response {
-    // TODO: generate and apply terrain heightmap to region
-    tracing::info!(
-        region = %body.region_id,
-        preset = ?body.preset,
-        "terrain apply requested"
-    );
-    Json(serde_json::json!({"status": "accepted", "region_id": body.region_id})).into_response()
+async fn handle_terrain_apply(Json(_body): Json<TerrainApplyBody>) -> Response {
+    return crate::error::not_implemented("generating and applying terrain is not implemented yet");
 }
 
 async fn handle_backups_list(State(s): State<ContentServiceState>) -> Response {
@@ -205,6 +183,7 @@ async fn handle_backups_list(State(s): State<ContentServiceState>) -> Response {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct BackupCreateBody {
     region_id: String,
     interval_hours: u32,
@@ -212,36 +191,16 @@ struct BackupCreateBody {
 }
 
 async fn handle_backups_create(
-    State(s): State<ContentServiceState>,
-    Json(body): Json<BackupCreateBody>,
+    State(_s): State<ContentServiceState>,
+    Json(_body): Json<BackupCreateBody>,
 ) -> Response {
-    // TODO: schedule actual OAR backups via region-simulator-core
-    let schedule = BackupSchedule {
-        region_id: body.region_id,
-        interval_hours: body.interval_hours,
-        retention_count: body.retention_count,
-        last_backup: None,
-        next_backup: None,
-    };
-
-    s.backups.lock().await.push(schedule.clone());
-    (StatusCode::CREATED, Json(schedule)).into_response()
+    return crate::error::not_implemented("scheduling backups is not implemented yet");
 }
 
 async fn handle_backup_now(
-    State(s): State<ContentServiceState>,
-    Path(region_id): Path<String>,
+    State(_s): State<ContentServiceState>,
+    Path(_region_id): Path<String>,
 ) -> Response {
-    // TODO: trigger immediate OAR backup
-    let backups = s.backups.lock().await;
-    if backups.iter().any(|b| b.region_id == region_id) {
-        tracing::info!(region = %region_id, "immediate backup requested");
-        Json(serde_json::json!({"status": "accepted", "region_id": region_id})).into_response()
-    } else {
-        (
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({"error": "no backup schedule for region"})),
-        )
-            .into_response()
-    }
+    return crate::error::not_implemented("triggering immediate backups is not implemented yet");
 }
+

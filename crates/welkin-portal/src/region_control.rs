@@ -84,59 +84,30 @@ pub async fn handle_create_region(
 
 // TODO: start/stop/snapshot need region-simulator-core process management
 pub async fn handle_start_region(
-    State(state): State<PortalState>,
+    State(_state): State<PortalState>,
     staff: RequireStaff,
-    Path(id): Path<String>,
+    Path(_id): Path<String>,
 ) -> Result<impl IntoResponse, PortalError> {
     require_operator(&staff)?;
-    let mut regions = state.region_statuses.lock().unwrap();
-    let region = regions
-        .iter_mut()
-        .find(|r| r.region_id == id)
-        .ok_or(PortalError::NotFound)?;
-    region.status = "running".into();
-    state
-        .audit_log
-        .log_action(&staff.0.staff_id, "start_region", &id, "", "");
-    Ok(Json(region.clone()))
+    return Ok(crate::error::not_implemented("start region is not implemented yet"));
 }
 
 pub async fn handle_stop_region(
-    State(state): State<PortalState>,
+    State(_state): State<PortalState>,
     staff: RequireStaff,
-    Path(id): Path<String>,
+    Path(_id): Path<String>,
 ) -> Result<impl IntoResponse, PortalError> {
     require_operator(&staff)?;
-    let mut regions = state.region_statuses.lock().unwrap();
-    let region = regions
-        .iter_mut()
-        .find(|r| r.region_id == id)
-        .ok_or(PortalError::NotFound)?;
-    region.status = "stopped".into();
-    state
-        .audit_log
-        .log_action(&staff.0.staff_id, "stop_region", &id, "", "");
-    Ok(Json(region.clone()))
+    return Ok(crate::error::not_implemented("stop region is not implemented yet"));
 }
 
 pub async fn handle_snapshot_region(
-    State(state): State<PortalState>,
+    State(_state): State<PortalState>,
     staff: RequireStaff,
-    Path(id): Path<String>,
+    Path(_id): Path<String>,
 ) -> Result<impl IntoResponse, PortalError> {
     require_operator(&staff)?;
-    let regions = state.region_statuses.lock().unwrap();
-    let _region = regions
-        .iter()
-        .find(|r| r.region_id == id)
-        .ok_or(PortalError::NotFound)?;
-    state
-        .audit_log
-        .log_action(&staff.0.staff_id, "snapshot_region", &id, "", "");
-    // TODO: trigger actual snapshot via region-simulator-core
-    Ok(Json(
-        serde_json::json!({ "status": "snapshot_requested", "region_id": id }),
-    ))
+    return Ok(crate::error::not_implemented("snapshot region is not implemented yet"));
 }
 
 pub async fn handle_remove_region(
