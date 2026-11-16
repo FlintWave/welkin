@@ -135,6 +135,24 @@ storage, inventory queries).
 | DatabaseService | ConnectionString | string | sqlite:robust.db | Database URL for all grid services |
 | DatabaseService | RobustConnectionString | string | (from ConnectionString) | Override when grid services need a separate database |
 | UserAccountService | AllowCreateUser | bool | false | Let the `createuser` grid method create accounts |
+| AssetService | AssetLoaderEnabled | bool | true | Load the default asset sets at start |
+| AssetService | AssetLoaderArgs | string | assets/AssetSets.xml | Path to the asset set control file |
+
+At start `welkin-robust` loads OpenSimulator's default asset sets (the default
+avatar body parts, clothing, animations and sounds) into the asset store, so
+viewers can fetch them. Without them avatars appear untextured. `AssetLoaderArgs`
+names a control file in OpenSimulator's `AssetSets.xml` format; each section in it
+points to a set file that lists the assets. The loader adds every asset that is
+not already in the store, so it is safe to run on every start.
+
+This repository does not include `AssetSets.xml` or the set files, because the
+assets are Linden Lab viewer art under CC BY-SA 2.5. Copy the `bin/assets` folder
+from an OpenSimulator 0.9.3.0 installation to `assets/` in the directory you start
+`welkin-robust` from, or point `AssetLoaderArgs` at your copy. See the
+[quick start](quick-start.md#default-assets). If the control
+file is missing, the grid logs a warning (`AssetSets.xml not found; default avatar
+assets are not seeded`) and starts anyway. Set `AssetLoaderEnabled = false` to skip
+the loader.
 
 `AllowCreateUser` matches OpenSimulator's default. While it is false, the
 `create-user` console command in `welkin-region` fails with "grid refused to

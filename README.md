@@ -119,6 +119,12 @@ cargo build --release
 ```
 
 That builds `target/release/welkin-robust` and `target/release/welkin-region`.
+Before the first start, copy the default avatar assets: Welkin cannot ship them
+(Linden Lab viewer art under CC BY-SA 2.5). Copy the `bin/assets` folder from an
+OpenSimulator 0.9.3.0 install to `assets/` beside `welkin-robust`, or set
+`[AssetService] AssetLoaderArgs` to your `AssetSets.xml`. Without it avatars stay
+untextured. See the [quick start guide](docs/quick-start.md#default-assets).
+
 Start the grid services first, then the region, each in its own terminal:
 
 ```sh
