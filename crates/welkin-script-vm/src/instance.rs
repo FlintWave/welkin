@@ -218,7 +218,8 @@ impl ScriptInstance {
         let bytecode = compile_source(source)?;
         let vm = Lua::new();
         if memory_limit > 0 {
-            vm.set_memory_limit(memory_limit)?;
+            // Headroom above the VM's baseline use (see `restore_from`).
+            vm.set_memory_limit(vm.used_memory() + memory_limit)?;
         }
 
         // Execute the bytecode so handler functions are registered as globals.
@@ -477,7 +478,8 @@ impl ScriptInstance {
     pub fn reset(&mut self) -> Result<(), VmError> {
         let vm = Lua::new();
         if self.memory_limit > 0 {
-            vm.set_memory_limit(self.memory_limit)?;
+            // Headroom above the VM's baseline, same as `new` and `restore_from`.
+            vm.set_memory_limit(vm.used_memory() + self.memory_limit)?;
         }
         vm.load(&self.bytecode).exec()?;
         if let Some(ref ctx) = self.ctx {
@@ -517,7 +519,10 @@ impl ScriptInstance {
     ) -> Result<Self, VmError> {
         let vm = restore_script_state(state)?;
         if memory_limit > 0 {
-            vm.set_memory_limit(memory_limit)?;
+            // `memory_limit` is headroom above what the fresh VM already uses; an
+            // absolute cap below the standard libraries' own size makes every
+            // allocation fail ("not enough memory").
+            vm.set_memory_limit(vm.used_memory() + memory_limit)?;
         }
 
         // Re-execute bytecode so handler functions are registered.
@@ -572,6 +577,32 @@ impl fmt::Debug for ScriptInstance {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn reset_keeps_the_memory_limit_as_headroom() -> Result<(), VmError> {
+        // The handler builds a 200 KB string. With the limit read as headroom above the
+        // baseline this fits; read as an absolute cap (the old reset behaviour) the
+        // baseline plus 200 KB would not fit in 262,144 bytes.
+        let src = "function state_entry() big = string.rep('x', 200000) end";
+        let mut inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), src, 262_144)?;
+        inst.post_event(ScriptEvent::StateEntry);
+        inst.run_next_event()?;
+        inst.reset()?;
+        inst.run_next_event()?; // state_entry queued by reset
+        Ok(())
+    }
+
+    #[test]
+    fn small_memory_limits_are_headroom_not_an_absolute_cap() -> Result<(), VmError> {
+        let src = "function state_entry() x = 1 end";
+        let inst = ScriptInstance::new(Uuid::new_v4(), Uuid::new_v4(), src, 262_144)?;
+        let state = inst.save_state()?;
+        // Regression: an absolute cap of ~10 KB used to make the restored VM fail with
+        // "not enough memory".
+        let mut restored = ScriptInstance::restore_from(Uuid::new_v4(), Uuid::new_v4(), &state, 262_144)?;
+        restored.post_event(ScriptEvent::StateEntry);
+        Ok(())
+    }
+
     use super::*;
 
     const HANDLER_SOURCE: &str = r#"

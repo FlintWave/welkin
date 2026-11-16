@@ -98,10 +98,18 @@ pub fn spawn_repl(
                             eprintln!("console: passwords containing a double quote are not supported");
                             continue;
                         }
-                        let command = format!(
-                            "create-user \"{}\" \"{}\" \"{}\"",
-                            first, last, password
-                        );
+                        // Email is optional and not secret: plain line editor, not kept in history.
+                        let email = match editor.readline("Email (optional, Enter to skip): ") {
+                            Ok(email) => email.trim().to_string(),
+                            Err(_) => String::new(),
+                        };
+                        let command = match build_create_user_command(&first, &last, &password, &email) {
+                            Ok(command) => command,
+                            Err(msg) => {
+                                eprintln!("console: {msg}");
+                                continue;
+                            }
+                        };
                         let out = handle.block_on(crate::console::execute(&ctx, &command));
                         println!("{out}");
                         if out == "quit" {
@@ -125,6 +133,23 @@ pub fn spawn_repl(
             }
         }
     }))
+}
+
+/// Builds the quoted `create-user` line; the email is appended only when non-empty.
+fn build_create_user_command(
+    first: &str,
+    last: &str,
+    password: &str,
+    email: &str,
+) -> Result<String, String> {
+    if email.contains('"') || email.chars().any(char::is_whitespace) {
+        return Err("the email must not contain spaces or double quotes".to_string());
+    }
+    let mut command = format!("create-user \"{first}\" \"{last}\" \"{password}\"");
+    if !email.is_empty() {
+        command.push_str(&format!(" \"{email}\""));
+    }
+    Ok(command)
 }
 
 /// True for lines that may carry a password; these never enter the line history.
@@ -217,6 +242,8 @@ pub async fn run_actions(
         >,
     >,
     shutdown: Arc<tokio::sync::Notify>,
+    scene: Arc<welkin_scene::scene::Scene>,
+    assets: Arc<welkin_services::remote::asset::RemoteAssetConnector>,
 ) {
     use welkin_msg::msgs::*;
 
@@ -293,6 +320,21 @@ pub async fn run_actions(
                     }
                 }
             }
+            ConsoleAction::LoadOar(path) => {
+                tracing::info!(%path, "console action: load oar");
+                match crate::oar_load::load_oar(std::path::Path::new(&path), &scene, &assets).await {
+                    Ok(report) => {
+                        tracing::info!(?report, "OAR loaded");
+                        // Show the new objects to everyone already connected.
+                        let all = clients.read().await;
+                        for (addr, c) in all.iter() {
+                            let mut sess = c.lock().await;
+                            crate::scene_sync::send_scene_objects(&scene, &mut sess, &socket, *addr).await;
+                        }
+                    }
+                    Err(err) => tracing::warn!(%path, %err, "OAR load failed"),
+                }
+            }
             ConsoleAction::Shutdown => {
                 tracing::info!("console action: shutdown");
                 shutdown.notify_one();
@@ -305,6 +347,20 @@ pub async fn run_actions(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn create_user_command_includes_email_only_when_given() {
+        assert_eq!(
+            build_create_user_command("A", "B", "pw12345678", "").unwrap(),
+            "create-user \"A\" \"B\" \"pw12345678\""
+        );
+        assert_eq!(
+            build_create_user_command("A", "B", "pw12345678", "a@b.c").unwrap(),
+            "create-user \"A\" \"B\" \"pw12345678\" \"a@b.c\""
+        );
+        assert!(build_create_user_command("A", "B", "pw", "a b").is_err());
+        assert!(build_create_user_command("A", "B", "pw", "a\"b").is_err());
+    }
 
     #[test]
     fn ct_eq_works() {

@@ -15,6 +15,7 @@ pub(crate) fn constant_time_eq(a: &str, b: &str) -> bool {
 
 pub mod accounts;
 pub mod agentprefs;
+pub mod asset_loader;
 pub mod assets;
 pub mod auth;
 pub mod authorization;

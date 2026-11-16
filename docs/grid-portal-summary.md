@@ -1,6 +1,6 @@
 # Grid portal summary
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#g1) · Previous: [Capacity assessor](capacity-assessor-summary.md) · Next: [Region simulator core](region-simulator-core-summary.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Decisions](decisions.md#g1) · Previous: [Capacity assessor](capacity-assessor-summary.md) · Next: [Region simulator core](region-simulator-core-summary.md)
 
 The grid-portal change is accepted (`8b685e0`). All 26 tasks are done. It adds
 a browser portal, an installer, a first-run wizard and an optional desktop

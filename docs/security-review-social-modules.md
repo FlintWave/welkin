@@ -1,6 +1,6 @@
 # Security Review: Social Modules (Task 7.3)
 
-**Reviewer:** Claude Opus 4.6 (HIGH RISK — Opus-level review)
+**Reviewer:** Claude Opus 4.6 (HIGH RISK, Opus-level review)
 **Adversarial review pass:** 2026-11-14 (added H-3, M-8, M-9, upgraded M-7)
 **Date:** 2026-11-14
 **Scope:** Groups, OfflineIM, Profiles, NPC, Concierge, IRC Bridge
@@ -259,7 +259,7 @@ oldest. Consider using an LRU cache implementation.
 
 ### M-7: NPC Control Operations Do Not Validate Caller Ownership
 
-**Severity:** MEDIUM (upgraded to HIGH in adversarial review — see H-3 note)
+**Severity:** MEDIUM (upgraded to HIGH in adversarial review, see H-3 note)
 **Affected file:** `crates/welkin-modules/src/npc/mod.rs:221-283`
 
 **Description:** The `move_to`, `say`, `sit`, `stand`, `rotate`, and `touch`
@@ -268,7 +268,7 @@ call `validate_owner`. Only `delete_npc` validates ownership. Any code with
 access to the module interface can control any NPC regardless of ownership.
 The trait definition itself (`INPCModule`) omits `caller_id` from these method
 signatures, meaning callers *cannot* pass ownership information even if they
-wanted to — this is a design-level gap, not just a missing check.
+wanted to: this is a design-level gap, not just a missing check.
 
 In C#, the OSSL functions (`osNpcMoveTo`, `osNpcSay`, etc.) each call
 `CheckPermissions` which verifies the calling script's owner matches the NPC
@@ -338,7 +338,7 @@ validation. If the service endpoint is accessible to untrusted callers, a
 spoofed `FromID` allows impersonating any agent as the sender of an offline
 message. The message recipient would see the spoofed sender when they log in.
 
-**Recommendation:** Same as M-1 — ensure the offline IM service is bound to a
+**Recommendation:** Same as M-1: ensure the offline IM service is bound to a
 private interface. Consider adding UUID format validation and optional
 caller authentication.
 
@@ -486,20 +486,20 @@ The Owner role and Everyone role are protected from deletion.
 ## Recommendations Summary
 
 **Before production deployment:**
-1. Fix H-1 (IRC protocol injection) — add sanitization before real I/O
-2. Fix H-2 (LevelGroupCreate) — enforce in region module before connector call
-3. Fix H-3 (Owner ejection) — prevent ejecting group owners
-4. Address M-1/M-10 — ensure service endpoints are on private interfaces
-5. Address M-5/M-3 — add size limits on stored text fields
-6. Address M-8 — verify group membership before joining chat sessions
-7. Address M-9 — enforce self-only membership preference updates
+1. Fix H-1 (IRC protocol injection): add sanitization before real I/O
+2. Fix H-2 (LevelGroupCreate): enforce in region module before connector call
+3. Fix H-3 (Owner ejection): prevent ejecting group owners
+4. Address M-1/M-10: ensure service endpoints are on private interfaces
+5. Address M-5/M-3: add size limits on stored text fields
+6. Address M-8: verify group membership before joining chat sessions
+7. Address M-9: enforce self-only membership preference updates
 
 **Before HG federation goes live:**
-8. Address M-6 — add cache size limits
-9. Address L-2 — validate home URIs
-10. Address L-6 — namespace cache keys by home grid
+8. Address M-6: add cache size limits
+9. Address L-2: validate home URIs
+10. Address L-6: namespace cache keys by home grid
 
 **Defense-in-depth improvements:**
-11. Address M-2 — escape LIKE wildcards
-12. Address M-4 — sanitize HTML in profile text
-13. Address M-7 — add caller_id to NPC control methods
+11. Address M-2: escape LIKE wildcards
+12. Address M-4: sanitize HTML in profile text
+13. Address M-7: add caller_id to NPC control methods

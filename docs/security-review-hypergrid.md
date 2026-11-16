@@ -1,6 +1,6 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 
-# Hypergrid Security Review — CRITICAL RISK
+# Hypergrid Security Review: CRITICAL RISK
 
 Date: 2026-11-14
 Reviewer: Claude Opus (automated)
@@ -8,7 +8,7 @@ Scope: Hypergrid services, connectors, and region modules
 
 ## Overall Assessment
 
-**CONDITIONAL PASS** — with mandatory remediation of all CRITICAL and HIGH
+**CONDITIONAL PASS**: with mandatory remediation of all CRITICAL and HIGH
 findings before any public-facing deployment. The Hypergrid implementation
 correctly models the major security boundaries (suitcase isolation, asset
 type filtering, service-session tokens, viewer/MAC deny lists) but has
@@ -75,7 +75,7 @@ limiting. Five are MEDIUM or LOW.
   service-session token *format* (embedded URL matches this grid) and checks
   viewer/MAC/ID0 deny lists, but it **never calls the home grid's
   `UserAgentService::verify_agent`**. The code explicitly marks this as
-  "NOTE: the full implementation would additionally" — meaning the callback
+  "NOTE: the full implementation would additionally": meaning the callback
   is a documented TODO, not an implemented check.
 
   An attacker can fabricate an `AgentCircuitInfo` with:
@@ -200,7 +200,7 @@ limiting. Five are MEDIUM or LOW.
   probe for the existence of script assets, even though the actual data
   cannot be retrieved.
 
-- **Impact**: Information disclosure — reveals which asset IDs exist on the
+- **Impact**: Information disclosure: reveals which asset IDs exist on the
   grid, which may leak information about user activity or grid content.
 - **Recommendation**: Filter `assets_exist` through the export-permission
   check: return `false` for assets whose type is not in
@@ -221,7 +221,7 @@ limiting. Five are MEDIUM or LOW.
 
   This yields only 32 bits of entropy (4 bytes = 8 hex chars). An attacker
   who knows a friendship exists can brute-force the secret in ~2^31 attempts
-  on average — feasible in minutes without rate limiting (F-06).
+  on average: feasible in minutes without rate limiting (F-06).
 
 - **Impact**: Unauthorized friendship deletion; with additional work,
   potential for forging status-notification subscriptions.

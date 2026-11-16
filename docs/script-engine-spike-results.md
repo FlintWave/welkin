@@ -3,7 +3,7 @@
 **Date:** 2024-11  
 **Spike goal:** Determine whether Luau (via mlua 0.12) is a viable runtime for
 LSL script execution in Welkin, and identify the work needed to make it
-production-ready.
+production-ready (spike document; see the README for current status).
 
 ---
 
@@ -135,7 +135,7 @@ LSL script execution in Welkin.
    YEngine's `CheckRun()` mechanism.
 4. **Memory isolation**: per-instance memory limits give us the same safety as
    YEngine's heap tracking.
-5. **Simpler architecture**: transpiling to Luau lets us leverage the Luau
+5. **Simpler architecture**: transpiling to Luau lets us use the Luau
    compiler and VM instead of writing and maintaining a CIL backend.
 
 **Caveats (required work):**

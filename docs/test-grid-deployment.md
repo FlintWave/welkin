@@ -2,7 +2,7 @@
 
 # Test grid deployment
 
-[<- Back to docs](README.md) | [Architecture](architecture.md) | [Operator guide](operator-guide.md) | [Migration guide](migration-guide.md)
+[<- Back to docs](index.md) | [Architecture](architecture.md) | [Operator guide](operator-guide.md) | [Migration guide](migration-guide.md)
 
 Deploy a self-contained test grid to verify that the Rust port works end to
 end: login, object creation, scripting, voice, and hypergrid. Everything runs
@@ -66,16 +66,47 @@ The first build compiles static musl-linked binaries inside the container
 
 ## Create an account
 
-Use the portal's first-run wizard to create the initial admin account:
+Create the first account from the region console. Start `welkin-robust`, then
+`welkin-region`, and at the `welkin>` prompt run:
 
-1. Open `http://localhost:9000/portal` in a browser.
-2. Follow the wizard: grid name, admin credentials, first region name and
-   coordinates.
-3. The wizard creates the estate, the default region, and an admin user with
-   the password you choose.
+```text
+create-user <first> <last>
+```
 
-If the portal is not reachable, create the account by connecting `osim-region`
-to the console (see the [operator guide](operator-guide.md)).
+For example, `create-user Alice Smith`. The console then asks for the password
+twice (`Password:` and `Confirm password:`) and does not echo what you type.
+It then asks `Email (optional, Enter to skip):`. The email is not a secret, so
+it is echoed and not kept in history.
+The console refuses a password typed on the command line, such as
+`create-user Alice Smith secret123`, and tells you to use the prompt instead.
+
+- The first and last name must be non-empty and contain no whitespace.
+- The password must be at least 8 characters and must not contain a double
+  quote (`"`).
+- The email is optional and must not contain spaces or double quotes.
+- The grid rejects a name or ID that already exists. Names are compared without
+  regard to case or Unicode form, so `Alice Smith` and `alice smith` are the
+  same account, and two simultaneous requests cannot both create it.
+
+The grid refuses the request unless `welkin-robust` has `AllowCreateUser = true`
+under `[UserAccountService]` in `robust.toml`. It defaults to false. The
+development `robust.toml` in the repository turns it on; for a grid you build
+yourself, add it while you create accounts and remove it afterwards. See the
+[configuration reference](configuration.md#welkin-robust-grid-services).
+
+The command sends the request to the grid service at `GridServerURI` in the
+`[GridService]` section of `welkin.toml`, so ROBUST must be running and
+reachable from the region. On success the console prints
+`created user First Last (<uuid>)`. Failures start with `error:`.
+
+The console does not save `create-user` lines in its command history, and the
+password is not written to the logs. The admin REST API runs the same command
+with the password inline in the request body, and the console's refusal does
+not apply there; see the [admin API note](configuration.md#admin-api) before
+using it.
+
+The web portal and its first-run wizard are a scaffold and do not create
+accounts.
 
 ## Importing OAR content
 
@@ -102,9 +133,9 @@ automatically using the coordinates stored in the archive.
 1. Download [Aurora Viewer](https://github.com/Aurora-Viewer/Aurora-Viewer)
    (pinned commit `3d523b14` for tested compatibility).
 2. Add a grid entry:
-   - **Login URI:** `http://<host>:8003`
-   - **Grid name:** whatever you chose in the wizard
-3. Log in with the credentials from the wizard.
+   - **Login URI:** `http://<host>:8002`
+   - **Grid name:** any name you like
+3. Log in with an account that exists in the grid database.
 
 The viewer should connect, rez your avatar, and display the region terrain.
 
@@ -131,7 +162,7 @@ Work through this checklist after first login:
 
 - [x] Create a prim, upload a script via two-step LLSD protocol (UpdateScriptAgent cap)
 - [x] "ALIVE" appears in chat when the script loads (state_entry fires llSay, bot-verified)
-- [x] Touch the prim; "touched" appears in chat (touch_start fires llSay, bot-verified)
+- [x] Touch the prim; "touched" appears in chat (touch_start fires llSay, bot-verified). The bot test passes 10/10 on a fresh region; on a region that already holds objects from earlier runs the touch step can fail. The cause is under investigation; probably the test picks a stale prim.
 - [ ] Script state survives region restart (checkpoint/restore)
 
 ### Voice
@@ -158,7 +189,7 @@ OPENSIM__Voice__WolfvoiceURI=http://wolfvoice:7880
 
 ### Hypergrid
 
-If the grid has a public IP and ports 8003/9000 are reachable:
+If the grid has a public IP and ports 8002 and 9000 are reachable:
 
 - [ ] Enable hypergrid in the profile (`[Hypergrid] Enabled = true`)
 - [ ] Teleport to a remote grid via `hop://grid.example.com:8002/RegionName`

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Integration architecture
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Viewer compatibility](viewer-compatibility.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Viewer compatibility](viewer-compatibility.md)
 
 How Welkin's crates connect at runtime. The [architecture doc](architecture.md)
 lists every crate and its role; this page traces the request paths that tie

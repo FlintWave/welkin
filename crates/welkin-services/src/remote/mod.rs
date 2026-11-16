@@ -4,7 +4,9 @@
 
 pub mod accounts;
 pub mod asset;
+pub mod avatar;
 pub mod grid;
+pub mod groups;
 pub mod inventory;
 
 use thiserror::Error;
@@ -27,19 +29,28 @@ pub(crate) fn extract_text(xml: &str, tag: &str) -> Option<String> {
     let mut reader = Reader::from_str(xml);
     let mut depth: Vec<String> = Vec::new();
     let mut capture = false;
+    let mut capture_depth = 0usize;
     let mut buf = String::new();
     loop {
         match reader.read_event() {
             Ok(Event::Start(e)) => {
                 let name = String::from_utf8_lossy(e.local_name().as_ref()).to_string();
-                if depth.len() == 1 && name == tag {
+                if !capture && name == tag {
                     capture = true;
+                    capture_depth = depth.len() + 1;
                 }
                 depth.push(name);
             }
+            Ok(Event::Empty(e)) => {
+                let name = String::from_utf8_lossy(e.local_name().as_ref()).to_string();
+                if !capture && name == tag {
+                    return None;
+                }
+            }
             Ok(Event::End(_)) => {
+                let closes_target = capture && depth.len() == capture_depth;
                 depth.pop();
-                if capture && depth.len() == 1 {
+                if closes_target {
                     return if buf.is_empty() { None } else { Some(buf) };
                 }
             }
@@ -54,4 +65,57 @@ pub(crate) fn extract_text(xml: &str, tag: &str) -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract_text;
+
+    #[test]
+    fn nested_result_list_finds_first_and_last_name() {
+        let xml = r#"<ServerResponse><result type="List"><FirstName>Ada</FirstName><LastName>Lovelace</LastName></result></ServerResponse>"#;
+        assert_eq!(extract_text(xml, "FirstName"), Some("Ada".to_string()));
+        assert_eq!(extract_text(xml, "LastName"), Some("Lovelace".to_string()));
+    }
+
+    #[test]
+    fn flat_reply() {
+        let xml = r#"<ServerResponse><Result>Success</Result></ServerResponse>"#;
+        assert_eq!(extract_text(xml, "Result"), Some("Success".to_string()));
+    }
+
+    #[test]
+    fn first_of_duplicate_tags_wins() {
+        let xml = r#"<root><Item>first</Item><Item>second</Item></root>"#;
+        assert_eq!(extract_text(xml, "Item"), Some("first".to_string()));
+    }
+
+    #[test]
+    fn absent_tag_returns_none() {
+        let xml = r#"<ServerResponse><Result>Success</Result></ServerResponse>"#;
+        assert_eq!(extract_text(xml, "Missing"), None);
+    }
+
+    #[test]
+    fn empty_elements_return_none() {
+        assert_eq!(extract_text("<Message></Message>", "Message"), None);
+        assert_eq!(extract_text("<Message/>", "Message"), None);
+    }
+
+    #[test]
+    fn unescapes_entities() {
+        let xml = r#"<X><Message>Ada &amp; Bob</Message></X>"#;
+        assert_eq!(extract_text(xml, "Message"), Some("Ada & Bob".to_string()));
+    }
+
+    #[test]
+    fn tag_name_must_match_exactly() {
+        let xml = r#"<X><FirstName>Ada</FirstName></X>"#;
+        assert_eq!(extract_text(xml, "Name"), None);
+    }
+
+    #[test]
+    fn malformed_or_truncated_xml_does_not_panic() {
+        assert_eq!(extract_text("<ServerResponse><Result>Success", "Result"), None);
+    }
 }

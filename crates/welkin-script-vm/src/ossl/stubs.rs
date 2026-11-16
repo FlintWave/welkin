@@ -158,7 +158,7 @@ fn register_os_get_notecard(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> LuaR
                 return Ok(text.clone());
             }
         }
-        for text in c.notecard_data.values() {
+        if let Some(text) = c.notecard_data.values().next() {
             return Ok(text.clone());
         }
         Ok(String::new())

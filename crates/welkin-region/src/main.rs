@@ -1,14 +1,35 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 mod logging;
+mod attachments_io;
+mod avatar_move;
 mod console;
 mod console_io;
+mod estate_config;
+mod groups_invites;
+mod groups_io;
+mod groups_admin;
+mod groups_chat;
+mod groups_queries;
+mod groups_queue;
+mod oar_load;
+mod object_buy;
+mod parcel_event;
+mod parcel_io;
+mod groups_tasks;
+mod inventory_rez;
 mod object_add;
 mod persist;
+mod persist_load;
+mod region_identity;
+mod physics_cmd;
 mod script_persist;
 mod scene_sync;
 mod sim_stats;
+#[cfg(test)]
+mod test_support;
 mod sound_io;
+mod terraform;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -81,6 +102,7 @@ struct RegionConfig {
     internal_port: u16,
     database_url: String,
     grid_service_url: Option<String>,
+    groups_server_uri: Option<String>,
     scene_config: SceneConfig,
 }
 
@@ -99,6 +121,16 @@ impl RegionConfig {
         let grid_service_url = config
             .get_string("GridService", "GridServerURI")
             .map(|s| s.to_string());
+
+        let groups_server_uri = if config.get_bool_or("Groups", "Enabled", false) {
+            groups_io::groups_server_uri(
+                config.get_string("Groups", "GroupsServerURI"),
+                config.get_string("GroupsService", "ServerURI"),
+                config.get_string("GridService", "GridServerURI"),
+            )
+        } else {
+            None
+        };
 
         let mut scene_config = SceneConfig::default();
         scene_config.physics_enabled =
@@ -142,12 +174,14 @@ impl RegionConfig {
             internal_port,
             database_url,
             grid_service_url,
+            groups_server_uri,
             scene_config,
         }
     }
 
-    fn build_region_info(&self) -> SceneRegionInfo {
+    fn build_region_info(&self, region_id: Uuid) -> SceneRegionInfo {
         let mut info = SceneRegionInfo::new(&self.region_name, self.region_loc_x, self.region_loc_y);
+        info.region_id = region_id;
         info.external_host_name = self.external_host_name.clone();
         info.internal_port = self.internal_port;
         info
@@ -218,12 +252,46 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // --- Database init ---
     info!(url = %redact_connection_string(&region_config.database_url), "Connecting to database");
     let pool = DataPool::connect(&region_config.database_url).await?;
-    script_persist::create_script_states_table(pool.inner()).await?;
+    let db_backend = if region_config.database_url.starts_with("mysql") {
+        welkin_data::migrations::Backend::MySQL
+    } else if region_config.database_url.starts_with("postgres") {
+        welkin_data::migrations::Backend::PostgreSQL
+    } else {
+        welkin_data::migrations::Backend::SQLite
+    };
+    script_persist::create_script_states_table(pool.inner(), db_backend).await?;
+    // Region tables (prims, terrain, ...): without them nothing the region saves would persist.
+    {
+        let backend = db_backend;
+        let runner = welkin_data::migrations::MigrationRunner::new(pool.inner().clone(), backend);
+        runner.ensure_migrations_table().await?;
+        for store_name in ["RegionStore", "EstateStore"] {
+            if let Some(content) = welkin_data::migrations::migration_content(store_name, backend) {
+                match runner.run_migrations(store_name, content).await {
+                    Ok(version) => info!(store = store_name, version, "schema is current"),
+                    Err(e) => return Err(format!("{store_name} migration failed: {e}").into()),
+                }
+            }
+        }
+    }
     let sim_store = std::sync::Arc::new(welkin_data::simulation::SimulationDataStore::new(pool.inner().clone()));
     info!("Database connection established");
 
     // --- Scene creation ---
-    let region_info = region_config.build_region_info();
+    let region_id = match region_identity::resolve(
+        pool.inner(),
+        db_backend,
+        &region_config.region_name,
+        region_config.region_loc_x,
+        region_config.region_loc_y,
+        config.get_string("Region", "RegionUUID"),
+    )
+    .await
+    {
+        Ok(id) => id,
+        Err(e) => return Err(e.into()),
+    };
+    let region_info = region_config.build_region_info(region_id);
     info!(
         region_id = %region_info.region_id,
         handle = region_info.region_handle,
@@ -239,21 +307,19 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         let physics =
             welkin_physics_rapier::RapierPhysicsScene::new(&scene.region_info.region_name);
         scene.set_physics(Box::new(physics));
-        let mut height_map: Vec<f32> = Vec::with_capacity(256 * 256);
-        for y in 0..256u32 {
-            for x in 0..256u32 {
-                let xf = x as f32;
-                let yf = y as f32;
-                let height = 21.0f32
-                    + 1.5f32 * (xf * 0.02).sin() * (yf * 0.03).cos()
-                    + 0.8f32 * (xf * 0.05 + 1.0).sin() * (yf * 0.04 + 0.5).sin()
-                    + 0.3f32 * (xf * 0.08 + yf * 0.06).cos();
-                height_map.push(height);
-            }
-        }
-        scene.set_terrain(&height_map);
-        info!("Physics engine (Rapier) initialised with terrain heightfield");
     }
+    // The region's terrain: the saved heightmap, or flat at the default height. One
+    // source for physics, avatars and the viewers' LayerData.
+    let height_map = match persist::load_saved_terrain(&sim_store, &region_id_str).await {
+        Some(saved) => {
+            info!("loaded saved terrain");
+            saved
+        }
+        None => vec![welkin_scene::terrain::DEFAULT_TERRAIN_HEIGHT; 256 * 256],
+    };
+    scene.set_terrain(&height_map);
+    let loaded_objects = persist::load_objects_into_scene(&scene, &sim_store, &region_id_str).await;
+    info!(loaded_objects, "loaded saved objects");
 
     // --- Module system ---
     let mut scene_ref = SceneRef::new(
@@ -332,29 +398,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let scripts_enabled = scene.config.scripts_enabled;
     info!(scripts_enabled, "script scheduler initialised");
 
-    // Restore persisted script states from DB
+    // Persisted script states are loaded here and restored (with builtins) by the
+    // heartbeat task, which owns the channels scripts need.
+    let mut pending_script_restore: Vec<(Uuid, Uuid, welkin_script_vm::ScriptState)> = Vec::new();
     if scripts_enabled {
-        match script_persist::load_script_states(pool.inner()).await {
-            Ok(states) if !states.is_empty() => {
-                let mut sched = script_scheduler.lock();
-                let mut restored = 0usize;
-                for (script_id, prim_id, state) in &states {
-                    match welkin_script_vm::ScriptInstance::restore_from(
-                        *script_id, *prim_id, state, 10_000,
-                    ) {
-                        Ok(instance) => {
-                            sched.add_script(instance);
-                            sched.post_event(*script_id, ScriptEvent::StateEntry);
-                            restored += 1;
-                        }
-                        Err(e) => {
-                            warn!(script = %script_id, error = %e, "failed to restore script state");
-                        }
-                    }
-                }
-                info!(restored, total = states.len(), "restored script states from DB");
-            }
-            Ok(_) => {}
+        match script_persist::load_script_states(pool.inner(), db_backend).await {
+            Ok(states) => pending_script_restore = states,
             Err(e) => warn!(error = %e, "failed to load script states from DB"),
         }
     }
@@ -455,7 +504,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let process_caps_base = caps_base.clone();
     let process_scheduler = Arc::clone(&script_scheduler);
     let process_grid_connector = grid_connector.clone();
-    let perms = Arc::new(DefaultPermissionsModule::new());
+    let perms = {
+        let mut perms = estate_config::permissions_from_config(&config);
+        let estate_store = welkin_data::estate::EstateStore::new(pool.inner().clone());
+        estate_config::apply_estate_data(&mut perms, &estate_store, &region_id_str).await;
+        Arc::new(perms)
+    };
     let process_perms = Arc::clone(&perms);
     let accounts_url = region_config
         .grid_service_url
@@ -465,6 +519,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         welkin_services::remote::accounts::RemoteAccountsConnector::new(accounts_url),
     );
     let process_accounts = Arc::clone(&accounts_connector);
+    let process_inventory = Arc::new(welkin_services::remote::inventory::RemoteInventoryConnector::new(accounts_url));
+    let process_assets = Arc::new(welkin_services::remote::asset::RemoteAssetConnector::new(accounts_url));
+    let process_avatars = Arc::new(welkin_services::remote::avatar::RemoteAvatarConnector::new(accounts_url));
+    let process_groups = region_config.groups_server_uri.as_deref().map(groups_io::GroupsCtx::new);
     let process_handle = tokio::spawn(async move {
         process_messages(
             msg_rx,
@@ -480,6 +538,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             process_grid_connector,
             process_perms,
             process_accounts,
+            process_inventory,
+            process_assets,
+            process_avatars,
+            process_groups,
         )
         .await;
     });
@@ -666,6 +728,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let heartbeat_sound_tx = sound_cmd_tx.clone();
     let _sound_cmd_tx = Arc::new(sound_cmd_tx);
 
+    // --- Physics command channel: scripts (llApplyImpulse, llSetForce, ...) -> physics ---
+    let (physics_cmd_tx, physics_cmd_rx) =
+        std::sync::mpsc::channel::<(Uuid, welkin_script_vm::PhysicsCommand)>();
+    let heartbeat_physics_tx = physics_cmd_tx.clone();
+    let _physics_cmd_tx = Arc::new(physics_cmd_tx);
+
     // --- Heartbeat loop ---
     let heartbeat_cancel = cancel.clone();
     let heartbeat_scene = Arc::clone(&scene);
@@ -673,6 +741,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let heartbeat_socket = udp_socket.clone();
     let heartbeat_clients = udp_clients.clone();
     let heartbeat_sim_store = Arc::clone(&sim_store);
+    let script_pool = pool.inner().clone();
+    let script_backend = db_backend;
     let heartbeat_region_id = region_id_str.clone();
     let frame_metrics = Arc::new(std::sync::Mutex::new(sim_stats::FrameMetrics::new()));
     let heartbeat_metrics = Arc::clone(&frame_metrics);
@@ -691,6 +761,65 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         let mut collision_sound_throttle = sound_io::CollisionSoundThrottle::new();
         let mut sensor_repeats: HashMap<Uuid, (welkin_script_vm::SensorRequest, std::time::Instant, std::time::Duration)> = HashMap::new();
         let mut control_registrations: HashMap<Uuid, (Uuid, u32, bool, bool)> = HashMap::new();
+        // Everything a script needs to talk to the region (chat, timers, sound, physics, ...).
+        let make_script_context = |script_id: Uuid, prim_id: Uuid, prim_pos: glam::Vec3| {
+            let prim_name = heartbeat_scene
+                .with_object(&prim_id, |g| g.root_part().name.clone())
+                .unwrap_or_default();
+            std::sync::Arc::new(parking_lot::RwLock::new(
+                welkin_script_vm::builtins::ScriptContext {
+                    script_id,
+                    prim_id,
+                    prim_name,
+                    position: [prim_pos.x as f64, prim_pos.y as f64, prim_pos.z as f64],
+                    chat_sender: Some(heartbeat_chat_tx.clone()),
+                    timer_sender: Some(heartbeat_timer_tx.clone()),
+                    event_sender: Some(heartbeat_event_tx.clone()),
+                    sensor_sender: Some(heartbeat_sensor_tx.clone()),
+                    control_sender: Some(heartbeat_control_tx.clone()),
+                    sound_sender: Some(heartbeat_sound_tx.clone()),
+                    physics_sender: Some(heartbeat_physics_tx.clone()),
+                    ..Default::default()
+                },
+            ))
+        };
+
+        // Bring back the scripts saved at the last shutdown/backup.
+        if scripts_enabled && !pending_script_restore.is_empty() {
+            let total = pending_script_restore.len();
+            let mut restored = 0usize;
+            for (script_id, prim_id, state) in std::mem::take(&mut pending_script_restore) {
+                // No memory cap, like freshly loaded scripts.
+                let mut instance = match welkin_script_vm::ScriptInstance::restore_from(script_id, prim_id, &state, 0) {
+                    Ok(instance) => instance,
+                    Err(e) => {
+                        warn!(script = %script_id, error = %e, "failed to restore script state");
+                        continue;
+                    }
+                };
+                // A saved script whose object is gone would run as an orphan; drop it.
+                let Some(prim_pos) = heartbeat_scene
+                    .resolve_group_for_prim(&prim_id)
+                    .and_then(|group_id| heartbeat_scene.with_object(&group_id, |g| g.position()))
+                else {
+                    warn!(script = %script_id, prim = %prim_id, "saved script's object no longer exists; discarding its state");
+                    if let Err(e) = script_persist::delete_script_state(&script_pool, script_backend, script_id).await {
+                        warn!(script = %script_id, error = %e, "could not delete the orphaned script state");
+                    }
+                    continue;
+                };
+                if let Err(e) = instance.register_builtins(make_script_context(script_id, prim_id, prim_pos)) {
+                    warn!(script = %script_id, error = %e, "failed to register builtins for restored script");
+                    continue;
+                }
+                let mut sched = heartbeat_scheduler.lock();
+                sched.add_script(instance);
+                sched.post_event(script_id, ScriptEvent::StateEntry);
+                restored += 1;
+            }
+            info!(restored, total, "restored script states from DB");
+        }
+
         loop {
             tokio::select! {
                 _ = heartbeat_cancel.cancelled() => break,
@@ -698,6 +827,29 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     let frame_start = std::time::Instant::now();
                     let frame_stats = heartbeat_scene.tick();
                     let physics_ms = frame_stats.physics_ms;
+
+                    // Script physics commands act on the physics bodies before the next step.
+                    while let Ok((prim_id, cmd)) = physics_cmd_rx.try_recv() {
+                        if let Err(reason) = physics_cmd::apply_physics_command(&heartbeat_scene, &prim_id, &cmd) {
+                            warn!(prim = %prim_id, command = ?cmd, %reason, "physics command not applied");
+                        }
+                    }
+
+                    // Physical prims: copy simulated motion into the scene and tell viewers.
+                    for m in heartbeat_scene.sync_physics_to_objects() {
+                        broadcast_terse_object_update(
+                            m.local_id,
+                            m.position,
+                            m.velocity,
+                            glam::Vec3::ZERO,
+                            m.rotation,
+                            m.angular_velocity,
+                            heartbeat_scene.region_info.region_handle,
+                            &heartbeat_socket,
+                            &heartbeat_clients,
+                        )
+                        .await;
+                    }
                     let mut script_ms = 0.0f32;
                     if scripts_enabled {
                         // Drain any link_message events from builtins
@@ -717,20 +869,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                     let prim_pos = heartbeat_scene
                                         .with_object(&load_req.prim_id, |g| g.position())
                                         .unwrap_or(glam::Vec3::new(128.0, 128.0, 22.0));
-                                    let ctx = std::sync::Arc::new(parking_lot::RwLock::new(
-                                        welkin_script_vm::builtins::ScriptContext {
-                                            script_id: load_req.script_id,
-                                            prim_id: load_req.prim_id,
-                                            position: [prim_pos.x as f64, prim_pos.y as f64, prim_pos.z as f64],
-                                            chat_sender: Some(heartbeat_chat_tx.clone()),
-                                            timer_sender: Some(heartbeat_timer_tx.clone()),
-                                            event_sender: Some(heartbeat_event_tx.clone()),
-                                            sensor_sender: Some(heartbeat_sensor_tx.clone()),
-                                            control_sender: Some(heartbeat_control_tx.clone()),
-                                            sound_sender: Some(heartbeat_sound_tx.clone()),
-                                            ..Default::default()
-                                        }
-                                    ));
+                                    let ctx = make_script_context(load_req.script_id, load_req.prim_id, prim_pos);
                                     if let Err(e) = instance.register_builtins(ctx) {
                                         tracing::warn!(
                                             script = %load_req.script_id,
@@ -949,6 +1088,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                         group.root_part_mut().text = ctx_text.clone();
                                     }
                                 });
+                                heartbeat_scene.push_object_to_physics(prim_id);
                                 if let Some(updated) = heartbeat_scene.get_object(prim_id) {
                                     if text_changed {
                                         broadcast_full_object_update(&updated, heartbeat_scene.region_info.region_handle, &heartbeat_socket, &heartbeat_clients).await;
@@ -1029,6 +1169,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                         ).await;
                         if n > 0 {
                             tracing::info!(count = n, "persisted dirty objects");
+                        }
+                        if persist::backup_terrain(&heartbeat_scene, &heartbeat_sim_store, &heartbeat_region_id).await {
+                            tracing::info!("persisted terrain");
                         }
                     }
                 }
@@ -1128,6 +1271,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let timeout_scene = Arc::clone(&scene);
     let timeout_clients = udp_clients.clone();
     let timeout_eqs = event_queues.clone();
+    let timeout_socket = udp_socket.clone();
+    let timeout_perms = Arc::clone(&perms);
+    let timeout_inventory = Arc::new(welkin_services::remote::inventory::RemoteInventoryConnector::new(accounts_url));
+    let timeout_assets = Arc::new(welkin_services::remote::asset::RemoteAssetConnector::new(accounts_url));
+    let timeout_avatars = Arc::new(welkin_services::remote::avatar::RemoteAvatarConnector::new(accounts_url));
     let timeout_handle = tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(5));
         loop {
@@ -1146,6 +1294,19 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     for (addr, agent) in &timed_out {
                         timeout_clients.write().await.remove(addr);
+                        attachments_io::remove_all_for_avatar(
+                            &attachments_io::AttachCtx {
+                                scene: &timeout_scene,
+                                perms: &timeout_perms,
+                                inventory: &timeout_inventory,
+                                assets: &timeout_assets,
+                                avatars: &timeout_avatars,
+                                socket: timeout_socket.as_ref(),
+                                clients: &timeout_clients,
+                            },
+                            *agent,
+                        )
+                        .await;
                         timeout_scene.remove_presence(agent);
                         timeout_eqs.write().await.remove(agent);
                         info!(agent = %agent, addr = %addr, "client timed out, removed");
@@ -1177,6 +1338,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         udp_socket.clone(),
         udp_clients.clone(),
         console_shutdown.clone(),
+        scene.clone(),
+        Arc::new(welkin_services::remote::asset::RemoteAssetConnector::new(accounts_url)),
     ));
     let _repl_handle = console_io::spawn_repl(console_ctx.clone(), cancel.clone());
     let admin_token = config.get_string_or("Admin", "Token", "");
@@ -1340,7 +1503,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }).collect()
         };
-        match tokio::time::timeout(Duration::from_secs(15), script_persist::save_script_states(pool.inner(), &states)).await {
+        match tokio::time::timeout(Duration::from_secs(15), script_persist::save_script_states(pool.inner(), db_backend, &states)).await {
             Ok(Ok(n)) => info!(count = n, "saved script states to DB"),
             Ok(Err(e)) => warn!(error = %e, "failed to save script states"),
             Err(_) => warn!("script state save timed out"),
@@ -1372,6 +1535,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }).await.is_err() {
             warn!("dirty prim flush timed out; some objects may not be persisted");
         }
+    }
+    match tokio::time::timeout(
+        Duration::from_secs(15),
+        persist::backup_terrain(&scene, &sim_store, &region_id_str),
+    )
+    .await
+    {
+        Ok(true) => info!("saved edited terrain on shutdown"),
+        Ok(false) => {}
+        Err(_) => warn!("terrain save timed out; recent terrain edits may be lost"),
     }
     pool.inner().close().await;
     info!("database pool closed");
@@ -1434,11 +1607,21 @@ async fn process_messages(
     grid_connector: Option<Arc<welkin_services::remote::grid::RemoteGridConnector>>,
     perms: Arc<DefaultPermissionsModule>,
     accounts_connector: Arc<welkin_services::remote::accounts::RemoteAccountsConnector>,
+    inventory_connector: Arc<welkin_services::remote::inventory::RemoteInventoryConnector>,
+    asset_connector: Arc<welkin_services::remote::asset::RemoteAssetConnector>,
+    avatar_connector: Arc<welkin_services::remote::avatar::RemoteAvatarConnector>,
+    groups: Option<groups_io::GroupsCtx>,
 ) {
     let mut last_agent_update: HashMap<Uuid, Instant> = HashMap::new();
+    // Persistent vertical velocity per avatar (jumping and falling).
+    let mut avatar_vertical: HashMap<Uuid, f32> = HashMap::new();
+    let mut modify_throttle = terraform::ModifyThrottle::default();
     let mut last_anim: HashMap<Uuid, &'static str> = HashMap::new();
     let mut always_run: HashSet<Uuid> = HashSet::new();
     let mut group_sessions = ChatSessionState::new();
+    let group_chat = groups_chat::GroupChat::new();
+    let region_parcel =
+        parcel_io::RegionParcel::new(scene.region_info.region_size_x, Uuid::nil());
     loop {
         let (src, pkt) = tokio::select! {
             _ = cancel.cancelled() => break,
@@ -1507,6 +1690,8 @@ async fn process_messages(
                 &event_queues,
                 &caps_base,
                 &accounts_connector,
+                &perms,
+                groups.as_ref(),
             )
             .await;
 
@@ -1515,6 +1700,20 @@ async fn process_messages(
                 let mut session = client.lock().await;
                 let sent = scene_sync::send_scene_objects(&scene, &mut session, &socket, src).await;
                 info!(agent = %agent_id, objects = sent, "sent existing scene objects to new viewer");
+                // Tell the viewer which parcel it stands on (flying needs AllowFly).
+                let parcel_msg = region_parcel.properties(
+                    parcel_io::SEQ_AGENT_PARCEL,
+                    false,
+                    scene.prim_stats().0 as i32,
+                    agent_id,
+                );
+                let (parcel_bytes, _) = session.circuit.send_msg(&parcel_msg, true);
+                let _ = socket.send_to(&parcel_bytes, src).await;
+                // Modern viewers take ParcelProperties from the event queue.
+                let parcel_eq = event_queues.read().await.get(&agent_id).cloned();
+                if let Some(eq) = parcel_eq {
+                    eq.enqueue("ParcelProperties", parcel_event::parcel_properties_event(&parcel_msg)).await;
+                }
             }
 
             // --- Issue 2A: Announce new avatar to all OTHER connected clients ---
@@ -1728,6 +1927,25 @@ async fn process_messages(
                     info!(agent = %agent_id, count = existing_presences.len(), "sent existing avatars to new user");
                 }
             }
+
+            // Wear again what this avatar wore last time (viewers that rely on the
+            // server doing this; others ask for the same items, which are then ignored).
+            let restored = attachments_io::restore_saved_attachments(
+                &attachments_io::AttachCtx {
+                    scene: &scene,
+                    perms: &perms,
+                    inventory: &inventory_connector,
+                    assets: &asset_connector,
+                    avatars: &avatar_connector,
+                    socket: socket.as_ref(),
+                    clients: &clients,
+                },
+                agent_id,
+            )
+            .await;
+            if restored > 0 {
+                info!(agent = %agent_id, restored, "saved attachments worn again");
+            }
         }
 
         if msg_id == StartPingCheck::ID
@@ -1789,20 +2007,43 @@ async fn process_messages(
         if msg_id == LogoutRequest::ID
             && let Some(client) = &client
         {
-            let mut session = client.lock().await;
-            let reply = LogoutReply {
-                agent_data: logout_reply::AgentData {
-                    agent_id: session.agent_id,
-                    session_id: session.session_id,
-                },
-                inventory_data: Vec::new(),
+            modify_throttle.forget(&agent_id);
+            if let Some(g) = &groups {
+                g.sequencer().forget(agent_id);
+                g.queue().forget(agent_id);
+            }
+            let leaving = {
+                let mut session = client.lock().await;
+                let reply = LogoutReply {
+                    agent_data: logout_reply::AgentData {
+                        agent_id: session.agent_id,
+                        session_id: session.session_id,
+                    },
+                    inventory_data: Vec::new(),
+                };
+                let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                let _ = socket.send_to(&pkt_bytes, src).await;
+                session.agent_id
             };
-            let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
-            let _ = socket.send_to(&pkt_bytes, src).await;
-            scene.remove_presence(&session.agent_id);
-            event_queues.write().await.remove(&session.agent_id);
+            // Attachments are saved into their inventory items and removed before the
+            // presence goes (the session lock is not held: this talks to every client).
+            attachments_io::remove_all_for_avatar(
+                &attachments_io::AttachCtx {
+                    scene: &scene,
+                    perms: &perms,
+                    inventory: &inventory_connector,
+                    assets: &asset_connector,
+                    avatars: &avatar_connector,
+                    socket: socket.as_ref(),
+                    clients: &clients,
+                },
+                leaving,
+            )
+            .await;
+            scene.remove_presence(&leaving);
+            event_queues.write().await.remove(&leaving);
             clients.write().await.remove(&src);
-            info!(agent = %session.agent_id, "logout acknowledged, presence and client removed");
+            info!(agent = %leaving, "logout acknowledged, presence and client removed");
         }
 
         if msg_id == EconomyDataRequest::ID
@@ -1961,13 +2202,52 @@ async fn process_messages(
             && let Ok(buy) = ObjectBuy::decode(&pkt.body)
             && let Some(client) = &client
         {
-            for obj in &buy.object_data {
-                info!(
-                    agent = %agent_id,
-                    local_id = obj.object_local_id,
-                    sale_type = obj.sale_type,
-                    "ObjectBuy: accepted (sample economy)"
-                );
+            let entries: Vec<object_buy::BuyEntry> = buy
+                .object_data
+                .iter()
+                .map(|o| object_buy::BuyEntry {
+                    local_id: o.object_local_id,
+                    sale_type: o.sale_type,
+                    sale_price: o.sale_price,
+                })
+                .collect();
+            let bought = object_buy::buy_objects(
+                &scene,
+                &inventory_connector,
+                &asset_connector,
+                agent_id,
+                buy.agent_data.category_id,
+                &entries,
+            )
+            .await;
+            for reason in &bought.errors {
+                warn!(agent = %agent_id, %reason, "ObjectBuy: purchase refused");
+                let alert = groups_io::alert_message(&format!("Unable to buy: {reason}."));
+                let mut sess = client.lock().await;
+                let (pkt_bytes, _) = sess.circuit.send_msg(&alert, true);
+                let _ = socket.send_to(&pkt_bytes, src).await;
+            }
+            for item in &bought.items {
+                info!(agent = %agent_id, item = %item.inventory_id, "ObjectBuy: delivered (sample economy)");
+                let update = inventory_item_update(agent_id, item);
+                let mut sess = client.lock().await;
+                let (pkt_bytes, _) = sess.circuit.send_msg(&update, true);
+                let _ = socket.send_to(&pkt_bytes, src).await;
+            }
+            if !bought.removed_local_ids.is_empty() {
+                let kill = KillObject {
+                    object_data: bought
+                        .removed_local_ids
+                        .iter()
+                        .map(|&id| kill_object::ObjectData { id })
+                        .collect(),
+                };
+                let all_clients = clients.read().await;
+                for (addr, c) in all_clients.iter() {
+                    let mut sess = c.lock().await;
+                    let (pkt_bytes, _) = sess.circuit.send_msg(&kill, true);
+                    let _ = socket.send_to(&pkt_bytes, *addr).await;
+                }
             }
             let reply = MoneyBalanceReply {
                 money_data: money_balance_reply::MoneyData {
@@ -1992,6 +2272,110 @@ async fn process_messages(
             let mut session = client.lock().await;
             let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
             let _ = socket.send_to(&pkt_bytes, src).await;
+        }
+
+        // ---- Attachments ----
+        if agent_id != Uuid::nil() {
+            let actx = attachments_io::AttachCtx {
+                scene: &scene,
+                perms: &perms,
+                inventory: &inventory_connector,
+                assets: &asset_connector,
+                avatars: &avatar_connector,
+                socket: socket.as_ref(),
+                clients: &clients,
+            };
+            if msg_id == RezSingleAttachmentFromInv::ID
+                && let Ok(msg) = RezSingleAttachmentFromInv::decode(&pkt.body)
+            {
+                let item_id = msg.object_data.item_id;
+                match attachments_io::rez_attachment_from_inventory(&actx, agent_id, item_id, msg.object_data.attachment_pt).await {
+                    Ok(point) => info!(agent = %agent_id, %item_id, point, "attachment worn"),
+                    Err(reason) => warn!(agent = %agent_id, %item_id, %reason, "RezSingleAttachmentFromInv: not worn"),
+                }
+            }
+            if msg_id == RezMultipleAttachmentsFromInv::ID
+                && let Ok(msg) = RezMultipleAttachmentsFromInv::decode(&pkt.body)
+            {
+                for entry in &msg.object_data {
+                    match attachments_io::rez_attachment_from_inventory(&actx, agent_id, entry.item_id, entry.attachment_pt).await {
+                        Ok(point) => info!(agent = %agent_id, item = %entry.item_id, point, "attachment worn"),
+                        Err(reason) => warn!(agent = %agent_id, item = %entry.item_id, %reason, "RezMultipleAttachmentsFromInv: not worn"),
+                    }
+                }
+            }
+            if msg_id == ObjectAttach::ID
+                && let Ok(msg) = ObjectAttach::decode(&pkt.body)
+            {
+                for entry in &msg.object_data {
+                    match attachments_io::attach_from_world(&actx, agent_id, entry.object_local_id, msg.agent_data.attachment_point).await {
+                        Ok(point) => info!(agent = %agent_id, local_id = entry.object_local_id, point, "object attached"),
+                        Err(reason) => warn!(agent = %agent_id, local_id = entry.object_local_id, %reason, "ObjectAttach: not attached"),
+                    }
+                }
+            }
+            if msg_id == ObjectDetach::ID
+                && let Ok(msg) = ObjectDetach::decode(&pkt.body)
+            {
+                for entry in &msg.object_data {
+                    let Some(group_id) = scene.get_object_by_local_id(entry.object_local_id) else { continue };
+                    if let Err(reason) = attachments_io::detach_to_inventory(&actx, agent_id, group_id).await {
+                        warn!(agent = %agent_id, local_id = entry.object_local_id, %reason, "ObjectDetach: not detached");
+                    }
+                }
+            }
+            if msg_id == DetachAttachmentIntoInv::ID
+                && let Ok(msg) = DetachAttachmentIntoInv::decode(&pkt.body)
+            {
+                let item_id = msg.object_data.item_id;
+                if let Err(reason) = attachments_io::detach_item_to_inventory(&actx, agent_id, item_id).await {
+                    warn!(agent = %agent_id, %item_id, %reason, "DetachAttachmentIntoInv: not detached");
+                }
+            }
+            if msg_id == ObjectDrop::ID
+                && let Ok(msg) = ObjectDrop::decode(&pkt.body)
+            {
+                for entry in &msg.object_data {
+                    if let Err(reason) = attachments_io::detach_to_ground(&actx, agent_id, entry.object_local_id).await {
+                        warn!(agent = %agent_id, local_id = entry.object_local_id, %reason, "ObjectDrop: not dropped");
+                    }
+                }
+            }
+        }
+
+        if msg_id == ModifyLand::ID
+            && agent_id != Uuid::nil()
+            && let Ok(modify) = ModifyLand::decode(&pkt.body)
+        {
+            let allowed = perms.can_edit_terrain(agent_id);
+            let changed = if modify_throttle.allow(agent_id, Instant::now()) {
+                terraform::apply_modify_land(&scene, allowed, &modify)
+            } else {
+                Vec::new() // too soon after this avatar's previous edit
+            };
+            if !allowed {
+                tracing::debug!(agent = %agent_id, "ModifyLand refused: no terraform permission");
+            }
+            terraform::broadcast_patches(&scene, &changed, &socket, &clients).await;
+        }
+
+        if parcel_io::is_parcel_request(pkt.id)
+            && let Some(client) = &client
+            && let Some(props) = parcel_io::handle_parcel_request(
+                &region_parcel,
+                agent_id,
+                &pkt.body,
+                scene.prim_stats().0 as i32,
+            )
+        {
+            info!(agent = %agent_id, seq = props.parcel_data.sequence_id, flags = props.parcel_data.parcel_flags, "ParcelProperties sent for request");
+            let mut session = client.lock().await;
+            let (parcel_bytes, _) = session.circuit.send_msg(&props, true);
+            let _ = socket.send_to(&parcel_bytes, src).await;
+            let parcel_eq = event_queues.read().await.get(&agent_id).cloned();
+            if let Some(eq) = parcel_eq {
+                eq.enqueue("ParcelProperties", parcel_event::parcel_properties_event(&props)).await;
+            }
         }
 
         if msg_id == AgentUpdate::ID
@@ -2064,11 +2448,14 @@ async fn process_messages(
                 .unwrap_or(1.0 / 30.0)
                 .min(0.5);
             last_agent_update.insert(update.agent_data.agent_id, now);
-            let mut new_pos = prev_pos + vel * dt;
-            new_pos.x = new_pos.x.clamp(0.0, 256.0);
-            new_pos.y = new_pos.y.clamp(0.0, 256.0);
-            if !flying && new_pos.z < 22.0 {
-                new_pos.z = 22.0;
+            let moved = prev_pos + vel * dt;
+            let ground_z = scene.terrain_height_at(moved.x, moved.y);
+            // AGENT_CONTROL_UP_POS while walking is a jump.
+            let jump = !flying && flags & 0x0010 != 0;
+            let vz = avatar_vertical.entry(update.agent_data.agent_id).or_insert(0.0);
+            let new_pos = avatar_move::place_on_ground(moved, flying, jump, ground_z, dt, vz);
+            if !flying {
+                vel.z = *vz; // let viewers extrapolate jumps and falls
             }
 
             scene.update_presence_position(&update.agent_data.agent_id, new_pos, rot);
@@ -2108,7 +2495,16 @@ async fn process_messages(
 
             // --- Animation state machine ---
             // Determine desired animation from control flags
-            let desired_anim = if flying {
+            // Airborne without flying: rising is JUMP, falling is FALLDOWN.
+            let airborne = !flying
+                && new_pos.z > ground_z + avatar_move::AVATAR_STAND_OFFSET + 0.1;
+            let desired_anim = if airborne {
+                if *vz < 0.0 {
+                    "666307d9-a860-572d-6fd4-c3ab8865c094" // FALLDOWN
+                } else {
+                    "2305bd75-1ca9-b03b-1faa-b176b8a8c49e" // JUMP
+                }
+            } else if flying {
                 if flags & 0x0001 != 0 || flags & 0x0002 != 0 || flags & 0x0004 != 0 || flags & 0x0008 != 0 {
                     "aec4610c-757f-bc4e-c092-c6e9caf18daf" // FLY
                 } else if flags & 0x0010 != 0 {
@@ -2117,6 +2513,13 @@ async fn process_messages(
                     "20f063ea-8306-2562-0b07-5c23464bcec5" // HOVER_DOWN
                 } else {
                     "4ae8016b-31b9-03bb-c401-b1ea941db41d" // HOVER
+                }
+            } else if flags & 0x0020 != 0 {
+                // AGENT_CONTROL_UP_NEG on the ground is a crouch.
+                if flags & 0x000F != 0 {
+                    "47f5f6fb-22e5-ae44-f871-73aaaf4a6022" // CROUCHWALK
+                } else {
+                    "201f3fdf-cb1f-dbec-201f-7333e328ae7c" // CROUCH
                 }
             } else if flags & 0x0001 != 0 || flags & 0x0002 != 0 || flags & 0x0004 != 0 || flags & 0x0008 != 0 {
                 if fast || always_run.contains(&update.agent_data.agent_id) {
@@ -2135,6 +2538,7 @@ async fn process_messages(
             let prev_anim = last_anim.get(&update.agent_data.agent_id).copied();
             if prev_anim != Some(desired_anim) {
                 last_anim.insert(update.agent_data.agent_id, desired_anim);
+                info!(agent = %update.agent_data.agent_id, flags, flying, anim = desired_anim, "avatar animation change");
                 let anim_msg = AvatarAnimation {
                     sender: avatar_animation::Sender {
                         id: update.agent_data.agent_id,
@@ -2500,6 +2904,7 @@ async fn process_messages(
                         }
                     }
                 });
+                scene.push_object_to_physics(&uuid);
 
                 // Read back updated values for terse broadcast
                 if let Some(obj) = scene.get_object(&uuid) {
@@ -3020,104 +3425,98 @@ async fn process_messages(
         // ---- RezObject handler ----
         if msg_id == RezObject::ID
             && let Ok(msg) = RezObject::decode(&pkt.body)
+            && agent_id != Uuid::nil()
         {
-            let name = String::from_utf8_lossy(&msg.inventory_data.name).to_string();
             let item_id = msg.inventory_data.item_id;
             let position = msg.rez_data.ray_end;
-            let mut root = SceneObjectPart::new(&name, msg.agent_data.agent_id);
-            root.creator_id = msg.inventory_data.creator_id;
-            root.group_position = position;
-            root.group_id = msg.agent_data.group_id;
-            root.base_mask = PermissionMask::from_bits_truncate(msg.inventory_data.base_mask);
-            root.owner_mask = PermissionMask::from_bits_truncate(msg.inventory_data.owner_mask);
-            root.group_mask = PermissionMask::from_bits_truncate(msg.inventory_data.group_mask);
-            root.everyone_mask = PermissionMask::from_bits_truncate(msg.inventory_data.everyone_mask);
-            root.next_owner_mask = PermissionMask::from_bits_truncate(msg.inventory_data.next_owner_mask);
-            let obj_uuid = root.uuid;
-            let group = SceneObjectGroup::new(root);
-            scene.add_object(group);
-            if let Some(obj) = scene.get_object(&obj_uuid) {
-                broadcast_full_object_update(&obj, scene.region_info.region_handle, &socket, &clients).await;
+            // Rez rights come from the permissions module. Parcels do not exist yet, so the
+            // whole region counts as one parcel owned by the estate owner.
+            let parcel = estate_config::default_parcel(&perms);
+            if !perms.can_create_object(agent_id, (position.x, position.y, position.z), Some(&parcel)) {
+                warn!(agent = %agent_id, %item_id, "RezObject: permission denied");
+                continue;
             }
-            if scripts_enabled {
-                script_scheduler.lock().post_event_to_prim(
-                    obj_uuid,
-                    ScriptEvent::OnRez { start_param: 0 },
-                );
+            match inventory_rez::rez_from_inventory(&inventory_connector, &asset_connector, agent_id, item_id, position).await {
+                Ok((item, group)) => {
+                    let obj_uuid = scene.add_object(group);
+                    if let Some(obj) = scene.get_object(&obj_uuid) {
+                        broadcast_full_object_update(&obj, scene.region_info.region_handle, &socket, &clients).await;
+                    }
+                    if scripts_enabled {
+                        script_scheduler.lock().post_event_to_prim(
+                            obj_uuid,
+                            ScriptEvent::OnRez { start_param: 0 },
+                        );
+                    }
+                    info!(agent = %agent_id, object = %obj_uuid, %item_id, ?position, name = %item.inventory_name, "RezObject: rezzed from inventory");
+                }
+                Err(reason) => {
+                    warn!(agent = %agent_id, %item_id, %reason, "RezObject: could not rez from inventory");
+                }
             }
-            info!(
-                agent = %msg.agent_data.agent_id,
-                object = %obj_uuid,
-                %item_id,
-                ?position,
-                %name,
-                "RezObject: created prim in scene"
-            );
         }
 
-        // ---- DeRezObject handler ----
+        // ---- DeRezObject handler (take, take copy, delete, return) ----
         if msg_id == DeRezObject::ID
+            && agent_id != Uuid::nil()
             && let Ok(msg) = DeRezObject::decode(&pkt.body)
         {
-            let destination = msg.agent_block.destination;
+            let Some(action) = inventory_rez::DeRezAction::from_destination(msg.agent_block.destination) else {
+                warn!(destination = msg.agent_block.destination, "DeRezObject: unsupported destination");
+                continue;
+            };
+            let parcel = estate_config::default_parcel(&perms);
             let mut kill_ids: Vec<u32> = Vec::new();
+            let mut new_items: Vec<welkin_data::inventory::InventoryItemRow> = Vec::new();
             for entry in &msg.object_data {
                 let local_id = entry.object_local_id;
-                let uuid = match scene.get_object_by_local_id(local_id) {
-                    Some(u) => u,
-                    None => {
-                        warn!(local_id, "DeRezObject: unknown local_id");
-                        continue;
+                let Some(uuid) = scene.get_object_by_local_id(local_id) else {
+                    warn!(local_id, "DeRezObject: unknown local_id");
+                    continue;
+                };
+                let Some(group) = scene.get_object(&uuid) else { continue };
+                let root = group.root_part();
+                let allowed = match action {
+                    inventory_rez::DeRezAction::TakeCopy => {
+                        perms.can_take_object(agent_id, root.owner_id, root.group_id)
+                            && perms.can_copy_object(agent_id, root.owner_id, root.group_id, root.owner_mask)
+                    }
+                    inventory_rez::DeRezAction::Take => perms.can_take_object(agent_id, root.owner_id, root.group_id),
+                    inventory_rez::DeRezAction::Delete => perms.can_delete_object(agent_id, root.owner_id, root.group_id),
+                    inventory_rez::DeRezAction::Return => {
+                        perms.can_return_object(agent_id, root.owner_id, root.group_id, Some(&parcel))
                     }
                 };
-                // Save script state before removal (for inventory persistence)
-                if scripts_enabled && destination != 1 {
-                    let sched = script_scheduler.lock();
-                    for sid in sched.scripts_on_prim(&uuid) {
-                        if let Some(inst) = sched.get_script(&sid) {
-                            match inst.save_state() {
-                                Ok(_state) => {
-                                    tracing::debug!(script = %sid, object = %uuid, "saved script state before derez");
-                                }
-                                Err(e) => {
-                                    tracing::warn!(script = %sid, error = %e, "failed to save script state before derez");
-                                }
-                            }
-                        }
+                if !allowed {
+                    warn!(agent = %agent_id, object = %uuid, ?action, "DeRezObject: permission denied");
+                    continue;
+                }
+                // The copy in inventory comes first; the object leaves the scene only once
+                // it is safely saved, so a service failure never destroys it.
+                let saved = inventory_rez::save_group_to_inventory(
+                    &inventory_connector,
+                    &asset_connector,
+                    action,
+                    agent_id,
+                    msg.agent_block.destination_id,
+                    &group,
+                )
+                .await;
+                drop(group);
+                match saved {
+                    Ok(item) => {
+                        info!(local_id, object = %uuid, ?action, item = %item.inventory_id, "DeRezObject: saved to inventory");
+                        new_items.push(item);
+                    }
+                    Err(reason) => {
+                        warn!(local_id, object = %uuid, ?action, %reason, "DeRezObject: could not save to inventory; object left in place");
+                        continue;
                     }
                 }
-                match destination {
-                    1 => {
-                        // TakeCopy: copy to inventory, leave in scene
-                        info!(local_id, object = %uuid, "DeRezObject: copied to inventory (TakeCopy)");
-                    }
-                    4 => {
-                        // Take: remove from scene, take to inventory
-                        if let Some(_removed) = scene.remove_object(&uuid) {
-                            kill_ids.push(local_id);
-                            info!(local_id, object = %uuid, "DeRezObject: taken to inventory");
-                        }
-                    }
-                    6 => {
-                        // Delete
-                        if let Some(_removed) = scene.remove_object(&uuid) {
-                            kill_ids.push(local_id);
-                            info!(local_id, object = %uuid, "DeRezObject: deleted");
-                        }
-                    }
-                    9 => {
-                        // ReturnToOwner
-                        if let Some(_removed) = scene.remove_object(&uuid) {
-                            kill_ids.push(local_id);
-                            info!(local_id, object = %uuid, "DeRezObject: returned to owner");
-                        }
-                    }
-                    other => {
-                        if let Some(_removed) = scene.remove_object(&uuid) {
-                            kill_ids.push(local_id);
-                            info!(local_id, object = %uuid, destination = other, "DeRezObject: removed with destination code");
-                        }
-                    }
+                if action != inventory_rez::DeRezAction::TakeCopy
+                    && scene.remove_object(&uuid).is_some()
+                {
+                    kill_ids.push(local_id);
                 }
             }
             if !kill_ids.is_empty() {
@@ -3129,6 +3528,15 @@ async fn process_messages(
                     let mut sess = c.lock().await;
                     let (pkt_bytes, _) = sess.circuit.send_msg(&kill, true);
                     let _ = socket.send_to(&pkt_bytes, *addr).await;
+                }
+            }
+            // Tell the viewer about items it now has in its own inventory.
+            if let Some(client) = &client {
+                for item in new_items.iter().filter(|i| Uuid::parse_str(&i.avatar_id).ok() == Some(agent_id)) {
+                    let update = inventory_item_update(agent_id, item);
+                    let mut sess = client.lock().await;
+                    let (pkt_bytes, _) = sess.circuit.send_msg(&update, true);
+                    let _ = socket.send_to(&pkt_bytes, src).await;
                 }
             }
         }
@@ -3501,8 +3909,27 @@ async fn process_messages(
         }
 
         if msg_id == AgentDataUpdateRequest::ID
+            && let Some(g) = &groups
+            && let Some(client) = &client
+            && let Some(pres) = scene.get_presence(&agent_id)
+        {
+            // Group lookups run in their own task: the packet loop never awaits HTTP.
+            groups_tasks::spawn_agent_data_update(
+                g.clone(),
+                agent_id,
+                pres.first_name.clone(),
+                pres.last_name.clone(),
+                client.clone(),
+                socket.clone(),
+                src,
+            );
+        }
+
+        if msg_id == AgentDataUpdateRequest::ID
+            && groups.is_none()
             && let Some(client) = &client
         {
+            let active = groups_io::ActiveGroup::default();
             let mut session = client.lock().await;
             let name = scene
                 .get_presence(&session.agent_id)
@@ -3513,10 +3940,10 @@ async fn process_messages(
                     agent_id: session.agent_id,
                     first_name: name.0.into_bytes(),
                     last_name: name.1.into_bytes(),
-                    group_title: Vec::new(),
-                    active_group_id: Uuid::nil(),
-                    group_powers: 0,
-                    group_name: Vec::new(),
+                    group_title: groups_io::name_bytes(&active.title),
+                    active_group_id: active.group_id,
+                    group_powers: active.powers,
+                    group_name: groups_io::name_bytes(&active.name),
                 },
             };
             let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
@@ -3902,6 +4329,19 @@ async fn process_messages(
                     }
                 }
                 drop(all_clients);
+                attachments_io::remove_all_for_avatar(
+                    &attachments_io::AttachCtx {
+                        scene: &scene,
+                        perms: &perms,
+                        inventory: &inventory_connector,
+                        assets: &asset_connector,
+                        avatars: &avatar_connector,
+                        socket: socket.as_ref(),
+                        clients: &clients,
+                    },
+                    target_id,
+                )
+                .await;
                 scene.remove_presence(&target_id);
                 info!(target = %target_id, "ejected user from region");
             }
@@ -4000,16 +4440,26 @@ async fn process_messages(
         }
 
         if msg_id == UUIDGroupNameRequest::ID
+            && let Some(g) = &groups
+            && let Ok(req) = UUIDGroupNameRequest::decode(&pkt.body)
+            && let Some(client) = &client
+        {
+            let ids: Vec<Uuid> = req.uuid_name_block.iter().take(groups_queue::MAX_ENTRIES_PER_PACKET).map(|b| b.id).collect();
+            groups_tasks::spawn_group_name_reply(g.clone(), ids, client.clone(), socket.clone(), src);
+        }
+
+        if msg_id == UUIDGroupNameRequest::ID
+            && groups.is_none()
             && let Ok(req) = UUIDGroupNameRequest::decode(&pkt.body)
             && let Some(client) = &client
         {
             let mut reply_blocks = Vec::new();
-            for block in &req.uuid_name_block {
-                let mut name = b"Unknown".to_vec();
-                name.push(0);
+            let ids: Vec<Uuid> = req.uuid_name_block.iter().map(|b| b.id).collect();
+            let names: Vec<(Uuid, String)> = ids.iter().map(|id| (*id, "Unknown".to_string())).collect();
+            for (id, name) in names {
                 reply_blocks.push(uuid_group_name_reply::UUIDNameBlock {
-                    id: block.id,
-                    group_name: name,
+                    id,
+                    group_name: groups_io::name_bytes(&name),
                 });
             }
             let reply = UUIDGroupNameReply {
@@ -4019,6 +4469,80 @@ async fn process_messages(
             let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
             let _ = socket.send_to(&pkt_bytes, src).await;
             info!(agent = %agent_id, count = req.uuid_name_block.len(), "UUIDGroupNameRequest: replied");
+        }
+
+        if let Some(g) = &groups
+            && groups_chat::is_notices_list_packet(pkt.id)
+            && let Some(client) = &client
+        {
+            groups_chat::spawn_notices_list(
+                g.clone(),
+                agent_id,
+                pkt.id,
+                pkt.body.clone(),
+                client.clone(),
+                socket.clone(),
+                src,
+            );
+        }
+
+        if let Some(g) = &groups
+            && groups_invites::is_invite_packet(pkt.id)
+            && let Some(client) = &client
+            && let Some(pres) = scene.get_presence(&agent_id)
+        {
+            groups_invites::spawn_invite_packet(
+                g.clone(),
+                agent_id,
+                format!("{} {}", pres.first_name, pres.last_name),
+                scene.region_info.region_id,
+                pkt.id,
+                pkt.body.clone(),
+                clients.clone(),
+                client.clone(),
+                socket.clone(),
+                src,
+            );
+        }
+
+        if let Some(g) = &groups
+            && groups_admin::is_admin_packet(pkt.id)
+            && let Some(client) = &client
+            && let Some(pres) = scene.get_presence(&agent_id)
+        {
+            groups_admin::spawn_admin_packet(
+                g.clone(),
+                agent_id,
+                pkt.id,
+                pkt.body.clone(),
+                pres.first_name.clone(),
+                pres.last_name.clone(),
+                event_queues.clone(),
+                clients.clone(),
+                client.clone(),
+                socket.clone(),
+                src,
+            );
+        }
+
+        if let Some(g) = &groups
+            && groups_tasks::is_group_packet(pkt.id)
+            && let Some(client) = &client
+            && let Some(pres) = scene.get_presence(&agent_id)
+        {
+            let eq = event_queues.read().await.get(&agent_id).cloned();
+            groups_tasks::spawn_group_packet(
+                g.clone(),
+                agent_id,
+                pkt.id,
+                pkt.body.clone(),
+                pres.first_name.clone(),
+                pres.last_name.clone(),
+                eq,
+                client.clone(),
+                socket.clone(),
+                src,
+            );
         }
 
         if msg_id == ViewerEffect::ID
@@ -4104,9 +4628,10 @@ async fn process_messages(
 
             let build_relay = |dlg: u8| -> ImprovedInstantMessage {
                 ImprovedInstantMessage {
+                    // Never forward the sender's secret circuit session id to the recipient.
                     agent_data: improved_instant_message::AgentData {
                         agent_id,
-                        session_id,
+                        session_id: Uuid::nil(),
                     },
                     message_block: improved_instant_message::MessageBlock {
                         from_group: mb.from_group,
@@ -4116,7 +4641,12 @@ async fn process_messages(
                         position: mb.position,
                         offline: 0,
                         dialog: dlg,
-                        id: im_session_id,
+                        // Person-to-person IM sessions are the XOR of both agent ids, as viewers compute them.
+                        id: if dlg == 0 {
+                            Uuid::from_u128(agent_id.as_u128() ^ to_agent.as_u128())
+                        } else {
+                            im_session_id
+                        },
                         timestamp: now_ts,
                         from_agent_name: mb.from_agent_name.clone(),
                         message: mb.message.clone(),
@@ -4126,6 +4656,48 @@ async fn process_messages(
                     meta_data: Vec::new(),
                 }
             };
+
+            // With groups enabled, group chat and notices go through the groups service
+            // (membership and SendNotices checked); the in-memory arms below serve only
+            // regions without groups.
+            if let Some(g) = &groups
+                && groups_chat::is_chat_dialog(dialog, mb.from_group)
+            {
+                if let Some(client) = &client
+                    && let Some(pres) = scene.get_presence(&agent_id)
+                {
+                    groups_chat::spawn_chat_im(
+                        g.clone(),
+                        group_chat.clone(),
+                        agent_id,
+                        pres.first_name.clone(),
+                        pres.last_name.clone(),
+                        scene.region_info.region_id,
+                        im.clone(),
+                        event_queues.clone(),
+                        clients.clone(),
+                        client.clone(),
+                        socket.clone(),
+                        src,
+                    );
+                }
+                continue;
+            }
+
+            // 3 (GroupInvitation) is only ever generated by the server from an
+            // InviteGroupRequest, and 33 (GroupNoticeInventoryAccepted) answers a notice
+            // attachment, which are refused. A client-sent copy is a forgery.
+            if matches!(dialog, 3 | 33) {
+                warn!(from = %agent_id, dialog, "IM: client-sent group invitation/notice-accept refused");
+                continue;
+            }
+
+            // Groups disabled: refuse group chat and notices instead of using the
+            // unchecked in-memory session arms below.
+            if groups.is_none() && groups_chat::is_chat_dialog(dialog, mb.from_group) {
+                warn!(from = %agent_id, dialog, "IM: group chat/notice refused, groups disabled");
+                continue;
+            }
 
             match dialog {
                 // 0: MessageFromAgent
@@ -4146,6 +4718,26 @@ async fn process_messages(
                         info!(from = %agent_id, to = %to_agent, "IM: personal message relayed");
                     } else {
                         warn!(from = %agent_id, to = %to_agent, "IM: target not online in region, offline storage pending");
+                    }
+                }
+                // 35/36: GroupInvitationAccept / GroupInvitationDecline
+                35 | 36 => {
+                    if let Some(g) = &groups
+                        && let Some(client) = &client
+                        && let Some(pres) = scene.get_presence(&agent_id)
+                    {
+                        groups_invites::spawn_invite_reply(
+                            g.clone(),
+                            agent_id,
+                            pres.first_name.clone(),
+                            pres.last_name.clone(),
+                            im.clone(),
+                            event_queues.clone(),
+                            clients.clone(),
+                            client.clone(),
+                            socket.clone(),
+                            src,
+                        );
                     }
                 }
                 // 4: InventoryOffered
@@ -4409,16 +5001,21 @@ async fn send_movement_complete(
     event_queues: &EventQueueMap,
     caps_base: &str,
     accounts: &Arc<welkin_services::remote::accounts::RemoteAccountsConnector>,
+    perms: &DefaultPermissionsModule,
+    groups: Option<&groups_io::GroupsCtx>,
 ) {
-    let mut session = client.lock().await;
-
+    // All HTTP lookups happen before the session lock is taken.
+    let agent_id = client.lock().await.agent_id;
     let (first_name, last_name) = accounts
-        .get_name(&session.agent_id.to_string())
+        .get_name(&agent_id.to_string())
         .await
         .unwrap_or_else(|e| {
             tracing::warn!(error = %e, "failed to resolve avatar name from ROBUST");
             ("Unknown".to_string(), "User".to_string())
         });
+    // Group data is fetched by a spawned task after login; the inline update is empty.
+    let active = groups_io::ActiveGroup::default();
+    let mut session = client.lock().await;
 
     let movement = AgentMovementComplete {
         agent_data: agent_movement_complete::AgentData {
@@ -4451,8 +5048,8 @@ async fn send_movement_complete(
             region_flags: 0,
             sim_access: 13, // Mature
             sim_name: region_info.region_name.as_bytes().to_vec(),
-            sim_owner: Uuid::nil(),
-            is_estate_manager: false,
+            sim_owner: perms.estate_owner,
+            is_estate_manager: perms.is_estate_manager(session.agent_id),
             water_height: 20.0,
             billable_factor: 0.0,
             cache_id: Uuid::new_v4(),
@@ -4496,26 +5093,17 @@ async fn send_movement_complete(
     }
     info!(agent = %session.agent_id, region = %region_info.region_name, "sent RegionHandshake");
 
-    // Send terrain data — flat terrain so viewer sees ground
-    let terrain_height = 21.0f32;
-    let patches_per_packet = 20;
-    let mut all_patches: Vec<(u32, u32)> = Vec::new();
-    for py in 0..16u32 {
-        for px in 0..16u32 {
-            all_patches.push((px, py));
-        }
-    }
-
-    for chunk in all_patches.chunks(patches_per_packet) {
-        let terrain_data = build_flat_terrain_data(terrain_height, chunk);
-        let raw_payload = build_layer_data_raw(&terrain_data);
+    // Send the region's terrain (the scene's height field), split into packet-sized LayerData.
+    let terrain_payloads = scene.terrain_layer_payloads(&terraform::all_patches());
+    for data in &terrain_payloads {
+        let raw_payload = terraform::layer_data_raw(data);
         let (pkt, _seq) = session.circuit.send_raw(&raw_payload, false, true);
         if let Err(e) = socket.send_to(&pkt, addr).await {
             tracing::warn!(error = %e, "failed to send LayerData");
             return;
         }
     }
-    info!(agent = %session.agent_id, "sent terrain LayerData (256 flat patches)");
+    info!(agent = %session.agent_id, packets = terrain_payloads.len(), "sent terrain LayerData");
 
     let avatar_local_id = scene.allocate_local_id();
     let (obj_pkt, wear_pkt, app_pkt) =
@@ -4554,10 +5142,10 @@ async fn send_movement_complete(
             agent_id: session.agent_id,
             first_name: first_name.as_bytes().to_vec(),
             last_name: last_name.as_bytes().to_vec(),
-            group_title: Vec::new(),
-            active_group_id: Uuid::nil(),
-            group_powers: 0,
-            group_name: Vec::new(),
+            group_title: groups_io::name_bytes(&active.title),
+            active_group_id: active.group_id,
+            group_powers: active.powers,
+            group_name: groups_io::name_bytes(&active.name),
         },
     };
     let (pkt, _) = session.circuit.send_msg(&agent_data_msg, true);
@@ -4594,6 +5182,18 @@ async fn send_movement_complete(
         );
         eq.enqueue("EstablishAgentCommunication", Llsd::Map(eq_body))
             .await;
+    }
+    if let Some(g) = groups {
+        groups_tasks::spawn_login_group_data(
+            g.clone(),
+            session.agent_id,
+            first_name.clone(),
+            last_name.clone(),
+            eq.clone(),
+            client.clone(),
+            socket.clone(),
+            addr,
+        );
     }
     event_queues.write().await.insert(session.agent_id, eq);
     info!(agent = %session.agent_id, "event queue created with initial event");
@@ -4663,6 +5263,42 @@ async fn broadcast_terse_object_update(
         let mut sess = c.lock().await;
         let (pkt_bytes, _) = sess.circuit.send_msg(&terse_msg, false);
         let _ = socket.send_to(&pkt_bytes, *addr).await;
+    }
+}
+
+/// The viewer message announcing a new inventory item.
+fn inventory_item_update(agent_id: Uuid, item: &welkin_data::inventory::InventoryItemRow) -> UpdateCreateInventoryItem {
+    let id = |s: &str| Uuid::parse_str(s.trim()).unwrap_or(Uuid::nil());
+    UpdateCreateInventoryItem {
+        agent_data: update_create_inventory_item::AgentData {
+            agent_id,
+            sim_approved: true,
+            transaction_id: Uuid::nil(),
+        },
+        inventory_data: vec![update_create_inventory_item::InventoryData {
+            item_id: id(&item.inventory_id),
+            folder_id: id(&item.parent_folder_id),
+            callback_id: 0,
+            creator_id: id(&item.creator_id),
+            owner_id: id(&item.avatar_id),
+            group_id: id(&item.group_id),
+            base_mask: item.base_permissions as u32,
+            owner_mask: item.current_permissions as u32,
+            group_mask: item.group_permissions as u32,
+            everyone_mask: item.everyone_permissions as u32,
+            next_owner_mask: item.next_permissions as u32,
+            group_owned: item.group_owned != 0,
+            asset_id: id(&item.asset_id),
+            type_: item.asset_type as i8,
+            inv_type: item.inv_type as i8,
+            flags: item.flags as u32,
+            sale_type: item.sale_type as u8,
+            sale_price: item.sale_price,
+            name: item.inventory_name.as_bytes().to_vec(),
+            description: item.inventory_description.as_bytes().to_vec(),
+            creation_date: item.creation_date,
+            crc: 0,
+        }],
     }
 }
 
@@ -4784,59 +5420,6 @@ fn build_avatar_packets(
     let (app_pkt, _) = session.circuit.send_msg(&appearance_msg, true);
 
     (obj_pkt, wear_pkt, app_pkt)
-}
-
-fn build_flat_terrain_data(height: f32, patches: &[(u32, u32)]) -> Vec<u8> {
-    let mut bits: Vec<u8> = Vec::with_capacity(512);
-
-    let push = |bits: &mut Vec<u8>, value: u32, count: u32| {
-        let mut remaining = count;
-        let mut byte_index: u32 = 0;
-        while remaining > 0 {
-            let dsize = remaining.min(8);
-            remaining -= dsize;
-            let byte_val = (value >> (8 * byte_index)) & 0xFF;
-            for b in (0..dsize).rev() {
-                bits.push(((byte_val >> b) & 1) as u8);
-            }
-            byte_index += 1;
-        }
-    };
-
-    // Group header
-    push(&mut bits, 264, 16); // stride
-    push(&mut bits, 16, 8); // patch_size
-    push(&mut bits, 0x4C, 8); // type = 'L'
-
-    for &(px, py) in patches {
-        let patch_id = (px << 5) | (py & 0x1F);
-        // Patch header: quant_wbits(8), dc_offset(32), range(16), patch_ids(10)
-        push(&mut bits, 0, 8);
-        push(&mut bits, (height - 0.5f32).to_bits(), 32);
-        push(&mut bits, 1, 16);
-        push(&mut bits, patch_id, 10);
-        // Immediate EOB (1=present, 0=end_of_block)
-        bits.push(1);
-        bits.push(0);
-    }
-
-    push(&mut bits, 97, 8); // END_OF_PATCHES
-
-    let mut bytes = vec![0u8; bits.len().div_ceil(8)];
-    for (i, &b) in bits.iter().enumerate() {
-        bytes[i / 8] |= b << (7 - (i % 8));
-    }
-    bytes
-}
-
-fn build_layer_data_raw(terrain_data: &[u8]) -> Vec<u8> {
-    let mut payload = Vec::with_capacity(terrain_data.len() + 4);
-    payload.push(11); // LayerData High msg ID
-    payload.push(0x4C); // LayerID.Type = 'L' (land)
-    let len = terrain_data.len() as u16;
-    payload.extend_from_slice(&len.to_le_bytes());
-    payload.extend_from_slice(terrain_data);
-    payload
 }
 
 const KNOWN_CAPS: &[&str] = &[
@@ -5040,7 +5623,9 @@ mod tests {
     fn test_build_region_info() {
         let config = Config::default();
         let rc = RegionConfig::from_config(&config);
-        let info = rc.build_region_info();
+        let id = Uuid::new_v4();
+        let info = rc.build_region_info(id);
+        assert_eq!(info.region_id, id);
         assert_eq!(info.region_name, "My Region");
         assert_eq!(info.region_loc_x, 1000);
         assert_eq!(info.region_loc_y, 1000);

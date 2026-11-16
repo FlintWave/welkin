@@ -17,3 +17,8 @@ GridServerURI = "http://127.0.0.1:8003"
 [Scene]
 PhysicsEnabled = true
 ScriptsEnabled = true
+
+[Estate]
+# Avatar UUID of the estate owner (terraforming and estate tools).
+# EstateOwner = "00000000-0000-0000-0000-000000000000"
+# EstateManagers = "uuid, uuid"

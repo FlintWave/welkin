@@ -2,7 +2,7 @@
 
 # Operator guide
 
-[<- Back to docs](README.md) | [Architecture](architecture.md) | [Test grid deployment](test-grid-deployment.md) | [Migration guide](migration-guide.md)
+[<- Back to docs](index.md) | [Architecture](architecture.md) | [Test grid deployment](test-grid-deployment.md) | [Migration guide](migration-guide.md)
 
 Complete reference for installing, configuring, running, and maintaining an
 OpenSimulator grid using the Rust implementation. For a quick test deployment,
@@ -66,7 +66,8 @@ curl -sSf https://raw.githubusercontent.com/.../install/install.sh | bash
 ```
 
 The installer detects the distribution, sets up the database, writes
-configuration, creates the systemd unit, and runs the first-run wizard.
+configuration, and creates the systemd unit. The first-run wizard is part of the portal
+scaffold and does not run.
 `install/upgrade.sh` and `install/uninstall.sh` handle upgrades (preserving
 data) and removal.
 
@@ -194,7 +195,13 @@ Set `OPENSIM__Logging__json=true` to switch to structured JSON log output.
 Three backends are supported via `sqlx`. All use the same schema (the 53 C#
 migration files are embedded and applied automatically on startup).
 
-### MariaDB / MySQL (recommended for production)
+> [!WARNING]
+> Only SQLite has been run and verified. MariaDB and PostgreSQL are supported in
+> the code but untested, with known problems; see the
+> [configuration reference](configuration.md#database-urls).
+
+### MariaDB / MySQL (intended for production, not yet verified)
+
 
 ```sh
 # Create the database and user
@@ -284,8 +291,8 @@ OPENSIM__GridService__GridServerURI=http://localhost:8003 \
 ### Multi-region
 
 A single `welkin-region` process can host multiple regions. Each region needs
-a unique UDP port for LLUDP traffic. Configure additional regions through the
-portal or configuration.
+a unique UDP port for LLUDP traffic. Configure additional regions through
+configuration files.
 
 ### Docker Compose
 
@@ -548,10 +555,58 @@ LLUDP (UDP 9000) is not proxied; it must be reachable directly.
 
 ### Authentication
 
-- Portal staff passwords use Argon2id (decision G2)
+- Planned: portal staff passwords use Argon2id (decision G2); the portal is a
+  scaffold and not deployed
 - Grid user passwords are MD5 by default (C# compatibility); upgrade to
   Argon2id with `osim-migrate upgrade-passwords`
 - OSSL function access is gated by threat level with per-function overrides
+
+### Account creation
+
+The grid's `createuser` method is off by default (`[UserAccountService]
+AllowCreateUser = false`). Turn it on only while you create accounts, then set
+it back to false and restart `welkin-robust`. While it is on, anyone who can
+reach the private service port can create accounts. The repository's
+development `robust.toml` and compose file enable it for local testing; do not
+copy that into a production grid. See the
+[configuration reference](configuration.md#welkin-robust-grid-services).
+
+### Estate owner and permissions
+
+Permission checks are on by default (`[Permissions]
+serverside_object_permissions`). Set `[Estate] EstateOwner` to your avatar UUID
+and add managers with `EstateManagers`; without an owner, nobody can terraform
+or use the estate tools, though avatars can still edit objects they own. Turn
+the permission checks off only on a development region: with them off, any
+avatar can edit or delete any object. Each avatar's terrain edits are also
+limited to one every 20 ms. See the
+[configuration reference](configuration.md#welkin-region-region-simulator).
+
+### Private service port
+
+`welkin-robust` binds its private port (8003 by default) to `127.0.0.1`. That
+port serves account and authentication endpoints with no authentication, so
+treat any wider bind as a decision. Use `--private-bind` or
+`WELKIN_PRIVATE_BIND` only to reach it from a region host or container network,
+and restrict it by firewall to those hosts. See the
+[configuration reference](configuration.md#welkin-robust-grid-services).
+
+### Admin API
+
+The region simulator's admin REST API (`POST /admin/console`) is off until
+`[Admin] Token` is set. It authenticates with a bearer token over plain HTTP;
+it has no TLS of its own. The default `BindAddress` is `127.0.0.1`, which keeps
+the token on the local machine.
+
+Welkin will not start the API on a non-loopback address unless
+`[Admin] AllowRemoteBind = true` is also set; without it the region logs an
+error and the API stays off. If you accept the risk and bind it to `0.0.0.0` or
+another reachable address, anyone on the path can read the token and run
+console commands, including `create-user` with its password. Keep
+`BindAddress` at `127.0.0.1`, or place the API behind a reverse proxy with TLS (the nginx example above works
+with the port changed to 9100) and restrict it by firewall. Use a long random
+token and rotate it if it may have been exposed. See the
+[configuration reference](configuration.md#admin-api).
 
 ### Rate limiting
 
@@ -559,7 +614,6 @@ Apply rate limiting at the reverse proxy layer. Key endpoints to protect:
 
 - `/login` (XML-RPC login)
 - `/assets` (asset upload/download)
-- `/portal` (staff portal)
 
 ### Firewall recommendations
 
@@ -576,6 +630,22 @@ Apply rate limiting at the reverse proxy layer. Key endpoints to protect:
 > Robust directly to the public internet without an access control layer.
 
 ---
+
+## What survives a restart
+
+A region saves its objects, terrain and estate settings to its database, and
+loads them again at start. Objects and terrain are written on the backup timer
+(`[Backup] IntervalSeconds`, 900 by default), so a crash can lose edits made
+since the last save. Avatars' worn attachments are remembered in the grid's
+avatar service and worn again at the next login. Scripts are saved and restored
+with their objects; a saved script whose object no longer exists is skipped and
+deleted at start.
+
+All of this is keyed by the region UUID. Leave `[Region] RegionUUID` unset to let
+the region generate one on its first start and keep it, or set it yourself. Do
+not rename a region or move it to another location without setting `RegionUUID`
+to the old value; the region would get a new UUID and would not find its data.
+See the [configuration reference](configuration.md#welkin-region-region-simulator).
 
 ## Upgrading
 

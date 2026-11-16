@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Cutover summary
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Migration guide](migration-guide.md) · [Operator guide](operator-guide.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Migration guide](migration-guide.md) · [Operator guide](operator-guide.md)
 
 Status: accepted (19 of 19 tasks, 7 sections). Change:
 `openspec/changes/cutover/`.

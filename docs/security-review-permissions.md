@@ -20,7 +20,7 @@ ObjectDuplicateOnRay). The findings below are now operationally live, not theore
 
 ## Critical findings (blocking)
 
-### C-1. Nil UUID matches nil object owner — ownership bypass
+### C-1. Nil UUID matches nil object owner: ownership bypass
 
 **Severity**: CRITICAL
 **File**: `checks.rs` lines 130, 167, 195, 226, 236, 265, 270, 295, 330, 346, 387, 450, 474
@@ -58,7 +58,7 @@ is on), though this changes bypass semantics.
 
 ## High findings
 
-### H-1. `is_god()` bypasses `allow_grid_gods` gate — god-mode escalation
+### H-1. `is_god()` bypasses `allow_grid_gods` gate: god-mode escalation
 
 **Severity**: HIGH
 **File**: `mod.rs` lines 183-201
@@ -88,7 +88,7 @@ if self.config.allow_grid_gods && self.god_users.contains(&agent_id) {
 }
 ```
 
-### H-2. No god-mode request gate — automatic privilege escalation for all admins
+### H-2. No god-mode request gate: automatic privilege escalation for all admins
 
 **Severity**: HIGH
 **File**: `checks.rs` lines 48-57, `mod.rs` lines 183-201
@@ -115,7 +115,7 @@ tracks which users have explicitly requested god-mode. `is_god()` should require
 administrator status AND presence in this set (or in `god_users`). Provide
 `request_god_mode(agent_id)` and `release_god_mode(agent_id)` methods to toggle it.
 
-### H-3. Default configuration has bypass ON — silent open access
+### H-3. Default configuration has bypass ON: silent open access
 
 **Severity**: HIGH
 **File**: `mod.rs` lines 62-78
@@ -184,7 +184,7 @@ the implementations are either no-ops or semantically wrong:
 |---|---|
 | `can_create_object` (line 103) | Compares `agent_id == parcel.group_id`. An agent UUID will never equal a group UUID. Dead code. |
 | `can_delete_object` (line 140-143) | Comment says "simplified check" but the block is empty. Group members cannot delete group-owned objects. |
-| `can_take_object` (line 304-307) | Same as above — empty block. Group members cannot take group-owned objects. |
+| `can_take_object` (line 304-307) | Same as above: empty block. Group members cannot take group-owned objects. |
 | `can_run_script` (line 398) | Compares `agent_id == parcel.group_id`. Same agent-vs-group-UUID mismatch as `can_create_object`. |
 | `can_edit_object` | `_object_group` parameter is unused. No group logic at all. |
 | `can_move_object` | `_object_group` parameter is unused. No group logic at all. |
@@ -321,7 +321,7 @@ extend it per M-3) or remove the struct.
 The `initialise()` method (line 271-273) correctly enforces that `implicit_gods = true`
 forces `automatic_gods = false`. However, there is no reverse enforcement:
 `automatic_gods = true` does not force `implicit_gods = false`. This is consistent
-with C# but means the two flags are not truly mutual exclusives — `implicit_gods`
+with C# but means the two flags are not truly mutual exclusives: `implicit_gods`
 has priority. This asymmetry is documented only in code, not in user-facing config
 documentation.
 
@@ -339,17 +339,17 @@ The following C# permission check methods have no Rust equivalent:
 
 | C# Method | Risk |
 |---|---|
-| `CanInstantMessage` | Low — IM permissions rarely restricted |
-| `CanViewScript` / `CanEditScript` | Medium — `allowed_script_editors` is parsed but never checked |
-| `CanViewNotecard` / `CanEditNotecard` | Low — notecards follow object perms |
-| `CanResetScript` | Low — usually follows edit permission |
-| `CanBuyLand` | Medium — land purchases unprotected |
-| `CanLinkObject` / `CanDelinkObject` | Low — follows edit permission |
-| `CanTeleport` | Low — typically always allowed |
-| `CanControlPrimMedia` / `CanInteractWithPrimMedia` | Low — media controls |
+| `CanInstantMessage` | Low: IM permissions rarely restricted |
+| `CanViewScript` / `CanEditScript` | Medium: `allowed_script_editors` is parsed but never checked |
+| `CanViewNotecard` / `CanEditNotecard` | Low: notecards follow object perms |
+| `CanResetScript` | Low: usually follows edit permission |
+| `CanBuyLand` | Medium: land purchases unprotected |
+| `CanLinkObject` / `CanDelinkObject` | Low: follows edit permission |
+| `CanTeleport` | Low: typically always allowed |
+| `CanControlPrimMedia` / `CanInteractWithPrimMedia` | Low: media controls |
 
 The `allowed_script_editors` config value is parsed during `initialise()` (line 282-286)
-but never referenced by any check function — `can_compile_script` only checks
+but never referenced by any check function: `can_compile_script` only checks
 `allowed_script_creators`. This is dead config.
 
 ### I-4. No logging of denied permission checks

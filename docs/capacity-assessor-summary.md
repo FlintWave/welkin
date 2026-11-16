@@ -1,6 +1,6 @@
 # Capacity assessor summary
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Decisions](decisions.md#c1) · Previous: [Grid services](grid-services-summary.md) · Next: [Grid portal](grid-portal-summary.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Decisions](decisions.md#c1) · Previous: [Grid services](grid-services-summary.md) · Next: [Grid portal](grid-portal-summary.md)
 
 Change: `openspec/changes/capacity-assessor` (proposal only, no `design.md`).
 Crate: `crates/welkin-capacity`. Status: sections 1 and 2 implemented;

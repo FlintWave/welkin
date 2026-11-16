@@ -232,6 +232,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let profiles_store = Arc::new(welkin_data::profiles::ProfilesStore::new(p.clone()));
     let asset_store = Arc::new(welkin_data::assets::AssetStore::new(p.clone()));
 
+    // Seed the default asset sets (default avatar body parts, clothing, animations...).
+    if config.get_bool_or("AssetService", "AssetLoaderEnabled", true) {
+        let loader_args = config.get_string_or("AssetService", "AssetLoaderArgs", "assets/AssetSets.xml");
+        let control = PathBuf::from(&loader_args);
+        if control.is_file() {
+            let report = welkin_services::asset_loader::load_asset_sets(&asset_store, &control).await;
+            tracing::info!(?report, "default asset sets loaded");
+        } else {
+            tracing::warn!(path = %loader_args, "AssetSets.xml not found; default avatar assets are not seeded");
+        }
+    }
+
     let tile_dir = Arc::new(PathBuf::from(config.get_string_or(
         "MapService",
         "TileDir",

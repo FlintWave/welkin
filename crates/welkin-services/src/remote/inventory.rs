@@ -66,6 +66,84 @@ impl RemoteInventoryConnector {
         Ok((folders, items))
     }
 
+    /// Fetch a single inventory item by id. Returns `None` if it does not exist.
+    pub async fn get_item(&self, item_id: &str) -> Result<Option<InventoryItemRow>, RemoteError> {
+        let params = [("METHOD", "GETITEM"), ("ID", item_id)];
+        let body = self
+            .client
+            .post(&self.inventory_uri)
+            .form(&params)
+            .send()
+            .await?
+            .text()
+            .await?;
+        parse_item_response(&body)
+    }
+
+    /// The folder of a standard type (e.g. Trash 14, Lost And Found 16, Objects 6) for a principal.
+    pub async fn get_folder_for_type(
+        &self,
+        principal: &str,
+        folder_type: i32,
+    ) -> Result<Option<InventoryFolderRow>, RemoteError> {
+        let type_text = folder_type.to_string();
+        let params = [("METHOD", "GETFOLDERFORTYPE"), ("PRINCIPAL", principal), ("TYPE", type_text.as_str())];
+        let body = self
+            .client
+            .post(&self.inventory_uri)
+            .form(&params)
+            .send()
+            .await?
+            .text()
+            .await?;
+        Ok(parse_folders_from_response(&body)?.into_iter().next())
+    }
+
+    /// Add an inventory item. Returns whether the service accepted it.
+    pub async fn add_item(&self, item: &InventoryItemRow) -> Result<bool, RemoteError> {
+        self.send_item("ADDITEM", item).await
+    }
+
+    /// Replace an existing inventory item (same id). Returns whether the service accepted it.
+    pub async fn update_item(&self, item: &InventoryItemRow) -> Result<bool, RemoteError> {
+        self.send_item("UPDATEITEM", item).await
+    }
+
+    async fn send_item(&self, method: &str, item: &InventoryItemRow) -> Result<bool, RemoteError> {
+        let params = [
+            ("METHOD", method.to_string()),
+            ("AssetID", item.asset_id.clone()),
+            ("AssetType", item.asset_type.to_string()),
+            ("Name", item.inventory_name.clone()),
+            ("Description", item.inventory_description.clone()),
+            ("NextPermissions", item.next_permissions.to_string()),
+            ("CurrentPermissions", item.current_permissions.to_string()),
+            ("InvType", item.inv_type.to_string()),
+            ("CreatorId", item.creator_id.clone()),
+            ("BasePermissions", item.base_permissions.to_string()),
+            ("EveryOnePermissions", item.everyone_permissions.to_string()),
+            ("SalePrice", item.sale_price.to_string()),
+            ("SaleType", item.sale_type.to_string()),
+            ("CreationDate", item.creation_date.to_string()),
+            ("GroupID", item.group_id.clone()),
+            ("GroupOwned", if item.group_owned != 0 { "True" } else { "False" }.to_string()),
+            ("Flags", item.flags.to_string()),
+            ("ID", item.inventory_id.clone()),
+            ("Owner", item.avatar_id.clone()),
+            ("Folder", item.parent_folder_id.clone()),
+            ("GroupPermissions", item.group_permissions.to_string()),
+        ];
+        let body = self
+            .client
+            .post(&self.inventory_uri)
+            .form(&params)
+            .send()
+            .await?
+            .text()
+            .await?;
+        Ok(body.to_ascii_lowercase().contains(">true<"))
+    }
+
     /// Fetch only the items inside a folder (no sub-folders).
     pub async fn get_folder_items(
         &self,
@@ -88,6 +166,11 @@ impl RemoteInventoryConnector {
 // ---------------------------------------------------------------------------
 // XML parsing helpers
 // ---------------------------------------------------------------------------
+
+/// The single `<item type="List">` of a GETITEM reply (none for an empty reply).
+fn parse_item_response(xml: &str) -> Result<Option<InventoryItemRow>, RemoteError> {
+    Ok(parse_typed_list_elements(xml, parse_item_fields)?.into_iter().next())
+}
 
 /// Parse all folder elements that appear as direct children of `<ServerResponse>`.
 /// Handles the single-folder case (e.g. `<folder type="List">...</folder>`)
@@ -286,6 +369,18 @@ mod tests {
 
         let c2 = RemoteInventoryConnector::new("http://inv.example.com:8003/");
         assert_eq!(c2.inventory_uri, "http://inv.example.com:8003/xinventory");
+    }
+
+    #[test]
+    fn parse_getitem_reply() {
+        let xml = r#"<?xml version="1.0"?><ServerResponse><item type="List"><AssetID>ddd</AssetID><AssetType>6</AssetType><BasePermissions>581639</BasePermissions><CreationDate>1000</CreationDate><CreatorId>bbb</CreatorId><CreatorData></CreatorData><CurrentPermissions>581639</CurrentPermissions><Description>d</Description><EveryOnePermissions>0</EveryOnePermissions><Flags>0</Flags><Folder>aaa</Folder><GroupID>00000000-0000-0000-0000-000000000000</GroupID><GroupOwned>False</GroupOwned><GroupPermissions>0</GroupPermissions><ID>eee</ID><InvType>6</InvType><Name>Hat</Name><NextPermissions>581639</NextPermissions><Owner>bbb</Owner><SalePrice>0</SalePrice><SaleType>0</SaleType></item></ServerResponse>"#;
+        let item = parse_item_response(xml).unwrap().expect("item");
+        assert_eq!(item.inventory_id, "eee");
+        assert_eq!(item.asset_id, "ddd");
+        assert_eq!(item.asset_type, 6);
+        assert_eq!(item.avatar_id, "bbb");
+        assert_eq!(item.inventory_name, "Hat");
+        assert!(parse_item_response("<ServerResponse></ServerResponse>").unwrap().is_none());
     }
 
     #[test]

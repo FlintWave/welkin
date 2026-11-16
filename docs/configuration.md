@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Configuration reference
 
-[← Back to docs](README.md) · [Quick start](quick-start.md) · [Architecture](architecture.md)
+[← Back to docs](index.md) · [Quick start](quick-start.md) · [Architecture](architecture.md)
 
 Welkin reads TOML configuration files at startup. Each binary takes a
 `--config` flag pointing to its config file; defaults are `welkin.toml`
@@ -11,6 +11,13 @@ for the region simulator and `robust.toml` for grid services.
 
 Standard TOML. Top-level tables become config sections; keys inside them
 are typed as string, integer, boolean, or float.
+
+Welkin checks the type of boolean, integer and float settings. A value of the
+wrong type, such as `PhysicsEnabled = "false"` (a string) where a boolean is
+expected, is logged as an error naming the section, key and value, and Welkin
+uses the setting's default instead. Watch the startup log after editing a
+config file. An integer is accepted wherever a float is expected, so
+`Gain = 10` works for a float setting.
 
 ```toml
 [Region]
@@ -71,6 +78,7 @@ multi-region setups.
 | Region | RegionName | string | My Region | Display name shown to viewers |
 | Region | RegionLocX | int | 1000 | Grid X coordinate |
 | Region | RegionLocY | int | 1000 | Grid Y coordinate |
+| Region | RegionUUID | string | (generated once) | Fixed UUID for the region; see below |
 | Network | ExternalHostName | string | 127.0.0.1 | Public hostname or IP that viewers connect to |
 | Network | InternalPort | int | 9000 | UDP port for LLUDP viewer traffic |
 | DatabaseService | RegionConnectionString | string | sqlite:region.db | Database URL for region object storage |
@@ -78,12 +86,46 @@ multi-region setups.
 | GridService | GridServerURI | string | (none) | URL of the ROBUST grid service private port |
 | Scene | PhysicsEnabled | bool | true | Run Rapier physics simulation |
 | Scene | ScriptsEnabled | bool | true | Run LSL/OSSL script execution |
+| Estate | EstateOwner | string | (none) | Avatar UUID of the estate owner. Only the owner and managers may terraform or use estate tools |
+| Estate | EstateManagers | string | (none) | Comma-separated avatar UUIDs with estate manager rights |
+| Permissions | serverside_object_permissions | bool | true | Set false to switch all permission checks off (development only) |
+| Permissions | region_owner_is_god | bool | true | Treat the estate owner as an administrator |
+
+Permission checks are on by default. Without `EstateOwner` nobody has estate
+rights; avatars can still edit, move and delete objects they own. The region
+logs a warning at start-up when no owner is configured, and an error for any
+`EstateOwner` or `EstateManagers` entry that is not a UUID.
+
+The region also stores its estate in the region database (the `estate_settings`,
+`estate_map` and `estate_managers` tables). On the first start it creates the
+estate with OpenSimulator's defaults and writes the configured owner and
+managers into it. Later starts read the stored estate, so you can drop the
+`[Estate]` section after the first start. A different `EstateOwner` in the
+config replaces the stored owner. The region runs its database migrations
+at every start, so the tables for objects, terrain and the estate exist on a
+fresh database.
+
+Everything the region saves (objects, terrain, estate link, settings) is keyed
+by the region's UUID. If you leave `RegionUUID` out, the region generates one on
+its first start and stores it in the region database under its name and
+location, then reuses it on every later start. Set `RegionUUID` when you need a
+known value, for example when you move a region to a new database or machine and
+want it to find its saved data. The setting must be a valid UUID, or the region
+refuses to start. If you rename a region or change its location without setting
+`RegionUUID`, the region generates a new UUID and no longer sees its earlier
+data.
 
 ## welkin-robust (grid services)
 
 CLI: `welkin-robust --config <path> [--public-port <port>] [--private-port <port>]`
 
 Defaults: `--config robust.toml`, `--public-port 8002`, `--private-port 8003`.
+The private port binds to `127.0.0.1` by default, because it serves account and
+authentication endpoints without authentication. To bind another address, pass
+`--private-bind <address>` or set `WELKIN_PRIVATE_BIND`. The container image
+sets `WELKIN_PRIVATE_BIND=0.0.0.0` so other containers can reach it; keep the
+published port off the public network. A region on a different host cannot
+reach the private port until you change the bind address.
 The public port handles viewer login (XMLRPC) and user-facing caps. The
 private port handles inter-service traffic (grid registration, asset
 storage, inventory queries).
@@ -92,6 +134,37 @@ storage, inventory queries).
 |---|---|---|---|---|
 | DatabaseService | ConnectionString | string | sqlite:robust.db | Database URL for all grid services |
 | DatabaseService | RobustConnectionString | string | (from ConnectionString) | Override when grid services need a separate database |
+| UserAccountService | AllowCreateUser | bool | false | Let the `createuser` grid method create accounts |
+| AssetService | AssetLoaderEnabled | bool | true | Load the default asset sets at start |
+| AssetService | AssetLoaderArgs | string | assets/AssetSets.xml | Path to the asset set control file |
+
+At start `welkin-robust` loads OpenSimulator's default asset sets (the default
+avatar body parts, clothing, animations and sounds) into the asset store, so
+viewers can fetch them. Without them avatars appear untextured. `AssetLoaderArgs`
+names a control file in OpenSimulator's `AssetSets.xml` format; each section in it
+points to a set file that lists the assets. The loader adds every asset that is
+not already in the store, so it is safe to run on every start.
+
+This repository does not include `AssetSets.xml` or the set files, because the
+assets are Linden Lab viewer art under CC BY-SA 2.5. Copy the `bin/assets` folder
+from an OpenSimulator 0.9.3.0 installation to `assets/` in the directory you start
+`welkin-robust` from, or point `AssetLoaderArgs` at your copy. See the
+[quick start](quick-start.md#default-assets). If the control
+file is missing, the grid logs a warning (`AssetSets.xml not found; default avatar
+assets are not seeded`) and starts anyway. Set `AssetLoaderEnabled = false` to skip
+the loader.
+
+`AllowCreateUser` matches OpenSimulator's default. While it is false, the
+`create-user` console command in `welkin-region` fails with "grid refused to
+create the user". Set it to `true` only on a development or test grid, or
+briefly while you create the first account. When it is true, anyone who can
+reach the private service port (8003 by default) can create accounts, so keep
+that port off the public network.
+
+```toml
+[UserAccountService]
+AllowCreateUser = true
+```
 
 ## Database URLs
 
@@ -103,9 +176,25 @@ All database URLs use the same format across both binaries:
 | MariaDB/MySQL | `mysql://user:pass@host/db` | Via sqlx with the MySQL driver |
 | PostgreSQL | `postgres://user:pass@host/db` | Via sqlx with the Postgres driver |
 
-SQLite is the default for local development and single-server grids.
-MariaDB or PostgreSQL is recommended for production grids with multiple
-regions.
+The migration runner and the region's identity and saved-script storage use the
+placeholder style of the backend in use (`$1` for PostgreSQL, `?` for SQLite and
+MariaDB), and the key columns of the region identity and saved-script tables are
+`VARCHAR` so they work on MariaDB.
+
+SQLite is the only backend that has been run and verified. The code supports
+MariaDB and PostgreSQL, but no one has run the region or grid services against
+either of them yet, and these problems are known:
+
+- The `welkin-data` crate still has about 158 hardcoded `$n` placeholders, which
+  work on PostgreSQL and SQLite but not on MariaDB. A sweep to make them
+  backend-aware is pending.
+- The `script_states` table stores scripts in a `BLOB` column, which needs
+  `BYTEA` on PostgreSQL and `LONGBLOB` on MariaDB.
+- The `loc_x` and `loc_y` columns of the region identity table need `BIGINT` on
+  PostgreSQL (issue #79).
+
+Use SQLite until these are fixed. The MariaDB and PostgreSQL instructions in the
+operator guide describe the intended setup, not a verified one.
 
 ## Logging
 
@@ -145,6 +234,36 @@ and `Filter`. An invalid `RUST_LOG` or `Filter` value falls back to `info`.
 through a background writer, so lines written just before a crash can be
 lost.
 
+## Admin API
+
+The region simulator can expose a small REST API for console commands. It
+stays off until you set a token.
+
+| Section | Key | Type | Default | Purpose |
+|---|---|---|---|---|
+| Admin | Token | string | (empty) | Bearer token; an empty value disables the API |
+| Admin | BindAddress | string | 127.0.0.1 | Interface the API listens on |
+| Admin | Port | int | 9100 | TCP port for the API |
+| Admin | AllowRemoteBind | bool | false | Permit `BindAddress` to be a non-loopback address |
+
+```toml
+[Admin]
+Token = "a-long-random-string"
+BindAddress = "127.0.0.1"
+Port = 9100
+```
+
+Clients call `POST /admin/console` with the header
+`Authorization: Bearer <token>`.
+
+> [!WARNING]
+> The admin API uses plain HTTP, with no TLS. The token and every command,
+> including passwords typed into `create-user`, travel in cleartext. For that
+> reason the region refuses to start the API on a non-loopback `BindAddress`
+> and logs an error, unless you also set `AllowRemoteBind = true`. Keep
+> `BindAddress` at `127.0.0.1`, or put the API behind a reverse proxy that
+> terminates TLS. See the [operator guide](operator-guide.md#admin-api).
+
 ## Backup
 
 The region simulator saves changed objects to the database on a timer.
@@ -159,13 +278,43 @@ IntervalSeconds = 300
 ```
 
 Each save writes only objects that changed since the last one, and logs
-the count at info level when it is above zero.
+the count at info level when it is above zero. The same timer saves the
+terrain if it was edited since the last save. Terrain is stored in OpenSimulator's
+database format (revision 23, a gzip of the height field with heights rounded
+to 3 decimals), and the region loads it at start. A terrain edit made after the
+last save is lost if the region stops before the next one. At start the region
+loads its saved objects, terrain and estate. Objects created since the last
+save count as unsaved and go out on the next one.
 
 OpenSimulator saves on a frame count instead: the scene writes to storage
 every `UpdateStorageEveryNFrames` frames, 200 by default. Welkin uses
 wall-clock time on purpose, so the save interval does not shift with the
 frame rate. If you are migrating, set `IntervalSeconds` for the delay you
 want and drop `UpdateStorageEveryNFrames`; Welkin ignores that key.
+
+## Groups
+
+Group support in the region simulator is off by default, as in OpenSimulator.
+
+| Section | Key | Type | Default | Purpose |
+|---|---|---|---|---|
+| Groups | Enabled | bool | false | Turn on group data and group requests |
+| Groups | GroupsServerURI | string | (none) | URL of the grid groups service |
+| GroupsService | ServerURI | string | (none) | Second choice for the groups service URL |
+
+The region uses the first non-empty URL from `[Groups] GroupsServerURI`, then
+`[GroupsService] ServerURI`, then `[GridService] GridServerURI`, so a region that
+already points at `welkin-robust` needs only `Enabled = true`. The names match
+OpenSimulator's config.
+
+```toml
+[Groups]
+Enabled = true
+```
+
+If `Enabled` is true but no URL is found, groups stay off. `welkin-robust`
+serves the groups service at `/groups`. See
+[Viewer compatibility](viewer-compatibility.md#groups) for what works.
 
 ## Module configuration
 

@@ -1,6 +1,6 @@
 # Naming and Trademark Guidelines
 
-[← Back to docs](README.md) · [Licence audit](licence-audit.md)
+[← Back to docs](index.md) · [Licence audit](licence-audit.md)
 
 This document covers trademark obligations and naming conventions for
 Welkin.

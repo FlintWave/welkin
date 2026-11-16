@@ -62,7 +62,7 @@ pub struct PermissionsConfig {
 impl Default for PermissionsConfig {
     fn default() -> Self {
         Self {
-            bypass_permissions: true,
+            bypass_permissions: false,
             bypass_permissions_value: true,
             propagate_permissions: true,
             allow_grid_gods: false,

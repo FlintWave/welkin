@@ -1,6 +1,6 @@
 # Currency module summary
 
-[← Back to docs](README.md) · [Architecture](architecture.md)
+[← Back to docs](index.md) · [Architecture](architecture.md)
 
 Status: accepted (23 of 23 tasks, 3 phases). Change:
 `openspec/changes/currency-module/`.
@@ -28,7 +28,7 @@ zero-cost everything), `dtl` (proxy to external MoneyServer), or `gloebit`
 | MoneyBalanceRequest handler | Queries money module, sends MoneyBalanceReply |
 | MoneyTransferRequest handler | Validates via money module, sends balance result |
 | RequestPayPrice handler | Queries object pay price, sends PayPriceReply |
-| ObjectBuy handler | Validates purchase, transfers object ownership |
+| ObjectBuy handler | Validates sale type and price, delivers a copy or the original to the buyer's inventory; the sample economy charges nothing |
 | `/currency.php` | XML-RPC: getCurrencyQuote and buyCurrency |
 | `/landtool.php` | XML-RPC: preflightBuyLandPrep and buyLandPrep |
 | SimulatorFeatures | `currency-base-uri` in OpenSimExtras |

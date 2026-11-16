@@ -9,6 +9,8 @@
 pub mod avatar;
 pub mod cap_url;
 pub mod communication;
+pub mod constants;
+pub mod constants_extra;
 pub mod email;
 pub mod http;
 pub mod inventory;
@@ -851,6 +853,8 @@ impl Default for ScriptContext {
 /// Math and string functions are pure and need no context.
 /// Communication, physics and object stubs use `ctx` for identity / defaults.
 pub fn register_all(lua: &mlua::Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<(), VmError> {
+    // Base constants first so module-specific registrations can refine them.
+    constants::register_constants(lua)?;
     math::register_math(lua)?;
     string::register_string(lua)?;
     list::register_list(lua)?;

@@ -1,31 +1,55 @@
 # Welkin
 
 Rust reimplementation of [OpenSimulator 0.9.3.0](http://opensimulator.org/)
-grid services and region simulator. Wire and schema compatible with the C#
-server, so existing grids can migrate without losing content.
+grid services and region simulator. It aims to match the C# server on the wire
+and in its database schema, so existing grids can migrate without losing content.
 
 Your existing grid, content and viewer, on a server that is easier to run and
 harder to break.
 
-**Status:** Pre-alpha. First successful viewer connection achieved (Aurora
-Viewer and Firestorm). Working toward full viewer compatibility.
+**Status:** alpha (v0.1.0-alpha). Welkin builds, runs, and lets a viewer log in
+to a single-region grid on SQLite. It is not ready for a production grid. See
+the [viewer compatibility page](viewer-compatibility.md) for what works and what
+does not.
 
-> [!NOTE]
-> Start here: [Architecture](architecture.md) gives the workspace layout,
-> crate map, dependency graph and build instructions.
+This book has two parts.
+
+## Operator guide
+
+For people who run a grid or a region.
+
+- [Quick start](quick-start.md): build, configure and run
+- [Configuration reference](configuration.md): every `welkin.toml` and `robust.toml` key
+- [Database setup](database-setup.md): SQLite (verified), MariaDB and PostgreSQL (untested)
+- [Regions, estate and users](regions-estate-users.md): the region console, estate owner, accounts
+- [ROBUST grid services server](robust-server.md), [Container deployment](container-guide.md),
+  [Operator guide](operator-guide.md), [Test grid deployment](test-grid-deployment.md)
+- [Migration guide](migration-guide.md): C# to Rust, with rollback at every step
+- [Viewer compatibility](viewer-compatibility.md) and [OSgrid compatibility](osgrid-compatibility.md)
+
+## Agent build guide
+
+For people and AI agents who develop Welkin.
+
+- [Architecture](architecture.md) and [Crate structure](crate-structure.md)
+- [Module development guide](module-development.md): write a region module
+- [Script engine](scripting.md) and [OSSL reference](ossl.md)
+- [Testing](testing.md): cargo tests, CI, golden vectors, bots, the LibreMetaverse harness
+- [OpenSpec workflow](openspec-workflow.md) and [Task system](task-system.md)
+- [Decision log](decisions.md)
 
 ## Phase summaries
 
 | Phase | Summary | Security review |
 |---|---|---|
-| 0 | [Foundation and audit](phase-0-summary.md) | — |
-| 1 | [Protocol core](protocol-core-summary.md) | — |
-| 1 | [Physics backend](physics-backend-summary.md) | — |
-| 2 | [Grid services](grid-services-summary.md) | — |
-| 2 | [Capacity assessor](capacity-assessor-summary.md) | — |
-| 2 | [Grid portal](grid-portal-summary.md) | — |
-| 3 | [Region simulator core](region-simulator-core-summary.md) | — |
-| 3 | [Prim meshing](prim-meshing-summary.md) | — |
+| 0 | [Foundation and audit](phase-0-summary.md) | - |
+| 1 | [Protocol core](protocol-core-summary.md) | - |
+| 1 | [Physics backend](physics-backend-summary.md) | - |
+| 2 | [Grid services](grid-services-summary.md) | - |
+| 2 | [Capacity assessor](capacity-assessor-summary.md) | - |
+| 2 | [Grid portal](grid-portal-summary.md) | - |
+| 3 | [Region simulator core](region-simulator-core-summary.md) | - |
+| 3 | [Prim meshing](prim-meshing-summary.md) | - |
 | 4 | [Script engine](script-engine-summary.md) | [Sandboxing](security-review-script-sandboxing.md) |
 | 4 | [OSSL API](ossl-api-summary.md) | [OSSL API](security-review-ossl-api.md) |
 | 5 | [Region modules](region-modules-summary.md) | [Permissions](security-review-permissions.md) |
@@ -34,31 +58,19 @@ Viewer and Firestorm). Working toward full viewer compatibility.
 | 6 | [External grid mode](external-grid-mode-summary.md) | [Remote writes](security-review-remote-writes.md) |
 | 6 | [Hypergrid](hypergrid-summary.md) | [Hypergrid](security-review-hypergrid.md) |
 | 6 | [WebRTC voice](webrtc-voice-summary.md) | [Voice](security-review-voice.md) |
-| — | [Object interaction](object-interaction-summary.md) | — |
-| — | [Module activation](module-activation-summary.md) | — |
-| — | [Viewer messaging](viewer-messaging-summary.md) | — |
-| — | [Currency module](currency-module-summary.md) | — |
-| — | [Remaining parity](remaining-parity-summary.md) | — |
-| — | [Cutover](cutover-summary.md) | — |
-
-## Operator documentation
-
-- [ROBUST grid services server](robust-server.md) — architecture, configuration, endpoints
-- [Test grid deployment](test-grid-deployment.md) — deploy a containerised test grid in minutes
-- [Container deployment](container-guide.md) — Podman and Docker container setup
-- [Operator guide](operator-guide.md) — installation, configuration, running, monitoring, security
-- [Migration guide](migration-guide.md) — step-by-step C# to Rust migration with rollback at every step
+| - | [Object interaction](object-interaction-summary.md) | - |
+| - | [Module activation](module-activation-summary.md) | - |
+| - | [Viewer messaging](viewer-messaging-summary.md) | - |
+| - | [Currency module](currency-module-summary.md) | - |
+| - | [Remaining parity](remaining-parity-summary.md) | - |
+| - | [Cutover](cutover-summary.md) | - |
 
 ## Reference
 
-- [Architecture](architecture.md) — workspace, crates, dependency graph, build
-- [Decision log](decisions.md) — every design decision with rationale
-- [Licence audit](licence-audit.md) — C# dependencies, compatibility, dropped items
-- [LSL corpus analysis](lsl-corpus-analysis.md) — function frequency in real scripts
+- [Licence audit](licence-audit.md): C# dependencies, compatibility, dropped items
+- [LSL corpus analysis](lsl-corpus-analysis.md): function frequency in real scripts
 - [Naming and trademarks](naming-and-trademarks.md)
-- [OSgrid compatibility](osgrid-compatibility.md)
 - [Script engine spike results](script-engine-spike-results.md)
-- [Viewer compatibility](viewer-compatibility.md)
 - [Final acceptance review](final-acceptance-review.md)
 
 ## Security reviews

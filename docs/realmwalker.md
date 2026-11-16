@@ -2,7 +2,7 @@
 
 # RealmWalker bot SDK
 
-[← Back to docs](README.md) · [Script engine](scripting.md) · [Viewer compatibility](viewer-compatibility.md) · [Architecture](architecture.md)
+[← Back to docs](index.md) · [Script engine](scripting.md) · [Viewer compatibility](viewer-compatibility.md) · [Architecture](architecture.md)
 
 RealmWalker is a Rust-native bot and client SDK for OpenSimulator-compatible
 grids. It provides async login, UDP circuit management, chat, movement, and

@@ -2,29 +2,87 @@
 
 OpenSim 0.9.3.0 C# to Rust port. LGPL-3.0-or-later.
 
-## BLOCKING: Dead Systems Wiring (must complete before any new features)
+## Current Release (v0.1.0-alpha)
 
-Comprehensive audit (2026-11-15) found dozens of systems that are built,
-unit-tested, and completely disconnected from the running server. Nothing
-new gets built until every item here is wired in and verified by runtime
-behavior (viewer action produces correct result), not code existence.
+Welkin builds, runs, and lets a viewer log in to a single-region grid on SQLite.
+Both programs, `welkin-robust` and `welkin-region`, come from `cargo build
+--release`. The workspace has 2,688 passing tests, 0 failures and 2 ignored.
+
+What works in this release (see [viewer compatibility](docs/viewer-compatibility.md)
+for which parts were checked in a live viewer and which only in code):
+
+- Login, region handshake, movement, jumping and falling on real terrain, chat,
+  instant messages, friends and profiles
+- Objects: create, edit, link, take, return, rez from inventory and attach; saved
+  and loaded again at start
+- Terraforming with real terrain data, saved across restarts
+- Rapier 3D physics, physical prims, script physics commands
+- LSL scripts compiled to Luau and run in a sandboxed VM; about 60% of a sample
+  of 25 real-world scripts compile. Chat, timer, event, sensor, control, sound
+  and physics calls work at runtime
+- Estate settings and object permissions, enforced by default, with a stable region UUID
+- Groups: create, join, leave, invitations, roles and powers, titles, eject, group chat
+- Sound, buying objects, one whole-region parcel, loading an OAR from the console,
+  default avatar assets at start, and account creation from the region console
+
+Known limits of this release:
+
+- Stubs remain. A search of the Rust sources counts 233 lines that mention "stub"
+  (138 in `welkin-modules`, 53 in the script VM, 28 in `welkin-services`, 11 in the
+  conformance tool) and 24 `TODO` comments. Some are test helpers or comments, and
+  none has been sorted yet. The README lists examples.
+- The `ClientEgress` interface that modules use to message viewers is not connected
+  in the region yet, so those messages are dropped.
+- Run on a trusted network only. The authentication and account service endpoints
+  have no access-control gates yet (no `AllowSetPassword` check), and the portal
+  handlers do not validate input.
+- SQLite is the only database that has been run. MariaDB and PostgreSQL are untested
+  and have known problems.
+- The web portal is a scaffold: no binary mounts it and most handlers do nothing.
+- Many LSL functions are registered in the VM but not connected to the running
+  region and do nothing: `llEmail`, `llHTTPRequest`, `llHTTPResponse`,
+  `llRequestURL`, `llRezObject`, `llRezAtRoot`, `llAttachToAvatar` and its detach
+  call. `llRequestAgentData` returns placeholder data. Teleport between regions,
+  NPC functions and dynamic textures are not wired either.
+- The LSL compiler rejects some valid scripts, such as a float literal that
+  starts with a dot (`.4`).
+- Group notice attachments are not supported, and group proposals are out of scope. In group
+  chat, the event for a second avatar joining a session can arrive late.
+- Attachments are saved at logout, not on a timer, so a region crash loses
+  attachment changes made since login.
+- No 10-minute soak test and no recorded Aurora session are on record.
+- PBR, Bakes on Mesh, Animesh, EEP day cycles, viewer search and media on a prim
+  are not implemented.
+- The grid's private port binds to `127.0.0.1`, so a region on another machine
+  cannot reach it until you change the bind address.
+
+Everything below this section is paused after the release unless it says
+otherwise. Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Known gaps from the 2026-11-15 audit
+
+The audit of 2026-11-15 found dozens of systems that were built and unit-tested
+but not connected to the running server. Rows marked RESOLVED were fixed and are
+in the v0.1.0-alpha release. Every other row was not re-checked for this release:
+treat it as open. A gap counts as closed only when a viewer action produces the
+correct result, not when the code exists.
 
 ### P0: Core movement and physics [CRITICAL, world is unusable without these]
 
 | Item | Status | What exists | What's broken |
 |---|---|---|---|
-| Avatar physics (AvatarController) | built, not wired | Full PID controller, gravity, terrain collision, jump | step() never called; main loop uses kinematic pos += vel * dt with z=22 clamp |
-| Jump | built, not wired | UP_POS handling in AvatarController | Flag only processed when flying; ignored when grounded |
+| Avatar physics (AvatarController) | RESOLVED for standing, jump and fall (avatar_move.rs); the PID controller is not used | Full PID controller, gravity, terrain collision, jump | step() never called; main loop uses kinematic pos += vel * dt with z=22 clamp |
+| Jump | RESOLVED (429699c, da62213, fac8b53) | UP_POS handling in AvatarController | Flag only processed when flying; ignored when grounded |
 | Fly mode | partially wired | FLY flag detected, speed/animation set | State not latched; recomputed per-packet instead of toggled |
-| PhysicsCommand channel | built, not wired | mpsc channel type defined | Sender set to None; all LSL physics functions silently drop commands |
+| PhysicsCommand channel | RESOLVED (753ed12); llSetHoverHeight and runtime STATUS_PHYSICS changes are rejected with a logged reason | mpsc channel type defined | Sender set to None; all LSL physics functions silently drop commands |
 | Collision detection (avatar-prim) | partially wired | Rapier backend, events posted to scripts | Events fire but num_detected always 1, no llDetectedKey/Name/Pos data populated |
 | Sensor scan | built, stub | llSensor/llSensorRepeat registered | Always returns num_detected: 0; never queries scene |
-| Permission enforcement | built, not wired | DefaultPermissionsModule registered (main.rs:253) | Never consulted; any user can edit/delete/move/rename any object |
-| Object persistence | built, not wired | store_object() (simulation.rs:420), collect_for_backup() (scene.rs:424) | Neither called from main.rs; all objects lost on restart |
-| Script-scene propagation | design gap | llSetPos/llSetColor/llSetScale/llSetTexture in ScriptContext | Changes stay in per-script context; never written to SceneObjectPart, never broadcast |
-| Avatar name from login | bug | ScenePresence::new() at main.rs:4117 | Hardcoded "Test"/"User"; real name from login response never extracted |
+| Permission enforcement | RESOLVED (69f0db4, 416fa77); on by default | DefaultPermissionsModule registered (main.rs:253) | Never consulted; any user can edit/delete/move/rename any object |
+| Object persistence | RESOLVED (d6e1128, d89f143); objects, terrain and estate survive a restart | store_object() (simulation.rs:420), collect_for_backup() (scene.rs:424) | Neither called from main.rs; all objects lost on restart |
+| Script-scene propagation | RESOLVED (58e0fef) | llSetPos/llSetColor/llSetScale/llSetTexture in ScriptContext | Changes stay in per-script context; never written to SceneObjectPart, never broadcast |
+| Avatar name from login | RESOLVED (58e0fef) | ScenePresence::new() at main.rs:4117 | Hardcoded "Test"/"User"; real name from login response never extracted |
 | Cross-region teleport | bug | EntityTransferModule::teleport() called | Ok() and Err() paths both send TeleportFailed unconditionally (main.rs:3277) |
-| Sound (LSL) | built, not wired | llPlaySound/llTriggerSound/llLoopSound compile; SoundCommand enum exists | No Lua function registered in VM; sound_sender always None; calling crashes script |
+| Sound (LSL) | RESOLVED (6718355 to 82193d6) | llPlaySound/llTriggerSound/llLoopSound compile; SoundCommand enum exists | No Lua function registered in VM; sound_sender always None; calling crashes script |
 | AgentAnimation packet | missing handler | GesturesModule registered | No handler for AgentAnimation::ID; viewer-triggered gestures silently dropped |
 | Offline IM storage | stub | OfflineMessageModule registered | Never consulted; cross-region IM silently dropped, "offline storage pending" logged |
 
@@ -32,8 +90,8 @@ behavior (viewer action produces correct result), not code existence.
 
 | Item | Status | What exists | What's broken |
 |---|---|---|---|
-| Terrain brush (ModifyLand) | built, not wired | apply_brush() with raise/lower/smooth/flatten/noise/revert | No ModifyLand packet handler; brush code never called |
-| Terrain DCT compressor | built, not wired | encode_patch() / PatchEncoder | Server uses flat-terrain bit-packing hack; can't send real heightfield data |
+| Terrain brush (ModifyLand) | RESOLVED (ab6637a, e309498, 854b115) | apply_brush() with raise/lower/smooth/flatten/noise/revert | No ModifyLand packet handler; brush code never called |
+| Terrain DCT compressor | RESOLVED (82368da, 854b115); matches OpenSimulator golden vectors | encode_patch() / PatchEncoder | Server uses flat-terrain bit-packing hack; can't send real heightfield data |
 | Terrain file I/O | built, not wired | RAW32, PNG import/export | Module declared in lib.rs, never imported by any runtime crate |
 
 ### P2: Object and scene integrity [CRITICAL, objects must persist and behave correctly]
@@ -43,8 +101,8 @@ behavior (viewer action produces correct result), not code existence.
 | Vehicle dynamics | built, not wired | Full sled/car/boat/airplane/balloon simulation | step() never called from main loop |
 | Keyframe motion | built, not wired | Forward/reverse/loop/ping-pong animation | Never instantiated; XML deserializer skips KeyframeMotion elements |
 | Terse update throttling | built, not wired | Bandwidth-saving update suppression | Every update broadcasts to all clients unconditionally |
-| Object persistence | CONFIRMED NOT WIRED | store_object/collect_for_backup exist, never called | Prims do NOT survive restart; scene is purely in-memory (see P0) |
-| LSL physics behaviors | built, not wired | llMoveToTarget, llSetHoverHeight, llRotLookAt | physics_sender channel is None; commands dropped |
+| Object persistence | RESOLVED (d6e1128, d89f143); objects, terrain and estate survive a restart | store_object/collect_for_backup exist, never called | Prims do NOT survive restart; scene is purely in-memory (see P0) |
+| LSL physics behaviors | RESOLVED except llSetHoverHeight (753ed12) | llMoveToTarget, llSetHoverHeight, llRotLookAt | physics_sender channel is None; commands dropped |
 | llTakeControls/llReleaseControls | built, not wired | Control registrations tracked in HashMap | AgentUpdate never dispatches control events to scripts |
 
 ### P3: Server infrastructure [HIGH, affects stability and operations]
@@ -54,7 +112,7 @@ behavior (viewer action produces correct result), not code existence.
 | Graceful shutdown | built, not wired | GracefulShutdown orchestrator with state flushing | main loop calls scene.shutdown() directly; no countdown or announcement |
 | RegionModule tick/update | design gap | 48 modules registered | Trait has no tick() method; no module can do periodic work |
 | PresenceAdded/Removed events | partially wired | Event channels exist | Only fire for NPCs, not real user login/logout |
-| Permission checks | CONFIRMED NOT WIRED | DefaultPermissionsModule registered, PermissionCheckEvent defined | Zero enforcement on any object mutation; any user edits anything (see P0) |
+| Permission checks | RESOLVED (416fa77) | DefaultPermissionsModule registered, PermissionCheckEvent defined | Zero enforcement on any object mutation; any user edits anything (see P0) |
 | MoneyReceived event | built, not wired | Event channel subscribed | Never sent from any code path |
 | LandChange event | built, not wired | Event channel subscribed | No parcel system fires it |
 
@@ -63,7 +121,7 @@ behavior (viewer action produces correct result), not code existence.
 | Item | Behavior | Correct behavior |
 |---|---|---|
 | AgentSit | Logs "confirmed sit", does nothing | Update presence to seated, parent to sit target, stop movement |
-| ObjectBuy | Sends fake MoneyBalanceReply | Transfer ownership, debit/credit accounts |
+| ObjectBuy | RESOLVED for delivery (618651f): sale type and price are checked and the object goes to the buyer's inventory; the sample economy charges nothing | Transfer ownership, debit/credit accounts |
 | HomeLocation POST | Returns success, never persists | Store home location in user profile |
 | NewFileAgentInventory | Returns random UUIDs | Store uploaded asset, create inventory item |
 | UpdateNotecardAgentInventory | Returns random UUID | Store notecard content |
@@ -83,7 +141,7 @@ behavior (viewer action produces correct result), not code existence.
 
 | Packet group | Packets needed |
 |---|---|
-| Parcel system | ParcelPropertiesRequest, ParcelInfoRequest, ParcelDwellRequest, ParcelAccessListRequest/Update |
+| Parcel system | ParcelPropertiesRequest (handled for the single whole-region parcel, e6f5461), ParcelInfoRequest, ParcelDwellRequest, ParcelAccessListRequest/Update |
 | Asset transfer | TransferRequest, AssetUploadRequest, SendXferPacket, ConfirmXferPacket |
 | Mute list | MuteListRequest, UpdateMuteListEntry, RemoveMuteListEntry |
 | Search/directory | DirFindQuery, DirPlacesQuery, DirLandQuery, DirClassifiedQuery, DirEventsQuery |
@@ -108,13 +166,12 @@ UpdateNotecardTaskInventory, UpdateScriptTask, ViewerMetrics.
 Fix: add these to the KNOWN_CAPS list in main.rs seed handler (~line 4437).
 Many still need their stub handlers replaced with real implementations (see P4).
 
-## In Progress (3 changes)
+## In Progress
 
 | Change | Done | Remaining | Focus |
 |---|---|---|---|
 | integration-wiring | 30/35 | 5 | End-to-end integration verification |
 | firestorm-session | 29/36 | 7 | Firestorm viewer compatibility testing |
-| realmwalker | 21/80 | 59 | Rust-native bot SDK |
 
 ## Done (24 changes, all tasks complete)
 
@@ -145,34 +202,40 @@ Many still need their stub handlers replaced with real implementations (see P4).
 | lsl-compiler | 69/69 | LSL parser, implicit coercion, corpus coverage |
 | archives | 18/18 | OAR/IAR archive import and export |
 
-## Not Started (4 changes)
+## Paused: contributions welcome
+
+None of these is started. The task counts come from each change's `tasks.md`.
 
 | Change | Tasks | Summary |
 |---|---|---|
-| script-testing | 0/18 | LSL corpus testing framework (phases 1-2 code committed) |
+| realmwalker | 0/43 ticked | Rust-native bot SDK (code for phases 1 and 2 exists with 86 unit tests; the checklist was reset) |
+| script-testing | 0/18 | LSL corpus testing framework (phases 1 and 2 code committed) |
 | modern-avatar-features | 0/25 | Modern avatar rendering, materials, PBR |
+| eep-environment | 0/42 | Extended Environment (EEP) day cycles |
 | llm-world-copilot | - | LLM-powered in-world assistant (design phase) |
-| plugin-api | - | Plugin/extension API framework (design phase) |
+| plugin-api | - | Plugin and extension API framework (design phase) |
 
-## Future (blocked until above is clean)
+## Future (paused: contributions welcome)
 
-- EEP (Extended Environment Protocol): day cycles, per-parcel environments
-- Smooth region crossing: predictive handshake, dual-presence
-- Welkin web UI and project website
-- Ink NPC dialogue system (Python/Rust, no LLMs)
-- Benchmark comparison vs OpenSim
+- Smooth region crossing: predictive handshake, dual presence
+- A working web portal and first-run setup
+- Group notice attachments
+- MariaDB and PostgreSQL support, verified
+- Welkin project website
+- Ink NPC dialogue system (Python or Rust, no LLMs)
+- Benchmark comparison against OpenSimulator
 
 ## Test Summary
 
-- **2,355 tests passing**, 0 failures, 2 ignored
-- 27 crates in workspace
-- Both `welkin-region` and `welkin-robust` binaries build and start
+- **2,688 tests passing**, 0 failures, 2 ignored (`cargo test --workspace`)
+- 25 crates in the workspace, plus the Tauri companion app, which builds separately
+- Both `welkin-region` and `welkin-robust` build and start
 
 ## Key Milestones
 
-- **195/195**: Phases 1-3 (foundation through parity) complete
-- **Post-195**: OSSL, builtins, events, extension APIs shipped
-- **2026-11-15 audit**: Three-pass audit (dead systems + deep sweep + adversarial trace) found 60+ disconnected systems
-- **RealmWalker**: 21/80 tasks done (phases 1-2 code committed, 86 unit tests)
-- **LSL compiler**: 69/69 tasks complete; corpus was 60% (15/25) before final parser fixes
-- **Gray avatar fix**: b414fb9, FullObjectUpdate now carries baked textures
+- **195/195**: phases 1 to 3 (foundation through parity) complete
+- **Post-195**: OSSL, builtins, events and extension APIs shipped
+- **2026-11-15 audit**: three-pass audit found 60 or more disconnected systems; the
+  rows marked RESOLVED above were fixed afterwards
+- **LSL compiler**: 69/69 tasks complete
+- **v0.1.0-alpha**: first release; see Current Release above

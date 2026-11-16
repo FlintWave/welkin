@@ -17,6 +17,9 @@ pub struct SceneObjectGroup {
     pub is_attachment: bool,
     pub attachment_point: u8,
     pub attached_avatar: Uuid,
+    /// The inventory item this attachment was rezzed from (nil if it was attached
+    /// from the world).
+    pub attachment_item_id: Uuid,
 
     pub has_changed: bool,
     pub time_last_changed: i64,
@@ -35,6 +38,7 @@ impl SceneObjectGroup {
             is_attachment: false,
             attachment_point: 0,
             attached_avatar: Uuid::nil(),
+            attachment_item_id: Uuid::nil(),
             has_changed: false,
             time_last_changed: 0,
             time_first_changed: 0,
@@ -189,6 +193,20 @@ impl SceneObjectGroup {
         self.backup_needed = true;
     }
 
+    /// Give every part a new UUID and clear local ids (a rezzed copy of an inventory
+    /// object must not share identity with the original or with other rezzes).
+    /// Link order is kept.
+    pub fn reset_ids(&mut self) {
+        self.root_part.uuid = Uuid::new_v4();
+        self.root_part.local_id = 0;
+        let old = std::mem::take(&mut self.child_parts);
+        for (_, mut part) in old {
+            part.uuid = Uuid::new_v4();
+            part.local_id = 0;
+            self.child_parts.insert(part.uuid, part);
+        }
+    }
+
     fn renumber_links(&mut self) {
         let has_children = !self.child_parts.is_empty();
         self.root_part.link_num = if has_children { 1 } else { 0 };
@@ -204,6 +222,23 @@ impl SceneObjectGroup {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn reset_ids_gives_new_identities_and_keeps_links() {
+        let mut g = SceneObjectGroup::new(SceneObjectPart::new("root", Uuid::new_v4()));
+        g.add_part(SceneObjectPart::new("a", Uuid::new_v4()));
+        g.add_part(SceneObjectPart::new("b", Uuid::new_v4()));
+        let old: std::collections::HashSet<Uuid> = g.parts().map(|p| p.uuid).collect();
+        g.reset_ids();
+        let new: std::collections::HashSet<Uuid> = g.parts().map(|p| p.uuid).collect();
+        assert_eq!(new.len(), 3);
+        assert!(old.is_disjoint(&new));
+        assert_eq!(g.uuid(), g.root_part().uuid);
+        let mut links: Vec<i32> = g.parts().map(|p| p.link_num).collect();
+        links.sort();
+        assert_eq!(links, vec![1, 2, 3]);
+        assert!(g.parts().all(|p| p.local_id == 0));
+    }
+
     use super::*;
     use crate::part::SceneObjectPart;
 

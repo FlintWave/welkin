@@ -2,6 +2,7 @@
 name = "welkin-realmwalker"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 description = "Rust-native bot/client SDK for OpenSimulator-compatible grids"
@@ -26,3 +27,6 @@ glam = { workspace = true }
 
 [features]
 integration = []
+
+[lints]
+workspace = true

@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: LGPL-3.0-or-later -->
 # Module development guide
 
-[← Back to docs](README.md) · [Architecture](architecture.md) · [Region simulator core](region-simulator-core-summary.md)
+[← Back to docs](index.md) · [Architecture](architecture.md) · [Region simulator core](region-simulator-core-summary.md)
 
 Welkin loads region modules at startup through the `RegionModule` trait
 defined in the `welkin-modules` crate. Third-party modules implement this
@@ -23,6 +23,7 @@ The public API boundary consists of these types:
 - `ModuleError` (error type)
 - `SceneRef` (region handle)
 - `SceneEvents` (event bus)
+- `ClientEgress` and `EgressEvent` (messages to viewers)
 - `ModuleRegistry` (module container)
 
 Everything on the other side of these traits is Welkin's internal
@@ -99,12 +100,37 @@ pub struct SceneRef {
     pub region_size_y: u32,
     pub events: Arc<SceneEvents>,
     pub registry: Arc<RwLock<ModuleRegistry>>,
+    pub egress: SharedEgress,
 }
 ```
 
 Use `scene.registry` to look up sibling modules by interface type
 (`scene.registry.read().get_module::<ChatModule>()`), the same pattern as
 C#'s `RequestModuleInterface<T>()`.
+
+## Sending messages to viewers: ClientEgress
+
+A module that needs to show something to an avatar (an alert, a kick, a URL or
+text dialog, an appearance update, a friend's online status, an instant message)
+calls `scene.egress.send(event)`. `SceneRef` carries a shared `ClientEgress`
+(`scene.egress`), and an `EgressEvent` names what to send:
+
+```rust
+pub trait ClientEgress: Send + Sync {
+    fn send(&self, event: EgressEvent) -> bool;   // true if the agent is here and the event was accepted
+    fn is_connected(&self, agent: Uuid) -> bool;
+}
+```
+
+Two implementations exist. `NullEgress` drops every event and returns false;
+`SceneRef` starts with it. `RecordingEgress` keeps the events and a set of
+connected agents so a test can check what a module sent. The avatar factory, gods
+and dialog modules already send through it.
+
+The region does not install a real `ClientEgress` yet, so in the running region
+these events go to `NullEgress` and are dropped. A module written against the
+trait will start to work when the region installs one. Test your module with
+`RecordingEgress` in the meantime.
 
 ## Module registry
 

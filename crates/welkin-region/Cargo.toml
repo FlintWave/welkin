@@ -2,6 +2,7 @@
 name = "welkin-region"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
@@ -29,6 +30,8 @@ uuid = { workspace = true }
 glam = { workspace = true }
 welkin-llsd = { path = "../welkin-llsd" }
 welkin-services = { path = "../welkin-services" }
+welkin-archive = { path = "../welkin-archive" }
+welkin-types = { path = "../welkin-types" }
 parking_lot = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }

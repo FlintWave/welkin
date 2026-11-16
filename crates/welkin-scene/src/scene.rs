@@ -12,6 +12,7 @@ use welkin_physics::PhysicsScene;
 
 use crate::group::SceneObjectGroup;
 use crate::presence::ScenePresence;
+use crate::terrain::TerrainChannel;
 
 #[derive(Debug, Clone)]
 pub struct RegionInfo {
@@ -93,6 +94,17 @@ pub struct FrameStats {
     pub physics_ms: f32,
 }
 
+/// A physical object whose simulated state changed, for update broadcasting.
+#[derive(Debug, Clone)]
+pub struct MovedObject {
+    pub uuid: Uuid,
+    pub local_id: u32,
+    pub position: Vec3,
+    pub velocity: Vec3,
+    pub rotation: Quat,
+    pub angular_velocity: Vec3,
+}
+
 pub struct Scene {
     pub region_info: RegionInfo,
     pub config: SceneConfig,
@@ -112,6 +124,27 @@ pub struct Scene {
 
     started_at: RwLock<Option<Instant>>,
     physics: Mutex<Option<Box<dyn PhysicsScene + Send>>>,
+    /// The region's height field: the single source for physics and ground queries.
+    terrain: RwLock<TerrainChannel>,
+    /// The terrain as last loaded or baked; the `Revert` brush restores from it.
+    baked_terrain: RwLock<Vec<f32>>,
+    /// Set when terrain is edited; cleared when it has been saved.
+    terrain_modified: AtomicBool,
+}
+
+/// Highest attachment point number (SL has 55 including HUD points).
+pub const MAX_ATTACHMENT_POINT: u8 = 55;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum AttachError {
+    #[error("invalid attachment point {0}")]
+    BadPoint(u8),
+    #[error("the avatar is not in the region")]
+    NoAvatar,
+    #[error("the object is not in the scene")]
+    NoObject,
+    #[error("the object is already attached")]
+    AlreadyAttached,
 }
 
 impl Scene {
@@ -131,6 +164,9 @@ impl Scene {
             presence_count: AtomicU32::new(0),
             started_at: RwLock::new(None),
             physics: Mutex::new(None),
+            terrain: RwLock::new(TerrainChannel::new_default()),
+            baked_terrain: RwLock::new(TerrainChannel::new_default().heights().to_vec()),
+            terrain_modified: AtomicBool::new(false),
         }
     }
 
@@ -142,6 +178,8 @@ impl Scene {
 
     pub fn add_object(&self, mut group: SceneObjectGroup) -> Uuid {
         let uuid = group.uuid();
+        // A new object has never been saved.
+        group.mark_changed();
 
         let mut local_ids: Vec<u32> = Vec::new();
         for part in group.parts_mut() {
@@ -397,6 +435,85 @@ impl Scene {
         });
     }
 
+    /// Push an object's current root transform into its physics actor. Call after
+    /// code (scripts, editing) moves an object directly so its collider follows.
+    pub fn push_object_to_physics(&self, uuid: &Uuid) {
+        let Some((local_id, pos, rot)) = self.with_object(uuid, |g| {
+            let r = g.root_part();
+            (r.local_id, r.group_position, r.rotation_offset)
+        }) else {
+            return;
+        };
+        let _ = self.with_physics(|ph| {
+            if let Some(actor) = ph.get_actor_mut(local_id) {
+                actor.set_position(pos);
+                actor.set_orientation(rot);
+            }
+        });
+    }
+
+    /// Copy simulated state of physical prims back into the scene. Returns the
+    /// objects whose transform or motion state changed (including coming to rest),
+    /// so the caller can send updates to viewers.
+    pub fn sync_physics_to_objects(&self) -> Vec<MovedObject> {
+        if !self.config.physics_enabled {
+            return Vec::new();
+        }
+        let physical: Vec<(Uuid, u32)> = self
+            .objects
+            .read()
+            .unwrap()
+            .iter()
+            .filter(|(_, g)| g.is_physical() && !g.is_phantom())
+            .map(|(id, g)| (*id, g.root_part().local_id))
+            .collect();
+        if physical.is_empty() {
+            return Vec::new();
+        }
+        let states: Vec<(Uuid, u32, Vec3, Vec3, Quat, Vec3)> = self
+            .with_physics(|ph| {
+                physical
+                    .iter()
+                    .filter_map(|(id, lid)| {
+                        ph.get_actor(*lid).map(|a| {
+                            (*id, *lid, a.position(), a.velocity(), a.orientation(), a.rotational_velocity())
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let mut moved = Vec::new();
+        let mut objects = self.objects.write().unwrap();
+        for (id, local_id, pos, vel, rot, ang) in states {
+            let Some(group) = objects.get_mut(&id) else { continue };
+            let old = group.root_part();
+            let pos_changed = (old.group_position - pos).length() > 0.005;
+            let rot_changed = old.rotation_offset.dot(rot).abs() < 0.99999;
+            let at_rest = vel.length() < 0.01 && ang.length() < 0.01;
+            let settled = at_rest && (old.velocity != Vec3::ZERO || old.angular_velocity != Vec3::ZERO);
+            if !(pos_changed || rot_changed || settled) {
+                continue;
+            }
+            let (vel, ang) = if at_rest { (Vec3::ZERO, Vec3::ZERO) } else { (vel, ang) };
+            group.set_position(pos);
+            group.set_rotation(rot);
+            let root = group.root_part_mut();
+            root.velocity = vel;
+            root.angular_velocity = ang;
+            group.mark_changed();
+            moved.push(MovedObject {
+                uuid: id,
+                local_id,
+                position: pos,
+                velocity: vel,
+                rotation: rot,
+                angular_velocity: ang,
+            });
+        }
+        moved
+    }
+
     fn unregister_root_from_physics(&self, local_id: u32) {
         if local_id == 0 {
             return;
@@ -408,12 +525,253 @@ impl Scene {
         self.physics.lock().unwrap().is_some()
     }
 
+    /// Terrain height in metres at a region-local position (bilinear between the
+    /// four surrounding vertices; positions outside the region clamp to the edge).
+    pub fn terrain_height_at(&self, x: f32, y: f32) -> f32 {
+        let terrain = self.terrain.read().unwrap();
+        let max_x = (terrain.size_x() - 1) as f32;
+        let max_y = (terrain.size_y() - 1) as f32;
+        let x = x.clamp(0.0, max_x);
+        let y = y.clamp(0.0, max_y);
+        let (x0, y0) = (x.floor() as u32, y.floor() as u32);
+        let (x1, y1) = ((x0 + 1).min(terrain.size_x() - 1), (y0 + 1).min(terrain.size_y() - 1));
+        let (fx, fy) = (x - x0 as f32, y - y0 as f32);
+        let h00 = terrain.get(x0, y0);
+        let h10 = terrain.get(x1, y0);
+        let h01 = terrain.get(x0, y1);
+        let h11 = terrain.get(x1, y1);
+        let bottom = h00 + (h10 - h00) * fx;
+        let top = h01 + (h11 - h01) * fx;
+        bottom + (top - bottom) * fy
+    }
+
     pub fn set_terrain(&self, height_map: &[f32]) {
+        {
+            let mut terrain = self.terrain.write().unwrap();
+            let expected = (terrain.size_x() * terrain.size_y()) as usize;
+            if height_map.len() == expected {
+                terrain.heights_mut().copy_from_slice(height_map);
+                terrain.mark_all_dirty();
+                *self.baked_terrain.write().unwrap() = height_map.to_vec();
+            } else {
+                tracing::warn!(
+                    got = height_map.len(),
+                    expected,
+                    "set_terrain: height map size does not match the region; scene terrain unchanged"
+                );
+            }
+        }
         if let Ok(mut guard) = self.physics.lock()
             && let Some(ref mut physics) = *guard
         {
             physics.set_terrain(height_map);
         }
+    }
+
+    /// Run a terrain edit; returns the patches that changed (and clears their
+    /// dirty flags). The physics height field follows the change.
+    fn edit_terrain(&self, edit: impl FnOnce(&mut TerrainChannel, &[f32])) -> Vec<(u32, u32)> {
+        let (changed, heights) = {
+            let mut terrain = self.terrain.write().unwrap();
+            let baked = self.baked_terrain.read().unwrap();
+            edit(&mut terrain, baked.as_slice());
+            let changed = terrain.dirty_patches();
+            terrain.clear_dirty();
+            let heights = if changed.is_empty() { Vec::new() } else { terrain.heights().to_vec() };
+            (changed, heights)
+        };
+        if !changed.is_empty() {
+            self.terrain_modified.store(true, Ordering::SeqCst);
+        }
+        if !changed.is_empty()
+            && let Ok(mut guard) = self.physics.lock()
+            && let Some(ref mut physics) = *guard
+        {
+            physics.set_terrain(&heights);
+        }
+        changed
+    }
+
+    /// The terrain heights if they were edited since the last save (and marks them
+    /// as saved). Call `mark_terrain_modified` again if the save fails.
+    pub fn take_terrain_for_backup(&self) -> Option<Vec<f32>> {
+        if self.terrain_modified.swap(false, Ordering::SeqCst) {
+            Some(self.terrain.read().unwrap().heights().to_vec())
+        } else {
+            None
+        }
+    }
+
+    pub fn mark_terrain_modified(&self) {
+        self.terrain_modified.store(true, Ordering::SeqCst);
+    }
+
+    /// Apply a terraform brush (a viewer `ModifyLand` click). Returns the changed
+    /// patches as (patch_x, patch_y).
+    pub fn modify_terrain(
+        &self,
+        action: crate::terrain_paint::PaintAction,
+        x: f32,
+        y: f32,
+        height: f32,
+        brush_size: f32,
+        strength: f32,
+    ) -> Vec<(u32, u32)> {
+        self.edit_terrain(|terrain, baked| {
+            crate::terrain_paint::paint_effect(terrain, Some(baked), action, x, y, height, brush_size, strength)
+        })
+    }
+
+    /// Apply an area terraform over a rectangle (west, south, east, north in region metres).
+    #[allow(clippy::too_many_arguments)]
+    pub fn flood_terrain(
+        &self,
+        action: crate::terrain_paint::PaintAction,
+        height: f32,
+        strength: f32,
+        west: f32,
+        south: f32,
+        east: f32,
+        north: f32,
+    ) -> Vec<(u32, u32)> {
+        self.edit_terrain(|terrain, baked| {
+            crate::terrain_paint::flood_effect(terrain, Some(baked), action, height, strength, west, south, east, north)
+        })
+    }
+
+    /// LayerData payloads (the `LayerData` block bytes) for the given patches, split
+    /// so every payload fits in one UDP packet.
+    pub fn terrain_layer_payloads(&self, patches: &[(u32, u32)]) -> Vec<Vec<u8>> {
+        const MAX_PAYLOAD: usize = 1000;
+        let terrain = self.terrain.read().unwrap();
+        let mut out = Vec::new();
+        let mut rest = patches;
+        while !rest.is_empty() {
+            let mut take = rest.len().min(8);
+            loop {
+                let data = crate::terrain_layer::encode_land_layer(&terrain, &rest[..take]);
+                if data.is_empty() {
+                    return out; // region size the encoder does not support
+                }
+                if data.len() <= MAX_PAYLOAD || take == 1 {
+                    out.push(data);
+                    break;
+                }
+                take = take.div_ceil(2);
+            }
+            rest = &rest[take..];
+        }
+        out
+    }
+
+    // ---- Attachments ----
+
+    /// Attach an object already in the scene to an avatar's attachment point. The
+    /// object leaves the physics world (it now follows the avatar) and its root part
+    /// takes the avatar as parent. `root.attached_pos` / `rotation_offset` hold the
+    /// offset from the attachment point and are left as set by the caller.
+    pub fn attach_object(
+        &self,
+        group_id: &Uuid,
+        agent_id: &Uuid,
+        point: u8,
+        item_id: Uuid,
+    ) -> Result<(), AttachError> {
+        if point == 0 || point > MAX_ATTACHMENT_POINT {
+            return Err(AttachError::BadPoint(point));
+        }
+        let avatar_local_id = self
+            .presences
+            .read()
+            .unwrap()
+            .get(agent_id)
+            .map(|p| p.local_id)
+            .ok_or(AttachError::NoAvatar)?;
+        let root_local_id = {
+            let mut objects = self.objects.write().unwrap();
+            let group = objects.get_mut(group_id).ok_or(AttachError::NoObject)?;
+            if group.is_attachment {
+                return Err(AttachError::AlreadyAttached);
+            }
+            group.is_attachment = true;
+            group.attachment_point = point;
+            group.attached_avatar = *agent_id;
+            group.attachment_item_id = item_id;
+            group.root_part_mut().parent_id = avatar_local_id;
+            group.root_part_mut().shape.last_attach_point = point;
+            group.mark_changed();
+            group.root_part().local_id
+        };
+        self.unregister_root_from_physics(root_local_id);
+        if let Some(p) = self.presences.write().unwrap().get_mut(agent_id) {
+            p.attachments.retain(|(_, g)| g != group_id);
+            p.attachments.push((point, *group_id));
+        }
+        Ok(())
+    }
+
+    /// Detach an attachment and leave it in the world at `position`. Returns false if
+    /// the object is not an attachment.
+    pub fn detach_object(&self, group_id: &Uuid, position: Vec3) -> bool {
+        let agent = {
+            let mut objects = self.objects.write().unwrap();
+            let Some(group) = objects.get_mut(group_id) else { return false };
+            if !group.is_attachment {
+                return false;
+            }
+            let agent = group.attached_avatar;
+            group.is_attachment = false;
+            group.attachment_point = 0;
+            group.attached_avatar = Uuid::nil();
+            group.attachment_item_id = Uuid::nil();
+            group.root_part_mut().parent_id = 0;
+            group.root_part_mut().attached_pos = Vec3::ZERO;
+            group.set_position(position);
+            group.mark_changed();
+            agent
+        };
+        if let Some(p) = self.presences.write().unwrap().get_mut(&agent) {
+            p.attachments.retain(|(_, g)| g != group_id);
+        }
+        if let Some(group) = self.get_object(group_id) {
+            self.register_group_with_physics(&group);
+        }
+        true
+    }
+
+    /// Object ids of the attachments an avatar wears, with their attachment points.
+    pub fn attachments_of(&self, agent_id: &Uuid) -> Vec<(u8, Uuid)> {
+        let objects = self.objects.read().unwrap();
+        let mut out: Vec<(u8, Uuid)> = objects
+            .iter()
+            .filter(|(_, g)| g.is_attachment && g.attached_avatar == *agent_id)
+            .map(|(id, g)| (g.attachment_point, *id))
+            .collect();
+        out.sort();
+        out
+    }
+
+    /// Remove one worn attachment from the scene entirely, keeping the avatar's
+    /// attachment list in step. Returns the removed object.
+    pub fn remove_attachment(&self, group_id: &Uuid) -> Option<SceneObjectGroup> {
+        let group = self.remove_object(group_id)?;
+        if group.is_attachment
+            && let Some(p) = self.presences.write().unwrap().get_mut(&group.attached_avatar)
+        {
+            p.attachments.retain(|(_, g)| g != group_id);
+        }
+        Some(group)
+    }
+
+    /// Remove every attachment an avatar wears from the scene (logout) and return them,
+    /// with their attachment points still set so callers can save them.
+    pub fn take_attachments_of(&self, agent_id: &Uuid) -> Vec<SceneObjectGroup> {
+        let ids: Vec<Uuid> = self.attachments_of(agent_id).into_iter().map(|(_, id)| id).collect();
+        let removed: Vec<SceneObjectGroup> = ids.iter().filter_map(|id| self.remove_object(id)).collect();
+        if let Some(p) = self.presences.write().unwrap().get_mut(agent_id) {
+            p.attachments.clear();
+        }
+        removed
     }
 
     pub fn get_top_colliders(&self) -> Vec<(u32, f32)> {
@@ -585,6 +943,224 @@ mod tests {
         assert_eq!(scene.frame_number(), 0);
         assert!(!scene.is_active());
         assert!(!scene.is_shutting_down());
+    }
+
+    fn physical_group(name: &str, position: Vec3) -> SceneObjectGroup {
+        let mut part = test_part(name, Uuid::new_v4());
+        part.group_position = position;
+        part.flags |= crate::part::PrimFlags::PHYSICS;
+        SceneObjectGroup::new(part)
+    }
+
+    #[test]
+    fn sync_copies_physical_motion_back_and_reports_rest() {
+        let scene = test_scene();
+        scene.set_physics(Box::new(welkin_physics::null::NullPhysicsScene::new("t")));
+        let uuid = scene.add_object(physical_group("Ball", Vec3::new(5.0, 5.0, 50.0)));
+        let local_id = scene.get_object(&uuid).unwrap().root_part().local_id;
+
+        // Nothing moved yet.
+        assert!(scene.sync_physics_to_objects().is_empty());
+
+        // Physics moves the actor.
+        scene.with_physics(|p| {
+            let a = p.get_actor_mut(local_id).unwrap();
+            a.set_position(Vec3::new(5.0, 5.0, 40.0));
+            a.set_velocity(Vec3::new(0.0, 0.0, -5.0));
+        });
+        let moved = scene.sync_physics_to_objects();
+        assert_eq!(moved.len(), 1);
+        assert_eq!(moved[0].uuid, uuid);
+        assert_eq!(moved[0].position, Vec3::new(5.0, 5.0, 40.0));
+        let part = scene.get_object(&uuid).unwrap();
+        assert_eq!(part.root_part().group_position, Vec3::new(5.0, 5.0, 40.0));
+        assert_eq!(part.root_part().velocity, Vec3::new(0.0, 0.0, -5.0));
+
+        // Same state again: nothing to report.
+        assert!(scene.sync_physics_to_objects().is_empty());
+
+        // Comes to rest at the same spot: one final update with zero velocity.
+        scene.with_physics(|p| p.get_actor_mut(local_id).unwrap().set_velocity(Vec3::ZERO));
+        let rest = scene.sync_physics_to_objects();
+        assert_eq!(rest.len(), 1);
+        assert_eq!(rest[0].velocity, Vec3::ZERO);
+        assert!(scene.sync_physics_to_objects().is_empty());
+    }
+
+    #[test]
+    fn non_physical_objects_are_not_synced_but_moves_reach_physics() {
+        let scene = test_scene();
+        scene.set_physics(Box::new(welkin_physics::null::NullPhysicsScene::new("t")));
+        let uuid = scene.add_object(test_group("Wall", Uuid::new_v4(), Vec3::new(1.0, 1.0, 1.0)));
+        let local_id = scene.get_object(&uuid).unwrap().root_part().local_id;
+        assert!(scene.sync_physics_to_objects().is_empty());
+
+        scene.with_object_mut(&uuid, |g| g.set_position(Vec3::new(9.0, 9.0, 9.0)));
+        scene.push_object_to_physics(&uuid);
+        let p = scene.with_physics(|ph| ph.get_actor(local_id).unwrap().position()).unwrap();
+        assert_eq!(p, Vec3::new(9.0, 9.0, 9.0));
+    }
+
+    #[test]
+    fn modify_terrain_raises_ground_and_reports_changed_patches() {
+        use crate::terrain_paint::PaintAction;
+        let scene = test_scene();
+        let before = scene.terrain_height_at(100.0, 100.0);
+        let changed = scene.modify_terrain(PaintAction::Raise, 100.0, 100.0, 0.0, 4.0, 2.0);
+        assert!((scene.terrain_height_at(100.0, 100.0) - (before + 2.0)).abs() < 1e-3);
+        assert!(!changed.is_empty());
+        assert!(changed.iter().all(|&(px, py)| px < 16 && py < 16));
+        // Dirty flags were consumed: a brush that changes nothing reports nothing.
+        assert!(scene.modify_terrain(PaintAction::Raise, 100.0, 100.0, 0.0, 4.0, 0.0).iter().all(|p| changed.contains(p)));
+        // Revert restores the baked (loaded) height.
+        scene.modify_terrain(PaintAction::Revert, 100.0, 100.0, 0.0, 4.0, 1.0);
+        assert!((scene.terrain_height_at(100.0, 100.0) - before).abs() < 1e-3);
+    }
+
+    fn scene_with_avatar() -> (Scene, Uuid, u32) {
+        use crate::presence::{PresenceType, ScenePresence};
+        let scene = test_scene();
+        let agent = Uuid::new_v4();
+        scene.add_presence(ScenePresence::new(agent, "Test", "Avatar", PresenceType::User));
+        let local = scene.get_presence(&agent).unwrap().local_id;
+        (scene, agent, local)
+    }
+
+    #[test]
+    fn attach_parents_the_object_to_the_avatar_and_detach_puts_it_back() {
+        let (scene, agent, avatar_local) = scene_with_avatar();
+        let obj = scene.add_object(test_group("Hat", agent, Vec3::new(10.0, 10.0, 30.0)));
+        let item = Uuid::new_v4();
+        scene.attach_object(&obj, &agent, 2, item).unwrap();
+
+        let g = scene.get_object(&obj).unwrap();
+        assert!(g.is_attachment);
+        assert_eq!((g.attachment_point, g.attached_avatar, g.attachment_item_id), (2, agent, item));
+        assert_eq!(g.root_part().parent_id, avatar_local);
+        assert_eq!(scene.attachments_of(&agent), vec![(2, obj)]);
+        assert_eq!(scene.get_presence(&agent).unwrap().attachments, vec![(2, obj)]);
+
+        assert!(scene.detach_object(&obj, Vec3::new(50.0, 60.0, 25.0)));
+        let g = scene.get_object(&obj).unwrap();
+        assert!(!g.is_attachment);
+        assert_eq!(g.root_part().parent_id, 0);
+        assert_eq!(g.position(), Vec3::new(50.0, 60.0, 25.0));
+        assert!(scene.attachments_of(&agent).is_empty());
+        assert!(scene.get_presence(&agent).unwrap().attachments.is_empty());
+        assert!(!scene.detach_object(&obj, Vec3::ZERO), "already detached");
+    }
+
+    #[test]
+    fn attach_rejects_bad_requests() {
+        let (scene, agent, _) = scene_with_avatar();
+        let obj = scene.add_object(test_group("Hat", agent, Vec3::ZERO));
+        assert_eq!(scene.attach_object(&obj, &agent, 0, Uuid::nil()), Err(AttachError::BadPoint(0)));
+        assert_eq!(scene.attach_object(&obj, &agent, 56, Uuid::nil()), Err(AttachError::BadPoint(56)));
+        assert_eq!(scene.attach_object(&obj, &Uuid::new_v4(), 2, Uuid::nil()), Err(AttachError::NoAvatar));
+        assert_eq!(scene.attach_object(&Uuid::new_v4(), &agent, 2, Uuid::nil()), Err(AttachError::NoObject));
+        scene.attach_object(&obj, &agent, 2, Uuid::nil()).unwrap();
+        assert_eq!(scene.attach_object(&obj, &agent, 3, Uuid::nil()), Err(AttachError::AlreadyAttached));
+    }
+
+    #[test]
+    fn remove_attachment_cleans_the_avatars_list() {
+        let (scene, agent, _) = scene_with_avatar();
+        let a = scene.add_object(test_group("A", agent, Vec3::ZERO));
+        scene.attach_object(&a, &agent, 2, Uuid::nil()).unwrap();
+        assert!(scene.remove_attachment(&a).is_some());
+        assert!(scene.get_object(&a).is_none());
+        assert!(scene.get_presence(&agent).unwrap().attachments.is_empty());
+    }
+
+    #[test]
+    fn logout_takes_all_of_an_avatars_attachments_out_of_the_scene() {
+        let (scene, agent, _) = scene_with_avatar();
+        let a = scene.add_object(test_group("A", agent, Vec3::ZERO));
+        let b = scene.add_object(test_group("B", agent, Vec3::ZERO));
+        let ground = scene.add_object(test_group("Ground", agent, Vec3::ZERO));
+        scene.attach_object(&a, &agent, 2, Uuid::new_v4()).unwrap();
+        scene.attach_object(&b, &agent, 6, Uuid::new_v4()).unwrap();
+        let taken = scene.take_attachments_of(&agent);
+        assert_eq!(taken.len(), 2);
+        assert!(taken.iter().all(|g| g.is_attachment), "still marked so callers can save them");
+        assert!(scene.get_object(&a).is_none() && scene.get_object(&b).is_none());
+        assert!(scene.get_object(&ground).is_some());
+        assert!(scene.get_presence(&agent).unwrap().attachments.is_empty());
+    }
+
+    #[test]
+    fn attached_objects_leave_the_physics_world() {
+        let (scene, agent, _) = scene_with_avatar();
+        scene.set_physics(Box::new(welkin_physics::null::NullPhysicsScene::new("t")));
+        let obj = scene.add_object(test_group("Hat", agent, Vec3::new(5.0, 5.0, 30.0)));
+        let local = scene.get_object(&obj).unwrap().root_part().local_id;
+        assert!(scene.with_physics(|ph| ph.get_actor_mut(local).is_some()).unwrap());
+        scene.attach_object(&obj, &agent, 2, Uuid::nil()).unwrap();
+        assert!(!scene.with_physics(|ph| ph.get_actor_mut(local).is_some()).unwrap());
+        scene.detach_object(&obj, Vec3::new(5.0, 5.0, 30.0));
+        assert!(scene.with_physics(|ph| ph.get_actor_mut(local).is_some()).unwrap(), "back in the world");
+    }
+
+    #[test]
+    fn edited_terrain_is_offered_for_backup_once() {
+        use crate::terrain_paint::PaintAction;
+        let scene = test_scene();
+        assert!(scene.take_terrain_for_backup().is_none(), "untouched terrain needs no save");
+        scene.set_terrain(&vec![5.0; 256 * 256]);
+        assert!(scene.take_terrain_for_backup().is_none(), "loading terrain is not an edit");
+        scene.modify_terrain(PaintAction::Raise, 50.0, 50.0, 0.0, 3.0, 1.0);
+        let heights = scene.take_terrain_for_backup().expect("edited");
+        assert_eq!(heights.len(), 256 * 256);
+        assert!(scene.take_terrain_for_backup().is_none());
+        scene.mark_terrain_modified();
+        assert!(scene.take_terrain_for_backup().is_some());
+    }
+
+    #[test]
+    fn terrain_layer_payloads_cover_all_patches_and_fit_a_packet() {
+        let scene = test_scene();
+        let all: Vec<(u32, u32)> = (0..16).flat_map(|py| (0..16).map(move |px| (px, py))).collect();
+        let payloads = scene.terrain_layer_payloads(&all);
+        let decoded: usize = payloads
+            .iter()
+            .map(|p| crate::terrain_layer::decode_land_layer(p).unwrap().len())
+            .sum();
+        assert_eq!(decoded, 256);
+        assert!(payloads.iter().all(|p| p.len() <= 1000));
+        // Rough terrain still fits: many patches, each possibly large.
+        let mut map = vec![0.0f32; 256 * 256];
+        for (i, h) in map.iter_mut().enumerate() {
+            *h = ((i * 7919) % 97) as f32;
+        }
+        scene.set_terrain(&map);
+        let payloads = scene.terrain_layer_payloads(&all);
+        assert!(payloads.iter().all(|p| p.len() <= 1000 || crate::terrain_layer::decode_land_layer(p).unwrap().len() == 1));
+        let decoded: usize = payloads.iter().map(|p| crate::terrain_layer::decode_land_layer(p).unwrap().len()).sum();
+        assert_eq!(decoded, 256);
+    }
+
+    #[test]
+    fn terrain_height_is_bilinear_clamped_and_follows_set_terrain() {
+        let scene = test_scene();
+        // Default region terrain is flat at 21 m.
+        assert_eq!(scene.terrain_height_at(100.5, 40.25), 21.0);
+
+        // h = 0.1 * x  (map index = y * 256 + x)
+        let mut map = vec![0.0f32; 256 * 256];
+        for y in 0..256 {
+            for x in 0..256 {
+                map[y * 256 + x] = x as f32 * 0.1;
+            }
+        }
+        scene.set_terrain(&map);
+        assert!((scene.terrain_height_at(10.0, 5.0) - 1.0).abs() < 1e-4);
+        assert!((scene.terrain_height_at(10.5, 5.0) - 1.05).abs() < 1e-4, "interpolates between vertices");
+        assert!((scene.terrain_height_at(-20.0, 5.0) - 0.0).abs() < 1e-4, "clamped at the west edge");
+        assert!((scene.terrain_height_at(400.0, 5.0) - 25.5).abs() < 1e-3, "clamped at the east edge");
+
+        // A map of the wrong size is rejected and leaves the terrain alone.
+        scene.set_terrain(&[5.0; 10]);
+        assert!((scene.terrain_height_at(10.0, 5.0) - 1.0).abs() < 1e-4);
     }
 
     #[test]
@@ -903,6 +1479,10 @@ mod tests {
         scene.add_object(g1);
         scene.add_object(g2);
         scene.add_object(g3);
+        // A new object counts as unsaved; this test wants one that is clean.
+        scene.mark_backed_up(&u3);
+        scene.mark_backed_up(&u1);
+        scene.mark_backed_up(&u2);
 
         // Mark two as needing backup (recently — would NOT pass timed collection)
         scene.with_object_mut(&u1, |g| g.mark_changed());

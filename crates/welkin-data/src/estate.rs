@@ -43,7 +43,7 @@ pub struct EstateSettingsRow {
     #[sqlx(rename = "EstateSkipScripts")]
     pub estate_skip_scripts: i32,
     #[sqlx(rename = "BillableFactor")]
-    pub billable_factor: f32,
+    pub billable_factor: f64,
     #[sqlx(rename = "PublicAccess")]
     pub public_access: i32,
     #[sqlx(rename = "AbuseEmail")]
@@ -129,6 +129,53 @@ impl EstateStore {
             .fetch_optional(&self.pool)
             .await?;
         Ok(row)
+    }
+
+    /// Create an estate, choosing the next free id (OpenSim starts new estates at 100).
+    /// Returns the id; `estate.estate_id` is ignored.
+    pub async fn create_estate(&self, estate: &EstateSettingsRow) -> Result<i32, DataError> {
+        let mut tx = self.pool.begin().await?;
+        let next: (i64,) = sqlx::query_as("SELECT COALESCE(MAX(EstateID), 99) + 1 FROM estate_settings")
+            .fetch_one(&mut *tx)
+            .await?;
+        let id = next.0 as i32;
+        let sql = format!(
+            "INSERT INTO estate_settings ({ESTATE_COLS}) VALUES \
+             ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28)"
+        );
+        sqlx::query(&sql)
+            .bind(id)
+            .bind(estate.estate_name.clone())
+            .bind(estate.abuse_email_to_estate_owner)
+            .bind(estate.deny_anonymous)
+            .bind(estate.reset_home_on_teleport)
+            .bind(estate.fixed_sun)
+            .bind(estate.deny_transacted)
+            .bind(estate.block_dwell)
+            .bind(estate.deny_identified)
+            .bind(estate.allow_voice)
+            .bind(estate.use_global_time)
+            .bind(estate.price_per_meter)
+            .bind(estate.tax_free)
+            .bind(estate.allow_direct_teleport)
+            .bind(estate.redirect_grid_x)
+            .bind(estate.redirect_grid_y)
+            .bind(estate.parent_estate_id)
+            .bind(estate.sun_position)
+            .bind(estate.estate_skip_scripts)
+            .bind(estate.billable_factor)
+            .bind(estate.public_access)
+            .bind(estate.abuse_email.clone())
+            .bind(estate.estate_owner.clone())
+            .bind(estate.deny_minors)
+            .bind(estate.allow_landmark)
+            .bind(estate.allow_parcel_changes)
+            .bind(estate.allow_set_home)
+            .bind(estate.allow_environment_override)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(id)
     }
 
     pub async fn store_estate(&self, estate: &EstateSettingsRow) -> Result<(), DataError> {

@@ -78,6 +78,24 @@ pub fn full_update_for_part(
     }
 }
 
+/// The `state` byte a viewer expects for an attachment point: the nibbles swapped
+/// (OpenSim `(point % 16) * 16 + point / 16`).
+pub fn attachment_state(point: u8) -> u8 {
+    point.rotate_left(4)
+}
+
+/// Make `update` describe a worn attachment: the root hangs off the avatar at its offset
+/// from the attachment point and names the inventory item it came from; every part
+/// carries the swapped attachment point.
+fn apply_attachment(update: &mut FullObjectUpdate, group: &welkin_scene::group::SceneObjectGroup, is_root: bool) {
+    update.state = attachment_state(group.attachment_point);
+    if is_root {
+        update.position = group.root_part().attached_pos;
+        let item = if group.attachment_item_id.is_nil() { group.uuid() } else { group.attachment_item_id };
+        update.name_value = format!("AttachItemID STRING RW SV {item}").into_bytes();
+    }
+}
+
 /// Updates for one object group: the root prim first, then every child part
 /// (children carry the root's local id as their parent and their offset position).
 pub fn group_updates(group: &welkin_scene::group::SceneObjectGroup) -> Vec<FullObjectUpdate> {
@@ -85,7 +103,11 @@ pub fn group_updates(group: &welkin_scene::group::SceneObjectGroup) -> Vec<FullO
     let root = group.root_part();
 
     if root.local_id != 0 {
-        updates.push(full_update_for_part(root, root.parent_id, true));
+        let mut u = full_update_for_part(root, root.parent_id, true);
+        if group.is_attachment {
+            apply_attachment(&mut u, group, true);
+        }
+        updates.push(u);
     }
 
     let root_local_id = root.local_id;
@@ -93,7 +115,11 @@ pub fn group_updates(group: &welkin_scene::group::SceneObjectGroup) -> Vec<FullO
         if part.local_id == 0 || part.uuid == root.uuid {
             continue;
         }
-        updates.push(full_update_for_part(part, root_local_id, false));
+        let mut u = full_update_for_part(part, root_local_id, false);
+        if group.is_attachment {
+            apply_attachment(&mut u, group, false);
+        }
+        updates.push(u);
     }
     updates
 }
@@ -275,5 +301,84 @@ mod tests {
         assert!(seen.iter().any(|o| o.full_id == plain_root));
         let child = seen.iter().find(|o| o.parent_id != 0).expect("child part delivered");
         assert_eq!(child.parent_id, root.id, "child references the root's local id");
+    }
+
+    /// Real Rapier world: a physical prim dropped above terrain falls (reported as
+    /// moved each step), lands on the terrain, and a final at-rest update is sent.
+    #[test]
+    fn physical_prim_falls_lands_and_settles() {
+        use glam::Vec3;
+        use welkin_scene::group::SceneObjectGroup;
+        use welkin_scene::part::PrimFlags;
+        use welkin_scene::scene::{RegionInfo, Scene, SceneConfig};
+
+        let scene = Scene::new(RegionInfo::new("Phys", 1000, 1000), SceneConfig::default());
+        scene.set_physics(Box::new(welkin_physics_rapier::RapierPhysicsScene::new("Phys")));
+        scene.set_terrain(&vec![21.0f32; 256 * 256]);
+
+        let mut part = SceneObjectPart::new("Ball", Uuid::new_v4());
+        part.group_position = Vec3::new(128.0, 128.0, 40.0);
+        part.scale = Vec3::new(1.0, 1.0, 1.0);
+        part.flags |= PrimFlags::PHYSICS;
+        let id = scene.add_object(SceneObjectGroup::new(part));
+
+        let mut reports = 0usize;
+        let mut last_velocity_nonzero = false;
+        for _ in 0..600 {
+            scene.tick();
+            for m in scene.sync_physics_to_objects() {
+                reports += 1;
+                last_velocity_nonzero = m.velocity != Vec3::ZERO;
+            }
+        }
+
+        let z = scene.get_object(&id).unwrap().root_part().group_position.z;
+        assert!(reports > 5, "falling prim should have produced many updates, got {reports}");
+        assert!(z < 25.0, "prim should have fallen from 40 to the terrain (z={z})");
+        assert!(z > 20.0, "prim must rest on the terrain, not fall through it (z={z})");
+        assert!(!last_velocity_nonzero, "the final update must report the prim at rest");
+    }
+
+    #[test]
+    fn attachments_hang_off_the_avatar_with_the_swapped_point_and_item_name_value() {
+        use glam::Vec3;
+        use uuid::Uuid;
+        use welkin_scene::group::SceneObjectGroup;
+
+        let owner = Uuid::new_v4();
+        let mut root = SceneObjectPart::new("Hat", owner);
+        root.local_id = 10;
+        root.parent_id = 7; // the avatar's local id
+        root.attached_pos = Vec3::new(0.1, 0.2, 0.3);
+        root.group_position = Vec3::new(99.0, 99.0, 99.0);
+        let mut child = SceneObjectPart::new("Brim", owner);
+        child.local_id = 11;
+        let mut g = SceneObjectGroup::new(root);
+        g.add_part(child);
+        let item = Uuid::new_v4();
+        g.is_attachment = true;
+        g.attachment_point = 2; // skull
+        g.attachment_item_id = item;
+
+        let updates = group_updates(&g);
+        assert_eq!(updates.len(), 2);
+        let (r, c) = (&updates[0], &updates[1]);
+        assert_eq!(r.parent_id, 7);
+        assert_eq!(r.position, Vec3::new(0.1, 0.2, 0.3), "offset from the attachment point, not the world position");
+        assert_eq!(r.state, 0x20);
+        assert_eq!(String::from_utf8_lossy(&r.name_value), format!("AttachItemID STRING RW SV {item}"));
+        assert_eq!(c.parent_id, 10, "children hang off the root as usual");
+        assert_eq!(c.state, 0x20);
+        assert!(c.name_value.is_empty());
+
+        // The same group as a plain object has no attachment data.
+        g.is_attachment = false;
+        let plain = group_updates(&g);
+        assert_eq!(plain[0].state, 0);
+        assert!(plain[0].name_value.is_empty());
+
+        assert_eq!(attachment_state(2), 0x20);
+        assert_eq!(attachment_state(35), 0x32);
+        assert_eq!(attachment_state(0), 0);
     }
 }

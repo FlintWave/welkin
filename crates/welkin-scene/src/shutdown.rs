@@ -114,10 +114,15 @@ mod tests {
         let g3 = test_group("Clean", owner, Vec3::new(10.0, 0.0, 0.0));
         let u1 = g1.uuid();
         let u2 = g2.uuid();
+        let u3 = g3.uuid();
 
         scene.add_object(g1);
         scene.add_object(g2);
         scene.add_object(g3);
+        // New objects count as unsaved; start from a clean scene.
+        for id in [u1, u2, u3] {
+            scene.mark_backed_up(&id);
+        }
 
         // Mark two objects dirty.
         scene.with_object_mut(&u1, |g| g.mark_changed());

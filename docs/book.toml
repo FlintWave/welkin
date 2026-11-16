@@ -1,7 +1,7 @@
 [book]
-title = "OpenSim Rust"
-description = "Rust port of OpenSimulator 0.9.3.0"
-authors = ["welkin contributors"]
+title = "Welkin"
+description = "Documentation for the Welkin virtual-world server"
+authors = ["FlintWave"]
 language = "en"
 src = "."
 
@@ -10,15 +10,12 @@ build-dir = "book"
 create-missing = false
 
 [output.html]
-default-theme = "rust"
-preferred-dark-theme = "ayu"
+default-theme = "mocha"
+preferred-dark-theme = "mocha"
+additional-css = ["./theme/catppuccin.css"]
+git-repository-url = "https://github.com/FlintWave/welkin"
+edit-url-template = "https://github.com/FlintWave/welkin/edit/main/docs/{path}"
 
 [output.html.fold]
 enable = true
 level = 1
-
-[preprocessor.mermaid]
-command = "mdbook-mermaid"
-
-[preprocessor.admonish]
-command = "mdbook-admonish"

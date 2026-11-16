@@ -67,7 +67,7 @@ class Program
 
         Console.WriteLine("[LOGIN] Logging in as Test User...");
         var loginParams = client.Network.DefaultLoginParams("Test", "User", "password", "WelkinBotTest", "1.0");
-        loginParams.URI = "http://127.0.0.1:8002/";
+        loginParams.URI = Environment.GetEnvironmentVariable("WELKIN_LOGIN_URI") ?? "http://127.0.0.1:8002/";
         loginParams.Start = "last";
 
         bool success = await client.Network.LoginAsync(loginParams);
@@ -147,7 +147,7 @@ class Program
                 var lslCode = "default { state_entry() { llSay(0, \"SCRIPT_ALIVE\"); } touch_start(integer n) { llSay(0, \"TOUCHED\"); } }";
                 var content = new StringContent(lslCode);
                 content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
-                var response = await http.PostAsync($"http://127.0.0.1:9001/UpdateScriptAgent?prim_id={rezzedPrimUuid}", content);
+                var response = await http.PostAsync($"{Environment.GetEnvironmentVariable("WELKIN_REGION_HTTP") ?? "http://127.0.0.1:9001"}/UpdateScriptAgent?prim_id={rezzedPrimUuid}", content);
                 if (response.IsSuccessStatusCode)
                 {
                     scriptUploadOk = true;
