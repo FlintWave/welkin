@@ -2984,8 +2984,9 @@ mod tests {
     #[test]
     fn avatar_factory_stubs() {
         let module = AvatarFactoryModule::new();
-        assert!(module.send_appearance(Uuid::new_v4()));
-        assert!(module.request_rebake(Uuid::new_v4()));
+        // Without a scene there is nowhere to send to.
+        assert!(!module.send_appearance(Uuid::new_v4()));
+        assert!(!module.request_rebake(Uuid::new_v4()));
     }
 
     // -- 169. BakedTexturesModule store/get/clear ----------------------------

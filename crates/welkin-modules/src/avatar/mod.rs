@@ -6,6 +6,7 @@
 //! Implements the Rust equivalents of the C# avatar region modules from
 //! `OpenSim/Region/CoreModules/Avatar/`.
 
+use crate::egress::EgressEvent;
 use std::collections::HashMap;
 
 use uuid::Uuid;
@@ -186,11 +187,18 @@ impl AvatarFactoryModule {
         self.appearances.get(&agent_id)
     }
 
-    /// Stub: signal appearance to the viewer pipeline. Returns `true` on success.
-    pub fn send_appearance(&self, _agent_id: Uuid) -> bool {
-        // In a full implementation this would serialize the appearance into
-        // viewer packets and push them to the LLUDP layer.
-        true
+    pub fn send_appearance(&self, agent_id: Uuid) -> bool {
+        if !self.appearances.contains_key(&agent_id) {
+            return false;
+        }
+
+        if let Some(scene) = &self.scene {
+            scene
+                .egress
+                .send(crate::egress::EgressEvent::AppearanceUpdate { agent: agent_id })
+        } else {
+            false
+        }
     }
 
     /// Return the baked texture faces for an agent.
@@ -217,9 +225,14 @@ impl AvatarFactoryModule {
         }
     }
 
-    /// Request the viewer to rebake textures (stub).
-    pub fn request_rebake(&self, _agent_id: Uuid) -> bool {
-        true
+    pub fn request_rebake(&self, agent_id: Uuid) -> bool {
+        if let Some(scene) = &self.scene {
+            scene
+                .egress
+                .send(crate::egress::EgressEvent::RebakeRequest { agent: agent_id })
+        } else {
+            false
+        }
     }
 
     /// Update the hover-Z preference for an agent.
@@ -641,9 +654,16 @@ impl GodsModule {
             .unwrap_or(GodLevel::Not)
     }
 
-    /// Kick a user from the region (stub — logs intent, would send kick via LLUDP).
-    pub fn kick_user(&self, _agent_id: Uuid, _reason: &str) {
-        // Stub: in a full implementation this sends a KickUser packet.
+    /// Kick a user from the region.
+    pub fn kick_user(&self, agent_id: Uuid, reason: &str) {
+        if let Some(scene) = &self.scene {
+            let event = EgressEvent::Kick {
+                agent: agent_id,
+                reason: reason.to_string(),
+            };
+            scene.egress.send(event);
+        }
+        tracing::info!(agent = %agent_id, reason = %reason, "kicking user from region");
     }
 }
 
@@ -702,12 +722,26 @@ impl DialogModule {
 
     /// Send a simple alert message to a single agent.
     pub fn send_alert(&self, _agent_id: Uuid, _message: &str) {
-        // Stub: would send an AgentAlertMessage packet.
+        if let Some(scene) = &self.scene {
+            let message = _message.chars().take(1024).collect::<String>();
+            let _ = scene.egress.send(crate::egress::EgressEvent::Alert {
+                agent: _agent_id,
+                message,
+                modal: false,
+            });
+        }
     }
 
     /// Send an alert message with a modal flag.
     pub fn send_alert_to_user(&self, _agent_id: Uuid, _message: &str, _modal: bool) {
-        // Stub: would send a modal/non-modal alert.
+        if let Some(scene) = &self.scene {
+            let message = _message.chars().take(1024).collect::<String>();
+            let _ = scene.egress.send(crate::egress::EgressEvent::Alert {
+                agent: _agent_id,
+                message,
+                modal: _modal,
+            });
+        }
     }
 
     /// Send a URL notification dialog.
@@ -721,7 +755,18 @@ impl DialogModule {
         _message: &str,
         _url: &str,
     ) {
-        // Stub: would send a LoadURL packet.
+        if let Some(scene) = &self.scene {
+            let message = _message.chars().take(1024).collect::<String>();
+            let _ = scene.egress.send(crate::egress::EgressEvent::LoadUrl {
+                agent: _agent_id,
+                object_name: _object_name.to_string(),
+                object_id: _object_id,
+                owner_id: _owner_id,
+                group_owned: _group_owned,
+                message,
+                url: _url.to_string(),
+            });
+        }
     }
 
     /// Send a text-box input dialog.
@@ -734,7 +779,16 @@ impl DialogModule {
         _object_id: Uuid,
         _owner_id: Uuid,
     ) {
-        // Stub: would send a ScriptDialog with a text input box.
+        if let Some(scene) = &self.scene {
+            let _ = scene.egress.send(crate::egress::EgressEvent::TextBox {
+                agent: _agent_id,
+                message: _message.to_string(),
+                chat_channel: _chat_channel,
+                object_name: _object_name.to_string(),
+                object_id: _object_id,
+                owner_id: _owner_id,
+            });
+        }
     }
 }
 
@@ -941,5 +995,281 @@ impl RegionModule for GesturesModule {
     fn close(&mut self) -> Result<(), ModuleError> {
         self.active.clear();
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod stub_tests_avfac {
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn send_appearance_without_stored_appearance_is_false() {
+        let agent = Uuid::new_v4();
+        let mut module = AvatarFactoryModule {
+            appearances: std::collections::HashMap::new(),
+            bake_cache: std::collections::HashMap::new(),
+            scene: None,
+        };
+
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+
+        use crate::module::RegionModule;
+        let _ = module.add_region(&scene);
+
+        rec.connect(agent);
+        assert!(!module.send_appearance(agent));
+        assert!(rec.events().is_empty());
+    }
+
+    #[test]
+    fn send_appearance_with_stored_appearance_records_event() {
+        let agent = Uuid::new_v4();
+        let mut module = AvatarFactoryModule {
+            appearances: std::collections::HashMap::new(),
+            bake_cache: std::collections::HashMap::new(),
+            scene: None,
+        };
+
+        module.set_appearance(agent, AvatarAppearance::default());
+
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+
+        use crate::module::RegionModule;
+        let _ = module.add_region(&scene);
+
+        rec.connect(agent);
+        assert!(module.send_appearance(agent));
+        assert_eq!(
+            rec.events(),
+            vec![crate::egress::EgressEvent::AppearanceUpdate { agent }]
+        );
+    }
+
+    #[test]
+    fn request_rebake_records_event() {
+        let agent = Uuid::new_v4();
+        let mut module = AvatarFactoryModule {
+            appearances: std::collections::HashMap::new(),
+            bake_cache: std::collections::HashMap::new(),
+            scene: None,
+        };
+
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+
+        use crate::module::RegionModule;
+        let _ = module.add_region(&scene);
+
+        rec.connect(agent);
+        assert!(module.request_rebake(agent));
+        assert_eq!(
+            rec.events(),
+            vec![crate::egress::EgressEvent::RebakeRequest { agent }]
+        );
+    }
+}
+
+#[cfg(test)]
+mod stub_tests_gods {
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn kick_user_sends_kick_when_connected() {
+        use crate::module::RegionModule;
+
+        let agent = uuid::Uuid::new_v4();
+        let mut scene = crate::registry::SceneRef::new(uuid::Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+
+        let mut module = GodsModule {
+            god_levels: std::collections::HashMap::new(),
+            dialog_on_exit: false,
+            scene: None,
+        };
+
+        let _ = module.add_region(&scene);
+        rec.connect(agent);
+
+        module.kick_user(agent, "because");
+
+        assert_eq!(
+            rec.events(),
+            vec![crate::egress::EgressEvent::Kick {
+                agent,
+                reason: "because".to_string()
+            }]
+        );
+    }
+
+    #[test]
+    fn kick_user_does_nothing_when_not_connected() {
+        use crate::module::RegionModule;
+
+        let agent = uuid::Uuid::new_v4();
+        let mut scene = crate::registry::SceneRef::new(uuid::Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+
+        let mut module = GodsModule {
+            god_levels: std::collections::HashMap::new(),
+            dialog_on_exit: false,
+            scene: None,
+        };
+
+        let _ = module.add_region(&scene);
+
+        module.kick_user(agent, "because");
+
+        assert!(rec.events().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod stub_tests_dialog {
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn send_alert_event_arrives() {
+        let agent = Uuid::new_v4();
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+        rec.connect(agent);
+
+        let module = DialogModule { scene: Some(scene) };
+        module.send_alert(agent, "hello");
+
+        assert_eq!(
+            rec.events(),
+            vec![crate::egress::EgressEvent::Alert {
+                agent,
+                message: "hello".to_string(),
+                modal: false,
+            }]
+        );
+    }
+
+    #[test]
+    fn send_alert_to_user_event_arrives() {
+        let agent = Uuid::new_v4();
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+        rec.connect(agent);
+
+        let module = DialogModule { scene: Some(scene) };
+        module.send_alert_to_user(agent, "attention", true);
+
+        assert_eq!(
+            rec.events(),
+            vec![crate::egress::EgressEvent::Alert {
+                agent,
+                message: "attention".to_string(),
+                modal: true,
+            }]
+        );
+    }
+
+    #[test]
+    fn send_url_to_user_event_arrives() {
+        let agent = Uuid::new_v4();
+        let object_id = Uuid::new_v4();
+        let owner_id = Uuid::new_v4();
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+        rec.connect(agent);
+
+        let module = DialogModule { scene: Some(scene) };
+        module.send_url_to_user(agent, "object", object_id, owner_id, true, "message", "https://example.com");
+
+        assert_eq!(
+            rec.events(),
+            vec![crate::egress::EgressEvent::LoadUrl {
+                agent,
+                object_name: "object".to_string(),
+                object_id,
+                owner_id,
+                group_owned: true,
+                message: "message".to_string(),
+                url: "https://example.com".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn send_text_box_to_user_event_arrives() {
+        let agent = Uuid::new_v4();
+        let object_id = Uuid::new_v4();
+        let owner_id = Uuid::new_v4();
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+        rec.connect(agent);
+
+        let module = DialogModule { scene: Some(scene) };
+        module.send_text_box_to_user(agent, "prompt", 42, "object", object_id, owner_id);
+
+        assert_eq!(
+            rec.events(),
+            vec![crate::egress::EgressEvent::TextBox {
+                agent,
+                message: "prompt".to_string(),
+                chat_channel: 42,
+                object_name: "object".to_string(),
+                object_id,
+                owner_id,
+            }]
+        );
+    }
+
+    #[test]
+    fn send_alert_truncates_to_1024_chars() {
+        let agent = Uuid::new_v4();
+        let mut scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        scene.egress = rec.clone();
+        rec.connect(agent);
+
+        let module = DialogModule { scene: Some(scene) };
+        module.send_alert(agent, &"x".repeat(2000));
+
+        assert_eq!(
+            rec.events(),
+            vec![crate::egress::EgressEvent::Alert {
+                agent,
+                message: "x".repeat(1024),
+                modal: false,
+            }]
+        );
+    }
+
+    #[test]
+    fn send_does_nothing_without_region() {
+        let agent = Uuid::new_v4();
+        let rec = std::sync::Arc::new(crate::egress::RecordingEgress::new());
+        let module = DialogModule { scene: None };
+        module.send_alert(agent, "hello");
+        module.send_alert_to_user(agent, "hello", true);
+        module.send_url_to_user(
+            agent,
+            "object",
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            false,
+            "hello",
+            "https://example.com",
+        );
+        module.send_text_box_to_user(agent, "hello", 1, "object", Uuid::new_v4(), Uuid::new_v4());
+        assert!(rec.events().is_empty());
     }
 }
