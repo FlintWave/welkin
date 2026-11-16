@@ -277,7 +277,7 @@ impl GroupsStore {
 
     pub async fn store_group(&self, row: &GroupRow) -> Result<bool, DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM os_groups_groups WHERE GroupID = $1")
+        sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM os_groups_groups WHERE GroupID = $1"))
             .bind(row.group_id.clone())
             .execute(&mut *tx)
             .await?;
@@ -285,7 +285,8 @@ impl GroupsStore {
             "INSERT INTO os_groups_groups ({GROUP_COLS}) VALUES \
              ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)"
         );
-        sqlx::query(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        sqlx::query(&q)
             .bind(row.group_id.clone())
             .bind(row.name.clone())
             .bind(row.charter.clone())
@@ -309,7 +310,8 @@ impl GroupsStore {
         group_id: &str,
     ) -> Result<Option<GroupRow>, DataError> {
         let sql = format!("SELECT {GROUP_COLS} FROM os_groups_groups WHERE GroupID = $1");
-        let row = sqlx::query_as::<_, GroupRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let row = sqlx::query_as::<_, GroupRow>(&q)
             .bind(group_id.to_string())
             .fetch_optional(&self.pool)
             .await?;
@@ -318,7 +320,8 @@ impl GroupsStore {
 
     pub async fn retrieve_group_by_name(&self, name: &str) -> Result<Option<GroupRow>, DataError> {
         let sql = format!("SELECT {GROUP_COLS} FROM os_groups_groups WHERE Name = $1");
-        let row = sqlx::query_as::<_, GroupRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let row = sqlx::query_as::<_, GroupRow>(&q)
             .bind(name.to_string())
             .fetch_optional(&self.pool)
             .await?;
@@ -328,7 +331,8 @@ impl GroupsStore {
     pub async fn retrieve_groups(&self, pattern: &str) -> Result<Vec<GroupRow>, DataError> {
         let sql = format!("SELECT {GROUP_COLS} FROM os_groups_groups WHERE Name LIKE $1");
         let like = format!("%{pattern}%");
-        let rows = sqlx::query_as::<_, GroupRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let rows = sqlx::query_as::<_, GroupRow>(&q)
             .bind(like)
             .fetch_all(&self.pool)
             .await?;
@@ -336,7 +340,7 @@ impl GroupsStore {
     }
 
     pub async fn delete_group(&self, group_id: &str) -> Result<bool, DataError> {
-        let res = sqlx::query("DELETE FROM os_groups_groups WHERE GroupID = $1")
+        let res = sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM os_groups_groups WHERE GroupID = $1"))
             .bind(group_id.to_string())
             .execute(&self.pool)
             .await?;
@@ -345,7 +349,7 @@ impl GroupsStore {
 
     pub async fn member_count(&self, group_id: &str) -> Result<i64, DataError> {
         let row: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM os_groups_membership WHERE GroupID = $1")
+            sqlx::query_as(&crate::portable::sql(&self.pool, "SELECT COUNT(*) FROM os_groups_membership WHERE GroupID = $1"))
                 .bind(group_id.to_string())
                 .fetch_one(&self.pool)
                 .await?;
@@ -353,7 +357,7 @@ impl GroupsStore {
     }
 
     pub async fn role_count(&self, group_id: &str) -> Result<i64, DataError> {
-        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM os_groups_roles WHERE GroupID = $1")
+        let row: (i64,) = sqlx::query_as(&crate::portable::sql(&self.pool, "SELECT COUNT(*) FROM os_groups_roles WHERE GroupID = $1"))
             .bind(group_id.to_string())
             .fetch_one(&self.pool)
             .await?;
@@ -362,7 +366,7 @@ impl GroupsStore {
 
     pub async fn role_member_count(&self, group_id: &str, role_id: &str) -> Result<i64, DataError> {
         let row: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM os_groups_rolemembership WHERE GroupID = $1 AND RoleID = $2",
+            &crate::portable::sql(&self.pool, "SELECT COUNT(*) FROM os_groups_rolemembership WHERE GroupID = $1 AND RoleID = $2"),
         )
         .bind(group_id.to_string())
         .bind(role_id.to_string())
@@ -375,7 +379,7 @@ impl GroupsStore {
 
     pub async fn store_member(&self, row: &MembershipRow) -> Result<bool, DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM os_groups_membership WHERE GroupID = $1 AND PrincipalID = $2")
+        sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM os_groups_membership WHERE GroupID = $1 AND PrincipalID = $2"))
             .bind(row.group_id.clone())
             .bind(row.principal_id.clone())
             .execute(&mut *tx)
@@ -384,7 +388,8 @@ impl GroupsStore {
             "INSERT INTO os_groups_membership ({MEMBERSHIP_COLS}) VALUES \
              ($1, $2, $3, $4, $5, $6, $7)"
         );
-        sqlx::query(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        sqlx::query(&q)
             .bind(row.group_id.clone())
             .bind(row.principal_id.clone())
             .bind(row.selected_role_id.clone())
@@ -407,7 +412,8 @@ impl GroupsStore {
             "SELECT {MEMBERSHIP_COLS} FROM os_groups_membership \
              WHERE GroupID = $1 AND PrincipalID = $2"
         );
-        let row = sqlx::query_as::<_, MembershipRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let row = sqlx::query_as::<_, MembershipRow>(&q)
             .bind(group_id.to_string())
             .bind(principal_id.to_string())
             .fetch_optional(&self.pool)
@@ -417,7 +423,8 @@ impl GroupsStore {
 
     pub async fn retrieve_members(&self, group_id: &str) -> Result<Vec<MembershipRow>, DataError> {
         let sql = format!("SELECT {MEMBERSHIP_COLS} FROM os_groups_membership WHERE GroupID = $1");
-        let rows = sqlx::query_as::<_, MembershipRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let rows = sqlx::query_as::<_, MembershipRow>(&q)
             .bind(group_id.to_string())
             .fetch_all(&self.pool)
             .await?;
@@ -430,7 +437,8 @@ impl GroupsStore {
     ) -> Result<Vec<MembershipRow>, DataError> {
         let sql =
             format!("SELECT {MEMBERSHIP_COLS} FROM os_groups_membership WHERE PrincipalID = $1");
-        let rows = sqlx::query_as::<_, MembershipRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let rows = sqlx::query_as::<_, MembershipRow>(&q)
             .bind(principal_id.to_string())
             .fetch_all(&self.pool)
             .await?;
@@ -443,7 +451,7 @@ impl GroupsStore {
         principal_id: &str,
     ) -> Result<bool, DataError> {
         let res =
-            sqlx::query("DELETE FROM os_groups_membership WHERE GroupID = $1 AND PrincipalID = $2")
+            sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM os_groups_membership WHERE GroupID = $1 AND PrincipalID = $2"))
                 .bind(group_id.to_string())
                 .bind(principal_id.to_string())
                 .execute(&self.pool)
@@ -455,7 +463,7 @@ impl GroupsStore {
 
     pub async fn store_role(&self, row: &RoleRow) -> Result<bool, DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM os_groups_roles WHERE GroupID = $1 AND RoleID = $2")
+        sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM os_groups_roles WHERE GroupID = $1 AND RoleID = $2"))
             .bind(row.group_id.clone())
             .bind(row.role_id.clone())
             .execute(&mut *tx)
@@ -464,7 +472,8 @@ impl GroupsStore {
             "INSERT INTO os_groups_roles ({ROLE_COLS}) VALUES \
              ($1, $2, $3, $4, $5, $6)"
         );
-        sqlx::query(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        sqlx::query(&q)
             .bind(row.group_id.clone())
             .bind(row.role_id.clone())
             .bind(row.name.clone())
@@ -484,7 +493,8 @@ impl GroupsStore {
     ) -> Result<Option<RoleRow>, DataError> {
         let sql =
             format!("SELECT {ROLE_COLS} FROM os_groups_roles WHERE GroupID = $1 AND RoleID = $2");
-        let row = sqlx::query_as::<_, RoleRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let row = sqlx::query_as::<_, RoleRow>(&q)
             .bind(group_id.to_string())
             .bind(role_id.to_string())
             .fetch_optional(&self.pool)
@@ -494,7 +504,8 @@ impl GroupsStore {
 
     pub async fn retrieve_roles(&self, group_id: &str) -> Result<Vec<RoleRow>, DataError> {
         let sql = format!("SELECT {ROLE_COLS} FROM os_groups_roles WHERE GroupID = $1");
-        let rows = sqlx::query_as::<_, RoleRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let rows = sqlx::query_as::<_, RoleRow>(&q)
             .bind(group_id.to_string())
             .fetch_all(&self.pool)
             .await?;
@@ -502,7 +513,7 @@ impl GroupsStore {
     }
 
     pub async fn delete_role(&self, group_id: &str, role_id: &str) -> Result<bool, DataError> {
-        let res = sqlx::query("DELETE FROM os_groups_roles WHERE GroupID = $1 AND RoleID = $2")
+        let res = sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM os_groups_roles WHERE GroupID = $1 AND RoleID = $2"))
             .bind(group_id.to_string())
             .bind(role_id.to_string())
             .execute(&self.pool)
@@ -515,8 +526,8 @@ impl GroupsStore {
     pub async fn store_role_member(&self, row: &RoleMembershipRow) -> Result<bool, DataError> {
         let mut tx = self.pool.begin().await?;
         sqlx::query(
-            "DELETE FROM os_groups_rolemembership \
-             WHERE GroupID = $1 AND RoleID = $2 AND PrincipalID = $3",
+            &crate::portable::sql(&self.pool, "DELETE FROM os_groups_rolemembership \
+             WHERE GroupID = $1 AND RoleID = $2 AND PrincipalID = $3"),
         )
         .bind(row.group_id.clone())
         .bind(row.role_id.clone())
@@ -526,7 +537,8 @@ impl GroupsStore {
         let sql = format!(
             "INSERT INTO os_groups_rolemembership ({ROLEMEMBERSHIP_COLS}) VALUES ($1, $2, $3)"
         );
-        sqlx::query(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        sqlx::query(&q)
             .bind(row.group_id.clone())
             .bind(row.role_id.clone())
             .bind(row.principal_id.clone())
@@ -546,7 +558,8 @@ impl GroupsStore {
             "SELECT {ROLEMEMBERSHIP_COLS} FROM os_groups_rolemembership \
              WHERE GroupID = $1 AND RoleID = $2 AND PrincipalID = $3"
         );
-        let row = sqlx::query_as::<_, RoleMembershipRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let row = sqlx::query_as::<_, RoleMembershipRow>(&q)
             .bind(group_id.to_string())
             .bind(role_id.to_string())
             .bind(principal_id.to_string())
@@ -562,7 +575,8 @@ impl GroupsStore {
         let sql = format!(
             "SELECT {ROLEMEMBERSHIP_COLS} FROM os_groups_rolemembership WHERE GroupID = $1"
         );
-        let rows = sqlx::query_as::<_, RoleMembershipRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let rows = sqlx::query_as::<_, RoleMembershipRow>(&q)
             .bind(group_id.to_string())
             .fetch_all(&self.pool)
             .await?;
@@ -578,7 +592,8 @@ impl GroupsStore {
             "SELECT {ROLEMEMBERSHIP_COLS} FROM os_groups_rolemembership \
              WHERE GroupID = $1 AND PrincipalID = $2"
         );
-        let rows = sqlx::query_as::<_, RoleMembershipRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let rows = sqlx::query_as::<_, RoleMembershipRow>(&q)
             .bind(group_id.to_string())
             .bind(principal_id.to_string())
             .fetch_all(&self.pool)
@@ -593,8 +608,8 @@ impl GroupsStore {
         principal_id: &str,
     ) -> Result<bool, DataError> {
         let res = sqlx::query(
-            "DELETE FROM os_groups_rolemembership \
-             WHERE GroupID = $1 AND RoleID = $2 AND PrincipalID = $3",
+            &crate::portable::sql(&self.pool, "DELETE FROM os_groups_rolemembership \
+             WHERE GroupID = $1 AND RoleID = $2 AND PrincipalID = $3"),
         )
         .bind(group_id.to_string())
         .bind(role_id.to_string())
@@ -610,7 +625,7 @@ impl GroupsStore {
         principal_id: &str,
     ) -> Result<bool, DataError> {
         let res = sqlx::query(
-            "DELETE FROM os_groups_rolemembership WHERE GroupID = $1 AND PrincipalID = $2",
+            &crate::portable::sql(&self.pool, "DELETE FROM os_groups_rolemembership WHERE GroupID = $1 AND PrincipalID = $2"),
         )
         .bind(group_id.to_string())
         .bind(principal_id.to_string())
@@ -623,12 +638,13 @@ impl GroupsStore {
 
     pub async fn store_principal(&self, row: &PrincipalRow) -> Result<bool, DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM os_groups_principals WHERE PrincipalID = $1")
+        sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM os_groups_principals WHERE PrincipalID = $1"))
             .bind(row.principal_id.clone())
             .execute(&mut *tx)
             .await?;
         let sql = format!("INSERT INTO os_groups_principals ({PRINCIPAL_COLS}) VALUES ($1, $2)");
-        sqlx::query(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        sqlx::query(&q)
             .bind(row.principal_id.clone())
             .bind(row.active_group_id.clone())
             .execute(&mut *tx)
@@ -643,7 +659,8 @@ impl GroupsStore {
     ) -> Result<Option<PrincipalRow>, DataError> {
         let sql =
             format!("SELECT {PRINCIPAL_COLS} FROM os_groups_principals WHERE PrincipalID = $1");
-        let row = sqlx::query_as::<_, PrincipalRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let row = sqlx::query_as::<_, PrincipalRow>(&q)
             .bind(principal_id.to_string())
             .fetch_optional(&self.pool)
             .await?;
@@ -651,7 +668,7 @@ impl GroupsStore {
     }
 
     pub async fn delete_principal(&self, principal_id: &str) -> Result<bool, DataError> {
-        let res = sqlx::query("DELETE FROM os_groups_principals WHERE PrincipalID = $1")
+        let res = sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM os_groups_principals WHERE PrincipalID = $1"))
             .bind(principal_id.to_string())
             .execute(&self.pool)
             .await?;
@@ -662,14 +679,15 @@ impl GroupsStore {
 
     pub async fn store_invitation(&self, row: &InvitationRow) -> Result<bool, DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM os_groups_invites WHERE InviteID = $1")
+        sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM os_groups_invites WHERE InviteID = $1"))
             .bind(row.invite_id.clone())
             .execute(&mut *tx)
             .await?;
         let sql = format!(
             "INSERT INTO os_groups_invites ({INVITATION_COLS}) VALUES ($1, $2, $3, $4, $5)"
         );
-        sqlx::query(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        sqlx::query(&q)
             .bind(row.invite_id.clone())
             .bind(row.group_id.clone())
             .bind(row.role_id.clone())
@@ -686,7 +704,8 @@ impl GroupsStore {
         invite_id: &str,
     ) -> Result<Option<InvitationRow>, DataError> {
         let sql = format!("SELECT {INVITATION_COLS} FROM os_groups_invites WHERE InviteID = $1");
-        let row = sqlx::query_as::<_, InvitationRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let row = sqlx::query_as::<_, InvitationRow>(&q)
             .bind(invite_id.to_string())
             .fetch_optional(&self.pool)
             .await?;
@@ -702,7 +721,8 @@ impl GroupsStore {
             "SELECT {INVITATION_COLS} FROM os_groups_invites \
              WHERE GroupID = $1 AND PrincipalID = $2"
         );
-        let row = sqlx::query_as::<_, InvitationRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let row = sqlx::query_as::<_, InvitationRow>(&q)
             .bind(group_id.to_string())
             .bind(principal_id.to_string())
             .fetch_optional(&self.pool)
@@ -711,7 +731,7 @@ impl GroupsStore {
     }
 
     pub async fn delete_invite(&self, invite_id: &str) -> Result<bool, DataError> {
-        let res = sqlx::query("DELETE FROM os_groups_invites WHERE InviteID = $1")
+        let res = sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM os_groups_invites WHERE InviteID = $1"))
             .bind(invite_id.to_string())
             .execute(&self.pool)
             .await?;
@@ -725,7 +745,7 @@ impl GroupsStore {
             .unwrap_or_default()
             .as_secs() as i64
             - 2 * 24 * 3600;
-        sqlx::query("DELETE FROM os_groups_invites WHERE TMStamp < $1")
+        sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM os_groups_invites WHERE TMStamp < $1"))
             .bind(cutoff)
             .execute(&self.pool)
             .await?;
@@ -736,7 +756,7 @@ impl GroupsStore {
 
     pub async fn store_notice(&self, row: &NoticeRow) -> Result<bool, DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM os_groups_notices WHERE NoticeID = $1")
+        sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM os_groups_notices WHERE NoticeID = $1"))
             .bind(row.notice_id.clone())
             .execute(&mut *tx)
             .await?;
@@ -744,7 +764,8 @@ impl GroupsStore {
             "INSERT INTO os_groups_notices ({NOTICE_COLS}) VALUES \
              ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)"
         );
-        sqlx::query(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        sqlx::query(&q)
             .bind(row.group_id.clone())
             .bind(row.notice_id.clone())
             .bind(row.timestamp)
@@ -764,7 +785,8 @@ impl GroupsStore {
 
     pub async fn retrieve_notice(&self, notice_id: &str) -> Result<Option<NoticeRow>, DataError> {
         let sql = format!("SELECT {NOTICE_COLS} FROM os_groups_notices WHERE NoticeID = $1");
-        let row = sqlx::query_as::<_, NoticeRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let row = sqlx::query_as::<_, NoticeRow>(&q)
             .bind(notice_id.to_string())
             .fetch_optional(&self.pool)
             .await?;
@@ -775,7 +797,8 @@ impl GroupsStore {
         let sql = format!(
             "SELECT {NOTICE_COLS} FROM os_groups_notices WHERE GroupID = $1 ORDER BY TMStamp DESC"
         );
-        let rows = sqlx::query_as::<_, NoticeRow>(&sql)
+        let q = crate::portable::sql(&self.pool, &sql);
+        let rows = sqlx::query_as::<_, NoticeRow>(&q)
             .bind(group_id.to_string())
             .fetch_all(&self.pool)
             .await?;
@@ -783,7 +806,7 @@ impl GroupsStore {
     }
 
     pub async fn delete_notice(&self, notice_id: &str) -> Result<bool, DataError> {
-        let res = sqlx::query("DELETE FROM os_groups_notices WHERE NoticeID = $1")
+        let res = sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM os_groups_notices WHERE NoticeID = $1"))
             .bind(notice_id.to_string())
             .execute(&self.pool)
             .await?;
@@ -797,7 +820,7 @@ impl GroupsStore {
             .unwrap_or_default()
             .as_secs() as i64
             - 14 * 24 * 3600;
-        sqlx::query("DELETE FROM os_groups_notices WHERE TMStamp < $1")
+        sqlx::query(&crate::portable::sql(&self.pool, "DELETE FROM os_groups_notices WHERE TMStamp < $1"))
             .bind(cutoff)
             .execute(&self.pool)
             .await?;
