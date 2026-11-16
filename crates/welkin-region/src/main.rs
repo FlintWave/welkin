@@ -1110,8 +1110,28 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                             tracing::warn!(script = %script_id, error = %err, "script execution error");
                         }
 
+                        // llResetScript: honour the flag the VM set, then clear it
+                        let reset_ids: Vec<Uuid> = {
+                            let sched = heartbeat_scheduler.lock();
+                            sched.all_scripts().filter_map(|inst| {
+                                let ctx_arc = inst.context()?;
+                                let mut ctx = ctx_arc.write();
+                                if ctx.reset_requested {
+                                    ctx.reset_requested = false;
+                                    Some(inst.script_id)
+                                } else {
+                                    None
+                                }
+                            }).collect()
+                        };
+                        for script_id in reset_ids {
+                            if let Err(e) = heartbeat_scheduler.lock().reset_script(&script_id) {
+                                tracing::warn!(script = %script_id, error = %e, "llResetScript failed");
+                            }
+                        }
+
                         // Propagate script context changes to scene objects
-                        let script_changes: Vec<(Uuid, glam::Vec3, glam::Quat, glam::Vec3, String)> = {
+                        let script_changes: Vec<(Uuid, glam::Vec3, glam::Quat, glam::Vec3, String, welkin_scene::part::PartColor, u8)> = {
                             let sched = heartbeat_scheduler.lock();
                             sched.all_scripts().filter_map(|inst| {
                                 let ctx_arc = inst.context()?;
@@ -1122,10 +1142,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                     glam::Quat::from_xyzw(ctx.rotation[0] as f32, ctx.rotation[1] as f32, ctx.rotation[2] as f32, ctx.rotation[3] as f32),
                                     glam::Vec3::new(ctx.scale[0] as f32, ctx.scale[1] as f32, ctx.scale[2] as f32),
                                     ctx.hover_text.clone(),
+                                    welkin_scene::part::PartColor::new(
+                                        (ctx.hover_text_color[0] * 255.0).round() as u8,
+                                        (ctx.hover_text_color[1] * 255.0).round() as u8,
+                                        (ctx.hover_text_color[2] * 255.0).round() as u8,
+                                        (ctx.hover_text_alpha * 255.0).round() as u8,
+                                    ),
+                                    ctx.click_action.clamp(0, 255) as u8,
                                 ))
                             }).collect()
                         };
-                        for (prim_id, ctx_pos, ctx_rot, ctx_scale, ctx_text) in &script_changes {
+                        for (prim_id, ctx_pos, ctx_rot, ctx_scale, ctx_text, ctx_color, ctx_click) in &script_changes {
                             let needs_update = if let Some(obj) = heartbeat_scene.get_object(prim_id) {
                                 let rp = obj.root_part();
                                 let pos_diff = (rp.group_position - *ctx_pos).length() > 0.001;
@@ -1134,7 +1161,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                     || (rp.rotation_offset.z - ctx_rot.z).abs() > 0.001
                                     || (rp.rotation_offset.w - ctx_rot.w).abs() > 0.001;
                                 let scale_diff = (rp.scale - *ctx_scale).length() > 0.001;
-                                let text_diff = rp.text != *ctx_text;
+                                let text_diff = (rp.text != *ctx_text || (!ctx_text.is_empty() && rp.text_color.0 != ctx_color.0))
+                                    || rp.click_action != *ctx_click;
                                 (pos_diff, rot_diff, scale_diff, text_diff)
                             } else {
                                 continue;
@@ -1152,7 +1180,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                         group.root_part_mut().scale = *ctx_scale;
                                     }
                                     if text_changed {
-                                        group.root_part_mut().text = ctx_text.clone();
+                                        let root = group.root_part_mut();
+                                        root.text = ctx_text.clone();
+                                        root.text_color = *ctx_color;
+                                        root.click_action = *ctx_click;
                                     }
                                 });
                                 heartbeat_scene.push_object_to_physics(prim_id);

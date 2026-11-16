@@ -70,13 +70,14 @@ pub fn register_extra_g2(
         let ctx = Arc::clone(ctx);
         lua.globals().set(
             "llSetText",
-            lua.create_function(move |_lua, (text, color, _alpha): (Option<String>, Option<mlua::Table>, Option<f64>)| {
+            lua.create_function(move |_lua, (text, color, alpha): (Option<String>, Option<mlua::Table>, Option<f64>)| {
                 let text = text.unwrap_or_default();
                 let v = table_vec(color.as_ref());
                 let color = [clamp01(v[0]), clamp01(v[1]), clamp01(v[2])];
                 let mut c = ctx.write();
                 c.hover_text = text;
                 c.hover_text_color = color;
+                c.hover_text_alpha = clamp01(alpha.unwrap_or(1.0));
                 Ok(())
             })?,
         )?;
@@ -439,6 +440,7 @@ mod tests {
         let c = ctx.read();
         assert_eq!(c.hover_text, "hi");
         assert_eq!(c.hover_text_color, [1.0, 0.0, 0.5]);
+        assert!((c.hover_text_alpha - 0.25).abs() < f64::EPSILON);
     }
 
     #[test]
