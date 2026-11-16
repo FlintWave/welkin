@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
-use glam::{Quat, Vec3};
-use uuid::Uuid;
 use welkin_msg::msgs::{ObjectUpdate, object_update};
 use welkin_msg::objects::FullObjectUpdate;
 use welkin_scene::part::SceneObjectPart;

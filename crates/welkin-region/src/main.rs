@@ -2370,65 +2370,12 @@ async fn process_messages(
             root.rotation_offset = add.object_data.rotation;
             root.name = "Object".to_string();
             let obj_uuid = root.uuid;
-            let obj_pos = root.group_position;
-            let obj_scale = root.scale;
-            let obj_rot = root.rotation_offset;
             let group = SceneObjectGroup::new(root);
             let _obj_id = scene.add_object(group);
             info!(agent = %add.agent_data.agent_id, object = %obj_uuid, "ObjectAdd: created in scene");
 
             if let Some(obj) = scene.get_object(&obj_uuid) {
-                let local_id = obj.root_part().local_id;
-                let prim_obj = FullObjectUpdate {
-                    local_id,
-                    full_id: obj_uuid,
-                    parent_id: 0,
-                    pcode: 9,
-                    state: 0,
-                    crc: 0,
-                    material: 3,
-                    click_action: 0,
-                    scale: obj_scale,
-                    position: obj_pos,
-                    velocity: glam::Vec3::ZERO,
-                    acceleration: glam::Vec3::ZERO,
-                    rotation: obj_rot,
-                    angular_velocity: glam::Vec3::ZERO,
-                    update_flags: 0x0001_000D,
-                    owner_id: add.agent_data.agent_id,
-                    path_curve: 16,
-                    profile_curve: 1,
-                    path_begin: 0,
-                    path_end: 0,
-                    path_scale_x: 100,
-                    path_scale_y: 100,
-                    path_shear_x: 0,
-                    path_shear_y: 0,
-                    path_twist: 0,
-                    path_twist_begin: 0,
-                    path_radius_offset: 0,
-                    path_taper_x: 0,
-                    path_taper_y: 0,
-                    path_revolutions: 0,
-                    path_skew: 0,
-                    profile_begin: 0,
-                    profile_end: 0,
-                    profile_hollow: 0,
-                    texture_entry: build_default_prim_te(),
-                    texture_anim: Vec::new(),
-                    name_value: Vec::new(),
-                    data: Vec::new(),
-                    text: String::new(),
-                    text_color: [0, 0, 0, 0],
-                    media_url: String::new(),
-                    ps_block: Vec::new(),
-                    extra_params: Vec::new(),
-                    sound_id: Uuid::nil(),
-                    sound_gain: 0.0,
-                    sound_flags: 0,
-                    sound_radius: 0.0,
-                    foot_plane: None,
-                };
+                let prim_obj = scene_sync::full_update_for_part(obj.root_part(), 0, true);
                 let obj_msg = ObjectUpdate {
                     region_data: object_update::RegionData {
                         region_handle: scene.region_info.region_handle,
@@ -4665,62 +4612,7 @@ async fn broadcast_full_object_update(
     clients: &ClientMap,
 ) {
     let root = obj.root_part();
-    let shape = &root.shape;
-    let prim_obj = FullObjectUpdate {
-        local_id: root.local_id,
-        full_id: root.uuid,
-        parent_id: root.parent_id,
-        pcode: 9,
-        state: 0,
-        crc: 0,
-        material: root.material,
-        click_action: root.click_action,
-        scale: root.scale,
-        position: root.group_position,
-        velocity: root.velocity,
-        acceleration: root.acceleration,
-        rotation: root.rotation_offset,
-        angular_velocity: root.angular_velocity,
-        update_flags: 0x0001_000D,
-        owner_id: root.owner_id,
-        path_curve: shape.path_curve,
-        profile_curve: shape.profile_curve,
-        path_begin: shape.path_begin,
-        path_end: shape.path_end,
-        path_scale_x: shape.path_scale_x,
-        path_scale_y: shape.path_scale_y,
-        path_shear_x: shape.path_shear_x,
-        path_shear_y: shape.path_shear_y,
-        path_twist: shape.path_twist,
-        path_twist_begin: shape.path_twist_begin,
-        path_radius_offset: shape.path_radius_offset,
-        path_taper_x: shape.path_taper_x,
-        path_taper_y: shape.path_taper_y,
-        path_revolutions: shape.path_revolutions,
-        path_skew: shape.path_skew,
-        profile_begin: shape.profile_begin,
-        profile_end: shape.profile_end,
-        profile_hollow: shape.profile_hollow,
-        texture_entry: build_default_prim_te(),
-        texture_anim: root.texture_animation.clone(),
-        name_value: Vec::new(),
-        data: Vec::new(),
-        text: root.text.clone(),
-        text_color: [
-            root.text_color.r(),
-            root.text_color.g(),
-            root.text_color.b(),
-            root.text_color.a(),
-        ],
-        media_url: root.media_url.clone(),
-        ps_block: root.particle_system.clone(),
-        extra_params: Vec::new(),
-        sound_id: root.sound_id,
-        sound_gain: root.sound_gain,
-        sound_flags: root.sound_flags,
-        sound_radius: root.sound_radius,
-        foot_plane: None,
-    };
+    let prim_obj = scene_sync::full_update_for_part(root, root.parent_id, true);
     let obj_msg = ObjectUpdate {
         region_data: object_update::RegionData {
             region_handle,
