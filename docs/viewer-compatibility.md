@@ -28,6 +28,10 @@ Working:
 - A viewer can create a group, join one, leave one, update a group's info and
   activate a group. The region replies with the viewer's usual reply messages and
   refreshes the avatar's group state after a change.
+- A viewer can open a group's profile and read its member list, its roles, the
+  titles the avatar may pick, and which members hold which role. The member list
+  goes out in replies of up to 25 members, and only to members of the group: a
+  request from an avatar that is not a member gets no reply.
 
 How it differs from OpenSimulator:
 
@@ -41,13 +45,16 @@ How it differs from OpenSimulator:
 - `GroupPowers` in the login group data is an 8-byte big-endian binary value,
   the same encoding OpenSimulator uses.
 - The region makes its calls to the groups service without holding the session
-  lock, so a slow groups service does not freeze the avatar's connection. The
-  connector times out a request after 15 seconds and a connection attempt after
-  5 seconds, and speaks the XML protocol that ROBUST's groups service uses.
+  lock, and runs each group request in its own task. A slow or hung groups
+  service therefore does not stall the region's packet loop or the avatar's
+  other traffic; a test with a hung service covers this. The connector times out
+  a request after 15 seconds and a connection attempt after 5 seconds, and
+  speaks the XML protocol that ROBUST's groups service uses.
 
-Not covered by this work: group roles and role editing, member lists, group
-notices and group proposals. The region code has no handlers for the role and
-member requests. Treat those as missing until a later change adds them.
+Not covered by this work: changing roles or their powers, assigning members to
+roles, inviting and ejecting members, group notices and group proposals. The
+region answers the read-only queries above but has no handlers for these
+changes. Treat them as missing until a later change adds them.
 
 Limits to know about:
 
