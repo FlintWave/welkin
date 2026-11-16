@@ -126,6 +126,8 @@ pub struct Scene {
     physics: Mutex<Option<Box<dyn PhysicsScene + Send>>>,
     /// The region's height field: the single source for physics and ground queries.
     terrain: RwLock<TerrainChannel>,
+    /// The terrain as last loaded or baked; the `Revert` brush restores from it.
+    baked_terrain: RwLock<Vec<f32>>,
 }
 
 impl Scene {
@@ -146,6 +148,7 @@ impl Scene {
             started_at: RwLock::new(None),
             physics: Mutex::new(None),
             terrain: RwLock::new(TerrainChannel::new_default()),
+            baked_terrain: RwLock::new(TerrainChannel::new_default().heights().to_vec()),
         }
     }
 
@@ -529,6 +532,7 @@ impl Scene {
             if height_map.len() == expected {
                 terrain.heights_mut().copy_from_slice(height_map);
                 terrain.mark_all_dirty();
+                *self.baked_terrain.write().unwrap() = height_map.to_vec();
             } else {
                 tracing::warn!(
                     got = height_map.len(),
@@ -542,6 +546,45 @@ impl Scene {
         {
             physics.set_terrain(height_map);
         }
+    }
+
+    /// Apply a terraform brush (a viewer `ModifyLand` click). Returns the patches
+    /// that changed, as (patch_x, patch_y), and clears their dirty flags. The
+    /// physics height field is updated to match.
+    pub fn modify_terrain(
+        &self,
+        action: crate::terrain_paint::PaintAction,
+        x: f32,
+        y: f32,
+        height: f32,
+        brush_size: f32,
+        strength: f32,
+    ) -> Vec<(u32, u32)> {
+        let (changed, heights) = {
+            let mut terrain = self.terrain.write().unwrap();
+            let baked = self.baked_terrain.read().unwrap();
+            crate::terrain_paint::paint_effect(
+                &mut terrain,
+                Some(baked.as_slice()),
+                action,
+                x,
+                y,
+                height,
+                brush_size,
+                strength,
+            );
+            let changed = terrain.dirty_patches();
+            terrain.clear_dirty();
+            let heights = if changed.is_empty() { Vec::new() } else { terrain.heights().to_vec() };
+            (changed, heights)
+        };
+        if !changed.is_empty()
+            && let Ok(mut guard) = self.physics.lock()
+            && let Some(ref mut physics) = *guard
+        {
+            physics.set_terrain(&heights);
+        }
+        changed
     }
 
     pub fn get_top_colliders(&self) -> Vec<(u32, f32)> {
@@ -769,6 +812,22 @@ mod tests {
         scene.push_object_to_physics(&uuid);
         let p = scene.with_physics(|ph| ph.get_actor(local_id).unwrap().position()).unwrap();
         assert_eq!(p, Vec3::new(9.0, 9.0, 9.0));
+    }
+
+    #[test]
+    fn modify_terrain_raises_ground_and_reports_changed_patches() {
+        use crate::terrain_paint::PaintAction;
+        let scene = test_scene();
+        let before = scene.terrain_height_at(100.0, 100.0);
+        let changed = scene.modify_terrain(PaintAction::Raise, 100.0, 100.0, 0.0, 4.0, 2.0);
+        assert!((scene.terrain_height_at(100.0, 100.0) - (before + 2.0)).abs() < 1e-3);
+        assert!(!changed.is_empty());
+        assert!(changed.iter().all(|&(px, py)| px < 16 && py < 16));
+        // Dirty flags were consumed: a brush that changes nothing reports nothing.
+        assert!(scene.modify_terrain(PaintAction::Raise, 100.0, 100.0, 0.0, 4.0, 0.0).iter().all(|p| changed.contains(p)));
+        // Revert restores the baked (loaded) height.
+        scene.modify_terrain(PaintAction::Revert, 100.0, 100.0, 0.0, 4.0, 1.0);
+        assert!((scene.terrain_height_at(100.0, 100.0) - before).abs() < 1e-3);
     }
 
     #[test]
