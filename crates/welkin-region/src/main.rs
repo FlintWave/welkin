@@ -229,16 +229,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // --- Database init ---
     info!(url = %redact_connection_string(&region_config.database_url), "Connecting to database");
     let pool = DataPool::connect(&region_config.database_url).await?;
-    script_persist::create_script_states_table(pool.inner()).await?;
+    let db_backend = if region_config.database_url.starts_with("mysql") {
+        welkin_data::migrations::Backend::MySQL
+    } else if region_config.database_url.starts_with("postgres") {
+        welkin_data::migrations::Backend::PostgreSQL
+    } else {
+        welkin_data::migrations::Backend::SQLite
+    };
+    script_persist::create_script_states_table(pool.inner(), db_backend).await?;
     // Region tables (prims, terrain, ...): without them nothing the region saves would persist.
     {
-        let backend = if region_config.database_url.starts_with("mysql") {
-            welkin_data::migrations::Backend::MySQL
-        } else if region_config.database_url.starts_with("postgres") {
-            welkin_data::migrations::Backend::PostgreSQL
-        } else {
-            welkin_data::migrations::Backend::SQLite
-        };
+        let backend = db_backend;
         let runner = welkin_data::migrations::MigrationRunner::new(pool.inner().clone(), backend);
         runner.ensure_migrations_table().await?;
         for store_name in ["RegionStore", "EstateStore"] {
@@ -256,6 +257,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // --- Scene creation ---
     let region_id = match region_identity::resolve(
         pool.inner(),
+        db_backend,
         &region_config.region_name,
         region_config.region_loc_x,
         region_config.region_loc_y,
@@ -377,7 +379,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // heartbeat task, which owns the channels scripts need.
     let mut pending_script_restore: Vec<(Uuid, Uuid, welkin_script_vm::ScriptState)> = Vec::new();
     if scripts_enabled {
-        match script_persist::load_script_states(pool.inner()).await {
+        match script_persist::load_script_states(pool.inner(), db_backend).await {
             Ok(states) => pending_script_restore = states,
             Err(e) => warn!(error = %e, "failed to load script states from DB"),
         }
@@ -715,6 +717,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let heartbeat_clients = udp_clients.clone();
     let heartbeat_sim_store = Arc::clone(&sim_store);
     let script_pool = pool.inner().clone();
+    let script_backend = db_backend;
     let heartbeat_region_id = region_id_str.clone();
     let frame_metrics = Arc::new(std::sync::Mutex::new(sim_stats::FrameMetrics::new()));
     let heartbeat_metrics = Arc::clone(&frame_metrics);
@@ -775,7 +778,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     .and_then(|group_id| heartbeat_scene.with_object(&group_id, |g| g.position()))
                 else {
                     warn!(script = %script_id, prim = %prim_id, "saved script's object no longer exists; discarding its state");
-                    if let Err(e) = script_persist::delete_script_state(&script_pool, script_id).await {
+                    if let Err(e) = script_persist::delete_script_state(&script_pool, script_backend, script_id).await {
                         warn!(script = %script_id, error = %e, "could not delete the orphaned script state");
                     }
                     continue;
@@ -1473,7 +1476,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }).collect()
         };
-        match tokio::time::timeout(Duration::from_secs(15), script_persist::save_script_states(pool.inner(), &states)).await {
+        match tokio::time::timeout(Duration::from_secs(15), script_persist::save_script_states(pool.inner(), db_backend, &states)).await {
             Ok(Ok(n)) => info!(count = n, "saved script states to DB"),
             Ok(Err(e)) => warn!(error = %e, "failed to save script states"),
             Err(_) => warn!("script state save timed out"),

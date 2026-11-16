@@ -324,7 +324,7 @@ mod restart_tests {
                 let sql = welkin_data::migrations::migration_content(name, backend).unwrap();
                 runner.run_migrations(name, sql).await.expect("migrations");
             }
-            let id = crate::region_identity::resolve(pool.inner(), "Home", 1000, 1000, None).await.unwrap();
+            let id = crate::region_identity::resolve(pool.inner(), welkin_data::migrations::Backend::SQLite, "Home", 1000, 1000, None).await.unwrap();
             let store = SimulationDataStore::new(pool.inner().clone());
             (pool, id, store)
         }

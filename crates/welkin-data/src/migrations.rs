@@ -12,6 +12,15 @@ pub enum Backend {
     SQLite,
 }
 
+impl Backend {
+    pub fn ph(self, n: usize) -> String {
+        match self {
+            Backend::PostgreSQL => format!("${}", n),
+            _ => "?".to_string(),
+        }
+    }
+}
+
 /// Stores migrated by `run_all` (those used by the grid services).
 pub const GRID_STORES: &[&str] = &[
     "AssetStore",
@@ -199,10 +208,7 @@ impl MigrationRunner {
     }
 
     fn ph(&self, n: usize) -> String {
-        match self.backend {
-            Backend::PostgreSQL => format!("${}", n),
-            _ => "?".to_string(),
-        }
+        self.backend.ph(n)
     }
 
     pub async fn ensure_migrations_table(&self) -> Result<(), DataError> {
