@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
-use std::sync::Arc;
 use welkin_msg::Msg;
 
 use tracing::warn;
@@ -314,7 +313,6 @@ fn bytes_nul(s: &str, max: usize) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use welkin_msg::msgs::{join_group_request, leave_group_request};
 
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::Arc;
@@ -325,7 +323,7 @@ mod tests {
     use welkin_data::groups::GroupsStore;
     use welkin_llsd::{Llsd, Map};
     use welkin_services::groups::{GroupsServiceState, router};
-    use welkin_services::remote::groups::{GroupRecord, MembershipRecord};
+    use welkin_services::remote::groups::GroupRecord;
 
     static SERVICE_COUNTER: AtomicU64 = AtomicU64::new(0);
 

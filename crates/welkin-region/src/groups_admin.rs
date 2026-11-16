@@ -387,7 +387,7 @@ mod tests {
     ];
 
     struct TestDb {
-        pool: sqlx::Pool<sqlx::Any>,
+        _pool: sqlx::Pool<sqlx::Any>,
         path: String,
     }
 
@@ -421,7 +421,7 @@ mod tests {
         });
 
         let ctx = groups_io::GroupsCtx::new(&format!("http://{}", addr));
-        (ctx, TestDb { pool, path })
+        (ctx, TestDb { _pool: pool, path })
     }
 
     fn make_group_record(founder: Uuid) -> GroupRecord {

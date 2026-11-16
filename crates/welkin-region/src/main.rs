@@ -1981,6 +1981,7 @@ async fn process_messages(
         if msg_id == LogoutRequest::ID
             && let Some(client) = &client
         {
+            modify_throttle.forget(&agent_id);
             let leaving = {
                 let mut session = client.lock().await;
                 let reply = LogoutReply {
