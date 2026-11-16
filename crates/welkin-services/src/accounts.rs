@@ -283,11 +283,42 @@ async fn handle_accounts(State(state): State<AccountsServiceState>, body: Bytes)
             if first.is_empty() || last.is_empty() || password.is_empty() {
                 return result_fail();
             }
+            if first.chars().any(|c| c.is_whitespace() || c.is_control())
+                || last.chars().any(|c| c.is_whitespace() || c.is_control())
+                || password.chars().count() < 8
+            {
+                tracing::warn!("createuser: invalid user name or password");
+                return result_fail();
+            }
+            match store.get_by_name(&first, &last).await {
+                Ok(Some(_)) => {
+                    tracing::warn!("createuser: name already exists");
+                    return result_fail();
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    tracing::warn!(error = %e, "createuser: name lookup failed");
+                    return result_fail();
+                }
+            }
             let pid = if f.str("PrincipalID").is_empty() {
                 uuid::Uuid::new_v4().to_string()
             } else {
                 f.str("PrincipalID").to_string()
             };
+            if !f.str("PrincipalID").is_empty() {
+                match store.get_by_id(&pid).await {
+                    Ok(Some(_)) => {
+                        tracing::warn!("createuser: principal id already exists");
+                        return result_fail();
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        tracing::warn!(error = %e, "createuser: principal lookup failed");
+                        return result_fail();
+                    }
+                }
+            }
             let scope = if f.str("ScopeID").is_empty() {
                 "00000000-0000-0000-0000-000000000000".to_string()
             } else {

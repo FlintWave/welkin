@@ -1152,6 +1152,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         region_id: region_id_str.clone(),
         started: Instant::now(),
         actions: console_tx,
+        grid_uri: config.get_string_or("GridService", "GridServerURI", ""),
+        http: reqwest::Client::new(),
     });
     tokio::spawn(console_io::run_actions(
         console_rx,

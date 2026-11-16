@@ -24,6 +24,8 @@ pub struct ConsoleContext {
     pub region_id: String,
     pub started: std::time::Instant,
     pub actions: UnboundedSender<ConsoleAction>,
+    pub grid_uri: String,
+    pub http: reqwest::Client,
 }
 
 #[derive(Parser, Debug)]
@@ -56,6 +58,13 @@ enum Sub {
     },
     Shutdown,
     Quit,
+    #[command(name = "create-user")]
+    CreateUser {
+        first: String,
+        last: String,
+        password: String,
+        email: Option<String>,
+    },
 }
 
 #[derive(Clone)]
@@ -184,6 +193,27 @@ fn find_presence(ctx: &ConsoleContext, query: &str) -> Result<PresenceSummary, S
     Ok(summaries[index].clone())
 }
 
+pub fn validate_new_user(first: &str, last: &str, password: &str) -> Result<(), String> {
+    if first.is_empty() || first.chars().any(char::is_whitespace) {
+        return Err("error: first name must be non-empty and contain no whitespace".to_string());
+    }
+    if last.is_empty() || last.chars().any(char::is_whitespace) {
+        return Err("error: last name must be non-empty and contain no whitespace".to_string());
+    }
+    if password.chars().count() < 8 {
+        return Err("error: password must be at least 8 characters".to_string());
+    }
+    Ok(())
+}
+
+pub fn extract_tag(xml: &str, tag: &str) -> Option<String> {
+    let open = format!("<{}>", tag);
+    let close = format!("</{}>", tag);
+    let start = xml.find(&open)? + open.len();
+    let end = xml[start..].find(&close)? + start;
+    Some(xml[start..end].to_string())
+}
+
 pub async fn execute(ctx: &ConsoleContext, line: &str) -> String {
     let trimmed = line.trim();
     if trimmed.is_empty() {
@@ -209,7 +239,8 @@ pub async fn execute(ctx: &ConsoleContext, line: &str) -> String {
              alert <message...> - broadcast an alert\n\
              kick <name> [reason...] - kick a user\n\
              shutdown - request server shutdown\n\
-             quit - close the console"
+             quit - close the console\n\
+             create-user <first> <last> <password> [email] - create a grid user account"
                 .to_string()
         }
         Sub::Version => env!("CARGO_PKG_VERSION").to_string(),
@@ -309,6 +340,52 @@ pub async fn execute(ctx: &ConsoleContext, line: &str) -> String {
             "shutdown requested".to_string()
         }
         Sub::Quit => "quit".to_string(),
+        Sub::CreateUser {
+            first,
+            last,
+            password,
+            email,
+        } => {
+            if let Err(err) = validate_new_user(&first, &last, &password) {
+                return err;
+            }
+            if ctx.grid_uri.trim().is_empty() {
+                return "error: no grid service URI configured".to_string();
+            }
+
+            let url = format!("{}/accounts", ctx.grid_uri.trim_end_matches('/'));
+            let form = vec![
+                ("METHOD", "createuser"),
+                ("FirstName", first.as_str()),
+                ("LastName", last.as_str()),
+                ("Password", password.as_str()),
+                ("Email", email.as_deref().unwrap_or("")),
+            ];
+
+            let response = match ctx.http.post(&url).form(&form).send().await {
+                Ok(response) => response,
+                Err(err) => {
+                    return format!("error: grid service unreachable: {err}");
+                }
+            };
+
+            let text = match response.text().await {
+                Ok(text) => text,
+                Err(err) => {
+                    return format!("error: grid service unreachable: {err}");
+                }
+            };
+
+            if text.contains("<result>Failure</result>") {
+                return "error: grid refused to create the user (name already exists or invalid data)"
+                    .to_string();
+            }
+
+            match extract_tag(&text, "PrincipalID") {
+                Some(id) => format!("created user {first} {last} ({id})"),
+                None => "error: grid response missing PrincipalID".to_string(),
+            }
+        }
     }
 }
 
@@ -361,4 +438,31 @@ mod tests {
             Err("no user named 'charlie'".to_string())
         );
     }
+
+    #[test]
+    fn extract_tag_found() {
+        assert_eq!(
+            extract_tag("<PrincipalID>abc-123</PrincipalID>", "PrincipalID"),
+            Some("abc-123".to_string())
+        );
+    }
+
+    #[test]
+    fn extract_tag_not_found() {
+        assert_eq!(extract_tag("<result>Success</result>", "PrincipalID"), None);
+    }
+
+    #[test]
+    fn validate_new_user_accepts_valid() {
+        assert!(validate_new_user("Alice", "Smith", "password123").is_ok());
+    }
+
+    #[test]
+    fn validate_new_user_rejects_invalid() {
+        assert!(validate_new_user("", "Smith", "password123").is_err());
+        assert!(validate_new_user("A lice", "Smith", "password123").is_err());
+        assert!(validate_new_user("Alice", "", "password123").is_err());
+        assert!(validate_new_user("Alice", "Smith", "short").is_err());
+    }
 }
+

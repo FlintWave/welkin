@@ -61,7 +61,10 @@ pub fn spawn_repl(
                     if l.is_empty() {
                         continue;
                     }
-                    let _ = editor.add_history_entry(l);
+                    // Never keep password-bearing commands in the line history.
+                    if !l.starts_with("create-user") {
+                        let _ = editor.add_history_entry(l);
+                    }
                     let out = handle.block_on(crate::console::execute(&ctx, l));
                     println!("{out}");
                     if out == "quit" {
