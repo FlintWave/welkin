@@ -62,7 +62,7 @@ pub fn spawn_repl(
                         continue;
                     }
                     // Never keep password-bearing commands in the line history.
-                    if !l.starts_with("create-user") {
+                    if !is_password_command(l) {
                         let _ = editor.add_history_entry(l);
                     }
 
@@ -117,6 +117,12 @@ pub fn spawn_repl(
             }
         }
     }))
+}
+
+/// True for lines that may carry a password; these never enter the line history.
+/// Case-insensitive and tolerant of leading whitespace.
+fn is_password_command(line: &str) -> bool {
+    line.trim_start().to_ascii_lowercase().starts_with("create-user")
 }
 
 fn words(line: &str) -> Vec<&str> {
@@ -291,6 +297,14 @@ mod tests {
         assert!(ct_eq(b"region", b"region"));
         assert!(!ct_eq(b"region", b"wrong!"));
         assert!(!ct_eq(b"short", b"slightly-longer"));
+    }
+
+    #[test]
+    fn password_commands_are_detected_case_and_space_insensitively() {
+        assert!(is_password_command("create-user a b pw"));
+        assert!(is_password_command("  create-user a b pw"));
+        assert!(is_password_command("Create-User a b pw"));
+        assert!(!is_password_command("users"));
     }
 
     #[test]
