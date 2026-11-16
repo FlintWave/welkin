@@ -261,6 +261,23 @@ without manual intervention.
 - Terrain uses a flat-terrain shortcut (range=0, dc_offset=21.0). Full DCT
   compression has a field-order fix pending.
 
+## Sound protocol
+
+Sound messages follow OpenSimulator's behaviour:
+
+- AttachedSound carries flags 0, or QUEUE (0x10) for llPlaySound with
+  queueing on.
+- SoundTrigger goes only to avatars inside the prim's sound radius; a radius of
+  0 is treated as 100 m.
+- PreloadSound goes to avatars inside twice the sound radius.
+- A looping or stopped sound is carried in a full ObjectUpdate for the root
+  prim, so avatars who enter the region later hear the loop. STOP is flag 0x20.
+- A prim that has a saved sound comes back from a restart looping, with the
+  LOOP flag set and a radius of 100 m. The saved data does not keep the loop
+  flag or the radius, so the region restores both for any prim with a sound.
+
+See the [script engine](scripting.md#sound) page for the LSL side.
+
 ## Commits
 
 | Hash | Description |
