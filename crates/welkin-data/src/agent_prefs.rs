@@ -33,43 +33,49 @@ impl AgentPrefsStore {
     }
 
     pub async fn get(&self, principal_id: &str) -> Result<Option<AgentPrefsRow>, DataError> {
-        let row = sqlx::query_as::<_, AgentPrefsRow>(
+        let q = crate::portable::sql(
+            &self.pool,
             "SELECT PrincipalID, AccessPrefs, HoverHeight, Language, LanguageIsPublic, \
              PermEveryone, PermGroup, PermNextOwner FROM AgentPrefs WHERE PrincipalID = $1",
-        )
-        .bind(principal_id.to_string())
-        .fetch_optional(&self.pool)
-        .await?;
+        );
+        let row = sqlx::query_as::<_, AgentPrefsRow>(&q)
+            .bind(principal_id.to_string())
+            .fetch_optional(&self.pool)
+            .await?;
         Ok(row)
     }
 
     pub async fn store(&self, prefs: &AgentPrefsRow) -> Result<(), DataError> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM AgentPrefs WHERE PrincipalID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM AgentPrefs WHERE PrincipalID = $1");
+        sqlx::query(&q)
             .bind(prefs.principal_id.clone())
             .execute(&mut *tx)
             .await?;
-        sqlx::query(
+        let q = crate::portable::sql(
+            &self.pool,
             "INSERT INTO AgentPrefs (PrincipalID, AccessPrefs, HoverHeight, Language, \
              LanguageIsPublic, PermEveryone, PermGroup, PermNextOwner) \
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-        )
-        .bind(prefs.principal_id.clone())
-        .bind(prefs.access_prefs.clone())
-        .bind(prefs.hover_height)
-        .bind(prefs.language.clone())
-        .bind(prefs.language_is_public)
-        .bind(prefs.perm_everyone)
-        .bind(prefs.perm_group)
-        .bind(prefs.perm_next_owner)
-        .execute(&mut *tx)
-        .await?;
+        );
+        sqlx::query(&q)
+            .bind(prefs.principal_id.clone())
+            .bind(prefs.access_prefs.clone())
+            .bind(prefs.hover_height)
+            .bind(prefs.language.clone())
+            .bind(prefs.language_is_public)
+            .bind(prefs.perm_everyone)
+            .bind(prefs.perm_group)
+            .bind(prefs.perm_next_owner)
+            .execute(&mut *tx)
+            .await?;
         tx.commit().await?;
         Ok(())
     }
 
     pub async fn delete(&self, principal_id: &str) -> Result<bool, DataError> {
-        let res = sqlx::query("DELETE FROM AgentPrefs WHERE PrincipalID = $1")
+        let q = crate::portable::sql(&self.pool, "DELETE FROM AgentPrefs WHERE PrincipalID = $1");
+        let res = sqlx::query(&q)
             .bind(principal_id.to_string())
             .execute(&self.pool)
             .await?;
