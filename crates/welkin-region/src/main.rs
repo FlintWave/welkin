@@ -2,6 +2,7 @@
 
 mod logging;
 mod console;
+mod console_io;
 mod persist;
 mod script_persist;
 mod sim_stats;
@@ -1115,8 +1116,50 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         "Region simulator started successfully"
     );
 
-    // --- Wait for shutdown signal ---
-    welkin_runtime::shutdown_signal().await;
+    // --- Operator console (REPL + admin REST) ---
+    let console_shutdown = Arc::new(tokio::sync::Notify::new());
+    let (console_tx, console_rx) = tokio::sync::mpsc::unbounded_channel();
+    let console_ctx = Arc::new(console::ConsoleContext {
+        scene: scene.clone(),
+        sim_store: sim_store.clone(),
+        region_id: region_id_str.clone(),
+        config: Arc::new(config.clone()),
+        started: Instant::now(),
+        actions: console_tx,
+    });
+    tokio::spawn(console_io::run_actions(
+        console_rx,
+        udp_socket.clone(),
+        udp_clients.clone(),
+        console_shutdown.clone(),
+    ));
+    let _repl_handle = console_io::spawn_repl(console_ctx.clone(), cancel.clone());
+    let admin_token = config.get_string_or("Admin", "Token", "");
+    if admin_token.is_empty() {
+        info!("admin REST API disabled ([Admin] Token not set)");
+    } else {
+        let bind = config.get_string_or("Admin", "BindAddress", "127.0.0.1");
+        let port = config.get_i64_or("Admin", "Port", 9100);
+        match tokio::net::TcpListener::bind(format!("{bind}:{port}")).await {
+            Ok(listener) => {
+                info!(%bind, port, "admin REST API listening");
+                let router = console_io::admin_router(console_ctx.clone(), admin_token);
+                let admin_cancel = cancel.clone();
+                tokio::spawn(async move {
+                    let _ = axum::serve(listener, router)
+                        .with_graceful_shutdown(async move { admin_cancel.cancelled().await })
+                        .await;
+                });
+            }
+            Err(e) => error!(%bind, port, error = %e, "admin REST API failed to bind"),
+        }
+    }
+
+    // --- Wait for shutdown signal (OS signal or console `shutdown`) ---
+    tokio::select! {
+        _ = welkin_runtime::shutdown_signal() => {}
+        _ = console_shutdown.notified() => info!("shutdown requested from console"),
+    }
     info!("Initiating graceful shutdown");
 
     // --- Notify connected clients before tearing down ---
