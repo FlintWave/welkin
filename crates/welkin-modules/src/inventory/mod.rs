@@ -290,25 +290,31 @@ impl AssetTransactionModule {
         }
     }
 
-    /// Begin a new asset upload.  Returns the transaction UUID.
-    pub fn begin_upload(&mut self, agent_id: Uuid, asset_type: AssetType) -> Uuid {
-        let transaction_id = Uuid::new_v4();
-        tracing::debug!(
-            %agent_id, ?asset_type, %transaction_id,
-            "begin_upload: stub — transaction created"
-        );
-        self.transactions.insert(
-            transaction_id,
-            UploadTransaction {
+        /// Begin a new asset upload.  Returns the transaction UUID.
+        pub fn begin_upload(&mut self, agent_id: Uuid, asset_type: AssetType) -> Uuid {
+            let transaction_id = Uuid::new_v4();
+            let created = match std::time::SystemTime::now()
+                .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            {
+                Ok(duration) => duration.as_secs() as _,
+                Err(_) => 0 as _,
+            };
+            tracing::debug!(
+                %agent_id, ?asset_type, %transaction_id, %created,
+                "begin_upload: created upload transaction"
+            );
+            self.transactions.insert(
                 transaction_id,
-                agent_id,
-                asset_type,
-                data: Vec::new(),
-                created: 0, // stub timestamp
-            },
-        );
-        transaction_id
-    }
+                UploadTransaction {
+                    transaction_id,
+                    agent_id,
+                    asset_type,
+                    data: Vec::new(),
+                    created,
+                },
+            );
+            transaction_id
+        }
 
     /// Append data to an in-progress upload.
     pub fn append_data(&mut self, transaction_id: Uuid, data: &[u8]) -> Result<(), ModuleError> {
@@ -491,5 +497,46 @@ impl RegionModule for XferModule {
 
     fn close(&mut self) -> Result<(), ModuleError> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_assettransactionmodule_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn begin_upload_stores_transaction_with_real_timestamp() {
+        let mut module = AssetTransactionModule {
+            transactions: std::collections::HashMap::new(),
+        };
+        let agent_id = Uuid::new_v4();
+        let transaction_id = module.begin_upload(agent_id, AssetType::Texture);
+
+        assert_ne!(transaction_id, Uuid::nil());
+        assert!(module.transactions.contains_key(&transaction_id));
+
+        let transaction = module.transactions.get(&transaction_id).unwrap();
+        assert_eq!(transaction.transaction_id, transaction_id);
+        assert_eq!(transaction.agent_id, agent_id);
+        assert_eq!(transaction.asset_type, AssetType::Texture);
+        assert!(transaction.data.is_empty());
+        assert!(transaction.created > 0);
+    }
+
+    #[test]
+    fn begin_upload_creates_distinct_transactions() {
+        let mut module = AssetTransactionModule {
+            transactions: std::collections::HashMap::new(),
+        };
+        let first = module.begin_upload(Uuid::new_v4(), AssetType::Texture);
+        let second = module.begin_upload(Uuid::new_v4(), AssetType::Sound);
+
+        assert_ne!(first, second);
+        assert_eq!(module.transactions.len(), 2);
+        assert!(module.transactions.contains_key(&first));
+        assert!(module.transactions.contains_key(&second));
     }
 }
