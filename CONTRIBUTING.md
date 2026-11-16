@@ -43,7 +43,8 @@ warning fails the build. It has three jobs:
   `todo!()`, `unimplemented!()`, `STUB` or `PLACEHOLDER`. Handlers must do real
   work.
 
-Run the same commands locally before you push. The documentation workflow
+The workspace passes clippy with `-D warnings` (commit 3800afd), so a new
+warning, including dead code, fails the build. Run the same commands locally before you push. The documentation workflow
 (`mdbook.yml`) deploys only from `main`, so a push to `dev` does not publish
 unreviewed docs.
 
