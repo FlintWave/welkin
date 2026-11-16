@@ -14,6 +14,7 @@ mod groups_queries;
 mod groups_queue;
 mod oar_load;
 mod object_buy;
+mod parcel_event;
 mod parcel_io;
 mod groups_tasks;
 mod inventory_rez;
@@ -1708,6 +1709,11 @@ async fn process_messages(
                 );
                 let (parcel_bytes, _) = session.circuit.send_msg(&parcel_msg, true);
                 let _ = socket.send_to(&parcel_bytes, src).await;
+                // Modern viewers take ParcelProperties from the event queue.
+                let parcel_eq = event_queues.read().await.get(&agent_id).cloned();
+                if let Some(eq) = parcel_eq {
+                    eq.enqueue("ParcelProperties", parcel_event::parcel_properties_event(&parcel_msg)).await;
+                }
             }
 
             // --- Issue 2A: Announce new avatar to all OTHER connected clients ---
@@ -2366,6 +2372,10 @@ async fn process_messages(
             let mut session = client.lock().await;
             let (parcel_bytes, _) = session.circuit.send_msg(&props, true);
             let _ = socket.send_to(&parcel_bytes, src).await;
+            let parcel_eq = event_queues.read().await.get(&agent_id).cloned();
+            if let Some(eq) = parcel_eq {
+                eq.enqueue("ParcelProperties", parcel_event::parcel_properties_event(&props)).await;
+            }
         }
 
         if msg_id == AgentUpdate::ID
@@ -2503,6 +2513,13 @@ async fn process_messages(
                     "20f063ea-8306-2562-0b07-5c23464bcec5" // HOVER_DOWN
                 } else {
                     "4ae8016b-31b9-03bb-c401-b1ea941db41d" // HOVER
+                }
+            } else if flags & 0x0020 != 0 {
+                // AGENT_CONTROL_UP_NEG on the ground is a crouch.
+                if flags & 0x000F != 0 {
+                    "47f5f6fb-22e5-ae44-f871-73aaaf4a6022" // CROUCHWALK
+                } else {
+                    "201f3fdf-cb1f-dbec-201f-7333e328ae7c" // CROUCH
                 }
             } else if flags & 0x0001 != 0 || flags & 0x0002 != 0 || flags & 0x0004 != 0 || flags & 0x0008 != 0 {
                 if fast || always_run.contains(&update.agent_data.agent_id) {
