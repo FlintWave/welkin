@@ -428,14 +428,20 @@ impl FlotsamAssetCache {
     /// Retrieve a cached asset by ID.
     pub fn get(&mut self, asset_id: &str) -> Option<CachedAsset> {
         self.stats.total_gets += 1;
+
         if self.config.memory_cache_enabled {
-            if let Some(entry) = self.memory_cache.get(asset_id) {
+            if let Some(entry) = self.memory_cache.get(asset_id).cloned() {
+                // Keep the simple insertion-order queue in LRU order.
+                self.insertion_order.retain(|key| key != asset_id);
+                self.insertion_order.push_back(asset_id.to_string());
+
                 self.stats.memory_hits += 1;
-                return Some(entry.clone());
+                return Some(entry);
             }
             self.stats.memory_misses += 1;
         }
-        // File cache tier would go here; stub returns miss.
+
+        // No file-cache tier is available through this cache handle.
         self.stats.file_misses += 1;
         None
     }
@@ -1096,5 +1102,52 @@ impl RegionModule for MapImageServiceConnector {
 
     fn close(&mut self) -> Result<(), ModuleError> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_rs_flotsamassetcache_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn get_missing_asset_records_memory_miss() {
+        let mut config = AssetCacheConfig::default();
+        config.memory_cache_enabled = true;
+
+        let mut cache = FlotsamAssetCache {
+            config,
+            memory_cache: HashMap::new(),
+            insertion_order: VecDeque::new(),
+            stats: CacheStats::default(),
+        };
+
+        assert!(cache.get("missing-asset").is_none());
+        assert_eq!(cache.stats.total_gets, 1);
+        assert_eq!(cache.stats.memory_hits, 0);
+        assert_eq!(cache.stats.memory_misses, 1);
+        assert_eq!(cache.stats.file_misses, 1);
+        assert!(cache.insertion_order.is_empty());
+    }
+
+    #[test]
+    fn get_with_memory_disabled_records_file_miss_only() {
+        let mut config = AssetCacheConfig::default();
+        config.memory_cache_enabled = false;
+
+        let mut cache = FlotsamAssetCache {
+            config,
+            memory_cache: HashMap::new(),
+            insertion_order: VecDeque::new(),
+            stats: CacheStats::default(),
+        };
+
+        assert!(cache.get("any-asset").is_none());
+        assert_eq!(cache.stats.total_gets, 1);
+        assert_eq!(cache.stats.memory_hits, 0);
+        assert_eq!(cache.stats.memory_misses, 0);
+        assert_eq!(cache.stats.file_misses, 1);
     }
 }
