@@ -12,6 +12,11 @@
 //! region_owner_is_god = true
 //! ```
 //!
+//! The estate is also stored in the region database (`estate_settings`, `estate_map`,
+//! `estate_managers`): the configured owner and managers are written there on first
+//! start, and later starts read the stored estate (a changed `EstateOwner` in the
+//! config replaces the stored owner).
+//!
 //! Without an estate owner nobody has estate rights (terraforming and other
 //! estate-only actions are refused); owners can still edit their own objects.
 
@@ -69,13 +74,107 @@ pub fn permissions_from_config(config: &Config) -> DefaultPermissionsModule {
 
     if perms.config.bypass_permissions {
         tracing::warn!("permission checks are switched OFF (serverside_object_permissions = false)");
-    } else if perms.estate_owner.is_nil() {
-        tracing::warn!(
-            "no [Estate] EstateOwner configured: nobody can terraform or use estate tools; \
-             set EstateOwner to an avatar UUID"
-        );
     }
     perms
+}
+
+fn default_estate(owner: Uuid) -> welkin_data::estate::EstateSettingsRow {
+    // OpenSim's defaults for a new estate.
+    welkin_data::estate::EstateSettingsRow {
+        estate_id: 0,
+        estate_name: Some("My Estate".to_string()),
+        abuse_email_to_estate_owner: 0,
+        deny_anonymous: 0,
+        reset_home_on_teleport: 0,
+        fixed_sun: 0,
+        deny_transacted: 0,
+        block_dwell: 0,
+        deny_identified: 0,
+        allow_voice: 1,
+        use_global_time: 1,
+        price_per_meter: 1,
+        tax_free: 0,
+        allow_direct_teleport: 1,
+        redirect_grid_x: 0,
+        redirect_grid_y: 0,
+        parent_estate_id: 1,
+        sun_position: 0.0,
+        estate_skip_scripts: 0,
+        billable_factor: 0.0,
+        public_access: 1,
+        abuse_email: String::new(),
+        estate_owner: owner.to_string(),
+        deny_minors: 0,
+        allow_landmark: 1,
+        allow_parcel_changes: 1,
+        allow_set_home: 1,
+        allow_environment_override: 0,
+    }
+}
+
+/// Reconcile the configured estate owner/managers (already in `perms`) with the
+/// estate stored for this region, creating the estate on first start, and leave
+/// `perms` holding the result.
+pub async fn apply_estate_data(
+    perms: &mut DefaultPermissionsModule,
+    store: &welkin_data::estate::EstateStore,
+    region_id: &str,
+) {
+    let cfg_owner = perms.estate_owner;
+    let cfg_managers: Vec<Uuid> = perms.estate_managers.iter().copied().collect();
+
+    let estate = match store.get_estate_for_region(region_id).await {
+        Ok(estate) => estate,
+        Err(e) => {
+            tracing::error!(error = %e, "could not read the estate; using the configured owner only");
+            return;
+        }
+    };
+    let result: Result<(), welkin_data::DataError> = async {
+        let estate_id = match estate {
+            Some(mut row) => {
+                let stored_owner = Uuid::parse_str(row.estate_owner.trim()).unwrap_or(Uuid::nil());
+                if !cfg_owner.is_nil() && cfg_owner != stored_owner {
+                    tracing::info!(old = %stored_owner, new = %cfg_owner, "estate owner changed by configuration");
+                    row.estate_owner = cfg_owner.to_string();
+                    store.store_estate(&row).await?;
+                } else {
+                    perms.estate_owner = stored_owner;
+                }
+                row.estate_id
+            }
+            None if !cfg_owner.is_nil() => {
+                let id = store.create_estate(&default_estate(cfg_owner)).await?;
+                store.link_region(id, region_id).await?;
+                tracing::info!(estate_id = id, owner = %cfg_owner, "created the region's estate");
+                id
+            }
+            None => return Ok(()),
+        };
+        let mut managers: std::collections::HashSet<Uuid> = store
+            .get_estate_managers(estate_id)
+            .await?
+            .iter()
+            .filter_map(|s| Uuid::parse_str(s.trim()).ok())
+            .collect();
+        for m in cfg_managers {
+            if managers.insert(m) {
+                store.add_estate_manager(estate_id, &m.to_string()).await?;
+            }
+        }
+        perms.estate_managers = managers;
+        Ok(())
+    }
+    .await;
+    if let Err(e) = result {
+        tracing::error!(error = %e, "estate could not be loaded or saved; using the configured owner only");
+    }
+    if perms.estate_owner.is_nil() && !perms.config.bypass_permissions {
+        tracing::warn!(
+            "the region has no estate owner (none in the database and no [Estate] EstateOwner configured): \
+             nobody can terraform or use estate tools; set EstateOwner to an avatar UUID"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -137,5 +236,74 @@ mod tests {
         // Object owned by `owner`, owner mask all, group/everyone none.
         assert!(perms.can_edit_object(owner, owner, Uuid::nil(), PermissionMask::all()));
         assert!(!perms.can_edit_object(other, owner, Uuid::nil(), PermissionMask::all()));
+    }
+
+    async fn estate_store() -> (welkin_data::estate::EstateStore, std::path::PathBuf) {
+        sqlx::any::install_default_drivers();
+        static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let path = std::env::temp_dir().join(format!(
+            "welkin-estate-test-{}-{}.db",
+            std::process::id(),
+            N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        ));
+        let _ = std::fs::remove_file(&path);
+        let pool = welkin_data::DataPool::connect(&format!("sqlite:{}?mode=rwc", path.display()))
+            .await
+            .expect("pool");
+        let backend = welkin_data::migrations::Backend::SQLite;
+        let runner = welkin_data::migrations::MigrationRunner::new(pool.inner().clone(), backend);
+        runner.ensure_migrations_table().await.unwrap();
+        let sql = welkin_data::migrations::migration_content("EstateStore", backend).unwrap();
+        runner.run_migrations("EstateStore", sql).await.unwrap();
+        (welkin_data::estate::EstateStore::new(pool.inner().clone()), path)
+    }
+
+    #[tokio::test]
+    async fn estate_is_created_stored_and_read_back_on_the_next_start() {
+        let (store, path) = estate_store().await;
+        let region = "22222222-2222-2222-2222-222222222222";
+        let owner = Uuid::new_v4();
+        let manager = Uuid::new_v4();
+
+        // First start: config only.
+        let mut perms = permissions_from_config(&config(&format!(
+            "[Estate]\nEstateOwner = \"{owner}\"\nEstateManagers = \"{manager}\"\n"
+        )));
+        apply_estate_data(&mut perms, &store, region).await;
+        assert_eq!(perms.estate_owner, owner);
+        let row = store.get_estate_for_region(region).await.unwrap().expect("estate created");
+        assert_eq!(row.estate_owner, owner.to_string());
+        assert_eq!(row.estate_id, 100);
+        assert_eq!(store.get_estate_managers(row.estate_id).await.unwrap(), vec![manager.to_string()]);
+
+        // Second start with no [Estate] config: the stored estate supplies everything.
+        let mut perms = permissions_from_config(&config(""));
+        assert!(perms.estate_owner.is_nil());
+        apply_estate_data(&mut perms, &store, region).await;
+        assert_eq!(perms.estate_owner, owner);
+        assert!(perms.is_estate_manager(manager));
+        assert!(perms.can_edit_terrain(owner));
+
+        // A new owner in the config replaces the stored one; managers are not duplicated.
+        let new_owner = Uuid::new_v4();
+        let mut perms = permissions_from_config(&config(&format!(
+            "[Estate]\nEstateOwner = \"{new_owner}\"\nEstateManagers = \"{manager}\"\n"
+        )));
+        apply_estate_data(&mut perms, &store, region).await;
+        assert_eq!(perms.estate_owner, new_owner);
+        let row = store.get_estate_for_region(region).await.unwrap().unwrap();
+        assert_eq!(row.estate_owner, new_owner.to_string());
+        assert_eq!(store.get_estate_managers(row.estate_id).await.unwrap().len(), 1);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn without_config_or_stored_estate_nobody_has_estate_rights() {
+        let (store, path) = estate_store().await;
+        let mut perms = permissions_from_config(&config(""));
+        apply_estate_data(&mut perms, &store, "33333333-3333-3333-3333-333333333333").await;
+        assert!(perms.estate_owner.is_nil());
+        assert!(store.get_estate_for_region("33333333-3333-3333-3333-333333333333").await.unwrap().is_none());
+        let _ = std::fs::remove_file(path);
     }
 }

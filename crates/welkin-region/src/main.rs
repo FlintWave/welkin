@@ -234,10 +234,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         };
         let runner = welkin_data::migrations::MigrationRunner::new(pool.inner().clone(), backend);
         runner.ensure_migrations_table().await?;
-        if let Some(content) = welkin_data::migrations::migration_content("RegionStore", backend) {
-            match runner.run_migrations("RegionStore", content).await {
-                Ok(version) => info!(version, "region store schema is current"),
-                Err(e) => return Err(format!("region store migration failed: {e}").into()),
+        for store_name in ["RegionStore", "EstateStore"] {
+            if let Some(content) = welkin_data::migrations::migration_content(store_name, backend) {
+                match runner.run_migrations(store_name, content).await {
+                    Ok(version) => info!(store = store_name, version, "schema is current"),
+                    Err(e) => return Err(format!("{store_name} migration failed: {e}").into()),
+                }
             }
         }
     }
@@ -456,7 +458,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let process_caps_base = caps_base.clone();
     let process_scheduler = Arc::clone(&script_scheduler);
     let process_grid_connector = grid_connector.clone();
-    let perms = Arc::new(estate_config::permissions_from_config(&config));
+    let perms = {
+        let mut perms = estate_config::permissions_from_config(&config);
+        let estate_store = welkin_data::estate::EstateStore::new(pool.inner().clone());
+        estate_config::apply_estate_data(&mut perms, &estate_store, &region_id_str).await;
+        Arc::new(perms)
+    };
     let process_perms = Arc::clone(&perms);
     let accounts_url = region_config
         .grid_service_url
@@ -700,10 +707,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         let mut control_registrations: HashMap<Uuid, (Uuid, u32, bool, bool)> = HashMap::new();
         // Everything a script needs to talk to the region (chat, timers, sound, physics, ...).
         let make_script_context = |script_id: Uuid, prim_id: Uuid, prim_pos: glam::Vec3| {
+            let prim_name = heartbeat_scene
+                .with_object(&prim_id, |g| g.root_part().name.clone())
+                .unwrap_or_default();
             std::sync::Arc::new(parking_lot::RwLock::new(
                 welkin_script_vm::builtins::ScriptContext {
                     script_id,
                     prim_id,
+                    prim_name,
                     position: [prim_pos.x as f64, prim_pos.y as f64, prim_pos.z as f64],
                     chat_sender: Some(heartbeat_chat_tx.clone()),
                     timer_sender: Some(heartbeat_timer_tx.clone()),
