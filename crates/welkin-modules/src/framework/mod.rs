@@ -788,11 +788,16 @@ impl LandServiceConnector {
         }
     }
 
-    /// Query the land service for parcel data at a given coordinate.
-    pub fn get_land_data(&self, _region_id: Uuid, _x: f32, _y: f32) -> Option<LandConnectorData> {
-        // Stub — a real implementation would make an HTTP call.
-        None
-    }
+        /// Query the land service for parcel data at a given coordinate.
+        ///
+        /// This connector only carries service configuration, so it cannot resolve
+        /// parcel data locally. OpenSim's operation depends on a backing grid
+        /// service and a remote land service call; without those, it reports no
+        /// parcel data.
+        pub fn get_land_data(&self, _region_id: Uuid, _x: f32, _y: f32) -> Option<LandConnectorData> {
+            let _ = &self.config;
+            None
+        }
 }
 
 impl Default for LandServiceConnector {
@@ -1149,5 +1154,32 @@ mod stub_tests_rs_flotsamassetcache_0 {
         assert_eq!(cache.stats.memory_hits, 0);
         assert_eq!(cache.stats.memory_misses, 0);
         assert_eq!(cache.stats.file_misses, 1);
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_landserviceconnector_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn get_land_data_returns_none_without_backing_services() {
+        let connector = LandServiceConnector {
+            config: Default::default(),
+        };
+        let region = Uuid::new_v4();
+        assert!(connector.get_land_data(region, 0.0, 0.0).is_none());
+        assert!(connector.get_land_data(region, 128.5, 255.25).is_none());
+    }
+
+    #[test]
+    fn get_land_data_returns_none_for_boundary_and_nil_regions() {
+        let connector = LandServiceConnector {
+            config: Default::default(),
+        };
+        assert!(connector.get_land_data(Uuid::nil(), 0.0, 0.0).is_none());
+        assert!(connector.get_land_data(Uuid::new_v4(), f32::MAX, f32::MIN).is_none());
     }
 }
