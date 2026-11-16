@@ -65,6 +65,43 @@ pub fn spawn_repl(
                     if !l.starts_with("create-user") {
                         let _ = editor.add_history_entry(l);
                     }
+
+                    if let Some((first, last)) = needs_password_prompt(l) {
+                        let password = match rpassword::prompt_password("Password: ") {
+                            Ok(password) => password,
+                            Err(err) => {
+                                eprintln!("console: {err}");
+                                continue;
+                            }
+                        };
+                        let confirm = match rpassword::prompt_password("Confirm password: ") {
+                            Ok(confirm) => confirm,
+                            Err(err) => {
+                                eprintln!("console: {err}");
+                                continue;
+                            }
+                        };
+                        if password != confirm {
+                            eprintln!("console: passwords did not match");
+                            continue;
+                        }
+
+                        if password.contains('"') {
+                            eprintln!("console: passwords containing a double quote are not supported");
+                            continue;
+                        }
+                        let command = format!(
+                            "create-user \"{}\" \"{}\" \"{}\"",
+                            first, last, password
+                        );
+                        let out = handle.block_on(crate::console::execute(&ctx, &command));
+                        println!("{out}");
+                        if out == "quit" {
+                            break;
+                        }
+                        continue;
+                    }
+
                     let out = handle.block_on(crate::console::execute(&ctx, l));
                     println!("{out}");
                     if out == "quit" {
@@ -80,6 +117,19 @@ pub fn spawn_repl(
             }
         }
     }))
+}
+
+fn words(line: &str) -> Vec<&str> {
+    line.split_whitespace().collect()
+}
+
+fn needs_password_prompt(line: &str) -> Option<(String, String)> {
+    let words = words(line);
+    if words.len() == 3 && words[0] == "create-user" {
+        Some((words[1].to_string(), words[2].to_string()))
+    } else {
+        None
+    }
 }
 
 async fn admin_console(
@@ -241,5 +291,17 @@ mod tests {
         assert!(ct_eq(b"region", b"region"));
         assert!(!ct_eq(b"region", b"wrong!"));
         assert!(!ct_eq(b"short", b"slightly-longer"));
+    }
+
+    #[test]
+    fn needs_password_prompt_works() {
+        assert_eq!(
+            needs_password_prompt("create-user alice smith"),
+            Some(("alice".to_string(), "smith".to_string()))
+        );
+        assert_eq!(needs_password_prompt("create-user alice"), None);
+        assert_eq!(needs_password_prompt("create-user alice smith extra"), None);
+        assert_eq!(needs_password_prompt("list-users alice smith"), None);
+        assert_eq!(needs_password_prompt(""), None);
     }
 }

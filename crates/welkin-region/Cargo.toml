@@ -34,6 +34,7 @@ serde_json = { workspace = true }
 sqlx = { workspace = true }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 rustyline = "19"
+rpassword = "7"
 
 [dev-dependencies]
 
