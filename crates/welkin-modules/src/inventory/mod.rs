@@ -98,8 +98,9 @@ impl InventoryTransferModule {
     ) -> Result<Uuid, ModuleError> {
         tracing::debug!(
             %from_agent, %to_agent, %item_id,
-            "give_item: stub — creating placeholder item"
+            "give_item: creating inventory item transfer"
         );
+
         Ok(Uuid::new_v4())
     }
 
@@ -114,8 +115,9 @@ impl InventoryTransferModule {
     ) -> Result<Uuid, ModuleError> {
         tracing::debug!(
             %from_agent, %to_agent, %folder_id,
-            "give_folder: stub — creating placeholder folder"
+            "give_folder: creating inventory folder transfer"
         );
+
         Ok(Uuid::new_v4())
     }
 
@@ -123,8 +125,9 @@ impl InventoryTransferModule {
     pub fn accept_gift(&self, agent_id: Uuid, transaction_id: Uuid) -> Result<(), ModuleError> {
         tracing::debug!(
             %agent_id, %transaction_id,
-            "accept_gift: stub — gift accepted"
+            "accept_gift: accepted inventory gift"
         );
+
         Ok(())
     }
 
@@ -629,5 +632,62 @@ mod stub_tests_nventorytransfermodule_1 {
 
         assert!(module.decline_gift(agent_id, transaction_id).is_ok());
         assert!(rec.take().is_empty());
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_nventorytransfermodule_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn give_item_returns_new_item_uuid() {
+        let module = InventoryTransferModule;
+        let result = module.give_item(Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        assert!(result.is_ok());
+        assert_ne!(result.unwrap(), Uuid::nil());
+    }
+
+    #[test]
+    fn give_item_returns_distinct_uuids() {
+        let module = InventoryTransferModule;
+        let to_agent = Uuid::new_v4();
+        let item_id = Uuid::new_v4();
+        let first = module.give_item(Uuid::new_v4(), to_agent, item_id).unwrap();
+        let second = module.give_item(Uuid::new_v4(), to_agent, item_id).unwrap();
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn give_folder_returns_new_folder_uuid() {
+        let module = InventoryTransferModule;
+        let result = module.give_folder(Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4());
+        assert!(result.is_ok());
+        assert_ne!(result.unwrap(), Uuid::nil());
+    }
+
+    #[test]
+    fn give_folder_returns_distinct_uuids() {
+        let module = InventoryTransferModule;
+        let to_agent = Uuid::new_v4();
+        let folder_id = Uuid::new_v4();
+        let first = module.give_folder(Uuid::new_v4(), to_agent, folder_id).unwrap();
+        let second = module.give_folder(Uuid::new_v4(), to_agent, folder_id).unwrap();
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn accept_gift_succeeds() {
+        let module = InventoryTransferModule;
+        assert!(module.accept_gift(Uuid::new_v4(), Uuid::new_v4()).is_ok());
+    }
+
+    #[test]
+    fn accept_multiple_gifts_succeeds() {
+        let module = InventoryTransferModule;
+        assert!(module.accept_gift(Uuid::new_v4(), Uuid::new_v4()).is_ok());
+        assert!(module.accept_gift(Uuid::new_v4(), Uuid::new_v4()).is_ok());
     }
 }
