@@ -428,6 +428,38 @@ async fn handle_accounts(State(state): State<AccountsServiceState>, body: Bytes)
 
             xml_response(&account_xml("result", &account))
         }
+        "setpassword" => {
+            let principal = if f.str("PrincipalID").is_empty() {
+                f.str("Principal").to_string()
+            } else {
+                f.str("PrincipalID").to_string()
+            };
+            if principal.is_empty() {
+                return result_fail();
+            }
+            if !state.can_set_password(&principal).await {
+                tracing::warn!("setpassword refused: ungated or account missing");
+                return result_fail();
+            }
+            let password = f.str("Password").to_string();
+            if password.is_empty() {
+                return result_fail();
+            }
+            let md5_pass = if password.starts_with("$1$") {
+                password[3..].to_string()
+            } else {
+                md5_hex(&password)
+            };
+            let salt = uuid::Uuid::new_v4().to_string();
+            let hash = md5_hex(&format!("{md5_pass}:{salt}"));
+            match state.auth_store.set_password(&principal, &hash, &salt).await {
+                Ok(()) => xml_response("<result>Success</result>"),
+                Err(e) => {
+                    tracing::warn!(error = %e, "setpassword failed");
+                    result_fail()
+                }
+            }
+        }
         other => {
             tracing::warn!(method = other, "unknown accounts method");
             result_fail()

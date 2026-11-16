@@ -5078,7 +5078,6 @@ dependencies = [
  "uuid",
  "welkin-script-api",
  "welkin-script-compiler",
- "welkin-types",
 ]
 
 [[package]]
@@ -5104,7 +5103,6 @@ dependencies = [
  "uuid",
  "welkin-data",
  "welkin-llsd",
- "welkin-types",
 ]
 
 [[package]]
