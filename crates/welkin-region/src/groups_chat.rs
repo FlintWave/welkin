@@ -72,8 +72,27 @@ pub enum ChatOut {
     NoticesList(msgs::GroupNoticesListReply),
 }
 
-pub fn is_chat_dialog(dialog: u8, from_group: bool) -> bool {
-    matches!(dialog, 13 | 14 | 17 | 32 | 37) || (dialog == 20 && from_group)
+pub mod dialog {
+    pub const SESSION_ADD: u8 = 13;
+    #[allow(dead_code)] // protocol value, pinned by test; not handled
+    pub const SESSION_OFFLINE_ADD: u8 = 14;
+    pub const SESSION_GROUP_START: u8 = 15;
+    pub const SESSION_SEND: u8 = 17;
+    pub const SESSION_DROP: u8 = 18;
+    pub const GROUP_NOTICE: u8 = 32;
+    pub const GROUP_NOTICE_REQUESTED: u8 = 37;
+}
+
+pub fn is_chat_dialog(dialog: u8, _from_group: bool) -> bool {
+    matches!(
+        dialog,
+        dialog::SESSION_ADD
+            | dialog::SESSION_GROUP_START
+            | dialog::SESSION_SEND
+            | dialog::SESSION_DROP
+            | dialog::GROUP_NOTICE
+            | dialog::GROUP_NOTICE_REQUESTED
+    )
 }
 
 pub fn is_notices_list_packet(id: welkin_msg::MsgId) -> bool {
@@ -121,7 +140,7 @@ fn make_notice_im(
             region_id: Uuid::nil(),
             position: glam::Vec3::ZERO,
             offline: 1,
-            dialog: 32,
+            dialog: dialog::GROUP_NOTICE,
             id: notice_id,
             timestamp,
             from_agent_name: gio::name_bytes(from_name),
@@ -133,6 +152,31 @@ fn make_notice_im(
     }
 }
 
+pub fn session_start_reply_event(group: Uuid, group_name: &str) -> welkin_llsd::Llsd {
+    let mut moderated_mode = welkin_llsd::Map::new();
+    moderated_mode.insert("voice".into(), welkin_llsd::Llsd::Boolean(false));
+
+    let mut session_info = welkin_llsd::Map::new();
+    session_info.insert(
+        "moderated_mode".into(),
+        welkin_llsd::Llsd::Map(moderated_mode),
+    );
+    session_info.insert(
+        "session_name".into(),
+        welkin_llsd::Llsd::String(group_name.to_string()),
+    );
+    session_info.insert("type".into(), welkin_llsd::Llsd::Integer(0));
+    session_info.insert("voice_enabled".into(), welkin_llsd::Llsd::Boolean(false));
+
+    let mut map = welkin_llsd::Map::new();
+    map.insert("session_id".into(), welkin_llsd::Llsd::Uuid(group));
+    map.insert("temp_session_id".into(), welkin_llsd::Llsd::Uuid(group));
+    map.insert("success".into(), welkin_llsd::Llsd::Boolean(true));
+    map.insert("session_info".into(), welkin_llsd::Llsd::Map(session_info));
+
+    welkin_llsd::Llsd::Map(map)
+}
+
 pub async fn process_chat_im(
     ctx: &gio::GroupsCtx,
     chat: &GroupChat,
@@ -141,25 +185,38 @@ pub async fn process_chat_im(
     last: &str,
     region_id: Uuid,
     im: &msgs::ImprovedInstantMessage,
+    eq: Option<&welkin_caps::event_queue::EventQueue>,
 ) -> Vec<ChatOut> {
     let mut out = Vec::new();
     let dialog = im.message_block.dialog;
 
     match (dialog, im.message_block.from_group) {
-        (17, _) => {
+        (dialog::SESSION_GROUP_START, _) => {
             let group = im.message_block.id;
             if is_member(ctx, agent, group).await {
                 chat.mark(group, agent);
-                let mut ack = im.clone();
-                ack.message_block.to_agent_id = agent;
-                out.push(ChatOut::Im { to: agent, im: ack });
+                let group_name = ctx
+                    .connector()
+                    .get_group(agent, Some(group), None)
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|g| g.group_name.to_string())
+                    .unwrap_or_else(|| "Unknown".to_string());
+                if let Some(eq) = eq {
+                    eq.enqueue(
+                        "ChatterBoxSessionStartReply",
+                        session_start_reply_event(group, &group_name),
+                    )
+                    .await;
+                }
             } else {
                 out.push(ChatOut::Alert(gio::alert_message(
                     "You are not a member of that group.",
                 )));
             }
         }
-        (20, true) => {
+        (dialog::SESSION_SEND, _) => {
             let group = im.message_block.id;
             let allowed = if chat.is_fresh(group, agent) {
                 true
@@ -191,17 +248,17 @@ pub async fn process_chat_im(
                     msg.message_block.offline = 0;
                     msg.message_block.timestamp = now;
                     msg.message_block.from_agent_name = sender_name.clone();
-                    msg.message_block.dialog = 20;
+                    msg.message_block.dialog = dialog::SESSION_SEND;
                     msg.message_block.from_group = true;
                     out.push(ChatOut::Im { to: other, im: msg });
                 }
             }
         }
-        (14, _) => {
+        (dialog::SESSION_DROP, _) => {
             let group = im.message_block.id;
             chat.remove(group, agent);
         }
-        (13, _) => {
+        (dialog::SESSION_ADD, _) => {
             let group = im.message_block.id;
             if is_member(ctx, agent, group).await {
                 chat.mark(group, agent);
@@ -385,6 +442,7 @@ pub fn spawn_chat_im(
     last: String,
     region_id: Uuid,
     im: msgs::ImprovedInstantMessage,
+    event_queues: Arc<RwLock<HashMap<Uuid, Arc<welkin_caps::event_queue::EventQueue>>>>,
     clients: Arc<RwLock<HashMap<SocketAddr, Arc<Mutex<welkin_net::server::ClientSession>>>>>,
     client: Arc<Mutex<welkin_net::server::ClientSession>>,
     socket: Arc<tokio::net::UdpSocket>,
@@ -392,7 +450,8 @@ pub fn spawn_chat_im(
 ) {
     let queue = ctx.queue().clone();
     let _ = queue.submit(agent, async move {
-        let outputs = process_chat_im(&ctx, &chat, agent, &first, &last, region_id, &im).await;
+        let eq = { let guard = event_queues.read().await; guard.get(&agent).cloned() };
+        let outputs = process_chat_im(&ctx, &chat, agent, &first, &last, region_id, &im, eq.as_deref()).await;
         deliver(outputs, agent, clients, client, socket, addr).await;
     });
 }
@@ -622,13 +681,13 @@ mod tests {
 
         let chat = GroupChat::new();
 
-        let im17 = mk_im(17, false, group, group, "", Vec::new());
-        let out = process_chat_im(&ctx, &chat, non_member, "Non", "Member", Uuid::nil(), &im17).await;
+        let im_start = mk_im(15, false, group, group, "", Vec::new());
+        let out = process_chat_im(&ctx, &chat, non_member, "Non", "Member", Uuid::nil(), &im_start, None).await;
         assert!(matches!(out.as_slice(), [ChatOut::Alert(_)]));
         assert!(!chat.is_fresh(group, non_member));
 
-        let im20 = mk_im(20, true, group, group, "hello", Vec::new());
-        let out = process_chat_im(&ctx, &chat, non_member, "Non", "Member", Uuid::nil(), &im20).await;
+        let im_send = mk_im(17, true, group, group, "hello", Vec::new());
+        let out = process_chat_im(&ctx, &chat, non_member, "Non", "Member", Uuid::nil(), &im_send, None).await;
         assert!(matches!(out.as_slice(), [ChatOut::Alert(_)]));
         assert!(!has_im(&out));
         assert!(!chat.is_fresh(group, non_member));
@@ -648,18 +707,18 @@ mod tests {
 
         let chat = GroupChat::new();
 
-        let im17 = mk_im(17, true, group, group, "", Vec::new());
-        let _ = process_chat_im(&ctx, &chat, founder, "Found", "Er", Uuid::nil(), &im17).await;
-        let _ = process_chat_im(&ctx, &chat, member, "Mem", "Ber", Uuid::nil(), &im17).await;
+        let im_start = mk_im(15, true, group, group, "", Vec::new());
+        let _ = process_chat_im(&ctx, &chat, founder, "Found", "Er", Uuid::nil(), &im_start, None).await;
+        let _ = process_chat_im(&ctx, &chat, member, "Mem", "Ber", Uuid::nil(), &im_start, None).await;
 
-        let im20 = mk_im(20, true, group, group, "packet name", Vec::new());
-        let out = process_chat_im(&ctx, &chat, founder, "First", "Last", Uuid::nil(), &im20).await;
+        let im_send = mk_im(17, true, group, group, "packet name", Vec::new());
+        let out = process_chat_im(&ctx, &chat, founder, "First", "Last", Uuid::nil(), &im_send, None).await;
 
         assert_eq!(out.len(), 1);
         match &out[0] {
             ChatOut::Im { to, im } => {
                 assert_eq!(*to, member);
-                assert_eq!(im.message_block.dialog, 20);
+                assert_eq!(im.message_block.dialog, 17);
                 assert!(im.message_block.from_group);
                 assert_eq!(im.agent_data.agent_id, founder);
                 assert_eq!(
@@ -692,22 +751,22 @@ mod tests {
 
         let chat = GroupChat::with_ttl(Duration::ZERO);
 
-        let im17 = mk_im(17, true, group, group, "", Vec::new());
-        let _ = process_chat_im(&ctx, &chat, member, "Mem", "Ber", Uuid::nil(), &im17).await;
+        let im_start = mk_im(15, true, group, group, "", Vec::new());
+        let _ = process_chat_im(&ctx, &chat, member, "Mem", "Ber", Uuid::nil(), &im_start, None).await;
 
         ctx.connector()
             .remove_agent_from_group(founder, member, group)
             .await
             .unwrap();
 
-        let im20 = mk_im(20, true, group, group, "msg", Vec::new());
-        let out = process_chat_im(&ctx, &chat, member, "Mem", "Ber", Uuid::nil(), &im20).await;
+        let im_send = mk_im(17, true, group, group, "msg", Vec::new());
+        let out = process_chat_im(&ctx, &chat, member, "Mem", "Ber", Uuid::nil(), &im_send, None).await;
         assert!(matches!(out.as_slice(), [ChatOut::Alert(_)]));
         assert!(!has_im(&out));
 
         chat.mark(group, founder);
-        let im14 = mk_im(14, true, group, group, "", Vec::new());
-        let _ = process_chat_im(&ctx, &chat, founder, "Found", "Er", Uuid::nil(), &im14).await;
+        let im_drop = mk_im(18, true, group, group, "", Vec::new());
+        let _ = process_chat_im(&ctx, &chat, founder, "Found", "Er", Uuid::nil(), &im_drop, None).await;
         assert!(!chat.is_fresh(group, founder));
     }
 
@@ -733,7 +792,7 @@ mod tests {
 
         let chat = GroupChat::new();
         let im = mk_im(32, true, Uuid::nil(), group, "Subj|Body text", Vec::new());
-        let out = process_chat_im(&ctx, &chat, founder, "First", "Last", Uuid::nil(), &im).await;
+        let out = process_chat_im(&ctx, &chat, founder, "First", "Last", Uuid::nil(), &im, None).await;
 
         let accepting = [founder, member1];
         assert_eq!(out.len(), accepting.len());
@@ -791,22 +850,22 @@ mod tests {
         let chat = GroupChat::new();
 
         let im_plain = mk_im(32, true, Uuid::nil(), group, "Subj|Body", Vec::new());
-        let out = process_chat_im(&ctx, &chat, plain_member, "Plain", "Member", Uuid::nil(), &im_plain).await;
+        let out = process_chat_im(&ctx, &chat, plain_member, "Plain", "Member", Uuid::nil(), &im_plain, None).await;
         assert!(matches!(out.as_slice(), [ChatOut::Alert(msg)] if *msg == gio::alert_message("No permission to send notice to group")));
         let before = ctx.connector().get_notices(founder, group).await.unwrap().len();
 
         let im_attach = mk_im(32, true, Uuid::nil(), group, "Subj|Body", vec![1u8]);
-        let out = process_chat_im(&ctx, &chat, founder, "First", "Last", Uuid::nil(), &im_attach).await;
+        let out = process_chat_im(&ctx, &chat, founder, "First", "Last", Uuid::nil(), &im_attach, None).await;
         assert!(matches!(out.as_slice(), [ChatOut::Alert(msg)] if *msg == gio::alert_message("Group notice attachments are not supported yet.")));
         let after = ctx.connector().get_notices(founder, group).await.unwrap().len();
         assert_eq!(before, after);
 
         let im_non = mk_im(32, true, Uuid::nil(), group, "Subj|Body", Vec::new());
-        let out = process_chat_im(&ctx, &chat, non_member, "Non", "Mem", Uuid::nil(), &im_non).await;
+        let out = process_chat_im(&ctx, &chat, non_member, "Non", "Mem", Uuid::nil(), &im_non, None).await;
         assert!(matches!(out.as_slice(), [ChatOut::Alert(msg)] if *msg == gio::alert_message("Group membership not found")));
 
         let im_nopipe = mk_im(32, true, Uuid::nil(), group, "NoPipe", Vec::new());
-        let out = process_chat_im(&ctx, &chat, founder, "First", "Last", Uuid::nil(), &im_nopipe).await;
+        let out = process_chat_im(&ctx, &chat, founder, "First", "Last", Uuid::nil(), &im_nopipe, None).await;
         assert!(out.is_empty());
     }
 
@@ -824,13 +883,13 @@ mod tests {
 
         let chat = GroupChat::new();
         let im = mk_im(32, true, Uuid::nil(), group, "Subj|Body", Vec::new());
-        let _ = process_chat_im(&ctx, &chat, founder, "First", "Last", Uuid::nil(), &im).await;
+        let _ = process_chat_im(&ctx, &chat, founder, "First", "Last", Uuid::nil(), &im, None).await;
 
         let notices = ctx.connector().get_notices(founder, group).await.unwrap();
         let notice_id = notices[0].notice_id;
 
         let im37 = mk_im(37, false, notice_id, Uuid::nil(), "", Vec::new());
-        let out = process_chat_im(&ctx, &chat, member, "Mem", "Ber", Uuid::nil(), &im37).await;
+        let out = process_chat_im(&ctx, &chat, member, "Mem", "Ber", Uuid::nil(), &im37, None).await;
         assert_eq!(out.len(), 1);
         match &out[0] {
             ChatOut::Im { to, im } => {
@@ -842,7 +901,7 @@ mod tests {
             _ => panic!("expected notice Im"),
         }
 
-        let out = process_chat_im(&ctx, &chat, non_member, "Non", "Mem", Uuid::nil(), &im37).await;
+        let out = process_chat_im(&ctx, &chat, non_member, "Non", "Mem", Uuid::nil(), &im37, None).await;
         assert!(out.is_empty());
     }
 
@@ -860,7 +919,7 @@ mod tests {
 
         let chat = GroupChat::new();
         let im = mk_im(32, true, Uuid::nil(), group, "Subj|Body", Vec::new());
-        let _ = process_chat_im(&ctx, &chat, founder, "First", "Last", Uuid::nil(), &im).await;
+        let _ = process_chat_im(&ctx, &chat, founder, "First", "Last", Uuid::nil(), &im, None).await;
 
         let req = msgs::GroupNoticesListRequest {
             agent_data: msgs::group_notices_list_request::AgentData {
@@ -945,6 +1004,7 @@ mod tests {
             "Last".to_string(),
             Uuid::nil(),
             im,
+            Arc::new(RwLock::new(HashMap::new())),
             clients,
             founder_session,
             region_socket,
@@ -962,5 +1022,80 @@ mod tests {
 
         let packet = welkin_msg::parse_packet(&buf[..received]).unwrap();
         assert_eq!(packet.id, msgs::ImprovedInstantMessage::ID);
+    }
+
+    #[tokio::test]
+    async fn chat_dialog_constants_match_protocol() {
+        assert_eq!(crate::groups_chat::dialog::SESSION_ADD, 13);
+        assert_eq!(crate::groups_chat::dialog::SESSION_OFFLINE_ADD, 14);
+        assert_eq!(crate::groups_chat::dialog::SESSION_GROUP_START, 15);
+        assert_eq!(crate::groups_chat::dialog::SESSION_SEND, 17);
+        assert_eq!(crate::groups_chat::dialog::SESSION_DROP, 18);
+        assert_eq!(crate::groups_chat::dialog::GROUP_NOTICE, 32);
+        assert_eq!(crate::groups_chat::dialog::GROUP_NOTICE_REQUESTED, 37);
+
+        for dialog in [13u8, 15, 17, 18, 32, 37] {
+            assert!(crate::groups_chat::is_chat_dialog(dialog, false));
+            assert!(crate::groups_chat::is_chat_dialog(dialog, true));
+        }
+        for dialog in [14u8, 16, 19, 20] {
+            assert!(!crate::groups_chat::is_chat_dialog(dialog, false));
+            assert!(!crate::groups_chat::is_chat_dialog(dialog, true));
+        }
+    }
+
+    #[tokio::test]
+    async fn session_start_replies_through_event_queue() {
+        let (ctx, _guard) = make_ctx().await;
+        let founder = Uuid::new_v4();
+        let group = create_group(&ctx, founder).await;
+        let chat = crate::groups_chat::GroupChat::new();
+        let agent = founder;
+        let im = mk_im(crate::groups_chat::dialog::SESSION_GROUP_START, false, group, group, "hello", Vec::new());
+
+        let eq = welkin_caps::event_queue::EventQueue::new();
+        let outputs = process_chat_im(&ctx, &chat, agent, "First", "Last", Uuid::nil(), &im, Some(&eq)).await;
+        assert!(!has_im(&outputs));
+        assert!(chat.is_fresh(group, agent));
+
+        let response = eq.poll(std::time::Duration::from_millis(500)).await;
+        let welkin_caps::event_queue::EventQueueResponse::Events { events, .. } = response else {
+            panic!("expected events");
+        };
+        let text = String::from_utf8_lossy(&events).to_string();
+        assert!(text.contains("ChatterBoxSessionStartReply"));
+        assert!(text.contains("Test Group"));
+
+        let outsider = Uuid::new_v4();
+        let eq2 = welkin_caps::event_queue::EventQueue::new();
+        let im2 = mk_im(crate::groups_chat::dialog::SESSION_GROUP_START, false, group, group, "hello", Vec::new());
+        let outputs2 = process_chat_im(&ctx, &chat, outsider, "Third", "Fourth", Uuid::nil(), &im2, Some(&eq2)).await;
+        assert!(matches!(
+            outputs2.first(),
+            Some(crate::groups_chat::ChatOut::Alert(_))
+        ));
+        let response2 = eq2.poll(std::time::Duration::from_millis(500)).await;
+        assert!(matches!(
+            response2,
+            welkin_caps::event_queue::EventQueueResponse::Timeout
+        ));
+    }
+
+    #[tokio::test]
+    async fn session_drop_stops_delivery() {
+        let (ctx, _guard) = make_ctx().await;
+        let founder = Uuid::new_v4();
+        let group = create_group(&ctx, founder).await;
+        let chat = crate::groups_chat::GroupChat::new();
+        let agent = founder;
+
+        let im_start =
+            mk_im(crate::groups_chat::dialog::SESSION_GROUP_START, false, group, group, "hello", Vec::new());
+        process_chat_im(&ctx, &chat, agent, "First", "Last", Uuid::nil(), &im_start, None).await;
+        assert!(chat.is_fresh(group, agent));
+
+        let im_drop = mk_im(crate::groups_chat::dialog::SESSION_DROP, false, group, group, "bye", Vec::new());
+        process_chat_im(&ctx, &chat, agent, "First", "Last", Uuid::nil(), &im_drop, None).await;
+        assert!(!chat.is_fresh(group, agent));
     }
 }

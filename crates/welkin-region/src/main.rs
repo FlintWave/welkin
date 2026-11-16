@@ -4571,6 +4571,7 @@ async fn process_messages(
                         pres.last_name.clone(),
                         scene.region_info.region_id,
                         im.clone(),
+                        event_queues.clone(),
                         clients.clone(),
                         client.clone(),
                         socket.clone(),
