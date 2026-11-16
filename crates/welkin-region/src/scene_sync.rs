@@ -78,6 +78,24 @@ pub fn full_update_for_part(
     }
 }
 
+/// The `state` byte a viewer expects for an attachment point: the nibbles swapped
+/// (OpenSim `(point % 16) * 16 + point / 16`).
+pub fn attachment_state(point: u8) -> u8 {
+    point.rotate_left(4)
+}
+
+/// Make `update` describe a worn attachment: the root hangs off the avatar at its offset
+/// from the attachment point and names the inventory item it came from; every part
+/// carries the swapped attachment point.
+fn apply_attachment(update: &mut FullObjectUpdate, group: &welkin_scene::group::SceneObjectGroup, is_root: bool) {
+    update.state = attachment_state(group.attachment_point);
+    if is_root {
+        update.position = group.root_part().attached_pos;
+        let item = if group.attachment_item_id.is_nil() { group.uuid() } else { group.attachment_item_id };
+        update.name_value = format!("AttachItemID STRING RW SV {item}").into_bytes();
+    }
+}
+
 /// Updates for one object group: the root prim first, then every child part
 /// (children carry the root's local id as their parent and their offset position).
 pub fn group_updates(group: &welkin_scene::group::SceneObjectGroup) -> Vec<FullObjectUpdate> {
@@ -85,7 +103,11 @@ pub fn group_updates(group: &welkin_scene::group::SceneObjectGroup) -> Vec<FullO
     let root = group.root_part();
 
     if root.local_id != 0 {
-        updates.push(full_update_for_part(root, root.parent_id, true));
+        let mut u = full_update_for_part(root, root.parent_id, true);
+        if group.is_attachment {
+            apply_attachment(&mut u, group, true);
+        }
+        updates.push(u);
     }
 
     let root_local_id = root.local_id;
@@ -93,7 +115,11 @@ pub fn group_updates(group: &welkin_scene::group::SceneObjectGroup) -> Vec<FullO
         if part.local_id == 0 || part.uuid == root.uuid {
             continue;
         }
-        updates.push(full_update_for_part(part, root_local_id, false));
+        let mut u = full_update_for_part(part, root_local_id, false);
+        if group.is_attachment {
+            apply_attachment(&mut u, group, false);
+        }
+        updates.push(u);
     }
     updates
 }
@@ -311,5 +337,48 @@ mod tests {
         assert!(z < 25.0, "prim should have fallen from 40 to the terrain (z={z})");
         assert!(z > 20.0, "prim must rest on the terrain, not fall through it (z={z})");
         assert!(!last_velocity_nonzero, "the final update must report the prim at rest");
+    }
+
+    #[test]
+    fn attachments_hang_off_the_avatar_with_the_swapped_point_and_item_name_value() {
+        use glam::Vec3;
+        use uuid::Uuid;
+        use welkin_scene::group::SceneObjectGroup;
+
+        let owner = Uuid::new_v4();
+        let mut root = SceneObjectPart::new("Hat", owner);
+        root.local_id = 10;
+        root.parent_id = 7; // the avatar's local id
+        root.attached_pos = Vec3::new(0.1, 0.2, 0.3);
+        root.group_position = Vec3::new(99.0, 99.0, 99.0);
+        let mut child = SceneObjectPart::new("Brim", owner);
+        child.local_id = 11;
+        let mut g = SceneObjectGroup::new(root);
+        g.add_part(child);
+        let item = Uuid::new_v4();
+        g.is_attachment = true;
+        g.attachment_point = 2; // skull
+        g.attachment_item_id = item;
+
+        let updates = group_updates(&g);
+        assert_eq!(updates.len(), 2);
+        let (r, c) = (&updates[0], &updates[1]);
+        assert_eq!(r.parent_id, 7);
+        assert_eq!(r.position, Vec3::new(0.1, 0.2, 0.3), "offset from the attachment point, not the world position");
+        assert_eq!(r.state, 0x20);
+        assert_eq!(String::from_utf8_lossy(&r.name_value), format!("AttachItemID STRING RW SV {item}"));
+        assert_eq!(c.parent_id, 10, "children hang off the root as usual");
+        assert_eq!(c.state, 0x20);
+        assert!(c.name_value.is_empty());
+
+        // The same group as a plain object has no attachment data.
+        g.is_attachment = false;
+        let plain = group_updates(&g);
+        assert_eq!(plain[0].state, 0);
+        assert!(plain[0].name_value.is_empty());
+
+        assert_eq!(attachment_state(2), 0x20);
+        assert_eq!(attachment_state(35), 0x32);
+        assert_eq!(attachment_state(0), 0);
     }
 }

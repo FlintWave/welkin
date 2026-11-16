@@ -101,8 +101,17 @@ impl RemoteInventoryConnector {
 
     /// Add an inventory item. Returns whether the service accepted it.
     pub async fn add_item(&self, item: &InventoryItemRow) -> Result<bool, RemoteError> {
+        self.send_item("ADDITEM", item).await
+    }
+
+    /// Replace an existing inventory item (same id). Returns whether the service accepted it.
+    pub async fn update_item(&self, item: &InventoryItemRow) -> Result<bool, RemoteError> {
+        self.send_item("UPDATEITEM", item).await
+    }
+
+    async fn send_item(&self, method: &str, item: &InventoryItemRow) -> Result<bool, RemoteError> {
         let params = [
-            ("METHOD", "ADDITEM".to_string()),
+            ("METHOD", method.to_string()),
             ("AssetID", item.asset_id.clone()),
             ("AssetType", item.asset_type.to_string()),
             ("Name", item.inventory_name.clone()),
@@ -132,7 +141,7 @@ impl RemoteInventoryConnector {
             .await?
             .text()
             .await?;
-        Ok(body.contains(">True<") || body.to_ascii_lowercase().contains(">true<"))
+        Ok(body.to_ascii_lowercase().contains(">true<"))
     }
 
     /// Fetch only the items inside a folder (no sub-folders).
