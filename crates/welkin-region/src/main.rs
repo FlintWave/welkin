@@ -836,6 +836,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         if raw <= 0 { 900 } else { raw.max(5) as u64 }
     };
     info!(backup_interval_secs, "periodic backup interval configured");
+    let script_money_module: Option<std::sync::Arc<dyn std::any::Any + Send + Sync>> =
+        Some(std::sync::Arc::new(welkin_modules::economy::SimpleMoneyModule::from_pool(
+            pool.clone(),
+        )));
+
     let heartbeat_handle = tokio::spawn(async move {
         let mut interval =
             tokio::time::interval(std::time::Duration::from_millis(frame_time_ms.max(50)));
@@ -899,7 +904,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     continue;
                 };
-                if let Err(e) = instance.register_builtins(make_script_context(script_id, prim_id, prim_pos)) {
+                let restore_ctx = make_script_context(script_id, prim_id, prim_pos);
+                welkin_script_vm::builtins::money::set_money_module(&restore_ctx, script_money_module.clone());
+                if let Err(e) = instance.register_builtins(restore_ctx) {
                     warn!(script = %script_id, error = %e, "failed to register builtins for restored script");
                     continue;
                 }
@@ -961,6 +968,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                                         .with_object(&load_req.prim_id, |g| g.position())
                                         .unwrap_or(glam::Vec3::new(128.0, 128.0, 22.0));
                                     let ctx = make_script_context(load_req.script_id, load_req.prim_id, prim_pos);
+                                    welkin_script_vm::builtins::money::set_money_module(&ctx, script_money_module.clone());
                                     if let Err(e) = instance.register_builtins(ctx) {
                                         tracing::warn!(
                                             script = %load_req.script_id,

@@ -12,6 +12,14 @@ use parking_lot::RwLock;
 
 use super::ScriptContext;
 
+/// Set (or clear) the money module handle on a script context.
+pub fn set_money_module(
+    ctx: &Arc<parking_lot::RwLock<ScriptContext>>,
+    module: Option<Arc<dyn std::any::Any + Send + Sync>>,
+) {
+    ctx.write().money_module = module;
+}
+
 /// Register money ll* functions as Lua globals.
 pub fn register_money(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<(), crate::VmError> {
     // llGiveMoney(key destination, integer amount) -> integer

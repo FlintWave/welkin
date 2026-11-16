@@ -764,6 +764,8 @@ pub struct ScriptContext {
     pub mod_command_sender: Option<std::sync::mpsc::Sender<ModCommand>>,
     /// In-memory JSON document stores for the JsonStore API.
     pub json_stores: HashMap<Uuid, serde_json::Value>,
+    /// Optional money module handle for money builtins (Any-typed to avoid cross-crate deps).
+    pub money_module: Option<std::sync::Arc<dyn std::any::Any + Send + Sync>>,
 }
 
 impl Default for ScriptContext {
@@ -921,6 +923,7 @@ impl Default for ScriptContext {
             mod_invoke_registry: HashMap::new(),
             mod_command_sender: None,
             json_stores: HashMap::new(),
+            money_module: None,
         }
     }
 }
