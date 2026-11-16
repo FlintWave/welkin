@@ -9,6 +9,7 @@ mod estate_config;
 mod groups_invites;
 mod groups_io;
 mod egress_io;
+mod friends_notify;
 mod groups_admin;
 mod groups_chat;
 mod groups_queries;
@@ -530,6 +531,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let process_inventory = Arc::new(welkin_services::remote::inventory::RemoteInventoryConnector::new(accounts_url));
     let process_assets = Arc::new(welkin_services::remote::asset::RemoteAssetConnector::new(accounts_url));
     let process_avatars = Arc::new(welkin_services::remote::avatar::RemoteAvatarConnector::new(accounts_url));
+    let process_friends = Arc::new(welkin_services::remote::friends::RemoteFriendsConnector::new(accounts_url));
+    let process_egress = scene_ref.egress.clone();
     let process_groups = region_config.groups_server_uri.as_deref().map(groups_io::GroupsCtx::new);
     let process_handle = tokio::spawn(async move {
         process_messages(
@@ -550,6 +553,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             process_assets,
             process_avatars,
             process_groups,
+            process_friends,
+            process_egress,
         )
         .await;
     });
@@ -1655,6 +1660,8 @@ async fn process_messages(
     asset_connector: Arc<welkin_services::remote::asset::RemoteAssetConnector>,
     avatar_connector: Arc<welkin_services::remote::avatar::RemoteAvatarConnector>,
     groups: Option<groups_io::GroupsCtx>,
+    friends: Arc<welkin_services::remote::friends::RemoteFriendsConnector>,
+    egress: welkin_modules::egress::SharedEgress,
 ) {
     let mut last_agent_update: HashMap<Uuid, Instant> = HashMap::new();
     // Persistent vertical velocity per avatar (jumping and falling).
@@ -1857,6 +1864,11 @@ async fn process_messages(
                     }
                 }
                 info!(agent = %agent_id, "announced new avatar to other clients");
+                // Friends see this avatar come online (and this avatar sees who is here).
+                let (friends, egress) = (friends.clone(), egress.clone());
+                tokio::spawn(async move {
+                    friends_notify::notify_status(egress.as_ref(), &friends, agent_id, true).await;
+                });
             }
 
             // --- Issue 2B: Send all EXISTING avatars to the newly logged-in user ---
@@ -2052,6 +2064,12 @@ async fn process_messages(
             && let Some(client) = &client
         {
             modify_throttle.forget(&agent_id);
+            {
+                let (friends, egress) = (friends.clone(), egress.clone());
+                tokio::spawn(async move {
+                    friends_notify::notify_status(egress.as_ref(), &friends, agent_id, false).await;
+                });
+            }
             if let Some(g) = &groups {
                 g.sequencer().forget(agent_id);
                 g.queue().forget(agent_id);
