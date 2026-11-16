@@ -403,38 +403,37 @@ fn dct_quantize(block: &[f32]) -> (Vec<i32>, i32) {
     let quant = build_quant();
     let copy = build_copy_matrix();
 
-    let mut coeff = vec![0.0f32; 256];
-    for ky in 0..16u32 {
-        for kx in 0..16u32 {
-            let s_kx = if kx == 0 {
-                1.0f32 / (2.0f32).sqrt()
-            } else {
-                1.0f32
-            };
-            let s_ky = if ky == 0 {
-                1.0f32 / (2.0f32).sqrt()
-            } else {
-                1.0f32
-            };
+    // Separable 2-D DCT with a precomputed basis: basis[k*16+n] = cos(pi*(n+0.5)*k/16).
+    let mut basis = [0.0f32; 256];
+    for k in 0..16usize {
+        for n in 0..16usize {
+            basis[k * 16 + n] =
+                (core::f64::consts::PI * (n as f64 + 0.5) * (k as f64) / 16.0).cos() as f32;
+        }
+    }
+    // Rows first: tmp[y*16+kx] = sum_x a[y*16+x] * basis[kx*16+x]
+    let mut tmp = [0.0f32; 256];
+    for y in 0..16usize {
+        for kx in 0..16usize {
             let mut sum = 0.0f32;
-            for y in 0..16u32 {
-                for x in 0..16u32 {
-                    let a = block[(y * 16 + x) as usize];
-                    let cosx = (core::f64::consts::PI
-                        * (x as f64 + 0.5)
-                        * (kx as f64)
-                        / 16.0)
-                    .cos() as f32;
-                    let cosy = (core::f64::consts::PI
-                        * (y as f64 + 0.5)
-                        * (ky as f64)
-                        / 16.0)
-                    .cos() as f32;
-                    sum += a * cosx * cosy;
-                }
+            for x in 0..16usize {
+                sum += block[y * 16 + x] * basis[kx * 16 + x];
             }
+            tmp[y * 16 + kx] = sum;
+        }
+    }
+    let mut coeff = vec![0.0f32; 256];
+    let s0 = 1.0f32 / (2.0f32).sqrt();
+    for ky in 0..16usize {
+        for kx in 0..16usize {
+            let mut sum = 0.0f32;
+            for y in 0..16usize {
+                sum += tmp[y * 16 + kx] * basis[ky * 16 + y];
+            }
+            let s_kx = if kx == 0 { s0 } else { 1.0 };
+            let s_ky = if ky == 0 { s0 } else { 1.0 };
             // The 1/8 of the Ooura definition lives in QuantizeTable16 (2/16 per coefficient).
-            coeff[(ky * 16 + kx) as usize] = s_kx * s_ky * sum;
+            coeff[ky * 16 + kx] = s_kx * s_ky * sum;
         }
     }
 
