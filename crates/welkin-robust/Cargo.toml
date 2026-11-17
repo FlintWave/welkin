@@ -10,6 +10,7 @@ publish.workspace = true
 welkin-config = { path = "../welkin-config" }
 welkin-runtime = { path = "../welkin-runtime" }
 welkin-services = { path = "../welkin-services" }
+welkin-modules = { path = "../welkin-modules" }
 welkin-data = { path = "../welkin-data" }
 axum = { workspace = true }
 tower = { version = "0.5", features = ["util"] }

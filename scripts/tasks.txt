@@ -1,0 +1,5 @@
+Audit crates/welkin-robust/src/gatekeeper_create_agent.rs CreateAgentService for empty-body, malformed UTF-8, and XML-rejection edge cases.
+Audit crates/welkin-region/src/main.rs group_name_cache wiring and propose unit tests for cache hit, miss, and invalidation.
+Review modern-avatar-features PBR material LLSD design and list missing source constants to copy.
+Suggest smoke tests for weather day-cycle binding in the script VM.
+Check unused imports and dead code in gatekeeper_create_agent after refactor.

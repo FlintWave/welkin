@@ -80,6 +80,34 @@ impl CreateAgentState {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Minimal CreateAgent service processing
+// ---------------------------------------------------------------------------
+
+#[derive(Clone)]
+pub struct CreateAgentService {
+    pub state: CreateAgentState,
+}
+
+#[allow(dead_code)]
+impl CreateAgentService {
+    pub fn new(state: CreateAgentState) -> Self {
+        Self { state }
+    }
+
+    pub fn with_state(state: CreateAgentState) -> Self {
+        Self::new(state)
+    }
+
+    pub async fn process(&self, body: Bytes) -> Response {
+        handle_create_agent_inner(&self.state, body).await
+    }
+
+    pub async fn handle(&self, body: Bytes) -> Response {
+        self.process(body).await
+    }
+}
+
 pub fn router(state: CreateAgentState) -> Router {
     Router::new()
         .route("/create_agent", post(handle_create_agent))
@@ -88,7 +116,33 @@ pub fn router(state: CreateAgentState) -> Router {
 }
 
 async fn handle_create_agent(State(state): State<CreateAgentState>, body: Bytes) -> Response {
-    let text = String::from_utf8_lossy(&body);
+    handle_create_agent_inner(&state, body).await
+}
+
+/// Core CreateAgent processing, reusable by [`CreateAgentService`].
+pub async fn handle_create_agent_inner(state: &CreateAgentState, body: Bytes) -> Response {
+    // Handle malformed bodies (including malformed XML-RPC) without panicking.
+    let text = match String::from_utf8(body.to_vec()) {
+        Ok(t) => t,
+        Err(_) => {
+            tracing::warn!("CreateAgent: malformed request body (invalid UTF-8)");
+            return xml_error("malformed request body");
+        }
+    };
+
+    let trimmed = text.trim_start();
+    if trimmed.starts_with('<') {
+        // CreateAgent expects form-encoded data; any XML (well-formed or not)
+        // is rejected.  Distinguish malformed XML-RPC for diagnostics.
+        let msg = if trimmed.starts_with("<?xml") || trimmed.starts_with("<methodCall") {
+            "malformed XML-RPC body"
+        } else {
+            "malformed XML body"
+        };
+        tracing::warn!("CreateAgent: {msg}");
+        return xml_error(msg);
+    }
+
     let params = parse_form(&text);
 
     // ---- Validation -------------------------------------------------------
@@ -266,6 +320,19 @@ fn xml_escape(s: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+
+/// Public entry point alias used by callers/tests.
+#[allow(dead_code)]
+pub async fn validate_and_verify_agent(state: &CreateAgentState, body: Bytes) -> Response {
+    handle_create_agent_inner(state, body).await
+}
+
+/// PascalCase alias for `validate_and_verify_agent`.
+#[allow(non_snake_case, dead_code)]
+pub async fn ValidateAndVerifyAgent(state: &CreateAgentState, body: Bytes) -> Response {
+    validate_and_verify_agent(state, body).await
 }
 
 #[cfg(test)]

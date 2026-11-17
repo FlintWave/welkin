@@ -1085,7 +1085,12 @@ pub async fn parcel_voice_info() -> Response {
 
 pub async fn provision_voice_account() -> Response {
     let mut map = Map::new();
+    map.insert("status".into(), Llsd::String("ok".into()));
     map.insert("voice_enabled".into(), Llsd::Boolean(false));
+    map.insert("username".into(), Llsd::String(String::new()));
+    map.insert("password".into(), Llsd::String(String::new()));
+    map.insert("voice_server_type".into(), Llsd::String("none".into()));
+    map.insert("voice_sip_uri_hostname".into(), Llsd::String(String::new()));
     map.insert("error".into(), Llsd::String("voice service not configured".into()));
     llsd_response(Llsd::Map(map))
 }

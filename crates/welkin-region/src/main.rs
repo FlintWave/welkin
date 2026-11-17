@@ -5038,7 +5038,7 @@ async fn process_messages(
             && let Some(client) = &client
         {
             let ids: Vec<Uuid> = req.uuid_name_block.iter().map(|b| b.id).collect();
-            let names = welkin_services::groups::resolve_group_names(&groups_store, &ids).await;
+            let names = policy::resolve_group_names_cached(policy::group_name_cache(), &groups_store, &ids).await;
             let mut reply_blocks = Vec::new();
             for id in &ids {
                 let name = names.get(id).cloned().unwrap_or_else(|| "Unknown".to_string());
