@@ -4678,15 +4678,34 @@ async fn process_messages(
                                 }
 
                                 if remote_ok {
-                                    let progress_msg = TeleportProgress {
-                                        agent_data: teleport_progress::AgentData { agent_id },
-                                        info: teleport_progress::Info {
+                                    // UpdateSimulator already sent above; finish the
+                                    // cross-region teleport by emitting TeleportFinish
+                                    // and logging completion.
+                                    let sim_ip: [u8; 4] = dest
+                                        .server_ip
+                                        .parse::<std::net::Ipv4Addr>()
+                                        .map(|ip| ip.octets())
+                                        .unwrap_or([127, 0, 0, 1]);
+                                    let sim_port = dest.server_port.unwrap_or(9000) as u16;
+                                    let finish_msg = TeleportFinish {
+                                        info: teleport_finish::Info {
+                                            agent_id,
+                                            location_id: 0,
+                                            sim_ip,
+                                            sim_port,
+                                            region_handle: req.info.region_handle,
+                                            seed_capability: Vec::new(),
+                                            sim_access: dest.access as u8,
                                             teleport_flags: 0,
-                                            message: b"Destination region located; teleport in progress.".to_vec(),
                                         },
                                     };
-                                    let (pkt_bytes, _) = session.circuit.send_msg(&progress_msg, true);
+                                    let (pkt_bytes, _) = session.circuit.send_msg(&finish_msg, true);
                                     let _ = socket.send_to(&pkt_bytes, src).await;
+                                    info!(
+                                        agent = %agent_id,
+                                        dest_handle = req.info.region_handle,
+                                        "cross-region teleport complete"
+                                    );
                                 } else {
                                     let fail_msg = TeleportFailed {
                                         info: teleport_failed::Info {

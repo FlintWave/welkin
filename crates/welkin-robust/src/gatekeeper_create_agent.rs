@@ -225,7 +225,8 @@ fn flatten_llsd_param(out: &mut HashMap<String, String>, val: &Llsd) {
     }
 }
 
-fn parse_params(text: &str) -> HashMap<String, String> {
+/// Parse a CreateAgent request body (form-encoded, XML-RPC, or LLSD) into fields.
+pub fn parse_create_agent(text: &str) -> HashMap<String, String> {
     let trimmed = text.trim_start();
     if !trimmed.starts_with('<') {
         return parse_form(text);
@@ -255,6 +256,11 @@ fn parse_params(text: &str) -> HashMap<String, String> {
 
     // Malformed XML -> empty (will be treated as missing fields)
     HashMap::new()
+}
+
+#[allow(dead_code)]
+fn parse_params(text: &str) -> HashMap<String, String> {
+    parse_create_agent(text)
 }
 
 fn pick(params: &HashMap<String, String>, names: &[&str]) -> Option<String> {
@@ -706,5 +712,100 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(resp.status().as_u16(), 200);
+    }
+
+    #[tokio::test]
+    async fn malformed_xml_rpc_body_returns_400() {
+        let xml = r#"<?xml version="1.0"?><methodCall><methodName>CreateAgent</methodName><params><param><value><struct>
+        <member><name>agent_id</name><value><string>not-a-uuid</string></value></member>
+        </struct></value></param></params>"#;
+        let state = CreateAgentState::default();
+        let app = router(state);
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/create_agent")
+                    .header("content-type", "application/xml")
+                    .body(axum::body::Body::from(xml))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status().as_u16(), 400);
+    }
+
+    #[tokio::test]
+    async fn malformed_xml_garbage_returns_400() {
+        let xml = "<methodCall><garbage";
+        let state = CreateAgentState::default();
+        let app = router(state);
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/create_agent")
+                    .header("content-type", "application/xml")
+                    .body(axum::body::Body::from(xml))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status().as_u16(), 400);
+    }
+
+    #[test]
+    fn parse_create_agent_valid_xmlrpc() {
+        let sid = Uuid::new_v4();
+        let aid = Uuid::new_v4();
+        let xml = format!(
+            r#"<?xml version="1.0"?><methodCall><methodName>CreateAgent</methodName><params><param><value><struct>
+            <member><name>agent_id</name><value><string>{aid}</string></value></member>
+            <member><name>session_id</name><value><string>{sid}</string></value></member>
+            </struct></value></param></params></methodCall>"#
+        );
+        let params = parse_create_agent(&xml);
+        assert_eq!(params.get("agent_id").unwrap(), &aid.to_string());
+        assert_eq!(params.get("session_id").unwrap(), &sid.to_string());
+    }
+
+    #[test]
+    fn parse_create_agent_malformed_returns_empty() {
+        let params = parse_create_agent("<methodCall><nope");
+        assert!(params.is_empty());
+    }
+
+    #[tokio::test]
+    async fn verify_client_mismatch_returns_400() {
+        let session = Uuid::new_v4();
+        let agent = Uuid::new_v4();
+        let token = "tok-123";
+        let service = welkin_services::user_agent::UserAgentServiceImpl::new(welkin_services::user_agent::UserAgentConfig {
+            grid_name: "http://mygrid.example:9000/".into(),
+            my_external_ip: "203.0.113.1".into(),
+            bypass_client_verification: false,
+            level_outside_contacts: 0,
+            show_details: true,
+        });
+        service.store_travel_info(welkin_services::hypergrid::TravelingAgentInfo {
+            session_id: session,
+            user_id: agent,
+            grid_external_name: "http://foreign.example:9000/".into(),
+            service_token: token.into(),
+            client_ip_address: "10.0.0.1".into(),
+        });
+        let mut state = CreateAgentState::default().with_user_agent(Arc::new(service));
+        state.grid_external_name = "http://foreign.example:9000/".into();
+        let (status, _) = post(
+            state,
+            body(&[
+                ("agent_id", &agent.to_string()),
+                ("session_id", &session.to_string()),
+                ("service_session_id", token),
+                ("ip_address", "8.8.8.8"),
+            ]),
+        )
+        .await;
+        assert_eq!(status, 400);
     }
 }
