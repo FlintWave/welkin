@@ -45,3 +45,5 @@ pub mod remote;
 pub mod simulation;
 pub mod user_agent;
 pub mod wizard;
+
+pub use remote::create_agent as create_agent;

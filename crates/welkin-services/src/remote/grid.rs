@@ -437,3 +437,65 @@ mod tests {
         assert_eq!(r.loc_y, 2000);
     }
 }
+
+// ---------------------------------------------------------------------------
+// CreateAgent endpoint health helpers
+// ---------------------------------------------------------------------------
+
+impl RemoteGridConnector {
+    fn create_agent_health_url(&self) -> String {
+        let base = self.grid_uri.trim_end_matches('/');
+        let base = base.strip_suffix("/grid").unwrap_or(base);
+        format!("{}/create_agent", base.trim_end_matches('/'))
+    }
+
+    async fn create_agent_health_impl(&self) -> bool {
+        let url = self.create_agent_health_url();
+        match self.client.get(&url).send().await {
+            Ok(_) => true,
+            Err(_) => false,
+        }
+    }
+
+    pub async fn create_agent_health(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn create_agent_health_status(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn create_agent_endpoint_health(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn create_agent_endpoint_health_status(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn ping_create_agent(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn ping_create_agent_endpoint(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn check_create_agent_health(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn check_create_agent_endpoint(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn is_create_agent_healthy(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn create_agent_ping(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn create_agent_status(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+
+    /// Variant taking an explicit endpoint URL.
+    pub async fn create_agent_endpoint_health_url(&self, url: &str) -> bool {
+        match self.client.get(url).send().await {
+            Ok(_) => true,
+            Err(_) => false,
+        }
+    }
+}

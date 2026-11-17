@@ -4414,6 +4414,30 @@ async fn process_messages(
             info!(agent = %agent_id, target = %target, "sent AvatarPropertiesReply");
         }
 
+        if msg_id == AvatarPropertiesUpdate::ID
+            && let Ok(req) = AvatarPropertiesUpdate::decode(&pkt.body)
+        {
+            let agent = req.agent_data.agent_id;
+            let partner = welkin_services::profiles::fetch_avatar_properties(&profiles_store, &agent.to_string())
+                .await
+                .ok()
+                .flatten()
+                .map(|p| p.partner_id.to_string())
+                .unwrap_or_else(|| Uuid::nil().to_string());
+            let about = String::from_utf8_lossy(&req.properties_data.about_text).to_string();
+            let first_life = String::from_utf8_lossy(&req.properties_data.fl_about_text).to_string();
+            let image_id = req.properties_data.image_id.to_string();
+            let first_life_image_id = req.properties_data.fl_image_id.to_string();
+            if let Err(e) = profiles_store
+                .update_avatar_profile(&agent.to_string(), &about, &first_life, &image_id, &first_life_image_id, &partner)
+                .await
+            {
+                tracing::warn!(error = %e, agent = %agent, "avatar properties update failed");
+            } else {
+                info!(agent = %agent, "updated avatar properties");
+            }
+        }
+
         if msg_id == AgentSetAppearance::ID
             && let Ok(appearance) = AgentSetAppearance::decode(&pkt.body)
         {
