@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -146,7 +147,18 @@ def write_result(out_dir, index, task, reply, exit_code, attempts, elapsed, erro
     )
 
 
-def run_one_task(ollama, index, task, out_dir, dry_run, timeout):
+def _retryable_text(text: str) -> bool:
+    low = text.lower()
+    if "queue" in low or "concurrency" in low or "too many requests" in low or "rate limit" in low or "429" in low or "5xx" in low:
+        return True
+    if re.search(r"\b429\b", text):
+        return True
+    if re.search(r"\b5\d{2}\b", text):
+        return True
+    return False
+
+
+def run_one_task(ollama, index, task, out_dir, dry_run, timeout, max_retries=0, max_backoff=120.0):
     if dry_run:
         write_result(out_dir, index, task, "DRY RUN: model was not invoked.\n", 0, 1, 0.0, "", True)
         print(f"[dry-run] task {index}: {task[:60]}")
@@ -157,8 +169,13 @@ def run_one_task(ollama, index, task, out_dir, dry_run, timeout):
     exit_code = 1
     attempts_used = 0
     started = time.monotonic()
-    for attempt in range(1, RETRY_COUNT + 1):
+    attempt = 0
+    while True:
+        if max_retries and max_retries > 0 and attempt >= max_retries:
+            break
+        attempt += 1
         attempts_used = attempt
+        retryable = False
         try:
             proc = subprocess.run(
                 [ollama, "run", MODEL],
@@ -167,24 +184,39 @@ def run_one_task(ollama, index, task, out_dir, dry_run, timeout):
                 text=True,
                 timeout=timeout,
             )
-            reply = proc.stdout
-            if proc.returncode == 0:
+            combined = (proc.stdout or "") + "\n" + (proc.stderr or "")
+            if proc.returncode == 0 and not _retryable_text(combined):
+                reply = proc.stdout
                 exit_code = 0
                 if proc.stderr.strip():
                     last_error = proc.stderr.strip()
                 break
+            retryable = True
             last_error = proc.stderr.strip() or f"ollama exited with code {proc.returncode}"
-            reply = proc.stdout + "\n" + proc.stderr
+            reply = combined
+            if proc.returncode == 0 and _retryable_text(combined):
+                last_error = "retryable output detected (429/5xx/concurrency/queue)"
         except subprocess.TimeoutExpired as exc:
             last_error = f"timeout after {timeout}s"
             reply = (exc.stdout or "") + "\n" + last_error
+            retryable = True
         except Exception as exc:
             last_error = f"{type(exc).__name__}: {exc}"
             reply = last_error
-        if attempt < RETRY_COUNT:
-            time.sleep(BACKOFF_BASE ** (attempt - 1))
+            retryable = True
+
+        if max_retries and max_retries > 0 and attempt >= max_retries:
+            break
+        if not retryable and not (max_retries and max_retries > 0):
+            # default: still retry on any command failure
+            pass
+        delay = min(float(max_backoff), BACKOFF_BASE ** max(0, attempt - 1))
+        if delay > 0:
+            time.sleep(delay)
+
     elapsed = time.monotonic() - started
-    write_result(out_dir, index, task, reply.strip(), exit_code, attempts_used, elapsed, last_error, False)
+    if exit_code == 0:
+        write_result(out_dir, index, task, reply.strip(), exit_code, attempts_used, elapsed, last_error, False)
     status = "ok" if exit_code == 0 else "FAIL"
     print(f"[{status}] task {index} (attempts={attempts_used}, {elapsed:.1f}s)")
     return index, exit_code
@@ -199,6 +231,8 @@ def main():
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--timeout", type=int, default=300)
     parser.add_argument("--idle-timeout", type=int, default=6)
+    parser.add_argument("--max-retries", type=int, default=0)
+    parser.add_argument("--max-backoff", type=float, default=120.0)
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
@@ -251,7 +285,7 @@ def main():
 
         with ThreadPoolExecutor(max_workers=batch_size) as executor:
             futures = {
-                executor.submit(run_one_task, ollama, i + 1, tasks[i], out_dir, args.dry_run, args.timeout): i
+                executor.submit(run_one_task, ollama, i + 1, tasks[i], out_dir, args.dry_run, args.timeout, args.max_retries, args.max_backoff): i
                 for i in batch
             }
             for future in as_completed(futures):

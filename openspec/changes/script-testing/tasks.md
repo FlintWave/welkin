@@ -12,11 +12,11 @@
 
 ## Phase 2: Layer 1 (offline compilation)
 
-- [ ] 2.1 Build the Layer 1 test runner: a Rust binary at `tests/script-testing/runner/` that depends on `welkin-script-compiler`, loads each `.lsl` file from the scripts directory, runs it through lex/parse/analyze/codegen stages, records pass/fail per stage with error details
-- [ ] 2.2 Define the JSON output schema for results (file, category, ossl flag, per-stage pass/fail, failure class, missing builtins list)
-- [ ] 2.3 Run Layer 1 on all selected scripts, produce `results/layer1.json`
-- [ ] 2.4 Build the matrix generator: reads `layer1.json` (and later `layer2.json`), produces `matrix.md` with columns for category, script count, compile status, run status, and blocker notes linking to lsl-compiler tasks
-- [ ] 2.5 Categorize all compilation failures by root cause (missing builtin, parse error, type error, unsupported syntax), update the matrix with failure counts per class
+- [x] 2.1 Build the Layer 1 test runner: a Rust binary at `tests/script-testing/runner/` that depends on `welkin-script-compiler`, loads each `.lsl` file from the scripts directory, runs it through lex/parse/analyze/codegen stages, records pass/fail per stage with error details
+- [x] 2.2 Define the JSON output schema for results (file, category, ossl flag, per-stage pass/fail, failure class, missing builtins list)
+- [x] 2.3 Run Layer 1 on all selected scripts, produce `results/layer1.json`
+- [x] 2.4 Build the matrix generator: reads `layer1.json` (and later `layer2.json`), produces `matrix.md` with columns for category, script count, compile status, run status, and blocker notes linking to lsl-compiler tasks
+- [x] 2.5 Categorize all compilation failures by root cause (missing builtin, parse error, type error, unsupported syntax), update the matrix with failure counts per class
 
 ## Phase 3: Layer 2 (live runtime)
 
