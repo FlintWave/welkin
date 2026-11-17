@@ -8,3 +8,8 @@ Audit crates/welkin-region/src/main.rs cross-region TeleportLocationRequest bran
 Audit crates/welkin-services/src/remote/gandalf.rs seed-cap parsing against OpenSim Gatekeeper XML-RPC and list any missing field aliases.
 Audit crates/welkin-modules environment day-cycle for mutation paths and design how to advance sun/moon based on region local time so day length tests remain deterministic.
 Audit UUIDNameRequest offline name lookup gaps versus the accounts service and suggest caching invalidation semantics.
+Audit remaining broken handlers in /var/home/erik/Projects/opensim-rust/crates/welkin-region/src/main.rs that only log (14 flagged); propose concrete implementation prioritizations with file:line.
+Audit crates/welkin-region/src/object_buy.rs and RequestPayPrice wiring for missing SimpleMoney balance persistence + owner credit.
+Review modern-avatar-features proposal PBR and identify 10 first built tasks.
+Design regression tests for money throttling and freeze gating using accounts + groups stores.
+Analyze Hypergrid end-to-end slice (from /tmp/hg_end_to_end_gaps.md if present) and outline smallest next milestone to actually teleport between two launched regions.

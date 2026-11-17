@@ -490,7 +490,6 @@ mod stub_tests_rviceinconnectormodule_0 {
     #[test]
     fn register_handlers_after_adding_region() {
         use crate::registry::SceneRef;
-use welkin_services::remote::gandalf::Gandalf;
 
         let mut module = HypergridServiceInConnectorModule::default();
         module.enabled = true;
