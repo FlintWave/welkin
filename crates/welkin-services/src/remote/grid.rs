@@ -378,65 +378,7 @@ impl RegionBuilder {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[test]
-    fn constructor_formats_uri() {
-        let c = RemoteGridConnector::new("http://grid.example.com:8003");
-        assert_eq!(c.grid_uri, "http://grid.example.com:8003/grid");
-
-        let c2 = RemoteGridConnector::new("http://grid.example.com:8003/");
-        assert_eq!(c2.grid_uri, "http://grid.example.com:8003/grid");
-    }
-
-    #[test]
-    fn parse_single_region_null() {
-        let xml = r#"<?xml version="1.0"?><ServerResponse><result>null</result></ServerResponse>"#;
-        let r = parse_single_region(xml).unwrap();
-        assert!(r.is_none());
-    }
-
-    #[test]
-    fn parse_single_region_found() {
-        let xml = r#"<?xml version="1.0"?><ServerResponse><result type="List"><uuid>aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee</uuid><locX>256000</locX><locY>256000</locY><sizeX>256</sizeX><sizeY>256</sizeY><regionName>Test Region</regionName><flags>8</flags><serverIP>127.0.0.1</serverIP><serverHttpPort>9000</serverHttpPort><serverURI>http://127.0.0.1:9000</serverURI><serverPort>9000</serverPort><regionMapTexture>00000000-0000-0000-0000-000000000000</regionMapTexture><parcelMapTexture>00000000-0000-0000-0000-000000000000</parcelMapTexture><access>1</access><regionSecret>secret</regionSecret><owner_uuid>11111111-2222-3333-4444-555555555555</owner_uuid><Token>tok</Token></result></ServerResponse>"#;
-        let r = parse_single_region(xml).unwrap().unwrap();
-        assert_eq!(r.uuid, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
-        assert_eq!(r.loc_x, 256000);
-        assert_eq!(r.loc_y, 256000);
-        assert_eq!(r.size_x, 256);
-        assert_eq!(r.region_name, "Test Region");
-        assert_eq!(r.server_ip, "127.0.0.1");
-        assert_eq!(r.server_port, Some(9000));
-        assert_eq!(r.flags, 8);
-    }
-
-    #[test]
-    fn parse_region_list_multiple() {
-        let xml = r#"<?xml version="1.0"?><ServerResponse><region0 type="List"><uuid>aaaa0000-0000-0000-0000-000000000000</uuid><locX>256000</locX><locY>256000</locY><sizeX>256</sizeX><sizeY>256</sizeY><regionName>Region A</regionName><flags>0</flags><serverIP>10.0.0.1</serverIP><serverHttpPort>9000</serverHttpPort><serverURI>http://10.0.0.1:9000</serverURI><serverPort>9000</serverPort><regionMapTexture>00000000-0000-0000-0000-000000000000</regionMapTexture><parcelMapTexture>00000000-0000-0000-0000-000000000000</parcelMapTexture><access>1</access><regionSecret></regionSecret><owner_uuid>00000000-0000-0000-0000-000000000000</owner_uuid><Token></Token></region0><region1 type="List"><uuid>bbbb0000-0000-0000-0000-000000000000</uuid><locX>256256</locX><locY>256000</locY><sizeX>256</sizeX><sizeY>256</sizeY><regionName>Region B</regionName><flags>0</flags><serverIP>10.0.0.2</serverIP><serverHttpPort>9000</serverHttpPort><serverURI>http://10.0.0.2:9000</serverURI><serverPort>9000</serverPort><regionMapTexture>00000000-0000-0000-0000-000000000000</regionMapTexture><parcelMapTexture>00000000-0000-0000-0000-000000000000</parcelMapTexture><access>1</access><regionSecret></regionSecret><owner_uuid>00000000-0000-0000-0000-000000000000</owner_uuid><Token></Token></region1></ServerResponse>"#;
-        let regions = parse_region_list(xml).unwrap();
-        assert_eq!(regions.len(), 2);
-        assert_eq!(regions[0].region_name, "Region A");
-        assert_eq!(regions[1].region_name, "Region B");
-        assert_eq!(regions[1].loc_x, 256256);
-    }
-
-    #[test]
-    fn handle_to_xy_decodes() {
-        let handle = (256000i64 << 32) | 256000i64;
-        assert_eq!(handle_to_xy(handle), (256000, 256000));
-    }
-
-    #[test]
-    fn get_region_by_position_xml_parses() {
-        let xml = r#"<?xml version="1.0"?><ServerResponse><result type="List"><uuid>aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee</uuid><locX>1000</locX><locY>2000</locY><sizeX>256</sizeX><sizeY>256</sizeY><regionName>Pos Region</regionName><flags>0</flags><serverIP>127.0.0.1</serverIP><serverHttpPort>9000</serverHttpPort><serverURI>http://127.0.0.1:9000</serverURI><serverPort>9000</serverPort><regionMapTexture>00000000-0000-0000-0000-000000000000</regionMapTexture><parcelMapTexture>00000000-0000-0000-0000-000000000000</parcelMapTexture><access>1</access><regionSecret>s</regionSecret><owner_uuid>11111111-2222-3333-4444-555555555555</owner_uuid><Token>t</Token></result></ServerResponse>"#;
-        let r = parse_single_region(xml).unwrap().unwrap();
-        assert_eq!(r.region_name, "Pos Region");
-        assert_eq!(r.loc_x, 1000);
-        assert_eq!(r.loc_y, 2000);
-    }
-}
 
 // ---------------------------------------------------------------------------
 // CreateAgent endpoint health helpers
@@ -497,5 +439,65 @@ impl RemoteGridConnector {
             Ok(_) => true,
             Err(_) => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn constructor_formats_uri() {
+        let c = RemoteGridConnector::new("http://grid.example.com:8003");
+        assert_eq!(c.grid_uri, "http://grid.example.com:8003/grid");
+
+        let c2 = RemoteGridConnector::new("http://grid.example.com:8003/");
+        assert_eq!(c2.grid_uri, "http://grid.example.com:8003/grid");
+    }
+
+    #[test]
+    fn parse_single_region_null() {
+        let xml = r#"<?xml version="1.0"?><ServerResponse><result>null</result></ServerResponse>"#;
+        let r = parse_single_region(xml).unwrap();
+        assert!(r.is_none());
+    }
+
+    #[test]
+    fn parse_single_region_found() {
+        let xml = r#"<?xml version="1.0"?><ServerResponse><result type="List"><uuid>aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee</uuid><locX>256000</locX><locY>256000</locY><sizeX>256</sizeX><sizeY>256</sizeY><regionName>Test Region</regionName><flags>8</flags><serverIP>127.0.0.1</serverIP><serverHttpPort>9000</serverHttpPort><serverURI>http://127.0.0.1:9000</serverURI><serverPort>9000</serverPort><regionMapTexture>00000000-0000-0000-0000-000000000000</regionMapTexture><parcelMapTexture>00000000-0000-0000-0000-000000000000</parcelMapTexture><access>1</access><regionSecret>secret</regionSecret><owner_uuid>11111111-2222-3333-4444-555555555555</owner_uuid><Token>tok</Token></result></ServerResponse>"#;
+        let r = parse_single_region(xml).unwrap().unwrap();
+        assert_eq!(r.uuid, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+        assert_eq!(r.loc_x, 256000);
+        assert_eq!(r.loc_y, 256000);
+        assert_eq!(r.size_x, 256);
+        assert_eq!(r.region_name, "Test Region");
+        assert_eq!(r.server_ip, "127.0.0.1");
+        assert_eq!(r.server_port, Some(9000));
+        assert_eq!(r.flags, 8);
+    }
+
+    #[test]
+    fn parse_region_list_multiple() {
+        let xml = r#"<?xml version="1.0"?><ServerResponse><region0 type="List"><uuid>aaaa0000-0000-0000-0000-000000000000</uuid><locX>256000</locX><locY>256000</locY><sizeX>256</sizeX><sizeY>256</sizeY><regionName>Region A</regionName><flags>0</flags><serverIP>10.0.0.1</serverIP><serverHttpPort>9000</serverHttpPort><serverURI>http://10.0.0.1:9000</serverURI><serverPort>9000</serverPort><regionMapTexture>00000000-0000-0000-0000-000000000000</regionMapTexture><parcelMapTexture>00000000-0000-0000-0000-000000000000</parcelMapTexture><access>1</access><regionSecret></regionSecret><owner_uuid>00000000-0000-0000-0000-000000000000</owner_uuid><Token></Token></region0><region1 type="List"><uuid>bbbb0000-0000-0000-0000-000000000000</uuid><locX>256256</locX><locY>256000</locY><sizeX>256</sizeX><sizeY>256</sizeY><regionName>Region B</regionName><flags>0</flags><serverIP>10.0.0.2</serverIP><serverHttpPort>9000</serverHttpPort><serverURI>http://10.0.0.2:9000</serverURI><serverPort>9000</serverPort><regionMapTexture>00000000-0000-0000-0000-000000000000</regionMapTexture><parcelMapTexture>00000000-0000-0000-0000-000000000000</parcelMapTexture><access>1</access><regionSecret></regionSecret><owner_uuid>00000000-0000-0000-0000-000000000000</owner_uuid><Token></Token></region1></ServerResponse>"#;
+        let regions = parse_region_list(xml).unwrap();
+        assert_eq!(regions.len(), 2);
+        assert_eq!(regions[0].region_name, "Region A");
+        assert_eq!(regions[1].region_name, "Region B");
+        assert_eq!(regions[1].loc_x, 256256);
+    }
+
+    #[test]
+    fn handle_to_xy_decodes() {
+        let handle = (256000i64 << 32) | 256000i64;
+        assert_eq!(handle_to_xy(handle), (256000, 256000));
+    }
+
+    #[test]
+    fn get_region_by_position_xml_parses() {
+        let xml = r#"<?xml version="1.0"?><ServerResponse><result type="List"><uuid>aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee</uuid><locX>1000</locX><locY>2000</locY><sizeX>256</sizeX><sizeY>256</sizeY><regionName>Pos Region</regionName><flags>0</flags><serverIP>127.0.0.1</serverIP><serverHttpPort>9000</serverHttpPort><serverURI>http://127.0.0.1:9000</serverURI><serverPort>9000</serverPort><regionMapTexture>00000000-0000-0000-0000-000000000000</regionMapTexture><parcelMapTexture>00000000-0000-0000-0000-000000000000</parcelMapTexture><access>1</access><regionSecret>s</regionSecret><owner_uuid>11111111-2222-3333-4444-555555555555</owner_uuid><Token>t</Token></result></ServerResponse>"#;
+        let r = parse_single_region(xml).unwrap().unwrap();
+        assert_eq!(r.region_name, "Pos Region");
+        assert_eq!(r.loc_x, 1000);
+        assert_eq!(r.loc_y, 2000);
     }
 }

@@ -148,20 +148,6 @@ impl GatekeeperServiceConnector {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn connector_normalises_url() {
-        let c = GatekeeperServiceConnector::new("http://example.com:9000");
-        assert!(c.server_url.ends_with('/'));
-
-        let c2 = GatekeeperServiceConnector::new("http://example.com:9000/");
-        assert!(c2.server_url.ends_with('/'));
-        assert!(!c2.server_url.ends_with("//"));
-    }
-}
 
 // ---------------------------------------------------------------------------
 // CreateAgent endpoint health helpers
@@ -191,4 +177,19 @@ impl GatekeeperServiceConnector {
     pub async fn is_create_agent_healthy(&self) -> bool { self.create_agent_health_impl().await }
     pub async fn create_agent_ping(&self) -> bool { self.create_agent_health_impl().await }
     pub async fn create_agent_status(&self) -> bool { self.create_agent_health_impl().await }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn connector_normalises_url() {
+        let c = GatekeeperServiceConnector::new("http://example.com:9000");
+        assert!(c.server_url.ends_with('/'));
+
+        let c2 = GatekeeperServiceConnector::new("http://example.com:9000/");
+        assert!(c2.server_url.ends_with('/'));
+        assert!(!c2.server_url.ends_with("//"));
+    }
 }
