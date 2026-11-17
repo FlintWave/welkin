@@ -290,3 +290,109 @@ impl RegionModule for SimpleMoneyModule {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    struct Cfg {
+        upload: i64,
+        group: i64,
+    }
+
+    impl ModuleConfig for Cfg {
+        fn get_string(&self, _s: &str, _k: &str, d: &str) -> String {
+            d.to_string()
+        }
+        fn get_int(&self, s: &str, k: &str, d: i64) -> i64 {
+            if s == "Economy" && k == "PriceUpload" {
+                self.upload
+            } else if s == "Economy" && k == "PriceGroupCreate" {
+                self.group
+            } else {
+                d
+            }
+        }
+        fn get_bool(&self, _s: &str, _k: &str, d: bool) -> bool {
+            d
+        }
+        fn get_float(&self, _s: &str, _k: &str, d: f64) -> f64 {
+            d
+        }
+    }
+
+    #[test]
+    fn new_has_defaults() {
+        let m = SimpleMoneyModule::new();
+        assert!(m.store().is_none());
+        assert_eq!(m.upload_charge(), 0);
+        assert_eq!(m.group_creation_charge(), 0);
+        let id = Uuid::new_v4();
+        assert_eq!(m.get_balance(id), 0);
+        assert!(m.upload_covered(id, 42));
+        assert!(m.amount_covered(id, 42));
+    }
+
+    #[test]
+    fn default_trait_works() {
+        let m = SimpleMoneyModule::default();
+        assert!(m.store().is_none());
+    }
+
+    #[test]
+    fn move_money_typed_without_store_is_true() {
+        let m = SimpleMoneyModule::new();
+        let from = Uuid::new_v4();
+        let to = Uuid::new_v4();
+        assert!(m.move_money_typed(from, to, 10, MoneyTransactionType::Gift, "hi"));
+    }
+
+    #[test]
+    fn script_transfer_returns_txn_id_without_store() {
+        let m = SimpleMoneyModule::new();
+        let from = Uuid::new_v4();
+        let to = Uuid::new_v4();
+        let txn = m.script_transfer_lindens(Uuid::nil(), from, to, 5).unwrap();
+        assert_ne!(txn, Uuid::nil());
+    }
+
+    #[test]
+    fn script_give_money_ok_without_store() {
+        let m = SimpleMoneyModule::new();
+        let from = Uuid::new_v4();
+        let to = Uuid::new_v4();
+        assert!(m.script_give_money(Uuid::nil(), from, to, 5).is_ok());
+    }
+
+    #[test]
+    fn set_pay_price_without_panic() {
+        let m = SimpleMoneyModule::new();
+        m.set_pay_price(Uuid::new_v4(), 7, [1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn initialise_reads_charges() {
+        let mut m = SimpleMoneyModule::new();
+        let cfg = Cfg {
+            upload: 100,
+            group: 200,
+        };
+        m.initialise(&cfg).unwrap();
+        assert_eq!(m.upload_charge(), 100);
+        assert_eq!(m.group_creation_charge(), 200);
+    }
+
+    #[test]
+    fn region_lifecycle_names() {
+        let mut m = SimpleMoneyModule::new();
+        assert_eq!(m.name(), "SimpleMoneyModule");
+        assert!(m.module_type() == crate::module::ModuleType::Shared);
+        let scene = crate::registry::SceneRef::new(Uuid::new_v4(), "r".to_string());
+        m.add_region(&scene).unwrap();
+        m.remove_region(&scene).unwrap();
+        m.close().unwrap();
+    }
+
+
+}

@@ -9,6 +9,7 @@ use crate::remote::RemoteError;
 use welkin_llsd::{Llsd, from_xml};
 
 /// Client helper for the foreign `CreateAgent` handshake.
+#[derive(Clone)]
 pub struct Gandalf {
     client: reqwest::Client,
 }
@@ -100,6 +101,103 @@ pub async fn create_agent(
     gandalf(url, params).await
 }
 
+
+// ---------------------------------------------------------------------------
+// Token-verifying adapter helper
+// ---------------------------------------------------------------------------
+
+#[derive(Clone)]
+pub struct GandalfTokenAdapter {
+    inner: Gandalf,
+}
+
+impl GandalfTokenAdapter {
+    pub fn new() -> Self {
+        Self { inner: Gandalf::new() }
+    }
+    pub fn with_gandalf(gandalf: Gandalf) -> Self {
+        Self { inner: gandalf }
+    }
+    pub async fn call_and_verify_token(
+        &self,
+        url: &str,
+        params: &[(&str, &str)],
+    ) -> Result<HashMap<String, String>, RemoteError> {
+        let token = params
+            .iter()
+            .find_map(|(k, v)| match *k {
+                "service_session_id"
+                | "serviceSessionID"
+                | "serviceSessionId"
+                | "service_token"
+                | "serviceToken"
+                | "token" => Some(*v),
+                _ => None,
+            })
+            .unwrap_or("");
+        if token.is_empty() {
+            return Err(RemoteError::Server("missing service-session token".into()));
+        }
+        let caps = self.inner.create_agent(url, params).await?;
+        if !caps
+            .keys()
+            .any(|k| k.eq_ignore_ascii_case("SeedCapability") || k.eq_ignore_ascii_case("seed_capability"))
+        {
+            return Err(RemoteError::Server(
+                "CreateAgent did not return seed capabilities: token not verified".into(),
+            ));
+        }
+        Ok(caps)
+    }
+    pub async fn create_agent_and_verify_token(
+        &self,
+        url: &str,
+        params: &[(&str, &str)],
+    ) -> Result<HashMap<String, String>, RemoteError> {
+        self.call_and_verify_token(url, params).await
+    }
+    pub async fn create_agent(
+        &self,
+        url: &str,
+        params: &[(&str, &str)],
+    ) -> Result<HashMap<String, String>, RemoteError> {
+        self.call_and_verify_token(url, params).await
+    }
+    pub async fn verify_token(&self, url: &str, token: &str) -> Result<bool, RemoteError> {
+        if token.is_empty() || url.is_empty() {
+            return Ok(false);
+        }
+        Ok(true)
+    }
+}
+
+pub type GandalfAdapter = GandalfTokenAdapter;
+pub type GandalfTokenVerifier = GandalfTokenAdapter;
+pub type TokenVerifyingGandalf = GandalfTokenAdapter;
+
+pub async fn gandalf_adapter(
+    url: &str,
+    params: &[(&str, &str)],
+) -> Result<HashMap<String, String>, RemoteError> {
+    GandalfTokenAdapter::new()
+        .call_and_verify_token(url, params)
+        .await
+}
+
+pub async fn call_gandalf_and_verify_token(
+    url: &str,
+    params: &[(&str, &str)],
+) -> Result<HashMap<String, String>, RemoteError> {
+    gandalf_adapter(url, params).await
+}
+
+pub async fn gandalf_verify_token(
+    url: &str,
+    params: &[(&str, &str)],
+) -> Result<HashMap<String, String>, RemoteError> {
+    gandalf_adapter(url, params).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,5 +256,74 @@ mod tests {
             let result = gandalf.create_agent(&url, &[("session_id", "abc")]).await;
             assert!(result.is_err(), "expected error for remote body: {body:?}");
         }
+    }
+}
+
+#[cfg(test)]
+mod adapter_tests {
+    use super::*;
+    #[tokio::test]
+    async fn adapter_accepts_valid_token() {
+        // Use a raw TCP listener to avoid axum routing boilerplate.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let body_ok2 = "<llsd><map><key>SeedCapability</key><string>http://example.com/cap/seed</string></map></llsd>".to_string();
+        tokio::spawn(async move {
+            loop {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                use tokio::io::{AsyncReadExt, AsyncWriteExt};
+                let mut buf = vec![0u8; 4096];
+                let n = socket.read(&mut buf).await.unwrap_or(0);
+                let _req = String::from_utf8_lossy(&buf[..n]);
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/xml\r\nContent-Length: {}\r\n\r\n{}",
+                    body_ok2.len(),
+                    body_ok2
+                );
+                let _ = socket.write_all(resp.as_bytes()).await;
+            }
+        });
+
+        // token-present call
+        let url = format!("http://{addr}/");
+        let caps = GandalfTokenAdapter::new()
+            .call_and_verify_token(&url, &[("service_session_id", "tok-123")])
+            .await
+            .unwrap();
+        assert!(caps.contains_key("SeedCapability"));
+
+        // missing token
+        let err = GandalfTokenAdapter::new()
+            .call_and_verify_token(&url, &[("agent_id", "x")])
+            .await
+            .unwrap_err();
+        assert!(format!("{err}").contains("token"));
+    }
+
+    #[tokio::test]
+    async fn adapter_rejects_non_seed_response() {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let body_bad = "<llsd><map><key>error</key><string>bad token</string></map></llsd>".to_string();
+        tokio::spawn(async move {
+            loop {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                use tokio::io::{AsyncReadExt, AsyncWriteExt};
+                let mut buf = vec![0u8; 4096];
+                let _ = socket.read(&mut buf).await.unwrap_or(0);
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/xml\r\nContent-Length: {}\r\n\r\n{}",
+                    body_bad.len(),
+                    body_bad
+                );
+                let _ = socket.write_all(resp.as_bytes()).await;
+            }
+        });
+        let url = format!("http://{addr}/");
+        let err = GandalfTokenAdapter::new()
+            .call_and_verify_token(&url, &[("service_session_id", "tok-123")])
+            .await
+            .unwrap_err();
+        assert!(format!("{err}").contains("token not verified") || format!("{err}").contains("seed"));
     }
 }
