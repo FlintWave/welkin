@@ -15,7 +15,6 @@ publish = false
 aurora-llsd = { git = "https://github.com/Aurora-Viewer/Aurora-Viewer", rev = "3d523b14a17bbc6484b208378c0eef291ad5ac32" }
 aurora-msg = { git = "https://github.com/Aurora-Viewer/Aurora-Viewer", rev = "3d523b14a17bbc6484b208378c0eef291ad5ac32" }
 aurora-prim = { git = "https://github.com/Aurora-Viewer/Aurora-Viewer", rev = "3d523b14a17bbc6484b208378c0eef291ad5ac32" }
-aurora-assets = { git = "https://github.com/Aurora-Viewer/Aurora-Viewer", rev = "3d523b14a17bbc6484b208378c0eef291ad5ac32" }
 aurora-net = { git = "https://github.com/Aurora-Viewer/Aurora-Viewer", rev = "3d523b14a17bbc6484b208378c0eef291ad5ac32" }
 
 # Common dependencies
@@ -37,7 +36,6 @@ sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "mysql", "p
 rapier3d = { version = "0.36.1", features = ["enhanced-determinism", "serde-serialize"] }
 clap = { version = "4", features = ["derive", "env"] }
 configparser = "3"
-metrics = "0.24"
 metrics-exporter-prometheus = "0.16"
 tempfile = "3"
 mlua = { version = "0.12", features = ["luau", "serialize", "send"] }
