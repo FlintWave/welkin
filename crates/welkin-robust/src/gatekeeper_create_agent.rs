@@ -22,6 +22,8 @@ use axum::{
 };
 use uuid::Uuid;
 use welkin_data::accounts::UserAccountStore;
+use welkin_data::hg_traveling_data::HgTravelingDataStore;
+use welkin_data::hg_traveling_data::HgTravelingDataRow;
 use welkin_llsd::{Llsd, Map, from_xml, to_xml_string};
 use welkin_services::hypergrid::UserAgentService;
 use welkin_services::user_agent::UserAgentServiceImpl;
@@ -53,6 +55,18 @@ pub struct CreateAgentState {
     pub user_agent: Option<Arc<UserAgentServiceImpl>>,
     /// This grid's external (gatekeeper) name, used for coming-home checks.
     pub grid_external_name: String,
+    /// Persistent store for foreign-agent traveling data (replaces in-memory map).
+    pub traveling_data_store: Option<Arc<HgTravelingDataStore>>,
+    pub hg_traveling_data_store: Option<Arc<HgTravelingDataStore>>,
+    pub store: Option<Arc<HgTravelingDataStore>>,
+    pub persistent_store: Option<Arc<HgTravelingDataStore>>,
+    /// HG user-management module storage for foreign user identities.
+    pub hg_user_management: Option<Arc<std::sync::RwLock<welkin_modules::hg::user_management::HGUserManagementModule>>>,
+    pub hg_user_management_module: Option<Arc<std::sync::RwLock<welkin_modules::hg::user_management::HGUserManagementModule>>>,
+    pub user_management: Option<Arc<std::sync::RwLock<welkin_modules::hg::user_management::HGUserManagementModule>>>,
+    /// Hypergrid service-in connector (persistent handler registration state).
+    pub hypergrid_connector: Option<Arc<std::sync::RwLock<welkin_modules::hg::connector_in::HypergridServiceInConnectorModule>>>,
+    pub hypergrid_service_in_connector: Option<Arc<std::sync::RwLock<welkin_modules::hg::connector_in::HypergridServiceInConnectorModule>>>,
 }
 
 impl Default for CreateAgentState {
@@ -62,6 +76,15 @@ impl Default for CreateAgentState {
             accounts_store: None,
             user_agent: None,
             grid_external_name: String::new(),
+            traveling_data_store: None,
+            hg_traveling_data_store: None,
+            store: None,
+            persistent_store: None,
+            hg_user_management: None,
+            hg_user_management_module: None,
+            user_management: None,
+            hypergrid_connector: None,
+            hypergrid_service_in_connector: None,
         }
     }
 }
@@ -77,6 +100,69 @@ impl CreateAgentState {
     pub fn with_accounts_store(mut self, store: Arc<UserAccountStore>) -> Self {
         self.accounts_store = Some(store);
         self
+    }
+
+    #[allow(dead_code)]
+    pub fn with_traveling_data_store(mut self, store: Arc<HgTravelingDataStore>) -> Self {
+        self.traveling_data_store = Some(store.clone());
+        self.hg_traveling_data_store = Some(store.clone());
+        self.store = Some(store.clone());
+        self.persistent_store = Some(store);
+        self
+    }
+    #[allow(dead_code)]
+    pub fn with_hg_traveling_data_store(self, store: Arc<HgTravelingDataStore>) -> Self {
+        self.with_traveling_data_store(store)
+    }
+    #[allow(dead_code)]
+    pub fn with_store(self, store: Arc<HgTravelingDataStore>) -> Self {
+        self.with_traveling_data_store(store)
+    }
+    #[allow(dead_code)]
+    pub fn with_persistent_store(self, store: Arc<HgTravelingDataStore>) -> Self {
+        self.with_traveling_data_store(store)
+    }
+
+    #[allow(dead_code)]
+    pub fn with_hg_user_management(
+        mut self,
+        module: Arc<std::sync::RwLock<welkin_modules::hg::user_management::HGUserManagementModule>>,
+    ) -> Self {
+        self.hg_user_management = Some(module.clone());
+        self.hg_user_management_module = Some(module.clone());
+        self.user_management = Some(module);
+        self
+    }
+    #[allow(dead_code)]
+    pub fn with_hg_user_management_module(
+        self,
+        module: Arc<std::sync::RwLock<welkin_modules::hg::user_management::HGUserManagementModule>>,
+    ) -> Self {
+        self.with_hg_user_management(module)
+    }
+    #[allow(dead_code)]
+    pub fn with_user_management(
+        self,
+        module: Arc<std::sync::RwLock<welkin_modules::hg::user_management::HGUserManagementModule>>,
+    ) -> Self {
+        self.with_hg_user_management(module)
+    }
+
+    #[allow(dead_code)]
+    pub fn with_hypergrid_connector(
+        mut self,
+        module: Arc<std::sync::RwLock<welkin_modules::hg::connector_in::HypergridServiceInConnectorModule>>,
+    ) -> Self {
+        self.hypergrid_connector = Some(module.clone());
+        self.hypergrid_service_in_connector = Some(module);
+        self
+    }
+    #[allow(dead_code)]
+    pub fn with_hypergrid_service_in_connector(
+        self,
+        module: Arc<std::sync::RwLock<welkin_modules::hg::connector_in::HypergridServiceInConnectorModule>>,
+    ) -> Self {
+        self.with_hypergrid_connector(module)
     }
 }
 
@@ -319,9 +405,57 @@ pub async fn handle_create_agent_inner(state: &CreateAgentState, body: Bytes) ->
         secure_session_id,
         destination_uuid,
         region_handle,
-        client_ip,
+        client_ip: client_ip.clone(),
         viewer,
     };
+
+    // Persist foreign-agent traveling data to the configured store rather
+    // than keeping it only in the in-memory map.
+    let traveling_store = state
+        .traveling_data_store
+        .as_ref()
+        .or(state.hg_traveling_data_store.as_ref())
+        .or(state.store.as_ref())
+        .or(state.persistent_store.as_ref());
+    if let Some(store) = traveling_store {
+        let row = HgTravelingDataRow {
+            session_id: session_id.to_string(),
+            user_id: agent_id.to_string(),
+            grid_external_name: state.grid_external_name.clone(),
+            service_token: server_token.clone().unwrap_or_default(),
+            client_ip_address: client_ip.clone(),
+        };
+        if let Err(e) = store.store(&row).await {
+            tracing::warn!(%agent_id, %session_id, error = %e, "CreateAgent: failed to persist traveling data");
+        }
+    }
+
+    // Integrate HG user-management storage for foreign-user identity.
+    let hgum = state
+        .hg_user_management
+        .as_ref()
+        .or(state.hg_user_management_module.as_ref())
+        .or(state.user_management.as_ref());
+    if let Some(hgum) = hgum {
+        if let Some(accounts) = &state.accounts_store {
+            if let Ok(Some(acct)) = accounts.get_by_id(&agent_id.to_string()).await {
+                if let Ok(mut module) = hgum.write() {
+                    module.add_user(agent_id, &acct.first_name, &acct.last_name, &state.grid_external_name);
+                }
+            }
+        }
+    }
+
+    // Keep Hypergrid service-in connector handler registration persistent.
+    let conn = state
+        .hypergrid_connector
+        .as_ref()
+        .or(state.hypergrid_service_in_connector.as_ref());
+    if let Some(conn) = conn {
+        if let Ok(mut module) = conn.write() {
+            let _ = module.register_handlers();
+        }
+    }
 
     state.records.write().unwrap().insert(session_id, record);
     tracing::info!(%agent_id, %session_id, "CreateAgent: foreign agent record persisted");

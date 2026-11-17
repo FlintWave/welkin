@@ -22,7 +22,6 @@ crc32fast = "1.4"
 uuid = { workspace = true }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 regex = { workspace = true }
-chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 http-body-util = "0.1"
 
 [dev-dependencies]

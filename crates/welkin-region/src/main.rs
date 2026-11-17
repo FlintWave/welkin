@@ -553,6 +553,28 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let process_assets = Arc::new(welkin_services::remote::asset::RemoteAssetConnector::new(accounts_url));
     let process_avatars = Arc::new(welkin_services::remote::avatar::RemoteAvatarConnector::new(accounts_url));
     let process_friends = Arc::new(welkin_services::remote::friends::RemoteFriendsConnector::new(accounts_url));
+    let group_chat_urls = {
+        let mut urls = Vec::new();
+        let candidates = [
+            ("GroupChat", "ForwardGroupChatURLs"),
+            ("GroupChat", "RelayURLs"),
+            ("Groups", "ForwardGroupChatURLs"),
+            ("Groups", "GroupChatURLs"),
+            ("Hypergrid", "ForwardGroupChatURLs"),
+            ("Hypergrid", "RelayURLs"),
+        ];
+        for (section, key) in candidates {
+            if let Some(text) = config.get_string(section, key) {
+                urls.extend(text.split([',', ' ', '\n', '\t']).filter_map(|part| {
+                    let trimmed = part.trim();
+                    if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+                }));
+            }
+        }
+        urls.sort();
+        urls.dedup();
+        urls
+    };
     let process_egress = scene_ref.egress.clone();
     let economy_type = config.get_string_or("Economy", "Type", "");
     let legacy_type = config.get_string_or("Modules", "MoneyModule", "Simple");
@@ -626,6 +648,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             process_friends,
             process_egress,
             Some(process_money_module.clone()),
+            group_chat_urls,
         )
         .await;
     });
@@ -1884,6 +1907,7 @@ async fn process_messages(
     friends: Arc<welkin_services::remote::friends::RemoteFriendsConnector>,
     egress: welkin_modules::egress::SharedEgress,
     money_module: Option<Arc<dyn welkin_modules::economy::MoneyModule>>,
+    group_chat_urls: Vec<String>,
 ) {
     let mut last_agent_update: HashMap<Uuid, Instant> = HashMap::new();
     // Persistent vertical velocity per avatar (jumping and falling).
@@ -1892,7 +1916,7 @@ async fn process_messages(
     let mut last_anim: HashMap<Uuid, &'static str> = HashMap::new();
     let mut always_run: HashSet<Uuid> = HashSet::new();
     let mut group_sessions = ChatSessionState::new();
-    let group_chat = groups_chat::GroupChat::new();
+    let group_chat = groups_chat::GroupChat::with_relay(std::time::Duration::from_secs(30), Some(friends.clone()), group_chat_urls);
     let region_parcel =
         parcel_io::RegionParcel::new(scene.region_info.region_size_x, Uuid::nil());
     loop {

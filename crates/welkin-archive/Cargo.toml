@@ -8,7 +8,6 @@ publish.workspace = true
 
 [dependencies]
 welkin-types = { path = "../welkin-types" }
-welkin-prim = { path = "../welkin-prim" }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 quick-xml = "0.37"

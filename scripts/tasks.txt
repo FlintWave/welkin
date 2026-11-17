@@ -3,3 +3,8 @@ Audit crates/welkin-region/src/main.rs group_name_cache wiring and propose unit 
 Review modern-avatar-features PBR material LLSD design and list missing source constants to copy.
 Suggest smoke tests for weather day-cycle binding in the script VM.
 Check unused imports and dead code in gatekeeper_create_agent after refactor.
+Audit on-received PacketRequestImage to ensure LRU cache eviction and packet marshalling size constants follow OpenSim exactly, then propose patch.
+Audit crates/welkin-region/src/main.rs cross-region TeleportLocationRequest branch for remaining TODOs that still send TeleportFailed and design a safe CreateAgent call sequence.
+Audit crates/welkin-services/src/remote/gandalf.rs seed-cap parsing against OpenSim Gatekeeper XML-RPC and list any missing field aliases.
+Audit crates/welkin-modules environment day-cycle for mutation paths and design how to advance sun/moon based on region local time so day length tests remain deterministic.
+Audit UUIDNameRequest offline name lookup gaps versus the accounts service and suggest caching invalidation semantics.
