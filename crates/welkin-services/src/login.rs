@@ -90,7 +90,7 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>,
     let username = format!("{} {}", first, last).trim().to_string();
     if !login_abuse_allowed(&client_ip, &username) {
         tracing::warn!(ip = %client_ip, username = %username, "login: throttled");
-        return error_response("TooManyRequests", "Too many login attempts, please try again later");
+        return error_response("TooMany", "Too many login attempts, please try again later");
     }
 
     if first.is_empty() || last.is_empty() {
@@ -638,14 +638,14 @@ fn client_ip(headers: &HeaderMap) -> String {
     if let Some(v) = headers.get("x-forwarded-for").and_then(|h| h.to_str().ok()) {
         if let Some(first) = v.split(',').next() {
             let trimmed = first.trim();
-            if !trimmed.is_empty() {
+            if !trimmed.is_empty() && trimmed.parse::<std::net::IpAddr>().is_ok() {
                 return trimmed.to_string();
             }
         }
     }
     if let Some(v) = headers.get("x-real-ip").and_then(|h| h.to_str().ok()) {
         let trimmed = v.trim();
-        if !trimmed.is_empty() {
+        if !trimmed.is_empty() && trimmed.parse::<std::net::IpAddr>().is_ok() {
             return trimmed.to_string();
         }
     }
@@ -659,9 +659,6 @@ fn login_guard() -> &'static Mutex<AbuseGuard> {
 }
 
 fn login_abuse_allowed(ip: &str, username: &str) -> bool {
-    let guard = login_guard().lock().unwrap();
-    // Need mutable; lock guard is MutexGuard. Can't call check on immutable? check takes &mut.
-    drop(guard);
     let mut guard = login_guard().lock().unwrap();
     guard.allow(ip) && guard.allow(username)
 }

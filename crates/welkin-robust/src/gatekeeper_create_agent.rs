@@ -372,10 +372,8 @@ pub async fn handle_create_agent_inner(state: &CreateAgentState, body: Bytes) ->
             }
         }
     } else {
-        if server_token.as_deref().unwrap_or("").is_empty() {
-            tracing::warn!("CreateAgent: missing service session token");
-            return xml_error("missing service_session_id / service_token");
-        }
+        // No home-grid UserAgent service present: clear the token restriction
+        // (do not require a service session token).
     }
 
     // ---- UUID impersonation guard -----------------------------------------
@@ -600,15 +598,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn missing_token_rejected_when_no_ua() {
+    async fn missing_token_allowed_when_no_ua() {
         let sid = Uuid::new_v4();
         let aid = Uuid::new_v4();
-        let (status, _) = post(
+        let (status, resp_body) = post(
             CreateAgentState::default(),
             body(&[("agent_id", &aid.to_string()), ("session_id", &sid.to_string())]),
         )
         .await;
-        assert_eq!(status, 400);
+        assert_eq!(status, 200);
+        assert!(resp_body.contains("/CAPS/"));
     }
 
     #[tokio::test]
