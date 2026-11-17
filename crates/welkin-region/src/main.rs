@@ -4646,11 +4646,15 @@ async fn process_messages(
                                 if let Ok(dest_uuid) = Uuid::parse_str(&dest.uuid) {
                                     // Build the AgentExport payload handed to the
                                     // destination gatekeeper.
+                                    let agent_id_text = export.agent_id.to_string();
+                                    let session_id_text = export.session_id.to_string();
+                                    let region_handle_text = export.region_handle.to_string();
+                                    let destination_uuid_text = dest_uuid.to_string();
                                     let params = [
-                                        ("agent_id", export.agent_id.to_string().leak() as &str),
-                                        ("session_id", export.session_id.to_string().leak() as &str),
-                                        ("region_handle", export.region_handle.to_string().leak() as &str),
-                                        ("destination_uuid", dest_uuid.to_string().leak() as &str),
+                                        ("agent_id", agent_id_text.as_str()),
+                                        ("session_id", session_id_text.as_str()),
+                                        ("region_handle", region_handle_text.as_str()),
+                                        ("destination_uuid", destination_uuid_text.as_str()),
                                     ];
                                     let gandalf = welkin_services::remote::gandalf::Gandalf::new();
                                     if let Err(e) = gandalf.create_agent(&dest.server_uri, &params).await {

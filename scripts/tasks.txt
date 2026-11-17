@@ -1,21 +1,10 @@
-Audit crates/welkin-robust/src/gatekeeper_create_agent.rs CreateAgentService for empty-body, malformed UTF-8, and XML-rejection edge cases.
-Audit crates/welkin-region/src/main.rs group_name_cache wiring and propose unit tests for cache hit, miss, and invalidation.
-Review modern-avatar-features PBR material LLSD design and list missing source constants to copy.
-Suggest smoke tests for weather day-cycle binding in the script VM.
-Check unused imports and dead code in gatekeeper_create_agent after refactor.
-Audit on-received PacketRequestImage to ensure LRU cache eviction and packet marshalling size constants follow OpenSim exactly, then propose patch.
-Audit crates/welkin-region/src/main.rs cross-region TeleportLocationRequest branch for remaining TODOs that still send TeleportFailed and design a safe CreateAgent call sequence.
-Audit crates/welkin-services/src/remote/gandalf.rs seed-cap parsing against OpenSim Gatekeeper XML-RPC and list any missing field aliases.
-Audit crates/welkin-modules environment day-cycle for mutation paths and design how to advance sun/moon based on region local time so day length tests remain deterministic.
-Audit UUIDNameRequest offline name lookup gaps versus the accounts service and suggest caching invalidation semantics.
-Audit remaining broken handlers in /var/home/erik/Projects/opensim-rust/crates/welkin-region/src/main.rs that only log (14 flagged); propose concrete implementation prioritizations with file:line.
-Audit crates/welkin-region/src/object_buy.rs and RequestPayPrice wiring for missing SimpleMoney balance persistence + owner credit.
-Review modern-avatar-features proposal PBR and identify 10 first built tasks.
-Design regression tests for money throttling and freeze gating using accounts + groups stores.
-Analyze Hypergrid end-to-end slice (from /tmp/hg_end_to_end_gaps.md if present) and outline smallest next milestone to actually teleport between two launched regions.
-Audit crates/welkin-region/src/groups_chat.rs for any leftover UDP-level telemetry that could be amplified by long-lived group sessions.
-Audit inventory_io.rs attachment save timing and crash-safety and propose timer + resume checkpointing approach.
-Audit the EstateOwnerMessage mutation path end-to-end; list methods still only log such as setregionterrain/restart/covenant and propose minimal writebacks.
-Audit OpenSim vs Welkin LSL builtins: identify next 8 missing builtins and map them to available VM infrastructure.
-Audit userprofile persistence fields and propose AvatarProperties display API gaps (born on, charter, profile URL).
-Audit RPC/manual account sidecar dependencies across Welkin docs so no runtime startup defaults rely solely on libremetaverse bot binaries.
+Generate EEP Phase 2 storage as COMPLETE standalone source: @@@FILE crates/welkin-modules/src/environment/eep_store.rs ... @@@END. Implement object-safe RegionEnvironmentStore load/save/delete, InMemoryRegionEnvironmentStore, three tests. No prose.
+Generate EEP Phase 3 GET/POST handlers as complete Rust module source using std only, @@@FILE crates/welkin-modules/src/environment/eep_caps.rs ... @@@END, covering request/response types and validation logic. No prose.
+Generate EEP Phase 3 PUT/POST/DELETE handlers as complete Rust module source via @@@FILE ... @@@END, no prose.
+Generate implementation plan for DayCycle frame advancement in crates/welkin-region/src/main.rs using a persistent state across ticks, no prose.
+Generate implementation plan for EEP per-parcel environment storage keyed by region and parcel local id, no prose.
+Generate implementation plan for EEP storage-backed GET/PUT handlers in welkin-region caps, no prose.
+Generate implementation plan for SendViewerUpdate existing weather broadcast integration, no prose.
+Generate implementation plan for map image upload object overlay integration, no prose.
+Generate implementation plan for names/capability server wiring, no prose.
+Generate implementation plan for UUID name resolver cache invalidation, no prose.

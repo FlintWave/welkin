@@ -178,7 +178,7 @@ def run_one_task(ollama, index, task, out_dir, dry_run, timeout, max_retries=0, 
         retryable = False
         try:
             proc = subprocess.run(
-                [ollama, "run", MODEL],
+                [ollama, "run", MODEL, "--think", "false"],
                 input=task,
                 capture_output=True,
                 text=True,
