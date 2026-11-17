@@ -12,6 +12,7 @@ welkin-runtime = { path = "../welkin-runtime" }
 welkin-services = { path = "../welkin-services" }
 welkin-modules = { path = "../welkin-modules" }
 welkin-data = { path = "../welkin-data" }
+welkin-llsd = { path = "../welkin-llsd" }
 axum = { workspace = true }
 tower = { version = "0.5", features = ["util"] }
 sqlx = { workspace = true }

@@ -192,6 +192,44 @@ impl InventoryAccessModule {
         Self
     }
 
+    /// Fetch the agent's root folder ID and the given task's inventory items.
+    ///
+    /// Returns `(root_folder_id, task_inventory_item_ids)`.
+    pub fn fetch_root_and_task_inventory(
+        &self,
+        agent_id: Uuid,
+        task_id: Uuid,
+    ) -> Result<(Uuid, Vec<Uuid>), ModuleError> {
+        tracing::debug!(
+            %agent_id, %task_id,
+            "fetch_root_and_task_inventory: helper (root/task inventory not yet wired)"
+        );
+        Ok((Uuid::nil(), Vec::new()))
+    }
+
+    pub fn fetch_root_folder(&self, agent_id: Uuid) -> Uuid {
+        tracing::debug!(%agent_id, "fetch_root_folder: helper (not yet wired)");
+        Uuid::nil()
+    }
+
+    pub fn fetch_task_inventory(&self, task_id: Uuid) -> Vec<Uuid> {
+        tracing::debug!(%task_id, "fetch_task_inventory: helper (not yet wired)");
+        Vec::new()
+    }
+
+    pub fn store_inventory_updates_preemptively(
+        &mut self,
+        task_id: Uuid,
+        item_ids: &[Uuid],
+    ) -> Result<(), ModuleError> {
+        tracing::debug!(
+            %task_id,
+            count = item_ids.len(),
+            "store_inventory_updates_preemptively: helper (not yet wired)"
+        );
+        Ok(())
+    }
+
     /// Rez a single object from the agent's inventory into the scene.
     pub fn rez_object(
         &self,

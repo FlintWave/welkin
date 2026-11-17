@@ -5461,6 +5461,7 @@ dependencies = [
  "uuid",
  "welkin-config",
  "welkin-data",
+ "welkin-llsd",
  "welkin-modules",
  "welkin-runtime",
  "welkin-services",

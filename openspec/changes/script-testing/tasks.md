@@ -4,11 +4,11 @@
 
 ## Phase 1: Corpus and tooling
 
-- [ ] 1.1 Clone Outworldz/LSL-Scripts into `tests/script-testing/corpus/`, add the directory to `.gitignore`
-- [ ] 1.2 Build the script scanner: a Rust binary at `tests/script-testing/scanner/` that reads `.lsl` files, extracts `ll*` and `os*` function calls via regex, groups by category using a hardcoded LSL function-to-category mapping, flags OSSL scripts
-- [ ] 1.3 Run the scanner on the full corpus, produce a JSON frequency report showing call counts per builtin and per category
-- [ ] 1.4 Select 20 to 30 scripts based on the frequency report: at least one per category from the proposal table (chat, timers, sensors, touch, movement, physics, particles, prim params, inventory, notecard, HTTP, email, vehicles, animations, link messages, textures, permissions, collision), prefer scripts with minimal external dependencies
-- [ ] 1.5 Copy selected scripts to `tests/script-testing/scripts/` (committed to the repo), with a `manifest.json` listing each script's file, category, expected builtins, and whether it uses OSSL
+- [x] 1.1 Clone Outworldz/LSL-Scripts into `tests/script-testing/corpus/`, add the directory to `.gitignore`
+- [x] 1.2 Build the script scanner: a Rust binary at `tests/script-testing/scanner/` that reads `.lsl` files, extracts `ll*` and `os*` function calls via regex, groups by category using a hardcoded LSL function-to-category mapping, flags OSSL scripts
+- [x] 1.3 Run the scanner on the full corpus, produce a JSON frequency report showing call counts per builtin and per category
+- [x] 1.4 Select 20 to 30 scripts based on the frequency report: at least one per category from the proposal table (chat, timers, sensors, touch, movement, physics, particles, prim params, inventory, notecard, HTTP, email, vehicles, animations, link messages, textures, permissions, collision), prefer scripts with minimal external dependencies
+- [x] 1.5 Copy selected scripts to `tests/script-testing/scripts/` (committed to the repo), with a `manifest.json` listing each script's file, category, expected builtins, and whether it uses OSSL
 
 ## Phase 2: Layer 1 (offline compilation)
 

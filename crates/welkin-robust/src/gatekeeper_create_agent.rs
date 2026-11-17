@@ -6,9 +6,8 @@
 //! by the Hypergrid Gandalf handshake, validates basic fields, performs
 //! impersonation/verification guards (VerifyAgent/VerifyClient emulation via an
 //! optional in-process UserAgent service), keeps a record of the visiting
-//! foreign agent, and returns an (empty) seed-capability LLSD response.  Full
-//! simulation co-validation (Presence creation, SimulationService.CreateAgent)
-//! remains beyond this layer.
+//! foreign agent, and returns a seed-capability LLSD response.  XML-RPC
+//! encoded params are also supported.
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -23,6 +22,7 @@ use axum::{
 };
 use uuid::Uuid;
 use welkin_data::accounts::UserAccountStore;
+use welkin_llsd::{Llsd, Map, from_xml, to_xml_string};
 use welkin_services::hypergrid::UserAgentService;
 use welkin_services::user_agent::UserAgentServiceImpl;
 
@@ -119,6 +119,67 @@ async fn handle_create_agent(State(state): State<CreateAgentState>, body: Bytes)
     handle_create_agent_inner(&state, body).await
 }
 
+fn llsd_to_string(v: &Llsd) -> String {
+    match v {
+        Llsd::String(s) | Llsd::Uri(s) => s.clone(),
+        Llsd::Uuid(u) => u.to_string(),
+        Llsd::Integer(i) => i.to_string(),
+        Llsd::Real(r) => r.to_string(),
+        Llsd::Boolean(b) => if *b { "true".into() } else { "false".into() },
+        Llsd::Date(d) => d.to_string(),
+        _ => String::new(),
+    }
+}
+
+fn flatten_llsd_param(out: &mut HashMap<String, String>, val: &Llsd) {
+    if let Llsd::Map(m) = val {
+        for (k, v) in m {
+            out.insert(k.clone(), llsd_to_string(v));
+        }
+    }
+}
+
+fn parse_params(text: &str) -> HashMap<String, String> {
+    let trimmed = text.trim_start();
+    if !trimmed.starts_with('<') {
+        return parse_form(text);
+    }
+
+    // XML-RPC methodCall
+    if let Ok(call) = welkin_llsd::xmlrpc::parse_call(text.as_bytes()) {
+        let mut out = HashMap::new();
+        for p in call.params {
+            flatten_llsd_param(&mut out, &p);
+        }
+        if !out.is_empty() {
+            return out;
+        }
+    }
+
+    // LLSD map body
+    if let Ok(Llsd::Map(m)) = from_xml(text.as_bytes()) {
+        let mut out = HashMap::new();
+        for (k, v) in m {
+            out.insert(k, llsd_to_string(&v));
+        }
+        if !out.is_empty() {
+            return out;
+        }
+    }
+
+    // Malformed XML -> empty (will be treated as missing fields)
+    HashMap::new()
+}
+
+fn pick(params: &HashMap<String, String>, names: &[&str]) -> Option<String> {
+    for n in names {
+        if let Some(v) = params.get(*n) {
+            return Some(v.clone());
+        }
+    }
+    None
+}
+
 /// Core CreateAgent processing, reusable by [`CreateAgentService`].
 pub async fn handle_create_agent_inner(state: &CreateAgentState, body: Bytes) -> Response {
     // Handle malformed bodies (including malformed XML-RPC) without panicking.
@@ -132,28 +193,41 @@ pub async fn handle_create_agent_inner(state: &CreateAgentState, body: Bytes) ->
 
     let trimmed = text.trim_start();
     if trimmed.starts_with('<') {
-        // CreateAgent expects form-encoded data; any XML (well-formed or not)
-        // is rejected.  Distinguish malformed XML-RPC for diagnostics.
-        let msg = if trimmed.starts_with("<?xml") || trimmed.starts_with("<methodCall") {
-            "malformed XML-RPC body"
-        } else {
-            "malformed XML body"
-        };
-        tracing::warn!("CreateAgent: {msg}");
-        return xml_error(msg);
+        // Reject clearly broken XML early.
+        if trimmed.starts_with("<?xml") || trimmed.starts_with("<methodCall") {
+            if welkin_llsd::xmlrpc::parse_call(text.as_bytes()).is_err()
+                && from_xml(text.as_bytes()).is_err()
+            {
+                tracing::warn!("CreateAgent: malformed XML-RPC body");
+                return xml_error("malformed XML-RPC body");
+            }
+        } else if !trimmed.starts_with("<llsd") && !trimmed.starts_with("<map") {
+            tracing::warn!("CreateAgent: malformed XML body");
+            return xml_error("malformed XML body");
+        }
     }
 
-    let params = parse_form(&text);
+    let params = parse_params(&text);
 
     // ---- Validation -------------------------------------------------------
-    let agent_id = match params.get("agent_id").and_then(|v| Uuid::parse_str(v).ok()) {
+    let agent_id = match pick(
+        &params,
+        &["agent_id", "agentID", "agentId", "agent_uuid", "agentUuid"],
+    )
+    .and_then(|v| Uuid::parse_str(&v).ok())
+    {
         Some(v) => v,
         None => {
             tracing::warn!("CreateAgent: missing/invalid agent_id");
             return xml_error("missing or invalid agent_id");
         }
     };
-    let session_id = match params.get("session_id").and_then(|v| Uuid::parse_str(v).ok()) {
+    let session_id = match pick(
+        &params,
+        &["session_id", "sessionID", "sessionId", "session_uuid"],
+    )
+    .and_then(|v| Uuid::parse_str(&v).ok())
+    {
         Some(v) => v,
         None => {
             tracing::warn!("CreateAgent: missing/invalid session_id");
@@ -161,25 +235,34 @@ pub async fn handle_create_agent_inner(state: &CreateAgentState, body: Bytes) ->
         }
     };
 
-    let secure_session_id = params
-        .get("secure_session_id")
-        .and_then(|v| Uuid::parse_str(v).ok());
-    let destination_uuid = params
-        .get("destination_uuid")
-        .and_then(|v| Uuid::parse_str(v).ok());
-    let region_handle = params.get("region_handle").and_then(|v| v.parse::<u64>().ok());
+    let secure_session_id = pick(
+        &params,
+        &["secure_session_id", "secureSessionID", "secureSessionId"],
+    )
+    .and_then(|v| Uuid::parse_str(&v).ok());
+    let destination_uuid = pick(
+        &params,
+        &["destination_uuid", "destinationUUID", "destination", "destination_id"],
+    )
+    .and_then(|v| Uuid::parse_str(&v).ok());
+    let region_handle = pick(&params, &["region_handle", "regionHandle"])
+        .and_then(|v| v.parse::<u64>().ok());
 
-    let client_ip = params.get("ip_address").cloned().unwrap_or_default();
-    let viewer = params.get("viewer").cloned().unwrap_or_default();
-    let server_token = params
-        .get("service_session_id")
-        .or_else(|| params.get("service_token"))
-        .cloned();
+    let client_ip = pick(&params, &["ip_address", "ipAddress", "client_ip", "clientIP"])
+        .unwrap_or_default();
+    let viewer = pick(&params, &["viewer", "client"]).unwrap_or_default();
+    let server_token = pick(
+        &params,
+        &[
+            "service_session_id",
+            "serviceSessionID",
+            "serviceSessionId",
+            "service_token",
+            "serviceToken",
+        ],
+    );
 
     // ---- VerifyAgent / VerifyClient callback (emulated) -------------------
-    // Emulate the foreign gatekeeper calling back to the agent's home grid
-    // UserAgentService.  Uses an in-process UserAgentServiceImpl when wired;
-    // otherwise (no real home grid reachable) the check is skipped.
     if let Some(ua) = &state.user_agent {
         let token = server_token.clone().unwrap_or_default();
         match ua.verify_agent(session_id, &token) {
@@ -203,9 +286,6 @@ pub async fn handle_create_agent_inner(state: &CreateAgentState, body: Bytes) ->
             }
         }
     } else {
-        // Emulation unavailable: still require a non-empty service token as a
-        // minimal anti-spoofing check so anonymous CreateAgent calls are
-        // rejected when no callback service is wired.
         if server_token.as_deref().unwrap_or("").is_empty() {
             tracing::warn!("CreateAgent: missing service session token");
             return xml_error("missing service_session_id / service_token");
@@ -215,8 +295,6 @@ pub async fn handle_create_agent_inner(state: &CreateAgentState, body: Bytes) ->
     // ---- UUID impersonation guard -----------------------------------------
     if let Some(accounts) = &state.accounts_store {
         if let Ok(Some(_acct)) = accounts.get_by_id(&agent_id.to_string()).await {
-            // agent_id collides with a local account: only allowed if the agent
-            // is genuinely coming home.
             let coming_home = state
                 .user_agent
                 .as_ref()
@@ -248,9 +326,18 @@ pub async fn handle_create_agent_inner(state: &CreateAgentState, body: Bytes) ->
     state.records.write().unwrap().insert(session_id, record);
     tracing::info!(%agent_id, %session_id, "CreateAgent: foreign agent record persisted");
 
-    let body = String::from(
-        "<?xml version=\"1.0\"?><llsd><map></map></llsd>",
-    );
+    let base = if state.grid_external_name.trim().is_empty() {
+        "http://127.0.0.1:9000"
+    } else {
+        state.grid_external_name.trim().trim_end_matches('/')
+    };
+    let seed_url = format!("{}/CAPS/seed", base);
+
+    let mut map: Map = Map::new();
+    map.insert("SeedCapability".into(), Llsd::String(seed_url.clone()));
+    map.insert("seed_capability".into(), Llsd::String(seed_url));
+
+    let body = to_xml_string(&Llsd::Map(map));
     (
         StatusCode::OK,
         [(header::CONTENT_TYPE, "application/xml; charset=utf-8")],
@@ -322,7 +409,6 @@ fn xml_escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
-
 /// Public entry point alias used by callers/tests.
 #[allow(dead_code)]
 pub async fn validate_and_verify_agent(state: &CreateAgentState, body: Bytes) -> Response {
@@ -361,7 +447,7 @@ mod tests {
             .join("&")
     }
 
-    async fn post(state: CreateAgentState, body: String) -> u16 {
+    async fn post(state: CreateAgentState, body: String) -> (u16, String) {
         let app: Router = router(state);
         let resp = app
             .oneshot(
@@ -374,14 +460,16 @@ mod tests {
             )
             .await
             .unwrap();
-        resp.status().as_u16()
+        let status = resp.status().as_u16();
+        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        (status, String::from_utf8_lossy(&bytes).to_string())
     }
 
     #[tokio::test]
     async fn missing_token_rejected_when_no_ua() {
         let sid = Uuid::new_v4();
         let aid = Uuid::new_v4();
-        let status = post(
+        let (status, _) = post(
             CreateAgentState::default(),
             body(&[("agent_id", &aid.to_string()), ("session_id", &sid.to_string())]),
         )
@@ -406,7 +494,7 @@ mod tests {
         let mut state = CreateAgentState::default().with_user_agent(service);
         state.grid_external_name = "http://foreign.example:9000/".into();
 
-        let status = post(
+        let (status, resp_body) = post(
             state,
             body(&[
                 ("agent_id", &agent.to_string()),
@@ -417,6 +505,7 @@ mod tests {
         )
         .await;
         assert_eq!(status, 200);
+        assert!(resp_body.contains("/CAPS/"));
     }
 
     #[tokio::test]
@@ -433,7 +522,7 @@ mod tests {
         });
 
         let state = CreateAgentState::default().with_user_agent(service);
-        let status = post(
+        let (status, _) = post(
             state,
             body(&[
                 ("agent_id", &agent.to_string()),
@@ -444,5 +533,45 @@ mod tests {
         )
         .await;
         assert_eq!(status, 400);
+    }
+
+    #[tokio::test]
+    async fn xml_rpc_params_parsed() {
+        let sid = Uuid::new_v4();
+        let aid = Uuid::new_v4();
+        let token = "tok-xml";
+        let service = ua(true);
+        service.store_travel_info(welkin_services::hypergrid::TravelingAgentInfo {
+            session_id: sid,
+            user_id: aid,
+            grid_external_name: "http://foreign.example:9000/".into(),
+            service_token: token.into(),
+            client_ip_address: "10.0.0.1".into(),
+        });
+        let mut state = CreateAgentState::default().with_user_agent(service);
+        state.grid_external_name = "http://foreign.example:9000/".into();
+
+        let xml = format!(
+            r#"<?xml version="1.0"?><methodCall><methodName>CreateAgent</methodName><params><param><value><struct>
+            <member><name>agent_id</name><value><string>{aid}</string></value></member>
+            <member><name>session_id</name><value><string>{sid}</string></value></member>
+            <member><name>service_session_id</name><value><string>{token}</string></value></member>
+            <member><name>ip_address</name><value><string>10.0.0.1</string></value></member>
+            </struct></value></param></params></methodCall>"#
+        );
+
+        let app: Router = router(state);
+        let resp = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/create_agent")
+                    .header("content-type", "application/xml")
+                    .body(axum::body::Body::from(xml))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status().as_u16(), 200);
     }
 }
