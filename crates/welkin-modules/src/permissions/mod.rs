@@ -7,9 +7,11 @@
 //! scripts, terrain, parcels, estate).
 
 pub mod abuse_guard;
+pub mod script_event_throttle;
 pub mod checks;
 
 pub use abuse_guard::AbuseGuard;
+pub use script_event_throttle::ScriptEventThrottle;
 
 use std::collections::HashSet;
 
