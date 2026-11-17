@@ -11,6 +11,7 @@
 //! The helper is sync and pure: it never performs I/O and never panics.
 
 use std::collections::HashMap;
+use std::time::Duration;
 use std::sync::{Arc, OnceLock};
 
 use uuid::Uuid;
@@ -198,6 +199,85 @@ pub async fn resolve_group_names_cached(
         }
     }
     out
+}
+
+
+// --- Cache invalidation / TTL / warm-up / reporting helpers ------------------
+
+/// Invalidate a single group-name cache entry.
+pub fn invalidate(cache: &GroupNameCache, id: Uuid) -> bool {
+    cache.invalidate(&id)
+}
+
+/// Alias matching the cache name.
+pub fn invalidate_group_name(cache: &GroupNameCache, id: Uuid) -> bool {
+    invalidate(cache, id)
+}
+
+/// Alias for external callers.
+pub fn invalidate_group_name_cache(cache: &GroupNameCache, id: Uuid) -> bool {
+    invalidate(cache, id)
+}
+
+/// Invalidate multiple group-name cache entries.
+pub fn invalidate_group_names(cache: &GroupNameCache, ids: &[Uuid]) {
+    for id in ids {
+        cache.invalidate(id);
+    }
+}
+
+/// Clear the entire group-name cache.
+pub fn invalidate_all(cache: &GroupNameCache) {
+    cache.clear();
+}
+
+pub fn invalidate_all_group_names(cache: &GroupNameCache) {
+    invalidate_all(cache);
+}
+
+pub fn clear_group_name_cache(cache: &GroupNameCache) {
+    cache.clear();
+}
+
+/// Remove entries older than `max_age` from the group-name cache.
+pub fn ttl_reaper(cache: &GroupNameCache, max_age: Duration) -> usize {
+    cache.ttl_reaper(max_age)
+}
+
+/// Warm up the group-name cache for the supplied ids.
+pub async fn warm_group_name_cache(
+    cache: &GroupNameCache,
+    store: &welkin_data::groups::GroupsStore,
+    ids: &[Uuid],
+) -> HashMap<Uuid, String> {
+    let names = resolve_group_names_cached(cache, store, ids).await;
+    cache.warm(names.iter().map(|(k, v)| (*k, v.clone())));
+    names
+}
+
+pub async fn warm_up_group_name_cache(
+    cache: &GroupNameCache,
+    store: &welkin_data::groups::GroupsStore,
+    ids: &[Uuid],
+) -> HashMap<Uuid, String> {
+    warm_group_name_cache(cache, store, ids).await
+}
+
+pub async fn warm_group_names(
+    cache: &GroupNameCache,
+    store: &welkin_data::groups::GroupsStore,
+    ids: &[Uuid],
+) -> HashMap<Uuid, String> {
+    warm_group_name_cache(cache, store, ids).await
+}
+
+/// Human-readable status report for the group-name cache.
+pub fn report_group_name_cache(cache: &GroupNameCache) -> String {
+    cache.report()
+}
+
+pub fn group_name_cache_report(cache: &GroupNameCache) -> String {
+    report_group_name_cache(cache)
 }
 
 #[cfg(test)]

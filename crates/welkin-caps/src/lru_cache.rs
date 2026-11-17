@@ -9,6 +9,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::hash::Hash;
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Default)]
 pub struct CacheStats {
@@ -34,6 +35,7 @@ struct Inner<K, V> {
     capacity: usize,
     map: HashMap<K, V>,
     order: VecDeque<K>,
+    timestamps: HashMap<K, Instant>,
     stats: CacheStats,
 }
 
@@ -57,6 +59,7 @@ where
                 capacity: cap,
                 map: HashMap::with_capacity(cap),
                 order: VecDeque::with_capacity(cap),
+                timestamps: HashMap::with_capacity(cap),
                 stats: CacheStats::default(),
             }),
         }
@@ -67,6 +70,7 @@ where
         if let Some(value) = inner.map.get(key).cloned() {
             inner.order.retain(|k| k != key);
             inner.order.push_back(key.clone());
+            inner.timestamps.insert(key.clone(), Instant::now());
             inner.stats.hits += 1;
             Some(value)
         } else {
@@ -78,6 +82,7 @@ where
     pub fn put(&self, key: K, value: V) {
         let mut inner = self.inner.lock().expect("lru cache poisoned");
         inner.stats.inserts += 1;
+        inner.timestamps.insert(key.clone(), Instant::now());
         if inner.map.contains_key(&key) {
             inner.map.insert(key.clone(), value);
             inner.order.retain(|k| k != &key);
@@ -94,6 +99,7 @@ where
         let mut inner = self.inner.lock().expect("lru cache poisoned");
         if inner.map.remove(key).is_some() {
             inner.order.retain(|k| k != key);
+            inner.timestamps.remove(key);
             inner.stats.invalidations += 1;
             true
         } else {
@@ -105,6 +111,7 @@ where
         let mut inner = self.inner.lock().expect("lru cache poisoned");
         inner.map.clear();
         inner.order.clear();
+        inner.timestamps.clear();
     }
 
     pub fn contains(&self, key: &K) -> bool {
@@ -131,12 +138,57 @@ where
         inner.capacity
     }
 
+    /// Remove entries whose last touch is older than `max_age`.
+    /// Returns the number of entries removed.
+    pub fn ttl_reaper(&self, max_age: Duration) -> usize {
+        let mut inner = self.inner.lock().expect("lru cache poisoned");
+        let now = Instant::now();
+        let expired: Vec<K> = inner
+            .timestamps
+            .iter()
+            .filter(|(_, ts)| now.duration_since(**ts) > max_age)
+            .map(|(k, _)| k.clone())
+            .collect();
+        let count = expired.len();
+        for key in expired {
+            inner.map.remove(&key);
+            inner.order.retain(|k| k != &key);
+            inner.timestamps.remove(&key);
+            inner.stats.invalidations += 1;
+        }
+        count
+    }
+
+    /// Bulk populate the cache from an iterator of (key, value) pairs.
+    pub fn warm(&self, entries: impl IntoIterator<Item = (K, V)>) {
+        for (k, v) in entries {
+            self.put(k, v);
+        }
+    }
+
+    /// Human-readable status report including stats, size and capacity.
+    pub fn report(&self) -> String {
+        let inner = self.inner.lock().expect("lru cache poisoned");
+        format!(
+            "len={}/{} hits={} misses={} inserts={} evictions={} invalidations={} hit_rate={:.3}",
+            inner.map.len(),
+            inner.capacity,
+            inner.stats.hits,
+            inner.stats.misses,
+            inner.stats.inserts,
+            inner.stats.evictions,
+            inner.stats.invalidations,
+            inner.stats.hit_rate()
+        )
+    }
+
     fn evict_locked(inner: &mut Inner<K, V>) {
         while inner.map.len() > inner.capacity {
             if let Some(oldest) = inner.order.pop_front() {
                 if inner.map.remove(&oldest).is_some() {
                     inner.stats.evictions += 1;
                 }
+                inner.timestamps.remove(&oldest);
             } else {
                 break;
             }
@@ -191,5 +243,22 @@ mod tests {
         cache.put(3, 3);
         assert!(cache.contains(&1));
         assert!(!cache.contains(&2));
+    }
+
+    #[test]
+    fn ttl_reaper_removes_stale() {
+        let cache = LruCache::<i32, i32>::new(4);
+        cache.put(1, 10);
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        assert_eq!(cache.ttl_reaper(std::time::Duration::from_millis(5)), 1);
+        assert!(!cache.contains(&1));
+    }
+
+    #[test]
+    fn warm_populates() {
+        let cache = LruCache::<i32, i32>::new(4);
+        cache.warm(vec![(1, 10), (2, 20)]);
+        assert_eq!(cache.get(&1), Some(10));
+        assert_eq!(cache.get(&2), Some(20));
     }
 }

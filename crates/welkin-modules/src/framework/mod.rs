@@ -316,11 +316,81 @@ impl SearchModule {
         self.index.add_place(name, owner, category)
     }
 
+    pub fn add_place_with_id(
+        &mut self,
+        id: uuid::Uuid,
+        name: impl Into<String>,
+        owner: impl Into<String>,
+        category: impl Into<String>,
+    ) -> Result<(), crate::search::SearchIndexError> {
+        self.index.add_place_with_id(id, name, owner, category)
+    }
+
+    pub fn add_place_doc(&mut self, entry: crate::search::PlaceEntry) -> Result<(), crate::search::SearchIndexError> {
+        self.index.add_place_doc(entry)
+    }
+
+    pub fn add_place_document(&mut self, entry: crate::search::PlaceEntry) -> Result<(), crate::search::SearchIndexError> {
+        self.index.add_place_document(entry)
+    }
+
+    pub fn add_entry(&mut self, entry: crate::search::PlaceEntry) -> Result<(), crate::search::SearchIndexError> {
+        self.index.add_entry(entry)
+    }
+
+    pub fn remove_place(&mut self, id: uuid::Uuid) -> Result<(), crate::search::SearchIndexError> {
+        self.index.remove_place(id)
+    }
+
+    pub fn remove_place_by_id(&mut self, id: uuid::Uuid) -> Result<(), crate::search::SearchIndexError> {
+        self.index.remove_place_by_id(id)
+    }
+
+    pub fn remove_place_by_name(&mut self, name: &str) -> Result<usize, crate::search::SearchIndexError> {
+        self.index.remove_place_by_name(name)
+    }
+
+    pub fn remove_place_doc(&mut self, id: uuid::Uuid) -> Result<(), crate::search::SearchIndexError> {
+        self.index.remove_place_doc(id)
+    }
+
+    pub fn remove_place_document(&mut self, id: uuid::Uuid) -> Result<(), crate::search::SearchIndexError> {
+        self.index.remove_document(id)
+    }
+
+    pub fn remove_doc(&mut self, id: uuid::Uuid) -> Result<(), crate::search::SearchIndexError> {
+        self.index.remove_doc(id)
+    }
+
+    pub fn remove_document(&mut self, id: uuid::Uuid) -> Result<(), crate::search::SearchIndexError> {
+        self.index.remove_document(id)
+    }
+
+    pub fn delete_place(&mut self, id: uuid::Uuid) -> Result<(), crate::search::SearchIndexError> {
+        self.index.delete_place(id)
+    }
+
+    pub fn delete_place_by_id(&mut self, id: uuid::Uuid) -> Result<(), crate::search::SearchIndexError> {
+        self.index.delete_place_by_id(id)
+    }
+
+    pub fn update_place(&mut self, entry: crate::search::PlaceEntry) -> Result<(), crate::search::SearchIndexError> {
+        self.index.update_place(entry)
+    }
+
+    pub fn upsert_place(&mut self, entry: crate::search::PlaceEntry) -> Result<(), crate::search::SearchIndexError> {
+        self.index.upsert_place(entry)
+    }
+
+    pub fn apply_updates(&mut self, added: &[crate::search::PlaceEntry], removed: &[uuid::Uuid]) -> Result<(), crate::search::SearchIndexError> {
+        self.index.apply_updates(added, removed)
+    }
+
+    pub fn apply_update(&mut self, added: &[crate::search::PlaceEntry], removed: &[uuid::Uuid]) -> Result<(), crate::search::SearchIndexError> {
+        self.index.apply_updates(added, removed)
+    }
+
     /// Search for places matching `query` with the given flags.
-    ///
-    /// OpenSim performs place search through an external directory service. This
-    /// module does not hold such a client, so the local, self-contained behavior
-    /// is to return no place results.
     pub fn search_places(&self, query: &str, flags: u32) -> Vec<SearchResult> {
         self.index.search_places(query, flags)
     }
@@ -328,6 +398,50 @@ impl SearchModule {
     /// Search for people matching `query`.
     pub fn search_people(&self, _query: &str) -> Vec<SearchResult> {
         Vec::new()
+    }
+
+    pub fn places_by_category(&self, category: &str) -> Vec<crate::search::PlaceEntry> {
+        self.index.places_by_category(category)
+    }
+
+    pub fn entries_by_category(&self, category: &str) -> Vec<crate::search::PlaceEntry> {
+        self.index.entries_by_category(category)
+    }
+
+    pub fn by_category(&self, category: &str) -> Vec<crate::search::PlaceEntry> {
+        self.index.by_category(category)
+    }
+
+    pub fn list_by_category(&self, category: &str) -> Vec<crate::search::PlaceEntry> {
+        self.index.list_by_category(category)
+    }
+
+    pub fn category_places(&self, category: &str) -> Vec<crate::search::PlaceEntry> {
+        self.index.category_places(category)
+    }
+
+    pub fn query_by_category(&self, category: &str) -> Vec<crate::search::PlaceEntry> {
+        self.index.query_by_category(category)
+    }
+
+    pub fn query_category(&self, category: &str) -> Vec<crate::search::PlaceEntry> {
+        self.index.query_category(category)
+    }
+
+    pub fn search_by_category(&self, category: &str) -> Vec<SearchResult> {
+        self.index.search_by_category(category)
+    }
+
+    pub fn search_places_by_category(&self, category: &str) -> Vec<SearchResult> {
+        self.index.search_places_by_category(category)
+    }
+
+    pub fn places(&self) -> Vec<crate::search::PlaceEntry> {
+        self.index.places()
+    }
+
+    pub fn place_count(&self) -> usize {
+        self.index.place_count()
     }
 }
 

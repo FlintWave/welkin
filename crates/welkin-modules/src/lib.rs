@@ -87,6 +87,7 @@ pub use profiles::{
     AvatarProperties, BasicProfileModule, ClassifiedSummary, PickSummary, UserNote,
 };
 pub use registry::{ModuleRegistry, SceneRef};
+pub use search::{PlaceEntry, PlaceIndex, SearchIndexError};
 pub use transfer::{
     AgentTransferState, EntityTransferContext, EntityTransferModule, EntityTransferStateMachine,
     GridRegion, TeleportFlags,
@@ -3886,6 +3887,30 @@ mod tests {
         assert!(m.search_people("test").is_empty());
         m.remove_region(&scene).unwrap();
         m.close().unwrap();
+    }
+
+    #[test]
+    fn search_module_updates_and_category() {
+        let mut m = SearchModule::new();
+        let id = Uuid::new_v4();
+        m.add_place_with_id(id, "Cafe", "bob", "restaurant").unwrap();
+        assert_eq!(m.place_count(), 1);
+        assert_eq!(m.places_by_category("restaurant").len(), 1);
+        assert_eq!(m.by_category("Restaurant").len(), 1);
+        assert_eq!(m.search_by_category("restaurant").len(), 1);
+        m.remove_place(id).unwrap();
+        assert_eq!(m.place_count(), 0);
+        assert!(m.places_by_category("restaurant").is_empty());
+
+        // place docs / updates
+        let e = PlaceEntry { id: Uuid::new_v4(), name: "Pub".into(), owner: "ann".into(), category: "bar".into() };
+        m.add_place_doc(e.clone()).unwrap();
+        m.update_place(PlaceEntry { id: e.id, name: "Pub2".into(), owner: "ann".into(), category: "bar".into() }).unwrap();
+        assert_eq!(m.places_by_category("bar")[0].name, "Pub2");
+        let added = vec![PlaceEntry { id: Uuid::new_v4(), name: "X".into(), owner: "o".into(), category: "cat".into() }];
+        let removed = vec![e.id];
+        m.apply_updates(&added, &removed).unwrap();
+        assert_eq!(m.place_count(), 1); // X remains (Pub2 removed by e.id? no, e.id still pub2)
     }
 
     // -- 224. ServiceConnectorConfig defaults ------------------------------

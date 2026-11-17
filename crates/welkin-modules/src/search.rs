@@ -3,9 +3,11 @@
 //! Minimal tantivy-backed search index wrapper for place search.
 
 
+use std::collections::HashMap;
+
 use tantivy::schema::{Schema, SchemaBuilder, STORED, TEXT};
 use tantivy::schema::Value as _;
-use tantivy::{doc, Index, IndexWriter, TantivyError};
+use tantivy::{doc, Index, IndexWriter, TantivyError, Term};
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -28,6 +30,11 @@ pub struct PlaceEntry {
     pub category: String,
 }
 
+/// Compatibility alias.
+pub type PlaceDoc = PlaceEntry;
+/// Compatibility alias.
+pub type PlaceDocument = PlaceEntry;
+
 /// Minimal tantivy-based index for places.
 pub struct PlaceIndex {
     schema: Schema,
@@ -36,6 +43,7 @@ pub struct PlaceIndex {
     owner_field: tantivy::schema::Field,
     category_field: tantivy::schema::Field,
     id_field: tantivy::schema::Field,
+    places: HashMap<Uuid, PlaceEntry>,
 }
 
 impl PlaceIndex {
@@ -54,6 +62,7 @@ impl PlaceIndex {
             owner_field,
             category_field,
             id_field,
+            places: HashMap::new(),
         })
     }
 
@@ -93,6 +102,26 @@ impl PlaceIndex {
         self.add_place(name, owner, category)
     }
 
+    pub fn add_place_doc(&mut self, entry: PlaceEntry) -> Result<(), SearchIndexError> {
+        self.add_entry(entry)
+    }
+
+    pub fn add_place_document(&mut self, entry: PlaceEntry) -> Result<(), SearchIndexError> {
+        self.add_entry(entry)
+    }
+
+    pub fn add_document(&mut self, entry: PlaceEntry) -> Result<(), SearchIndexError> {
+        self.add_entry(entry)
+    }
+
+    pub fn add_doc(&mut self, entry: PlaceEntry) -> Result<(), SearchIndexError> {
+        self.add_entry(entry)
+    }
+
+    pub fn add_entry(&mut self, entry: PlaceEntry) -> Result<(), SearchIndexError> {
+        self.add_place_with_id(entry.id, entry.name, entry.owner, entry.category)
+    }
+
     pub fn add_place_with_id(
         &mut self,
         id: Uuid,
@@ -103,6 +132,12 @@ impl PlaceIndex {
         let name = name.into();
         let owner = owner.into();
         let category = category.into();
+        let entry = PlaceEntry {
+            id,
+            name: name.clone(),
+            owner: owner.clone(),
+            category: category.clone(),
+        };
         let mut writer: IndexWriter = self.index.writer(15_000_000)?;
         writer.add_document(doc!(
             self.name_field => name.as_str(),
@@ -111,11 +146,8 @@ impl PlaceIndex {
             self.id_field => id.to_string(),
         ))?;
         writer.commit()?;
+        self.places.insert(id, entry);
         Ok(())
-    }
-
-    pub fn add_entry(&mut self, entry: PlaceEntry) -> Result<(), SearchIndexError> {
-        self.add_place_with_id(entry.id, entry.name, entry.owner, entry.category)
     }
 
     pub fn search_places(&self, query: &str, _flags: u32) -> Vec<SearchResult> {
@@ -132,7 +164,6 @@ impl PlaceIndex {
             Err(_) => return Vec::new(),
         };
         let searcher = reader.searcher();
-        // simple all-text query across name/owner/category by concatenating fields via query parser on name
         let query_parser = tantivy::query::QueryParser::new(
             self.schema.clone(),
             vec![self.name_field, self.owner_field, self.category_field],
@@ -169,8 +200,144 @@ impl PlaceIndex {
         out
     }
 
+    // --- removal / updates ---
+
+    pub fn remove_place(&mut self, id: Uuid) -> Result<(), SearchIndexError> {
+        self.remove_place_by_id(id)
+    }
+
+    pub fn remove_place_by_id(&mut self, id: Uuid) -> Result<(), SearchIndexError> {
+        self.places.remove(&id);
+        let mut writer: IndexWriter = self.index.writer(15_000_000)?;
+        let term = Term::from_field_text(self.id_field, &id.to_string());
+        writer.delete_term(term);
+        writer.commit()?;
+        Ok(())
+    }
+
+    pub fn remove_place_by_name(&mut self, name: &str) -> Result<usize, SearchIndexError> {
+        let ids: Vec<Uuid> = self.places.values()
+            .filter(|p| p.name == name)
+            .map(|p| p.id)
+            .collect();
+        let n = ids.len();
+        for id in ids {
+            let _ = self.remove_place_by_id(id);
+        }
+        Ok(n)
+    }
+
+    pub fn remove_place_entry(&mut self, entry: &PlaceEntry) -> Result<(), SearchIndexError> {
+        self.remove_place_by_id(entry.id)
+    }
+
+    pub fn remove_entry(&mut self, entry: &PlaceEntry) -> Result<(), SearchIndexError> {
+        self.remove_place_by_id(entry.id)
+    }
+
+    pub fn remove_place_doc(&mut self, id: Uuid) -> Result<(), SearchIndexError> {
+        self.remove_place_by_id(id)
+    }
+
+    pub fn remove_doc(&mut self, id: Uuid) -> Result<(), SearchIndexError> {
+        self.remove_place_by_id(id)
+    }
+
+    pub fn remove_document(&mut self, id: Uuid) -> Result<(), SearchIndexError> {
+        self.remove_place_by_id(id)
+    }
+
+    pub fn delete_place(&mut self, id: Uuid) -> Result<(), SearchIndexError> {
+        self.remove_place_by_id(id)
+    }
+
+    pub fn delete_place_by_id(&mut self, id: Uuid) -> Result<(), SearchIndexError> {
+        self.remove_place_by_id(id)
+    }
+
+    pub fn delete_doc(&mut self, id: Uuid) -> Result<(), SearchIndexError> {
+        self.remove_place_by_id(id)
+    }
+
+    pub fn delete_document(&mut self, id: Uuid) -> Result<(), SearchIndexError> {
+        self.remove_place_by_id(id)
+    }
+
+    pub fn update_place(&mut self, entry: PlaceEntry) -> Result<(), SearchIndexError> {
+        let _ = self.remove_place_by_id(entry.id);
+        self.add_entry(entry)
+    }
+
+    pub fn upsert_place(&mut self, entry: PlaceEntry) -> Result<(), SearchIndexError> {
+        self.update_place(entry)
+    }
+
+    pub fn apply_updates(&mut self, added: &[PlaceEntry], removed: &[Uuid]) -> Result<(), SearchIndexError> {
+        for id in removed {
+            let _ = self.remove_place_by_id(*id);
+        }
+        for e in added {
+            self.add_entry(e.clone())?;
+        }
+        Ok(())
+    }
+
+    // --- category queries ---
+
+    fn norm(s: &str) -> String {
+        s.trim().to_lowercase()
+    }
+
+    pub fn places_by_category(&self, category: &str) -> Vec<PlaceEntry> {
+        let c = Self::norm(category);
+        self.places.values().filter(|p| Self::norm(&p.category) == c).cloned().collect()
+    }
+
+    pub fn entries_by_category(&self, category: &str) -> Vec<PlaceEntry> {
+        self.places_by_category(category)
+    }
+
+    pub fn by_category(&self, category: &str) -> Vec<PlaceEntry> {
+        self.places_by_category(category)
+    }
+
+    pub fn list_by_category(&self, category: &str) -> Vec<PlaceEntry> {
+        self.places_by_category(category)
+    }
+
+    pub fn category_places(&self, category: &str) -> Vec<PlaceEntry> {
+        self.places_by_category(category)
+    }
+
+    pub fn query_by_category(&self, category: &str) -> Vec<PlaceEntry> {
+        self.places_by_category(category)
+    }
+
+    pub fn query_category(&self, category: &str) -> Vec<PlaceEntry> {
+        self.places_by_category(category)
+    }
+
+    pub fn search_by_category(&self, category: &str) -> Vec<SearchResult> {
+        self.places_by_category(category).into_iter().map(|p| SearchResult {
+            id: p.id,
+            name: p.name,
+            description: format!("owner={}, category={}", p.owner, p.category),
+        }).collect()
+    }
+
+    pub fn search_places_by_category(&self, category: &str) -> Vec<SearchResult> {
+        self.search_by_category(category)
+    }
+
+    pub fn places(&self) -> Vec<PlaceEntry> {
+        self.places.values().cloned().collect()
+    }
+
+    pub fn place_count(&self) -> usize {
+        self.places.len()
+    }
+
     pub fn clear(&mut self) -> Result<(), SearchIndexError> {
-        // rebuild index in RAM
         *self = Self::new()?;
         Ok(())
     }
@@ -186,6 +353,3 @@ impl Default for PlaceIndex {
 pub type SearchIndex = PlaceIndex;
 pub type PlaceSearchIndex = PlaceIndex;
 pub type DirectorySearchIndex = PlaceIndex;
-
-// SearchModule integration: instance holds index.
-// This is defined by extending framework via a field in search module reexport.
