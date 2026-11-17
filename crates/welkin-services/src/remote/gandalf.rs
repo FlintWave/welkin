@@ -164,10 +164,7 @@ impl GandalfTokenAdapter {
         self.call_and_verify_token(url, params).await
     }
     pub async fn verify_token(&self, url: &str, token: &str) -> Result<bool, RemoteError> {
-        if token.is_empty() || url.is_empty() {
-            return Ok(false);
-        }
-        Ok(true)
+        Ok(!token.is_empty() && !url.is_empty())
     }
 }
 
