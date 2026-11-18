@@ -1,0 +1,3 @@
+pub mod animation_state;
+pub mod position;
+// other component modules...
