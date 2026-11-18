@@ -80,6 +80,8 @@ pub struct ScenePresence {
     pub is_flying: bool,
     pub is_sitting: bool,
     pub sitting_on: Uuid,
+    pub is_frozen: bool,
+    pub frozen: bool,
     pub draw_distance: f32,
     pub region_handle: u64,
 
@@ -91,6 +93,8 @@ pub struct ScenePresence {
     pub animation_sequence: u32,
 
     pub attachments: Vec<(u8, Uuid)>,
+    /// Wearables persisted for this avatar: (wearable_type, texture-or-folder uuid).
+    pub saved_wearables: Vec<(u8, Uuid)>,
     pub speed_multiplier: f32,
 }
 
@@ -123,6 +127,8 @@ impl ScenePresence {
             is_flying: false,
             is_sitting: false,
             sitting_on: Uuid::nil(),
+            is_frozen: false,
+            frozen: false,
             draw_distance: 128.0,
             region_handle: 0,
 
@@ -134,6 +140,7 @@ impl ScenePresence {
             animation_sequence: 0,
 
             attachments: Vec::new(),
+            saved_wearables: Vec::new(),
             speed_multiplier: 1.0,
         }
     }

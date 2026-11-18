@@ -14,6 +14,7 @@ pub mod jsonstore;
 pub mod mod_api;
 pub mod ossl;
 pub mod scheduler;
+pub mod script_event_throttle;
 pub mod transfer;
 
 use mlua::chunk::Compiler;
@@ -21,6 +22,7 @@ use mlua::prelude::*;
 
 pub use instance::{ScriptEvent, ScriptInstance, ScriptInstanceState};
 pub use scheduler::{ScriptScheduler, TimerEntry};
+pub use script_event_throttle::ScriptEventThrottle;
 pub use transfer::RegionTransferBundle;
 pub use builtins::{RezRequest, AttachRequest, AttachAction, NpcCommand, NpcInfo, DynamicTextureCommand, TeleportRequest};
 pub use builtins::sensor::SensorRequest;

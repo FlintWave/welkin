@@ -1401,6 +1401,26 @@ async fn handle_find_groups(store: &GroupsStore, form: &HashMap<String, String>)
     xml_result(&list_to_xml("n", &items))
 }
 
+/// Resolve group names for a batch of group ids via the local groups store.
+pub async fn resolve_group_names(
+    store: &welkin_data::groups::GroupsStore,
+    ids: &[Uuid],
+) -> std::collections::HashMap<Uuid, String> {
+    let mut out = std::collections::HashMap::new();
+    for id in ids {
+        out.insert(*id, "Unknown".to_string());
+    }
+    for id in ids {
+        if id.is_nil() {
+            continue;
+        }
+        if let Ok(Some(group)) = store.retrieve_group_by_id(&id.to_string()).await {
+            out.insert(*id, group.name);
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

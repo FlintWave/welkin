@@ -3,9 +3,11 @@
 //! Environment modules: windlight presets, environment settings, and
 //! LightShare environment management.
 
+pub mod day_cycle;
 pub mod misc;
 pub mod sound;
 pub mod wind;
+pub use day_cycle::*;
 
 use uuid::Uuid;
 

@@ -65,6 +65,12 @@ pub trait RegionModule: Send + Sync + 'static {
     /// Human-readable name for logging and diagnostics.
     fn name(&self) -> &str;
 
+    /// Warm the place search index on region initialisation.
+    ///
+    /// Default is a no-op; SearchModule overrides to actually query its
+    /// backing index.  Modules that are not loaded simply skip this.
+    fn index_search_places(&mut self, _query: &str) {}
+
     /// Whether this module is shared across regions or per-region.
     fn module_type(&self) -> ModuleType;
 

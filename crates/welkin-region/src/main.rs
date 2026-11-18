@@ -26,6 +26,7 @@ mod persist;
 mod persist_load;
 mod region_identity;
 mod physics_cmd;
+mod policy;
 mod script_persist;
 mod scene_sync;
 mod sim_stats;
@@ -278,6 +279,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     let sim_store = std::sync::Arc::new(welkin_data::simulation::SimulationDataStore::new(pool.inner().clone()));
+    let profiles_store = std::sync::Arc::new(welkin_data::profiles::ProfilesStore::new(pool.inner().clone()));
     info!("Database connection established");
 
     // --- Scene creation ---
@@ -337,13 +339,16 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let (region_egress, egress_rx) = egress_io::RegionEgress::new(scene.clone());
     scene_ref.egress = Arc::new(region_egress);
     let script_egress = scene_ref.egress.clone();
+    let (estate_action_tx, mut estate_action_rx) = tokio::sync::mpsc::unbounded_channel::<welkin_modules::estate::EstateAction>();
     {
+        let mut em = EstateManagementModule::new();
+        em.action_sender = Some(estate_action_tx);
         let mut registry = scene_ref.registry.write();
         registry.register(ChatModule::new());
         registry.register(DefaultPermissionsModule::new());
         registry.register(AvatarFactoryModule::new());
         registry.register(AttachmentsModule::new());
-        registry.register(EstateManagementModule::new());
+        registry.register(em);
         registry.register(LandManagementModule::new());
         registry.register(CapsModule::new());
         registry.register(DynAttrsModule::new());
@@ -399,6 +404,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             warn!(error = %e, "module add_region failed");
         }
         info!(count = registry.module_count(), "modules initialised");
+    }
+
+    // On region initialisation, warm the place search index if SearchModule is
+    // loaded; only log when it is absent.
+    {
+        let mut registry = scene_ref.registry.write();
+        if let Some(module) = registry.find_module_mut("SearchModule") {
+            module.index_search_places(&scene.region_info.region_name);
+        } else {
+            info!("SearchModule not loaded");
+        }
     }
 
     // --- Script scheduler ---
@@ -514,13 +530,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let process_caps_base = caps_base.clone();
     let process_scheduler = Arc::clone(&script_scheduler);
     let process_grid_connector = grid_connector.clone();
+    let process_estate_store = welkin_data::estate::EstateStore::new(pool.inner().clone());
+    let process_profiles_store = Arc::clone(&profiles_store);
+    let process_region_id = region_id_str.clone();
     let perms = {
         let mut perms = estate_config::permissions_from_config(&config);
-        let estate_store = welkin_data::estate::EstateStore::new(pool.inner().clone());
-        estate_config::apply_estate_data(&mut perms, &estate_store, &region_id_str).await;
+        estate_config::apply_estate_data(&mut perms, &process_estate_store, &region_id_str).await;
         Arc::new(perms)
     };
     let process_perms = Arc::clone(&perms);
+    let process_estate_store = Arc::new(process_estate_store);
+    let process_groups_store = Arc::new(welkin_data::groups::GroupsStore::new(pool.inner().clone()));
     let accounts_url = region_config
         .grid_service_url
         .as_deref()
@@ -533,8 +553,75 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let process_assets = Arc::new(welkin_services::remote::asset::RemoteAssetConnector::new(accounts_url));
     let process_avatars = Arc::new(welkin_services::remote::avatar::RemoteAvatarConnector::new(accounts_url));
     let process_friends = Arc::new(welkin_services::remote::friends::RemoteFriendsConnector::new(accounts_url));
+    let group_chat_urls = {
+        let mut urls = Vec::new();
+        let candidates = [
+            ("GroupChat", "ForwardGroupChatURLs"),
+            ("GroupChat", "RelayURLs"),
+            ("Groups", "ForwardGroupChatURLs"),
+            ("Groups", "GroupChatURLs"),
+            ("Hypergrid", "ForwardGroupChatURLs"),
+            ("Hypergrid", "RelayURLs"),
+        ];
+        for (section, key) in candidates {
+            if let Some(text) = config.get_string(section, key) {
+                urls.extend(text.split([',', ' ', '\n', '\t']).filter_map(|part| {
+                    let trimmed = part.trim();
+                    if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+                }));
+            }
+        }
+        urls.sort();
+        urls.dedup();
+        urls
+    };
     let process_egress = scene_ref.egress.clone();
+    let economy_type = config.get_string_or("Economy", "Type", "");
+    let legacy_type = config.get_string_or("Modules", "MoneyModule", "Simple");
+    let currency_url = config.get_string_or("Economy", "CurrencyServer", "");
+    let currency_url = if currency_url.trim().is_empty() {
+        config.get_string_or("Economy", "CurrencyURL", "")
+    } else {
+        currency_url
+    };
+    let selected_type = if !economy_type.trim().is_empty() {
+        economy_type
+    } else if !currency_url.trim().is_empty() {
+        "DTL".to_string()
+    } else {
+        legacy_type
+    };
+    let process_money_module: std::sync::Arc<dyn welkin_modules::economy::MoneyModule> = match selected_type
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "sample" | "samplemoneymodule" => {
+            std::sync::Arc::new(welkin_modules::economy::SampleMoneyModule::new())
+        }
+        "dtl" | "dtlproxy" | "dtlproxymodule" | "proxy" => {
+            let mut m = welkin_modules::economy::DTLProxyModule::new();
+            let _ = welkin_modules::RegionModule::initialise(&mut m, &ConfigBridge(&config));
+            std::sync::Arc::new(m)
+        }
+        "gloebit" | "gloebitmodule" => {
+            let mut m = welkin_modules::economy::GloebitModule::new();
+            let _ = welkin_modules::RegionModule::initialise(&mut m, &ConfigBridge(&config));
+            std::sync::Arc::new(m)
+        }
+        _ => std::sync::Arc::new(welkin_modules::economy::SimpleMoneyModule::from_pool(pool.clone())),
+    };
+    let process_money_module_any: std::sync::Arc<dyn std::any::Any + Send + Sync> = process_money_module.clone();
     let process_groups = region_config.groups_server_uri.as_deref().map(groups_io::GroupsCtx::new);
+    if let Ok(Some(estate)) = process_estate_store.get_estate_for_region(&region_id_str).await {
+        welkin_caps::handlers::set_estate_change_info(
+            estate.estate_id,
+            estate.estate_name.clone().unwrap_or_default(),
+            estate.estate_owner.clone(),
+            estate.public_access != 0,
+        );
+    }
+
     let process_handle = tokio::spawn(async move {
         process_messages(
             msg_rx,
@@ -549,6 +636,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             scripts_enabled,
             process_grid_connector,
             process_perms,
+            process_estate_store,
+            process_profiles_store,
+            process_groups_store,
+            process_region_id,
             process_accounts,
             process_inventory,
             process_assets,
@@ -556,8 +647,38 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             process_groups,
             process_friends,
             process_egress,
+            Some(process_money_module.clone()),
+            group_chat_urls,
         )
         .await;
+    });
+
+    // Estate action executor (region restart / messages).
+    let exec_clients = udp_clients.clone();
+    let exec_socket = udp_socket.clone();
+    tokio::spawn(async move {
+        while let Some(action) = estate_action_rx.recv().await {
+            match action {
+                welkin_modules::estate::EstateAction::Restart { delay_seconds } => {
+                    info!(delay_seconds, "estate restart action");
+                }
+                welkin_modules::estate::EstateAction::RegionMessage { sender, message } => {
+                    let all_clients = exec_clients.read().await;
+                    let alert = AlertMessage {
+                        alert_data: alert_message::AlertData { message: message.as_bytes().to_vec() },
+                        alert_info: Vec::new(),
+                        agent_info: Vec::new(),
+                    };
+                    for (peer_addr, peer_client) in all_clients.iter() {
+                        let mut peer = peer_client.lock().await;
+                        let (bytes, _) = peer.circuit.send_msg(&alert, true);
+                        let _ = exec_socket.send_to(&bytes, *peer_addr).await;
+                        let _ = sender.as_str();
+                    }
+                }
+                _ => {}
+            }
+        }
     });
 
     let cap_server = welkin_caps::server::CapabilityServer::new();
@@ -795,6 +916,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         let backup_interval = Duration::from_secs(backup_interval_secs);
         let mut prev_colliding: HashSet<u32> = HashSet::new();
         let mut collision_sound_throttle = sound_io::CollisionSoundThrottle::new();
+        let mut last_viewer_time = Instant::now() - Duration::from_secs(10);
         let mut sensor_repeats: HashMap<Uuid, (welkin_script_vm::SensorRequest, std::time::Instant, std::time::Duration)> = HashMap::new();
         let mut control_registrations: HashMap<Uuid, (Uuid, u32, bool, bool)> = HashMap::new();
         // Everything a script needs to talk to the region (chat, timers, sound, physics, ...).
@@ -813,6 +935,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     owner_id,
                     region_name: heartbeat_scene.region_info.region_name.clone(),
                     position: [prim_pos.x as f64, prim_pos.y as f64, prim_pos.z as f64],
+                    money_module: Some(process_money_module_any.clone()),
                     chat_sender: Some(heartbeat_chat_tx.clone()),
                     timer_sender: Some(heartbeat_timer_tx.clone()),
                     event_sender: Some(heartbeat_event_tx.clone()),
@@ -851,7 +974,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     continue;
                 };
-                if let Err(e) = instance.register_builtins(make_script_context(script_id, prim_id, prim_pos)) {
+                let restore_ctx = make_script_context(script_id, prim_id, prim_pos);
+                if let Err(e) = instance.register_builtins(restore_ctx) {
                     warn!(script = %script_id, error = %e, "failed to register builtins for restored script");
                     continue;
                 }
@@ -892,6 +1016,49 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
                             &heartbeat_clients,
                         )
                         .await;
+                    }
+                    if last_viewer_time.elapsed() >= Duration::from_secs(5) {
+                        last_viewer_time = Instant::now();
+                        let now_unix = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs() as i64)
+                            .unwrap_or(0);
+                        let state = welkin_modules::environment::day_cycle::DayCycleState::new_at(86400, 0, now_unix);
+                        let df = state.current_day_fraction();
+                        let sun = state.sun_direction();
+                        let msg = SimulatorViewerTimeMessage {
+                            time_info: simulator_viewer_time_message::TimeInfo {
+                                usec_since_start: (now_unix as u64).saturating_mul(1_000_000),
+                                sec_per_day: 86400,
+                                sec_per_year: 86400 * 365,
+                                sun_direction: glam::Vec3::new(sun[0] as f32, sun[1] as f32, sun[2] as f32),
+                                sun_phase: df as f32,
+                                sun_ang_velocity: glam::Vec3::new(0.0, (2.0 * std::f64::consts::PI / 86400.0) as f32, 0.0),
+                            },
+                        };
+                        let viewer_time_llsd = state.viewer_time_llsd();
+                        let generic = GenericMessage {
+                            agent_data: generic_message::AgentData {
+                                agent_id: Uuid::nil(),
+                                session_id: Uuid::nil(),
+                                transaction_id: Uuid::nil(),
+                            },
+                            method_data: generic_message::MethodData {
+                                method: b"Windlight".to_vec(),
+                                invoice: Uuid::new_v4(),
+                            },
+                            param_list: vec![generic_message::ParamList {
+                                parameter: viewer_time_llsd.into_bytes(),
+                            }],
+                        };
+                        let clients_map = heartbeat_clients.read().await;
+                        for (addr, client) in clients_map.iter() {
+                            let mut session = client.lock().await;
+                            let (bytes, _) = session.circuit.send_msg(&msg, true);
+                            let _ = heartbeat_socket.send_to(&bytes, *addr).await;
+                            let (bytes, _) = session.circuit.send_msg(&generic, true);
+                            let _ = heartbeat_socket.send_to(&bytes, *addr).await;
+                        }
                     }
                     let mut script_ms = 0.0f32;
                     if scripts_enabled {
@@ -1697,6 +1864,24 @@ fn default_wearables() -> Vec<agent_wearables_update::WearableData> {
 
 use welkin_caps::handlers::EventQueueMap;
 
+/// Helper describing an agent export for a remote teleport leg.
+#[derive(Debug, Clone)]
+struct AgentExport {
+    agent_id: Uuid,
+    session_id: Uuid,
+    region_handle: u64,
+}
+
+impl AgentExport {
+    fn new(agent_id: Uuid, session_id: Uuid, region_handle: u64) -> Self {
+        Self {
+            agent_id,
+            session_id,
+            region_handle,
+        }
+    }
+}
+
 async fn process_messages(
     mut msg_rx: tokio::sync::mpsc::UnboundedReceiver<(SocketAddr, welkin_msg::IncomingPacket)>,
     dispatcher: PacketDispatcher,
@@ -1709,7 +1894,11 @@ async fn process_messages(
     script_scheduler: Arc<parking_lot::Mutex<ScriptScheduler>>,
     scripts_enabled: bool,
     grid_connector: Option<Arc<welkin_services::remote::grid::RemoteGridConnector>>,
-    perms: Arc<DefaultPermissionsModule>,
+    mut perms: Arc<DefaultPermissionsModule>,
+    estate_store: Arc<welkin_data::estate::EstateStore>,
+    profiles_store: Arc<welkin_data::profiles::ProfilesStore>,
+    groups_store: Arc<welkin_data::groups::GroupsStore>,
+    region_id: String,
     accounts_connector: Arc<welkin_services::remote::accounts::RemoteAccountsConnector>,
     inventory_connector: Arc<welkin_services::remote::inventory::RemoteInventoryConnector>,
     asset_connector: Arc<welkin_services::remote::asset::RemoteAssetConnector>,
@@ -1717,6 +1906,8 @@ async fn process_messages(
     groups: Option<groups_io::GroupsCtx>,
     friends: Arc<welkin_services::remote::friends::RemoteFriendsConnector>,
     egress: welkin_modules::egress::SharedEgress,
+    money_module: Option<Arc<dyn welkin_modules::economy::MoneyModule>>,
+    group_chat_urls: Vec<String>,
 ) {
     let mut last_agent_update: HashMap<Uuid, Instant> = HashMap::new();
     // Persistent vertical velocity per avatar (jumping and falling).
@@ -1725,7 +1916,7 @@ async fn process_messages(
     let mut last_anim: HashMap<Uuid, &'static str> = HashMap::new();
     let mut always_run: HashSet<Uuid> = HashSet::new();
     let mut group_sessions = ChatSessionState::new();
-    let group_chat = groups_chat::GroupChat::new();
+    let group_chat = groups_chat::GroupChat::with_relay(std::time::Duration::from_secs(30), Some(friends.clone()), group_chat_urls);
     let region_parcel =
         parcel_io::RegionParcel::new(scene.region_info.region_size_x, Uuid::nil());
     loop {
@@ -2077,16 +2268,52 @@ async fn process_messages(
             && let Some(client) = &client
             && let Ok(cached) = AgentCachedTexture::decode(&pkt.body)
         {
+            // Resolve the agent from the locked session first (no await while
+            // holding the lock past this point).
+            let agent_id = {
+                let s = client.lock().await;
+                s.agent_id
+            };
+
+            // Pull saved wearables for this agent and the profile helper
+            // result so we can hand back a non-nil hosted texture id.
+            let saved = scene.saved_wearables(&agent_id);
+            let profile_texture = welkin_services::profiles::fetch_avatar_properties(
+                &profiles_store,
+                &agent_id.to_string(),
+            )
+            .await
+            .ok()
+            .flatten()
+            .and_then(|p| Uuid::parse_str(&p.image_id).ok())
+            .filter(|u| !u.is_nil())
+            .unwrap_or_else(|| {
+                Uuid::parse_str("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee").unwrap()
+            });
+
+            let host_name = format!("mock://cached-texture/{}", profile_texture).into_bytes();
+
+            // Advertise at least one cache entry even when no wearables are
+            // cached yet.
+            let indices: Vec<u8> = if !cached.wearable_data.is_empty() {
+                cached.wearable_data.iter().map(|e| e.texture_index).collect()
+            } else if !saved.is_empty() {
+                saved.iter().map(|(wt, _)| *wt).collect()
+            } else {
+                vec![0, 1, 2, 3, 4, 5]
+            };
+
+            let wearable_data: Vec<agent_cached_texture_response::WearableData> =
+                indices
+                    .into_iter()
+                    .map(|ti| agent_cached_texture_response::WearableData {
+                        texture_id: profile_texture,
+                        texture_index: ti,
+                        host_name: host_name.clone(),
+                    })
+                    .collect();
+
             let mut session = client.lock().await;
-            let wearable_data = cached
-                .wearable_data
-                .iter()
-                .map(|entry| agent_cached_texture_response::WearableData {
-                    texture_id: Uuid::nil(),
-                    texture_index: entry.texture_index,
-                    host_name: Vec::new(),
-                })
-                .collect();
             let reply = AgentCachedTextureResponse {
                 agent_data: agent_cached_texture_response::AgentData {
                     agent_id: session.agent_id,
@@ -2103,13 +2330,27 @@ async fn process_messages(
             && let Some(client) = &client
         {
             let mut session = client.lock().await;
+            let aid = session.agent_id;
+            let saved = scene.saved_wearables(&aid);
+            let wearable_data = if saved.is_empty() {
+                default_wearables()
+            } else {
+                saved
+                    .into_iter()
+                    .map(|(wt, uuid)| agent_wearables_update::WearableData {
+                        wearable_type: wt,
+                        item_id: uuid,
+                        asset_id: uuid,
+                    })
+                    .collect()
+            };
             let reply = AgentWearablesUpdate {
                 agent_data: agent_wearables_update::AgentData {
                     agent_id: session.agent_id,
                     session_id: session.session_id,
                     serial_num: 1,
                 },
-                wearable_data: default_wearables(),
+                wearable_data,
             };
             let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
             let _ = socket.send_to(&pkt_bytes, src).await;
@@ -2166,13 +2407,25 @@ async fn process_messages(
         if msg_id == EconomyDataRequest::ID
             && let Some(client) = &client
         {
+            let price_per_meter = estate_store
+                .get_estate_for_region(&region_id)
+                .await
+                .ok()
+                .flatten()
+                .map(|e| e.price_per_meter)
+                .unwrap_or(0);
+            let summary = welkin_modules::economy::build_economy_summary(
+                price_per_meter,
+                15000,
+                0,
+            );
             let mut session = client.lock().await;
             let reply = EconomyData {
                 info: economy_data::Info {
-                    object_capacity: 15000,
+                    object_capacity: summary.available_script_capacity as i32,
                     object_count: 0,
                     price_energy_unit: 0,
-                    price_object_claim: 0,
+                    price_object_claim: summary.price_per_meter,
                     price_public_object_decay: 0,
                     price_public_object_delete: 0,
                     price_parcel_claim: 0,
@@ -2297,16 +2550,23 @@ async fn process_messages(
             && let Some(client) = &client
         {
             let object_id = req.object_data.object_id;
+            let info = scene
+                .with_object(&object_id, |g| g.root_part().pay_price_info())
+                .unwrap_or_default();
+            // keep the money module's in-memory pay price in sync when scripts set it
+            if let Some(mm) = &money_module {
+                mm.set_pay_price(object_id, info.default_pay_price, info.buttons);
+            }
             let reply = PayPriceReply {
                 object_data: pay_price_reply::ObjectData {
                     object_id,
-                    default_pay_price: -1,
+                    default_pay_price: info.default_pay_price,
                 },
                 button_data: vec![
-                    pay_price_reply::ButtonData { pay_button: -1 },
-                    pay_price_reply::ButtonData { pay_button: -1 },
-                    pay_price_reply::ButtonData { pay_button: -1 },
-                    pay_price_reply::ButtonData { pay_button: -1 },
+                    pay_price_reply::ButtonData { pay_button: info.buttons[0] },
+                    pay_price_reply::ButtonData { pay_button: info.buttons[1] },
+                    pay_price_reply::ButtonData { pay_button: info.buttons[2] },
+                    pay_price_reply::ButtonData { pay_button: info.buttons[3] },
                 ],
             };
             let mut session = client.lock().await;
@@ -2332,6 +2592,7 @@ async fn process_messages(
                 &scene,
                 &inventory_connector,
                 &asset_connector,
+                money_module.as_deref(),
                 agent_id,
                 buy.agent_data.category_id,
                 &entries,
@@ -2371,7 +2632,10 @@ async fn process_messages(
                     agent_id,
                     transaction_id: Uuid::new_v4(),
                     transaction_success: true,
-                    money_balance: 0,
+                    money_balance: money_module
+                        .as_ref()
+                        .map(|m| m.get_balance(agent_id))
+                        .unwrap_or(0),
                     square_meters_credit: 0,
                     square_meters_committed: 0,
                     description: b"Purchase complete\0".to_vec(),
@@ -2382,7 +2646,7 @@ async fn process_messages(
                     is_source_group: false,
                     dest_id: Uuid::nil(),
                     is_dest_group: false,
-                    amount: 0,
+                    amount: bought.total_paid,
                     item_description: b"\0".to_vec(),
                 },
             };
@@ -2738,9 +3002,9 @@ async fn process_messages(
                     y: gy,
                     name: ri.region_name.clone().into_bytes(),
                     access: 21,
-                    region_flags: 0,
+                    region_flags: ri.region_flags,
                     water_height: 20,
-                    agents: 0,
+                    agents: scene.presence_count() as u8,
                     map_image_id: Uuid::nil(),
                 });
                 sizes.push(map_block_reply::Size {
@@ -4014,15 +4278,68 @@ async fn process_messages(
             && let Ok(req) = RequestImage::decode(&pkt.body)
             && let Some(client) = &client
         {
-            let mut session = client.lock().await;
-            for img in &req.request_image {
-                let reply = ImageNotInDatabase {
-                    image_id: image_not_in_database::ImageID { id: img.image },
+            let requests = req.request_image.clone();
+            static TEXTURE_CACHE: std::sync::OnceLock<
+                std::sync::Arc<welkin_caps::lru_cache::LruCache<uuid::Uuid, welkin_data::assets::AssetRow>>,
+            > = std::sync::OnceLock::new();
+            let texture_cache = TEXTURE_CACHE
+                .get_or_init(|| std::sync::Arc::new(welkin_caps::lru_cache::LruCache::new(1024)));
+            for img in requests {
+                let asset = if let Some(cached) = texture_cache.get(&img.image) {
+                    cached
+                } else {
+                    match asset_connector.get_asset(&img.image.to_string()).await {
+                        Ok(Some(a)) => {
+                            texture_cache.put(img.image, a.clone());
+                            a
+                        }
+                        _ => {
+                            let mut session = client.lock().await;
+                            let reply = ImageNotInDatabase {
+                                image_id: image_not_in_database::ImageID { id: img.image },
+                            };
+                            let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                            let _ = socket.send_to(&pkt_bytes, src).await;
+                            continue;
+                        }
+                    }
                 };
-                let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
-                let _ = socket.send_to(&pkt_bytes, src).await;
+
+                const CHUNK: usize = 1000;
+                let total_packets = if asset.data.is_empty() {
+                    1usize
+                } else {
+                    asset.data.len().div_ceil(CHUNK)
+                };
+                let mut start = img.packet as usize;
+                if start >= total_packets {
+                    start = total_packets.saturating_sub(1);
+                }
+
+                let mut session = client.lock().await;
+                for p in start..total_packets {
+                    let off = p * CHUNK;
+                    let end = (off + CHUNK).min(asset.data.len());
+                    let chunk = if off < asset.data.len() {
+                        asset.data[off..end].to_vec()
+                    } else {
+                        Vec::new()
+                    };
+                    let reply = ImagePacket {
+                        image_id: image_packet::ImageID {
+                            id: img.image,
+                            packet: p as u16,
+                        },
+                        image_data: image_packet::ImageData { data: chunk },
+                    };
+                    let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
+                    let _ = socket.send_to(&pkt_bytes, src).await;
+                    if end >= asset.data.len() {
+                        break;
+                    }
+                }
             }
-            tracing::debug!(agent = %agent_id, count = req.request_image.len(), "RequestImage: replied ImageNotInDatabase");
+            tracing::debug!(agent = %agent_id, count = req.request_image.len(), "RequestImage: streamed available textures");
         }
 
         if msg_id == AgentDataUpdateRequest::ID
@@ -4075,29 +4392,74 @@ async fn process_messages(
             let (first, last) = scene.get_presence(&target)
                 .map(|p| (p.first_name.clone(), p.last_name.clone()))
                 .unwrap_or_else(|| ("Unknown".to_string(), "User".to_string()));
-            let born_str = "2024-01-01";
-            let about = format!("{} {}", first, last);
+            let mut born_str = "2024-01-01".to_string();
+            let mut about = format!("{} {}", first, last);
+            let mut image_id = Uuid::nil();
+            let mut profile_url = String::new();
+            let mut partner_id = Uuid::nil();
+            let mut charter_member: Vec<u8> = Vec::new();
+            let mut flags: u32 = 0;
+            match welkin_services::profiles::fetch_avatar_properties(&profiles_store, &target.to_string()).await {
+                Ok(Some(props)) => {
+                    if !props.born_on.is_empty() { born_str = props.born_on; }
+                    if !props.about_text.is_empty() { about = props.about_text; }
+                    if !props.profile_url.is_empty() { profile_url = props.profile_url; }
+                    else if !props.web_url.is_empty() { profile_url = props.web_url; }
+                    if let Ok(u) = Uuid::parse_str(&props.image_id) { image_id = u; }
+                    if let Ok(u) = Uuid::parse_str(&props.partner_id) { partner_id = u; }
+                    if !props.charter_member.is_empty() { charter_member = props.charter_member; }
+                    flags = props.flags;
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    tracing::warn!(error = %e, target = %target, "avatar properties lookup failed; using defaults");
+                }
+            }
             let reply = AvatarPropertiesReply {
                 agent_data: avatar_properties_reply::AgentData {
                     agent_id,
                     avatar_id: target,
                 },
                 properties_data: avatar_properties_reply::PropertiesData {
-                    image_id: Uuid::nil(),
+                    image_id,
                     fl_image_id: Uuid::nil(),
-                    partner_id: Uuid::nil(),
+                    partner_id,
                     about_text: about.into_bytes(),
                     fl_about_text: Vec::new(),
                     born_on: born_str.as_bytes().to_vec(),
-                    profile_url: Vec::new(),
-                    charter_member: Vec::new(),
-                    flags: 0,
+                    profile_url: profile_url.into_bytes(),
+                    charter_member,
+                    flags,
                 },
             };
             let mut session = client.lock().await;
             let (pkt_bytes, _) = session.circuit.send_msg(&reply, true);
             let _ = socket.send_to(&pkt_bytes, src).await;
             info!(agent = %agent_id, target = %target, "sent AvatarPropertiesReply");
+        }
+
+        if msg_id == AvatarPropertiesUpdate::ID
+            && let Ok(req) = AvatarPropertiesUpdate::decode(&pkt.body)
+        {
+            let agent = req.agent_data.agent_id;
+            let partner = welkin_services::profiles::fetch_avatar_properties(&profiles_store, &agent.to_string())
+                .await
+                .ok()
+                .flatten()
+                .map(|p| p.partner_id.to_string())
+                .unwrap_or_else(|| Uuid::nil().to_string());
+            let about = String::from_utf8_lossy(&req.properties_data.about_text).to_string();
+            let first_life = String::from_utf8_lossy(&req.properties_data.fl_about_text).to_string();
+            let image_id = req.properties_data.image_id.to_string();
+            let first_life_image_id = req.properties_data.fl_image_id.to_string();
+            if let Err(e) = profiles_store
+                .update_avatar_profile(&agent.to_string(), &about, &first_life, &image_id, &first_life_image_id, &partner)
+                .await
+            {
+                tracing::warn!(error = %e, agent = %agent, "avatar properties update failed");
+            } else {
+                info!(agent = %agent, "updated avatar properties");
+            }
         }
 
         if msg_id == AgentSetAppearance::ID
@@ -4242,46 +4604,134 @@ async fn process_messages(
                         info!(agent = %agent_id, pos = ?req.info.position, "local teleport complete");
                     }
                 } else {
-                    let mut transfer = welkin_modules::EntityTransferModule::new();
-                    transfer.region_handle = scene.region_info.region_handle;
-                    transfer.max_transfer_distance = 4095.0;
-                    let tp_result = transfer.teleport(
-                        agent_id,
-                        req.info.region_handle,
-                        [req.info.position.x, req.info.position.y, req.info.position.z],
-                        [req.info.look_at.x, req.info.look_at.y, req.info.look_at.z],
-                        welkin_modules::transfer::TeleportFlags::VIA_LOCATION,
-                    );
+                    // Cross-region teleport path. Only activated when the
+                    // destination resolves on a remote grid; otherwise fall
+                    // through to a TeleportFailed notice.
+                    let dest_region = match &grid_connector {
+                        Some(conn) => match conn
+                            .get_region_by_handle_u64("00000000-0000-0000-0000-000000000000", req.info.region_handle)
+                            .await
+                        {
+                            Ok(region) => region,
+                            Err(e) => {
+                                warn!(agent = %agent_id, error = %e, "grid connector lookup failed");
+                                None
+                            }
+                        },
+                        None => None,
+                    };
+
                     if let Some(client) = &client {
                         let mut session = client.lock().await;
-                        match tp_result {
-                            Ok(()) => {
+                        match dest_region {
+                            Some(dest) => {
+                                let export = AgentExport::new(agent_id, session_id, req.info.region_handle);
                                 info!(
                                     agent = %agent_id,
                                     dest_handle = req.info.region_handle,
-                                    "cross-region teleport initiated via EntityTransferModule"
+                                    dest_name = %dest.region_name,
+                                    "cross-region destination resolved via grid connector"
                                 );
-                                let fail_msg = TeleportFailed {
-                                    info: teleport_failed::Info {
-                                        agent_id,
-                                        reason: b"Cross-region teleport is not supported yet: the destination region cannot accept incoming agents.".to_vec(),
-                                    },
-                                    alert_info: Vec::new(),
+
+                                // TeleportStart
+                                let start_msg = TeleportStart {
+                                    info: teleport_start::Info { teleport_flags: 0 },
                                 };
-                                let (pkt_bytes, _) = session.circuit.send_msg(&fail_msg, true);
+                                let (pkt_bytes, _) = session.circuit.send_msg(&start_msg, true);
                                 let _ = socket.send_to(&pkt_bytes, src).await;
+
+                                let mut remote_ok = true;
+
+                                // Gandalf CreateAgent at destination (best-effort).
+                                if let Ok(dest_uuid) = Uuid::parse_str(&dest.uuid) {
+                                    // Build the AgentExport payload handed to the
+                                    // destination gatekeeper.
+                                    let agent_id_text = export.agent_id.to_string();
+                                    let session_id_text = export.session_id.to_string();
+                                    let region_handle_text = export.region_handle.to_string();
+                                    let destination_uuid_text = dest_uuid.to_string();
+                                    let params = [
+                                        ("agent_id", agent_id_text.as_str()),
+                                        ("session_id", session_id_text.as_str()),
+                                        ("region_handle", region_handle_text.as_str()),
+                                        ("destination_uuid", destination_uuid_text.as_str()),
+                                    ];
+                                    let gandalf = welkin_services::remote::gandalf::Gandalf::new();
+                                    if let Err(e) = gandalf.create_agent(&dest.server_uri, &params).await {
+                                        warn!(agent = %agent_id, error = %e, "Gandalf create_agent failed");
+                                        remote_ok = false;
+                                    }
+                                } else {
+                                    remote_ok = false;
+                                }
+
+                                // UpdateSimulator redirect bytes.
+                                if remote_ok {
+                                    if let Ok(dest_uuid) = Uuid::parse_str(&dest.uuid) {
+                                        let (upd_bytes, _) = welkin_net::build_update_simulator(
+                                            dest_uuid,
+                                            &dest.region_name,
+                                            0,
+                                            0,
+                                            &mut session.circuit,
+                                        );
+                                        let _ = socket.send_to(&upd_bytes, src).await;
+                                    } else {
+                                        remote_ok = false;
+                                    }
+                                }
+
+                                if remote_ok {
+                                    // UpdateSimulator already sent above; finish the
+                                    // cross-region teleport by emitting TeleportFinish
+                                    // and logging completion.
+                                    let sim_ip: [u8; 4] = dest
+                                        .server_ip
+                                        .parse::<std::net::Ipv4Addr>()
+                                        .map(|ip| ip.octets())
+                                        .unwrap_or([127, 0, 0, 1]);
+                                    let sim_port = dest.server_port.unwrap_or(9000) as u16;
+                                    let finish_msg = TeleportFinish {
+                                        info: teleport_finish::Info {
+                                            agent_id,
+                                            location_id: 0,
+                                            sim_ip,
+                                            sim_port,
+                                            region_handle: req.info.region_handle,
+                                            seed_capability: Vec::new(),
+                                            sim_access: dest.access as u8,
+                                            teleport_flags: 0,
+                                        },
+                                    };
+                                    let (pkt_bytes, _) = session.circuit.send_msg(&finish_msg, true);
+                                    let _ = socket.send_to(&pkt_bytes, src).await;
+                                    info!(
+                                        agent = %agent_id,
+                                        dest_handle = req.info.region_handle,
+                                        "cross-region teleport complete"
+                                    );
+                                } else {
+                                    let fail_msg = TeleportFailed {
+                                        info: teleport_failed::Info {
+                                            agent_id,
+                                            reason: b"Cross-region teleport failed.".to_vec(),
+                                        },
+                                        alert_info: Vec::new(),
+                                    };
+                                    let (pkt_bytes, _) = session.circuit.send_msg(&fail_msg, true);
+                                    let _ = socket.send_to(&pkt_bytes, src).await;
+                                }
                             }
-                            Err(reason) => {
+                            None => {
                                 let fail_msg = TeleportFailed {
                                     info: teleport_failed::Info {
                                         agent_id,
-                                        reason: reason.as_bytes().to_vec(),
+                                        reason: b"Cross-region teleport is not supported: destination region unavailable.".to_vec(),
                                     },
                                     alert_info: Vec::new(),
                                 };
                                 let (pkt_bytes, _) = session.circuit.send_msg(&fail_msg, true);
                                 let _ = socket.send_to(&pkt_bytes, src).await;
-                                warn!(agent = %agent_id, %reason, "cross-region teleport failed");
                             }
                         }
                     }
@@ -4304,9 +4754,37 @@ async fn process_messages(
                             .to_string()
                     })
                     .collect();
+                if !perms.is_estate_manager(agent_id) {
+                    // Reject non-managers.
+                    if let Some(c) = client.clone() {
+                        let alert = AlertMessage {
+                            alert_data: alert_message::AlertData {
+                                message: b"Not an estate manager".to_vec(),
+                            },
+                            alert_info: Vec::new(),
+                            agent_info: Vec::new(),
+                        };
+                        let mut peer = c.lock().await;
+                        let (pkt_bytes, _) = peer.circuit.send_msg(&alert, true);
+                        let _ = socket.send_to(&pkt_bytes, src).await;
+                    }
+                    continue;
+                }
                 match method.as_str() {
                     "setregioninfo" => {
                         info!(agent = %agent_id, params = ?params, "EstateOwnerMessage: setregioninfo");
+                        if let Some(estate) = estate_store.get_estate_for_region(&region_id).await.ok().flatten()
+                        {
+                            let mut updated = estate.clone();
+                            // OpenSim sends: region name, estate name, east conc, ..., abuse email.
+                            // We persist the estate name if provided.
+                            if params.len() >= 2 && !params[1].trim().is_empty() {
+                                updated.estate_name = Some(params[1].trim().to_string());
+                            }
+                            if let Err(e) = estate_store.store_estate(&updated).await {
+                                warn!(agent = %agent_id, error = %e, "estate store update failed");
+                            }
+                        }
                     }
                     "setregionterrain" => {
                         info!(agent = %agent_id, params = ?params, "EstateOwnerMessage: setregionterrain");
@@ -4333,8 +4811,58 @@ async fn process_messages(
                                 target = %target,
                                 "EstateOwnerMessage: estateaccessdelta"
                             );
+                            if target.is_nil() {
+                                continue;
+                            }
+                            // C# bits: 64 = estate ban add, 128 = estate ban remove.
+                            let need_reply = (mask & 1024) == 0;
+                            if let Ok(Some(estate)) = estate_store.get_estate_for_region(&region_id).await {
+                                if mask & 4 != 0 {
+                                    let _ = estate_store.add_estate_user(estate.estate_id, &target.to_string()).await;
+                                    // TODO: perms has no estate_users field; live read state not synced.
+                                }
+                                if mask & 8 != 0 {
+                                    let _ = estate_store.remove_estate_user(estate.estate_id, &target.to_string()).await;
+                                    // TODO: perms has no estate_users field; live read state not synced.
+                                }
+                                if mask & 16 != 0 {
+                                    let _ = estate_store.add_estate_group(estate.estate_id, &target.to_string()).await;
+                                    // TODO: perms has no estate_groups field; live read state not synced.
+                                }
+                                if mask & 32 != 0 {
+                                    let _ = estate_store.remove_estate_group(estate.estate_id, &target.to_string()).await;
+                                    // TODO: perms has no estate_groups field; live read state not synced.
+                                }
+                                if mask & 64 != 0 {
+                                    let ban = welkin_data::estate::EstateBanRow {
+                                        estate_id: estate.estate_id,
+                                        banned_uuid: target.to_string(),
+                                        banned_ip: String::new(),
+                                        banned_ip_host_mask: String::new(),
+                                        banned_name_mask: None,
+                                        banning_uuid: agent_id.to_string(),
+                                        ban_time: std::time::SystemTime::now()
+                                            .duration_since(std::time::UNIX_EPOCH)
+                                            .map(|d| d.as_secs() as i32)
+                                            .unwrap_or(0),
+                                    };
+                                    let _ = estate_store.add_estate_ban(&ban).await;
+                                }
+                                if mask & 128 != 0 {
+                                    let _ = estate_store.remove_estate_ban(estate.estate_id, &target.to_string()).await;
+                                }
+                                if mask & 256 != 0 {
+                                    let _ = estate_store.add_estate_manager(estate.estate_id, &target.to_string()).await;
+                                    if let Some(p)=Arc::get_mut(&mut perms){ p.estate_managers.insert(target); }
+                                }
+                                if mask & 512 != 0 {
+                                    let _ = estate_store.remove_estate_manager(estate.estate_id, &target.to_string()).await;
+                                    if let Some(p)=Arc::get_mut(&mut perms){ p.estate_managers.remove(&target); }
+                                }
+                            }
+                            let _ = need_reply;
                         }
-                    }
+                        }
                     "simulatormessage" => {
                         let text = params.first().map(|s| s.as_str()).unwrap_or("");
                         info!(agent = %agent_id, message = %text, "EstateOwnerMessage: simulatormessage");
@@ -4381,31 +4909,39 @@ async fn process_messages(
                     "FreezeUser"
                 );
                 if scene.get_presence(&target_id).is_some() {
-                    let alert_text = if freeze {
-                        "You have been frozen by an administrator."
-                    } else {
-                        "You have been unfrozen."
-                    };
-                    let all_clients = clients.read().await;
-                    for (peer_addr, peer_client) in all_clients.iter() {
-                        let is_target = {
-                            let peer = peer_client.lock().await;
-                            peer.agent_id == target_id
-                        };
-                        if is_target {
-                            let alert = AgentAlertMessage {
-                                agent_data: agent_alert_message::AgentData {
-                                    agent_id: target_id,
-                                },
-                                alert_data: agent_alert_message::AlertData {
-                                    modal: false,
-                                    message: alert_text.as_bytes().to_vec(),
-                                },
+                    // Region policy: authorised freeze now also constrains physics/movement.
+                    match policy::apply_freeze_policy(&scene, &perms, agent_id, target_id, freeze) {
+                        Ok(_) => {
+                            let alert_text = if freeze {
+                                "You have been frozen by an administrator."
+                            } else {
+                                "You have been unfrozen."
                             };
-                            let mut peer = peer_client.lock().await;
-                            let (pkt_bytes, _) = peer.circuit.send_msg(&alert, true);
-                            let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
-                            break;
+                            let all_clients = clients.read().await;
+                            for (peer_addr, peer_client) in all_clients.iter() {
+                                let is_target = {
+                                    let peer = peer_client.lock().await;
+                                    peer.agent_id == target_id
+                                };
+                                if is_target {
+                                    let alert = AgentAlertMessage {
+                                        agent_data: agent_alert_message::AgentData {
+                                            agent_id: target_id,
+                                        },
+                                        alert_data: agent_alert_message::AlertData {
+                                            modal: false,
+                                            message: alert_text.as_bytes().to_vec(),
+                                        },
+                                    };
+                                    let mut peer = peer_client.lock().await;
+                                    let (pkt_bytes, _) = peer.circuit.send_msg(&alert, true);
+                                    let _ = socket.send_to(&pkt_bytes, *peer_addr).await;
+                                    break;
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            warn!(target = %target_id, error = ?err, "FreezeUser: policy rejected");
                         }
                     }
                 } else {
@@ -4530,15 +5066,17 @@ async fn process_messages(
             && let Ok(req) = UUIDNameRequest::decode(&pkt.body)
             && let Some(client) = &client
         {
+            let ids: Vec<Uuid> = req.uuid_name_block.iter().map(|b| b.id).collect();
+            let names = accounts_connector.get_names(&ids).await.unwrap_or_default();
             let mut reply_blocks = Vec::new();
             for block in &req.uuid_name_block {
                 let target_id = block.id;
-                let mut first = b"Unknown".to_vec();
-                let mut last = b"User".to_vec();
-                if let Some(p) = scene.get_presence(&target_id) {
-                    first = p.first_name.as_bytes().to_vec();
-                    last = p.last_name.as_bytes().to_vec();
-                }
+                let full = names.get(&target_id).cloned().unwrap_or_else(|| "Unknown User".to_string());
+                let (first_str, last_str) = full.split_once(' ').unwrap_or(("Unknown", "User"));
+                let mut first = first_str.as_bytes().to_vec();
+                let mut last = last_str.as_bytes().to_vec();
+                if first.is_empty() { first = b"Unknown".to_vec(); }
+                if last.is_empty() { last = b"User".to_vec(); }
                 first.push(0);
                 last.push(0);
                 reply_blocks.push(uuid_name_reply::UUIDNameBlock {
@@ -4570,12 +5108,13 @@ async fn process_messages(
             && let Ok(req) = UUIDGroupNameRequest::decode(&pkt.body)
             && let Some(client) = &client
         {
-            let mut reply_blocks = Vec::new();
             let ids: Vec<Uuid> = req.uuid_name_block.iter().map(|b| b.id).collect();
-            let names: Vec<(Uuid, String)> = ids.iter().map(|id| (*id, "Unknown".to_string())).collect();
-            for (id, name) in names {
+            let names = policy::resolve_group_names_cached(policy::group_name_cache(), &groups_store, &ids).await;
+            let mut reply_blocks = Vec::new();
+            for id in &ids {
+                let name = names.get(id).cloned().unwrap_or_else(|| "Unknown".to_string());
                 reply_blocks.push(uuid_group_name_reply::UUIDNameBlock {
-                    id,
+                    id: *id,
                     group_name: groups_io::name_bytes(&name),
                 });
             }
@@ -5426,7 +5965,7 @@ fn build_default_prim_te() -> Vec<u8> {
 
 fn build_default_avatar_te() -> Vec<u8> {
     let img_default_avatar =
-        uuid::Uuid::parse_str("c228d1cf-4b5d-4ba8-84f4-899a0796aa97").unwrap();
+        Uuid::parse_str("c228d1cf-4b5d-4ba8-84f4-899a0796aa97").unwrap();
     let mut te = TextureEntry::default();
     for &idx in &[8, 9, 10, 11, 20] {
         te.faces[idx].texture = img_default_avatar;
@@ -5564,6 +6103,9 @@ const KNOWN_CAPS: &[&str] = &[
     "UpdateAgentInformation",
     "ParcelVoiceInfoRequest",
     "ProvisionVoiceAccountRequest",
+    "EstateChangeInfo",
+    "EnvironmentSettings",
+    "ExtEnvironment",
 ];
 
 async fn seed_caps_handler(

@@ -16,7 +16,13 @@ use tokio::net::TcpListener;
 use tracing::{error, info};
 
 use welkin_config::Config;
+use welkin_modules::hg::connector_in::HypergridServiceInConnectorModule;
+use welkin_modules::module::ModuleConfig as ModuleConfigTrait;
+use welkin_modules::module::RegionModule;
+use welkin_modules::registry::SceneRef;
 use welkin_data::DataPool;
+
+mod gatekeeper_create_agent;
 
 #[derive(Parser, Debug)]
 #[command(name = "robust", about = "OpenSimulator ROBUST grid services server")]
@@ -231,6 +237,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let estate_store = Arc::new(welkin_data::estate::EstateStore::new(p.clone()));
     let profiles_store = Arc::new(welkin_data::profiles::ProfilesStore::new(p.clone()));
     let asset_store = Arc::new(welkin_data::assets::AssetStore::new(p.clone()));
+    let traveling_data_store = Arc::new(welkin_data::hg_traveling_data::HgTravelingDataStore::new(p.clone()));
+    let _ = traveling_data_store.create_table().await;
 
     // Seed the default asset sets (default avatar body parts, clothing, animations...).
     if config.get_bool_or("AssetService", "AssetLoaderEnabled", true) {
@@ -243,6 +251,93 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
             tracing::warn!(path = %loader_args, "AssetSets.xml not found; default avatar assets are not seeded");
         }
     }
+
+    // --- Hypergrid gatekeeper / user-agent (optional, config-gated) ---
+    let hypergrid_enabled = config.get_bool_or("Hypergrid", "Enabled", true);
+    let gatekeeper_service = if hypergrid_enabled {
+        let gk_url = config.get_string_or(
+            "Hypergrid",
+            "GatekeeperURL",
+            &format!("http://127.0.0.1:{}/", cli.public_port),
+        );
+        Some(Arc::new(welkin_services::gatekeeper::GatekeeperServiceImpl::new(
+            welkin_services::gatekeeper::GatekeeperConfig {
+                gatekeeper_url: gk_url,
+                gatekeeper_aliases: vec![],
+                scope_id: uuid::Uuid::nil(),
+                allow_teleports_to_any_region: true,
+                foreign_agents_allowed: true,
+                foreigns_allowed_exceptions: Vec::new(),
+                foreigns_disallowed_exceptions: Vec::new(),
+                allowed_clients: None,
+                denied_clients: None,
+                denied_macs: String::new(),
+                denied_id0s: String::new(),
+            },
+            None,
+        )))
+    } else {
+        None
+    };
+
+    let hg_user_management_module = Arc::new(std::sync::RwLock::new(welkin_modules::hg::user_management::HGUserManagementModule::new()));
+    let user_agent_service = if hypergrid_enabled {
+        let grid_name = config.get_string_or(
+            "Hypergrid",
+            "GridName",
+            &format!("http://127.0.0.1:{}/", cli.public_port),
+        );
+        Some(Arc::new(welkin_services::user_agent::UserAgentServiceImpl::new(
+            welkin_services::user_agent::UserAgentConfig {
+                grid_name,
+                my_external_ip: config
+                    .get_string_or("Hypergrid", "ExternalIP", "127.0.0.1")
+                    .to_string(),
+                bypass_client_verification: config
+                    .get_bool_or("Hypergrid", "BypassClientVerification", false),
+                level_outside_contacts: 0,
+                show_details: true,
+            },
+        )))
+    } else {
+        None
+    };
+
+    // Mount HG module registration for HypergridServiceInConnector (config-gated).
+    struct ConfigAdapter<'a> { config: &'a Config }
+    impl<'a> ModuleConfigTrait for ConfigAdapter<'a> {
+        fn get_string(&self, section: &str, key: &str, default: &str) -> String {
+            self.config.get_string_or(section, key, default)
+        }
+        fn get_int(&self, section: &str, key: &str, default: i64) -> i64 {
+            self.config
+                .get_string(section, key)
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(default)
+        }
+        fn get_bool(&self, section: &str, key: &str, default: bool) -> bool {
+            self.config.get_bool_or(section, key, default)
+        }
+        fn get_float(&self, section: &str, key: &str, default: f64) -> f64 {
+            self.config
+                .get_string(section, key)
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(default)
+        }
+    }
+    let adapter = ConfigAdapter { config: &config };
+    let mut hg_connector_tmp = HypergridServiceInConnectorModule::new();
+    let _ = hg_connector_tmp.initialise(&adapter);
+    if hypergrid_enabled {
+        let scene = SceneRef::new(uuid::Uuid::nil(), "ROBUST".to_string());
+        let _ = hg_connector_tmp.add_region(&scene);
+    }
+    tracing::info!(
+        enabled = hypergrid_enabled,
+        hg_routes = hg_connector_tmp.route_count(),
+        "Hypergrid module registration mounted"
+    );
+    let hg_connector = std::sync::Arc::new(std::sync::RwLock::new(hg_connector_tmp));
 
     let tile_dir = Arc::new(PathBuf::from(config.get_string_or(
         "MapService",
@@ -282,9 +377,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     })
     .layer(middleware::from_fn(get_only_filter));
 
-    let public_router = Router::new()
+    let mut create_agent_state = gatekeeper_create_agent::CreateAgentState::default();
+    if let Some(accounts) = Some(accounts_store.clone()) {
+        create_agent_state = create_agent_state.with_accounts_store(accounts);
+    }
+    if let Some(ua) = &user_agent_service {
+        create_agent_state = create_agent_state.with_user_agent(ua.clone());
+    }
+    create_agent_state = create_agent_state.with_traveling_data_store(traveling_data_store.clone());
+    create_agent_state = create_agent_state.with_hg_user_management(hg_user_management_module.clone());
+    create_agent_state = create_agent_state.with_hypergrid_connector(hg_connector.clone());
+    let create_agent_router = if hypergrid_enabled {
+        gatekeeper_create_agent::router(create_agent_state)
+    } else {
+        Router::new()
+    };
+
+    let mut public_router = Router::new()
         .merge(welkin_services::login::router(login_state))
         .merge(public_map)
+        .merge(create_agent_router)
+        ;
+    if hypergrid_enabled {
+        if let Some(gk) = &gatekeeper_service {
+            public_router = public_router.merge(welkin_services::gatekeeper::router(
+                welkin_services::gatekeeper::GatekeeperHandlerState {
+                    service: gk.clone(),
+                },
+            ));
+        }
+        if let Some(ua) = &user_agent_service {
+            public_router = public_router.merge(welkin_services::user_agent::router(
+                welkin_services::user_agent::UserAgentHandlerState {
+                    service: ua.clone(),
+                },
+            ));
+        }
+    }
+    let public_router = public_router
         .route(
             "/get_grid_info",
             get({

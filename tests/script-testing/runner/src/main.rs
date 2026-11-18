@@ -8,6 +8,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
+use parking_lot::RwLock;
+use welkin_script_vm::builtins::{self, ScriptContext};
 
 use clap::{Parser as ClapParser, Subcommand};
 use regex::Regex;
@@ -88,6 +91,8 @@ struct Stages {
     parse: StageResult,
     analyze: StageResult,
     codegen: StageResult,
+    layer2: StageResult,
+    layer3: StageResult,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -125,6 +130,8 @@ fn compile_one_script(script_path: &Path) {
                     parse: StageResult { pass: None, errors: vec![] },
                     analyze: StageResult { pass: None, errors: vec![] },
                     codegen: StageResult { pass: None, errors: vec![] },
+            layer2: StageResult { pass: None, errors: vec![] },
+            layer3: StageResult { pass: None, errors: vec![] },
                 },
                 failure_class: Some("io_error".to_string()),
                 missing_builtins: vec![],
@@ -140,6 +147,8 @@ fn compile_one_script(script_path: &Path) {
         parse: StageResult { pass: None, errors: vec![] },
         analyze: StageResult { pass: None, errors: vec![] },
         codegen: StageResult { pass: None, errors: vec![] },
+        layer2: StageResult { pass: None, errors: vec![] },
+        layer3: StageResult { pass: None, errors: vec![] },
     };
     let mut failure_class: Option<String> = None;
     let mut missing_builtins: Vec<String> = Vec::new();
@@ -204,8 +213,43 @@ fn compile_one_script(script_path: &Path) {
     };
 
     if let Some(ref script_ast) = analyzed {
-        let _luau = welkin_script_compiler::codegen::CodeGen::generate(script_ast);
+        let luau = welkin_script_compiler::codegen::CodeGen::generate(script_ast);
         stages.codegen.pass = Some(true);
+
+        // Layer 2: compile generated Luau to bytecode (validates codegen output).
+        match welkin_script_vm::compile_source(&luau) {
+            Ok(bytecode) => {
+                stages.layer2.pass = Some(true);
+
+                // Layer 3: load + register builtins + execute entry point in VM.
+                let run_res = (|| -> Result<(), String> {
+                    let lua = welkin_script_vm::new_vm_with_memory_limit(64 * 1024 * 1024)
+                        .map_err(|e| e.to_string())?;
+                    let ctx = Arc::new(RwLock::new(ScriptContext {
+                        prim_name: "TestPrim".into(),
+                        prim_desc: "A test prim".into(),
+                        ..ScriptContext::default()
+                    }));
+                    builtins::register_all(&lua, &ctx).map_err(|e| e.to_string())?;
+                    lua.load(bytecode.as_slice()).exec().map_err(|e| e.to_string())?;
+                    if let Ok(dispatch) = lua.globals().get::<mlua::Function>("__dispatch") {
+                        let _ = dispatch.call::<()>("state_entry");
+                    }
+                    Ok(())
+                })();
+                match run_res {
+                    Ok(()) => stages.layer3.pass = Some(true),
+                    Err(e) => {
+                        stages.layer3.pass = Some(false);
+                        stages.layer3.errors.push(e);
+                    }
+                }
+            }
+            Err(e) => {
+                stages.layer2.pass = Some(false);
+                stages.layer2.errors.push(e.to_string());
+            }
+        }
     }
 
     let result = CompileOneResult { stages, failure_class, missing_builtins };
@@ -254,6 +298,8 @@ fn run_compilation(scripts_dir: &Path, output_path: &Path) {
                             parse: StageResult { pass: None, errors: vec![] },
                             analyze: StageResult { pass: None, errors: vec![] },
                             codegen: StageResult { pass: None, errors: vec![] },
+            layer2: StageResult { pass: None, errors: vec![] },
+            layer3: StageResult { pass: None, errors: vec![] },
                         };
                         (stages, Some("runner_error".to_string()), vec![])
                     }
@@ -268,6 +314,8 @@ fn run_compilation(scripts_dir: &Path, output_path: &Path) {
                     parse: StageResult { pass: None, errors: vec![] },
                     analyze: StageResult { pass: None, errors: vec![] },
                     codegen: StageResult { pass: None, errors: vec![] },
+            layer2: StageResult { pass: None, errors: vec![] },
+            layer3: StageResult { pass: None, errors: vec![] },
                 };
                 // If it crashed with memory allocation failure, lex likely passed
                 if stderr.contains("memory allocation") {
@@ -287,6 +335,8 @@ fn run_compilation(scripts_dir: &Path, output_path: &Path) {
                     parse: StageResult { pass: None, errors: vec![] },
                     analyze: StageResult { pass: None, errors: vec![] },
                     codegen: StageResult { pass: None, errors: vec![] },
+            layer2: StageResult { pass: None, errors: vec![] },
+            layer3: StageResult { pass: None, errors: vec![] },
                 };
                 (stages, Some("runner_error".to_string()), vec![])
             }
@@ -390,7 +440,7 @@ fn generate_matrix(results_path: &Path, manifest_path: &Path, output_path: &Path
     let mut md = String::with_capacity(8192);
 
     md.push_str("# LSL Compilation Compatibility Matrix\n\n");
-    md.push_str("| Script | Categories | Lex | Parse | Analyze | Codegen | Failure | Missing Builtins |\n");
+    md.push_str("| Script | Categories | Lex | Parse | Analyze | Codegen | Layer2 | Layer3 | Failure | Missing Builtins |\n");
     md.push_str("|--------|-----------|-----|-------|---------|---------|---------|------------------|\n");
 
     for r in &results.results {
@@ -403,6 +453,8 @@ fn generate_matrix(results_path: &Path, manifest_path: &Path, output_path: &Path
         let parse = stage_cell(&r.stages.parse);
         let analyze = stage_cell(&r.stages.analyze);
         let codegen = stage_cell(&r.stages.codegen);
+        let layer2 = stage_cell(&r.stages.layer2);
+        let layer3 = stage_cell(&r.stages.layer3);
         let failure = r.failure_class.as_deref().unwrap_or("-");
         let missing = if r.missing_builtins.is_empty() {
             "-".to_string()
@@ -412,7 +464,7 @@ fn generate_matrix(results_path: &Path, manifest_path: &Path, output_path: &Path
             r.missing_builtins.join(",")
         };
         md.push_str(&format!(
-            "| {file} | {cats} | {lex} | {parse} | {analyze} | {codegen} | {failure} | {missing} |\n",
+            "| {file} | {cats} | {lex} | {parse} | {analyze} | {codegen} | {layer2} | {layer3} | {failure} | {missing} |\n",
             file = r.file,
         ));
     }

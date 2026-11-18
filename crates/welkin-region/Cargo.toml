@@ -17,7 +17,6 @@ welkin-modules = { path = "../welkin-modules" }
 welkin-data = { path = "../welkin-data" }
 welkin-prim = { path = "../welkin-prim" }
 welkin-script-vm = { path = "../welkin-script-vm" }
-welkin-script-compiler = { path = "../welkin-script-compiler" }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
@@ -31,7 +30,6 @@ glam = { workspace = true }
 welkin-llsd = { path = "../welkin-llsd" }
 welkin-services = { path = "../welkin-services" }
 welkin-archive = { path = "../welkin-archive" }
-welkin-types = { path = "../welkin-types" }
 parking_lot = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }

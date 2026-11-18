@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
+pub use crate::environment::*;
+
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use axum::{
@@ -28,6 +30,8 @@ pub struct TextureQuery {
 #[derive(Debug, serde::Deserialize)]
 pub struct MeshQuery {
     pub mesh_id: Option<String>,
+    #[serde(default)]
+    pub pbr_material_id: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -191,6 +195,9 @@ pub async fn get_mesh2(
         return (StatusCode::BAD_REQUEST, "missing mesh_id").into_response();
     };
     tracing::debug!(mesh_id, "GetMesh2");
+    if let Some(ref pbr_material_id) = q.pbr_material_id {
+        tracing::debug!(%pbr_material_id, "Associated PBR material ID");
+    }
     match fetch_asset(&state, mesh_id).await {
         Ok(data) => (
             StatusCode::OK,
@@ -1083,7 +1090,12 @@ pub async fn parcel_voice_info() -> Response {
 
 pub async fn provision_voice_account() -> Response {
     let mut map = Map::new();
+    map.insert("status".into(), Llsd::String("ok".into()));
     map.insert("voice_enabled".into(), Llsd::Boolean(false));
+    map.insert("username".into(), Llsd::String(String::new()));
+    map.insert("password".into(), Llsd::String(String::new()));
+    map.insert("voice_server_type".into(), Llsd::String("none".into()));
+    map.insert("voice_sip_uri_hostname".into(), Llsd::String(String::new()));
     map.insert("error".into(), Llsd::String("voice service not configured".into()));
     llsd_response(Llsd::Map(map))
 }
@@ -1233,21 +1245,34 @@ pub async fn dispatch_region_info() -> Response {
     llsd_response(Llsd::Map(map))
 }
 
+static ESTATE_INFO: Mutex<Option<(i32, String, String, bool)>> = Mutex::new(None);
+
+pub fn set_estate_change_info(estate_id: i32, estate_name: String, estate_owner: String, public_access: bool) {
+    if let Ok(mut g) = ESTATE_INFO.lock() {
+        *g = Some((estate_id, estate_name, estate_owner, public_access));
+    }
+}
+
 pub async fn estate_change_info(body: Bytes) -> Response {
     if let Ok(llsd) = from_xml(&body) {
-        tracing::info!(?llsd, "EstateChangeInfo");
+        tracing::debug!(?llsd, "EstateChangeInfo");
     }
-    llsd_response(Llsd::Map(Map::new()))
+    let (estate_id, estate_name, estate_owner, public_access) = ESTATE_INFO
+        .lock()
+        .ok()
+        .and_then(|g| g.clone())
+        .unwrap_or((0, "My Estate".to_string(), String::new(), true));
+    let mut map = Map::new();
+    map.insert("success".into(), Llsd::Boolean(true));
+    map.insert("EstateID".into(), Llsd::Integer(estate_id));
+    map.insert("EstateName".into(), Llsd::String(estate_name));
+    map.insert("EstateOwner".into(), Llsd::String(estate_owner));
+    map.insert("public_access".into(), Llsd::Boolean(public_access));
+    llsd_response(Llsd::Map(map))
 }
 
 pub async fn environment_settings_get() -> Response {
-    let mut entry = Map::new();
-    entry.insert("type".into(), Llsd::String("default".into()));
-    entry.insert(
-        "regionID".into(),
-        Llsd::String("00000000-0000-0000-0000-000000000000".into()),
-    );
-    llsd_response(Llsd::Array(vec![Llsd::Map(entry)]))
+    llsd_response(default_environment_settings())
 }
 
 pub async fn environment_settings_post(body: Bytes) -> Response {
@@ -1255,6 +1280,53 @@ pub async fn environment_settings_post(body: Bytes) -> Response {
     let mut map = Map::new();
     map.insert("success".into(), Llsd::Boolean(true));
     llsd_response(Llsd::Map(map))
+}
+
+pub async fn ext_environment_settings_get() -> Response {
+    llsd_response(default_ext_environment_settings())
+}
+
+pub async fn ext_environment_settings_post(body: Bytes) -> Response {
+    log_upload_body("ExtEnvironment", &body);
+    let mut map = Map::new();
+    map.insert("success".into(), Llsd::Boolean(true));
+    llsd_response(Llsd::Map(map))
+}
+
+// Extended-environment aliases (historical handler names).
+pub async fn ext_environment_get() -> Response {
+    ext_environment_settings_get().await
+}
+pub async fn ext_environment_post(body: Bytes) -> Response {
+    ext_environment_settings_post(body).await
+}
+pub async fn extended_environment_settings_get() -> Response {
+    ext_environment_settings_get().await
+}
+pub async fn extended_environment_settings_post(body: Bytes) -> Response {
+    ext_environment_settings_post(body).await
+}
+
+// Environment aliases (historical handler names).
+pub async fn environment_settings() -> Response {
+    environment_settings_get().await
+}
+pub async fn environment_get() -> Response {
+    environment_settings_get().await
+}
+pub async fn environment_post(body: Bytes) -> Response {
+    environment_settings_post(body).await
+}
+
+// Healthcheck helper (capability-style).
+pub async fn healthcheck() -> Response {
+    llsd_response(Llsd::String("ok".into()))
+}
+pub async fn health_check() -> Response {
+    healthcheck().await
+}
+pub async fn health() -> Response {
+    healthcheck().await
 }
 
 pub async fn land_resources(_body: Bytes) -> Response {
@@ -1409,6 +1481,10 @@ pub fn cap_routes(
             "EnvironmentSettings",
             get(environment_settings_get).post(environment_settings_post),
         ),
+        (
+            "ExtEnvironment",
+            get(ext_environment_settings_get).post(ext_environment_settings_post),
+        ),
         ("LandResources", post(land_resources)),
         (
             "UpdateGestureAgentInventory",
@@ -1552,7 +1628,7 @@ mod tests {
     #[tokio::test]
     async fn test_cap_routes_count() {
         let routes = cap_routes(test_asset_state(), test_inv_state(), test_bake_state(), test_script_upload_state());
-        assert_eq!(routes.len(), 42);
+        assert_eq!(routes.len(), 43);
     }
 
     #[tokio::test]

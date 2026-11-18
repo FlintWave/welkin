@@ -7,9 +7,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-welkin-types = { path = "../welkin-types" }
 welkin-msg = { path = "../welkin-msg" }
-welkin-llsd = { path = "../welkin-llsd" }
 tokio = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

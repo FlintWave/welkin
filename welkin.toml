@@ -20,5 +20,5 @@ ScriptsEnabled = true
 
 [Estate]
 # Avatar UUID of the estate owner (terraforming and estate tools).
-# EstateOwner = "00000000-0000-0000-0000-000000000000"
+EstateOwner = "5fd70d30-9a82-4563-8eeb-03bb9bcac07a"
 # EstateManagers = "uuid, uuid"

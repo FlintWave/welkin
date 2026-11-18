@@ -13,6 +13,7 @@ pub(crate) fn constant_time_eq(a: &str, b: &str) -> bool {
     diff == 0
 }
 
+pub mod abuse_guard;
 pub mod accounts;
 pub mod agentprefs;
 pub mod asset_loader;
@@ -45,3 +46,7 @@ pub mod remote;
 pub mod simulation;
 pub mod user_agent;
 pub mod wizard;
+
+pub use remote::create_agent as create_agent;
+
+pub use abuse_guard::AbuseGuard;

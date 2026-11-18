@@ -183,27 +183,43 @@ pub fn register_inventory(
         let ctx = Arc::clone(ctx);
         let f = lua.create_function(move |_, (name, line): (String, i64)| {
             let ctx = ctx.read();
+            let asset_id = match Uuid::parse_str(&name) {
+                Ok(u) => u,
+                Err(_) => match ctx
+                    .inventory
+                    .iter()
+                    .find(|i| i.name == name && i.item_type == INVENTORY_NOTECARD)
+                {
+                    Some(item) => item.asset_id,
+                    None => Uuid::nil(),
+                },
+            };
+            if asset_id.is_nil() {
+                return Ok(Uuid::nil().to_string());
+            }
             let request_id = Uuid::new_v4().to_string();
-            if let Some(item) = ctx.inventory.iter().find(|i| i.name == name && i.item_type == INVENTORY_NOTECARD) {
-                let data = if let Some(content) = ctx.notecard_data.get(&item.asset_id) {
+            let data = if let Some(content) = ctx.notecard_data.get(&asset_id) {
+                if line < 0 {
+                    String::new()
+                } else {
                     let lines: Vec<&str> = content.lines().collect();
                     let idx = line as usize;
                     if idx < lines.len() {
                         lines[idx].to_string()
                     } else {
-                        "EOF".to_string()
+                        "\n\n\n".to_string()
                     }
-                } else {
-                    "EOF".to_string()
-                };
-                if let Some(ref tx) = ctx.event_sender {
+                }
+            } else {
+                String::new()
+            };
+            if let Some(ref tx) = ctx.event_sender {
                     let event = crate::ScriptEvent::Dataserver {
                         request_id: request_id.clone(),
                         data,
                     };
                     let _ = tx.send((ctx.prim_id, event));
                 }
-            }
             Ok(request_id)
         })?;
         lua.globals().set("llGetNotecardLine", f)?;
@@ -214,21 +230,33 @@ pub fn register_inventory(
         let ctx = Arc::clone(ctx);
         let f = lua.create_function(move |_, name: String| {
             let ctx = ctx.read();
+            let asset_id = match Uuid::parse_str(&name) {
+                Ok(u) => u,
+                Err(_) => match ctx
+                    .inventory
+                    .iter()
+                    .find(|i| i.name == name && i.item_type == INVENTORY_NOTECARD)
+                {
+                    Some(item) => item.asset_id,
+                    None => Uuid::nil(),
+                },
+            };
+            if asset_id.is_nil() {
+                return Ok(Uuid::nil().to_string());
+            }
             let request_id = Uuid::new_v4().to_string();
-            if let Some(item) = ctx.inventory.iter().find(|i| i.name == name && i.item_type == INVENTORY_NOTECARD) {
-                let count = if let Some(content) = ctx.notecard_data.get(&item.asset_id) {
-                    content.lines().count()
-                } else {
-                    0
-                };
-                if let Some(ref tx) = ctx.event_sender {
+            let count = if let Some(content) = ctx.notecard_data.get(&asset_id) {
+                content.lines().count()
+            } else {
+                0
+            };
+            if let Some(ref tx) = ctx.event_sender {
                     let event = crate::ScriptEvent::Dataserver {
                         request_id: request_id.clone(),
                         data: count.to_string(),
                     };
                     let _ = tx.send((ctx.prim_id, event));
                 }
-            }
             Ok(request_id)
         })?;
         lua.globals().set("llGetNumberOfNotecardLines", f)?;
@@ -427,7 +455,7 @@ mod tests {
         let (_prim_id, event) = rx.try_recv().unwrap();
         match event {
             crate::ScriptEvent::Dataserver { data, .. } => {
-                assert_eq!(data, "EOF");
+                assert_eq!(data, "\n\n\n");
             }
             _ => panic!("expected Dataserver event"),
         }

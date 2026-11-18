@@ -15,6 +15,7 @@ pub mod email;
 pub mod http;
 pub mod inventory;
 pub mod land;
+pub mod money;
 pub mod list;
 pub mod math;
 pub mod object;
@@ -763,6 +764,8 @@ pub struct ScriptContext {
     pub mod_command_sender: Option<std::sync::mpsc::Sender<ModCommand>>,
     /// In-memory JSON document stores for the JsonStore API.
     pub json_stores: HashMap<Uuid, serde_json::Value>,
+    /// Optional money module handle for money builtins (Any-typed to avoid cross-crate deps).
+    pub money_module: Option<std::sync::Arc<dyn std::any::Any + Send + Sync>>,
 }
 
 impl Default for ScriptContext {
@@ -920,6 +923,7 @@ impl Default for ScriptContext {
             mod_invoke_registry: HashMap::new(),
             mod_command_sender: None,
             json_stores: HashMap::new(),
+            money_module: None,
         }
     }
 }
@@ -945,6 +949,7 @@ pub fn register_all(lua: &mlua::Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result
     avatar::register_avatar(lua, ctx)?;
     inventory::register_inventory(lua, ctx)?;
     land::register_land(lua, ctx)?;
+    money::register_money(lua, ctx)?;
     vehicle::register_vehicle(lua, ctx)?;
     prim_params::register_prim_params(lua, ctx)?;
     email::register_email(lua, ctx)?;

@@ -43,3 +43,7 @@ tests/script-testing/runner/target/
 .opencode/
 opencode.json
 OPENCODE.md
+
+# Worker artifacts (task runner outputs)
+scratchpad/
+scripts/__pycache__/

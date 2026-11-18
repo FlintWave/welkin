@@ -8,7 +8,6 @@ publish.workspace = true
 
 [dependencies]
 welkin-types = { path = "../welkin-types" }
-welkin-scene = { path = "../welkin-scene" }
 welkin-services = { path = "../welkin-services" }
 welkin-data = { path = "../welkin-data" }
 bitflags = { workspace = true }
@@ -18,11 +17,10 @@ tokio = { workspace = true }
 uuid = { workspace = true }
 parking_lot = { workspace = true }
 tiny-skia = { workspace = true }
-irc = "1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
-quick-xml = "0.37"
+tantivy = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util", "macros", "rt-multi-thread"] }

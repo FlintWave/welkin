@@ -7,7 +7,6 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-welkin-data = { path = "../welkin-data" }
 axum = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
@@ -15,10 +14,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 thiserror = { workspace = true }
-tower-http = { version = "0.6", features = ["fs", "cors"] }
 argon2 = "0.5"
 time = { version = "0.3", features = ["formatting"] }
-rand = "0.9"
 
 [dev-dependencies]
 tower = "0.5"

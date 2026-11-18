@@ -136,6 +136,30 @@ pub struct UserAppDataRow {
     pub data_val: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct AvatarProperties {
+    pub user_uuid: String,
+    pub partner_id: String,
+    pub about_text: String,
+    pub first_life_text: String,
+    pub image_id: String,
+    pub first_life_image_id: String,
+    pub web_url: String,
+    pub profile_url: String,
+    pub want_to_mask: i32,
+    pub want_to_text: String,
+    pub skills_mask: i32,
+    pub skills_text: String,
+    pub languages: String,
+    pub publish_profile: bool,
+    pub publish_mature: bool,
+    pub born_on: String,
+    pub charter_member: Vec<u8>,
+    pub flags: u32,
+    pub first_name: Option<String>,
+    pub last_name: Option<String>,
+}
+
 const CLASSIFIED_COLS: &str = "classifieduuid, creatoruuid, creationdate, expirationdate, \
     category, name, description, parceluuid, parentestate, snapshotuuid, simname, posglobal, \
     parcelname, classifiedflags, priceforlisting";
@@ -334,6 +358,214 @@ impl ProfilesStore {
         Ok(())
     }
 
+    // ---- avatar properties (profile + account info) ----
+
+    pub async fn get_avatar_properties(
+        &self,
+        uuid: &str,
+    ) -> Result<Option<AvatarProperties>, DataError> {
+        let profile = self.get_profile(uuid).await?;
+        #[derive(sqlx::FromRow)]
+        struct AccountRow {
+            #[sqlx(rename = "FirstName")]
+            first_name: String,
+            #[sqlx(rename = "LastName")]
+            last_name: String,
+            #[sqlx(rename = "Created")]
+            created: i32,
+            #[sqlx(rename = "UserFlags")]
+            user_flags: Option<i32>,
+            #[sqlx(rename = "UserTitle")]
+            user_title: Option<String>,
+        }
+        let account: Option<AccountRow> = sqlx::query_as::<_, AccountRow>(
+            &crate::portable::sql(
+                &self.pool,
+                "SELECT FirstName, LastName, Created, UserFlags, UserTitle FROM UserAccounts WHERE PrincipalID = $1",
+            ),
+        )
+        .bind(uuid.to_string())
+        .fetch_optional(&self.pool)
+        .await
+        .unwrap_or_default();
+
+        if profile.is_none() && account.is_none() {
+            return Ok(None);
+        }
+
+        let p = profile.unwrap_or_else(|| ProfileRow {
+            user_uuid: uuid.to_string(),
+            profile_partner: "00000000-0000-0000-0000-000000000000".to_string(),
+            profile_allow_publish: vec![0],
+            profile_mature_publish: vec![0],
+            profile_url: String::new(),
+            profile_want_to_mask: 0,
+            profile_want_to_text: String::new(),
+            profile_skills_mask: 0,
+            profile_skills_text: String::new(),
+            profile_languages: String::new(),
+            profile_image: "00000000-0000-0000-0000-000000000000".to_string(),
+            profile_about_text: String::new(),
+            profile_first_image: "00000000-0000-0000-0000-000000000000".to_string(),
+            profile_first_text: String::new(),
+        });
+
+        let born_on = account
+            .as_ref()
+            .and_then(|a| {
+                if a.created > 0 {
+                    chrono::DateTime::from_timestamp(a.created as i64, 0)
+                        .map(|dt| dt.format("%Y-%m-%d").to_string())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_default();
+
+        let (charter_member, flags) = account
+            .as_ref()
+            .map(|a| {
+                let uf = a.user_flags.unwrap_or(0);
+                let mut membership = vec![((uf & 0x0f00) >> 8) as u8];
+                let title = a.user_title.clone().unwrap_or_default();
+                if !title.is_empty() {
+                    membership = title.into_bytes();
+                }
+                let flgs = (uf & 0xff) as u32;
+                (membership, flgs)
+            })
+            .unwrap_or((vec![0], 0));
+        Ok(Some(AvatarProperties {
+            user_uuid: uuid.to_string(),
+            partner_id: p.profile_partner.clone(),
+            about_text: p.profile_about_text.clone(),
+            first_life_text: p.profile_first_text.clone(),
+            image_id: p.profile_image.clone(),
+            first_life_image_id: p.profile_first_image.clone(),
+            web_url: p.profile_url.clone(),
+            profile_url: p.profile_url.clone(),
+            want_to_mask: p.profile_want_to_mask,
+            want_to_text: p.profile_want_to_text.clone(),
+            skills_mask: p.profile_skills_mask,
+            skills_text: p.profile_skills_text.clone(),
+            languages: p.profile_languages.clone(),
+            publish_profile: p.profile_allow_publish.first().copied().unwrap_or(0) != 0,
+            publish_mature: p.profile_mature_publish.first().copied().unwrap_or(0) != 0,
+            born_on,
+            charter_member: charter_member.clone(),
+            flags,
+            first_name: account.as_ref().map(|a| a.first_name.clone()),
+            last_name: account.as_ref().map(|a| a.last_name.clone()),
+        }))
+    }
+
+    pub async fn fetch_avatar_properties(
+        &self,
+        uuid: &str,
+    ) -> Result<Option<AvatarProperties>, DataError> {
+        self.get_avatar_properties(uuid).await
+    }
+
+    pub async fn get_profile_by_agent_uuid(
+        &self,
+        uuid: &str,
+    ) -> Result<Option<AvatarProperties>, DataError> {
+        self.get_avatar_properties(uuid).await
+    }
+
+    pub async fn fetch_profile_by_agent_uuid(
+        &self,
+        uuid: &str,
+    ) -> Result<Option<AvatarProperties>, DataError> {
+        self.get_avatar_properties(uuid).await
+    }
+
+    pub async fn fetch_profile(
+        &self,
+        uuid: &str,
+    ) -> Result<Option<AvatarProperties>, DataError> {
+        self.get_avatar_properties(uuid).await
+    }
+
+    // ---- avatar profile text/image/partner update via data store ----
+
+    pub async fn update_avatar_profile_text_image_partner(
+        &self,
+        user_uuid: &str,
+        about_text: &str,
+        first_life_text: &str,
+        image_id: &str,
+        first_life_image_id: &str,
+        partner_id: &str,
+    ) -> Result<(), DataError> {
+        let mut profile = match self.get_profile(user_uuid).await? {
+            Some(p) => p,
+            None => ProfileRow {
+                user_uuid: user_uuid.to_string(),
+                profile_partner: "00000000-0000-0000-0000-000000000000".to_string(),
+                profile_allow_publish: vec![0],
+                profile_mature_publish: vec![0],
+                profile_url: String::new(),
+                profile_want_to_mask: 0,
+                profile_want_to_text: String::new(),
+                profile_skills_mask: 0,
+                profile_skills_text: String::new(),
+                profile_languages: String::new(),
+                profile_image: "00000000-0000-0000-0000-000000000000".to_string(),
+                profile_about_text: String::new(),
+                profile_first_image: "00000000-0000-0000-0000-000000000000".to_string(),
+                profile_first_text: String::new(),
+            },
+        };
+        profile.profile_about_text = about_text.to_string();
+        profile.profile_first_text = first_life_text.to_string();
+        profile.profile_image = image_id.to_string();
+        profile.profile_first_image = first_life_image_id.to_string();
+        profile.profile_partner = partner_id.to_string();
+        self.store_profile(&profile).await
+    }
+
+    // Aliases for discoverability.
+    pub async fn update_avatar_profile(
+        &self,
+        user_uuid: &str,
+        about_text: &str,
+        first_life_text: &str,
+        image_id: &str,
+        first_life_image_id: &str,
+        partner_id: &str,
+    ) -> Result<(), DataError> {
+        self.update_avatar_profile_text_image_partner(
+            user_uuid,
+            about_text,
+            first_life_text,
+            image_id,
+            first_life_image_id,
+            partner_id,
+        )
+        .await
+    }
+
+    pub async fn store_avatar_profile(
+        &self,
+        user_uuid: &str,
+        about_text: &str,
+        first_life_text: &str,
+        image_id: &str,
+        first_life_image_id: &str,
+        partner_id: &str,
+    ) -> Result<(), DataError> {
+        self.update_avatar_profile_text_image_partner(
+            user_uuid,
+            about_text,
+            first_life_text,
+            image_id,
+            first_life_image_id,
+            partner_id,
+        )
+        .await
+    }
+
     // ---- notes ----
 
     pub async fn get_note(
@@ -457,5 +689,152 @@ impl ProfilesStore {
             .await?;
         tx.commit().await?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::any::AnyPoolOptions;
+
+    async fn pool() -> sqlx::AnyPool {
+        sqlx::any::install_default_drivers();
+        let p = AnyPoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS userprofile (
+              useruuid varchar(36) NOT NULL PRIMARY KEY,
+              profilePartner varchar(36) NOT NULL,
+              profileAllowPublish binary(1) NOT NULL,
+              profileMaturePublish binary(1) NOT NULL,
+              profileURL varchar(255) NOT NULL,
+              profileWantToMask int(3) NOT NULL,
+              profileWantToText text NOT NULL,
+              profileSkillsMask int(3) NOT NULL,
+              profileSkillsText text NOT NULL,
+              profileLanguages text NOT NULL,
+              profileImage varchar(36) NOT NULL,
+              profileAboutText text NOT NULL,
+              profileFirstImage varchar(36) NOT NULL,
+              profileFirstText text NOT NULL
+            )",
+        )
+        .execute(&p)
+        .await
+        .unwrap();
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS UserAccounts (
+              PrincipalID CHAR(36) PRIMARY KEY,
+              ScopeID CHAR(36) NOT NULL,
+              FirstName VARCHAR(64) NOT NULL,
+              LastName VARCHAR(64) NOT NULL,
+              Email VARCHAR(64),
+              ServiceURLs TEXT,
+              Created INT(11),
+              UserLevel integer NOT NULL DEFAULT 0,
+              UserFlags integer NOT NULL DEFAULT 0,
+              UserTitle varchar(64) NOT NULL DEFAULT ''
+            )",
+        )
+        .execute(&p)
+        .await
+        .unwrap();
+        p
+    }
+
+    #[tokio::test]
+    async fn avatar_properties_roundtrip() {
+        let p = pool().await;
+        let store = ProfilesStore::new(p.clone());
+        let uuid = "11111111-2222-3333-4444-555555555555";
+        let row = ProfileRow {
+            user_uuid: uuid.to_string(),
+            profile_partner: "00000000-0000-0000-0000-000000000000".to_string(),
+            profile_allow_publish: vec![1],
+            profile_mature_publish: vec![0],
+            profile_url: "http://example".to_string(),
+            profile_want_to_mask: 3,
+            profile_want_to_text: "fun".to_string(),
+            profile_skills_mask: 4,
+            profile_skills_text: "rust".to_string(),
+            profile_languages: "en".to_string(),
+            profile_image: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee".to_string(),
+            profile_about_text: "about me".to_string(),
+            profile_first_image: "11111111-2222-3333-4444-555555555555".to_string(),
+            profile_first_text: "first life".to_string(),
+        };
+        store.store_profile(&row).await.unwrap();
+        sqlx::query("INSERT INTO UserAccounts (PrincipalID, ScopeID, FirstName, LastName, Created) VALUES ($1, '00000000-0000-0000-0000-000000000000', 'Test', 'User', 1700000000)")
+            .bind(uuid.to_string())
+            .execute(&p)
+            .await
+            .unwrap();
+        let ap = store.get_avatar_properties(uuid).await.unwrap().unwrap();
+        assert_eq!(ap.about_text, "about me");
+        assert_eq!(ap.first_name.as_deref(), Some("Test"));
+        assert!(!ap.born_on.is_empty());
+        let missing = store
+            .get_avatar_properties("00000000-0000-0000-0000-000000000000")
+            .await
+            .unwrap();
+        assert!(missing.is_none());
+    }
+
+    #[tokio::test]
+    async fn avatar_profile_text_image_partner_update() {
+        let p = pool().await;
+        let store = ProfilesStore::new(p.clone());
+        let uuid = "11111111-2222-3333-4444-555555555555";
+        // base row
+        let row = ProfileRow {
+            user_uuid: uuid.to_string(),
+            profile_partner: "00000000-0000-0000-0000-000000000000".to_string(),
+            profile_allow_publish: vec![1],
+            profile_mature_publish: vec![0],
+            profile_url: "http://example".to_string(),
+            profile_want_to_mask: 3,
+            profile_want_to_text: "fun".to_string(),
+            profile_skills_mask: 4,
+            profile_skills_text: "rust".to_string(),
+            profile_languages: "en".to_string(),
+            profile_image: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee".to_string(),
+            profile_about_text: "old about".to_string(),
+            profile_first_image: "11111111-2222-3333-4444-555555555555".to_string(),
+            profile_first_text: "old first".to_string(),
+        };
+        store.store_profile(&row).await.unwrap();
+        let partner = "22222222-3333-4444-5555-666666666666";
+        store
+            .update_avatar_profile_text_image_partner(
+                uuid,
+                "new about",
+                "new first",
+                "cccccccc-dddd-eeee-ffff-000000000000",
+                "dddddddd-eeee-ffff-0000-111111111111",
+                partner,
+            )
+            .await
+            .unwrap();
+        let got = store.get_profile(uuid).await.unwrap().unwrap();
+        assert_eq!(got.profile_about_text, "new about");
+        assert_eq!(got.profile_first_text, "new first");
+        assert_eq!(got.profile_image, "cccccccc-dddd-eeee-ffff-000000000000");
+        assert_eq!(got.profile_first_image, "dddddddd-eeee-ffff-0000-111111111111");
+        assert_eq!(got.profile_partner, partner);
+        // other fields preserved
+        assert_eq!(got.profile_want_to_text, "fun");
+        assert_eq!(got.profile_url, "http://example");
+
+        // Non-existent user path
+        let u2 = "99999999-8888-7777-6666-555555555555";
+        store
+            .update_avatar_profile(u2, "about2", "first2", "img2", "firstimg2", "00000000-0000-0000-0000-000000000000")
+            .await
+            .unwrap();
+        let got2 = store.get_profile(u2).await.unwrap().unwrap();
+        assert_eq!(got2.profile_about_text, "about2");
     }
 }
