@@ -84,6 +84,10 @@ setup, configuration, database options, architecture, and the roadmap.
 
 Help is welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Contact
+
+Contact: `FlintWave@tuta.com`
+
 ## License
 
 LGPL-3.0-or-later. See [LICENSE](LICENSE).

@@ -1,0 +1,10 @@
+Generate EEP Phase 2 storage as COMPLETE standalone source: @@@FILE crates/welkin-modules/src/environment/eep_store.rs ... @@@END. Implement object-safe RegionEnvironmentStore load/save/delete, InMemoryRegionEnvironmentStore, three tests. No prose.
+Generate EEP Phase 3 GET/POST handlers as complete Rust module source using std only, @@@FILE crates/welkin-modules/src/environment/eep_caps.rs ... @@@END, covering request/response types and validation logic. No prose.
+Generate EEP Phase 3 PUT/POST/DELETE handlers as complete Rust module source via @@@FILE ... @@@END, no prose.
+Generate implementation plan for DayCycle frame advancement in crates/welkin-region/src/main.rs using a persistent state across ticks, no prose.
+Generate implementation plan for EEP per-parcel environment storage keyed by region and parcel local id, no prose.
+Generate implementation plan for EEP storage-backed GET/PUT handlers in welkin-region caps, no prose.
+Generate implementation plan for SendViewerUpdate existing weather broadcast integration, no prose.
+Generate implementation plan for map image upload object overlay integration, no prose.
+Generate implementation plan for names/capability server wiring, no prose.
+Generate implementation plan for UUID name resolver cache invalidation, no prose.

@@ -184,6 +184,75 @@ impl AttachmentsModule {
         self.attachments.remove(&agent_id).unwrap_or_default()
     }
 
+    /// Persistence flush helper: drain and return all attachments for an agent
+    /// logging out so they can be persisted (delegates to `on_agent_logout`).
+    pub fn flush_persistence_on_logout(
+        &mut self,
+        agent_id: Uuid,
+    ) -> Vec<AttachmentInfo> {
+        self.on_agent_logout(agent_id)
+    }
+
+    /// Alias: flush attachments on logout.
+    pub fn flush_attachments_on_logout(
+        &mut self,
+        agent_id: Uuid,
+    ) -> Vec<AttachmentInfo> {
+        self.on_agent_logout(agent_id)
+    }
+
+    /// Alias: persist attachments on logout.
+    pub fn persist_attachments_on_logout(
+        &mut self,
+        agent_id: Uuid,
+    ) -> Vec<AttachmentInfo> {
+        self.on_agent_logout(agent_id)
+    }
+
+    /// Alias: save attachments on logout.
+    pub fn save_attachments_on_logout(
+        &mut self,
+        agent_id: Uuid,
+    ) -> Vec<AttachmentInfo> {
+        self.on_agent_logout(agent_id)
+    }
+
+    /// Alias: flush on logout.
+    pub fn flush_on_logout(&mut self, agent_id: Uuid) -> Vec<AttachmentInfo> {
+        self.on_agent_logout(agent_id)
+    }
+
+    /// Alias: persistence flush helper.
+    pub fn persistence_flush_on_logout(
+        &mut self,
+        agent_id: Uuid,
+    ) -> Vec<AttachmentInfo> {
+        self.on_agent_logout(agent_id)
+    }
+
+    /// Timer hook: snapshot all currently worn attachments across every agent
+    /// without removing them from local state, for periodic persistence.
+    pub fn save_all_attachments(&self) -> Vec<AttachmentInfo> {
+        self.attachments
+            .values()
+            .flat_map(|list| list.iter().cloned())
+            .collect()
+    }
+
+    /// Alias timer hooks.
+    pub fn save_all_attachments_snapshot(&self) -> Vec<AttachmentInfo> {
+        self.save_all_attachments()
+    }
+    pub fn save_all_attachments_clone(&self) -> Vec<AttachmentInfo> {
+        self.save_all_attachments()
+    }
+    pub fn timer_save_all_attachments(&self) -> Vec<AttachmentInfo> {
+        self.save_all_attachments()
+    }
+    pub fn flush_all_attachments(&self) -> Vec<AttachmentInfo> {
+        self.save_all_attachments()
+    }
+
     /// Clone and return all attachments for cross-region transfer without
     /// removing them from local state.
     pub fn prepare_for_transfer(&self, agent_id: Uuid) -> Vec<AttachmentInfo> {

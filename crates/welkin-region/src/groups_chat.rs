@@ -17,17 +17,36 @@ use crate::groups_io as gio;
 pub struct GroupChat {
     pub roster: Arc<ParkingMutex<HashMap<(Uuid, Uuid), Instant>>>,
     pub ttl: Duration,
+    pub relay: Option<Arc<welkin_services::remote::friends::RemoteFriendsConnector>>,
+    pub relay_urls: Vec<String>,
 }
 
 impl GroupChat {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self::with_ttl(Duration::from_secs(30))
     }
 
+    #[allow(dead_code)]
     pub fn with_ttl(ttl: Duration) -> Self {
         Self {
             roster: Arc::new(ParkingMutex::new(HashMap::new())),
             ttl,
+            relay: None,
+            relay_urls: Vec::new(),
+        }
+    }
+
+    pub fn with_relay(
+        ttl: Duration,
+        relay: Option<Arc<welkin_services::remote::friends::RemoteFriendsConnector>>,
+        relay_urls: Vec<String>,
+    ) -> Self {
+        Self {
+            roster: Arc::new(ParkingMutex::new(HashMap::new())),
+            ttl,
+            relay,
+            relay_urls,
         }
     }
 
@@ -258,6 +277,7 @@ pub async fn process_chat_im(
                 )));
             } else {
                 let now = now_u32();
+                let message_text = gio::bytes_to_string(&im.message_block.message);
                 let sender_name = gio::name_bytes(&format!("{} {}", first, last));
                 let fresh = chat.fresh_members(group);
                 for other in fresh {
@@ -275,6 +295,19 @@ pub async fn process_chat_im(
                     msg.message_block.dialog = dialog::SESSION_SEND;
                     msg.message_block.from_group = true;
                     out.push(ChatOut::Im { to: other, im: msg });
+                }
+                if let Some(friends) = chat.relay.clone() {
+                    if !chat.relay_urls.is_empty() {
+                    let urls = chat.relay_urls.clone();
+                    let group_id = group;
+                    let sender = format!("{} {}", first, last);
+                    let message = message_text.clone();
+                    tokio::spawn(async move {
+                        friends
+                            .forward_group_chat(group_id, agent, &sender, &message, &urls)
+                            .await;
+                    });
+                    }
                 }
             }
         }

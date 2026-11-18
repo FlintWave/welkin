@@ -14,6 +14,9 @@ use quick_xml::Reader;
 use quick_xml::events::Event;
 use uuid::Uuid;
 
+use axum::http::HeaderMap;
+use std::sync::{Mutex, OnceLock};
+
 use welkin_data::accounts::UserAccountStore;
 use welkin_data::auth::AuthStore;
 use welkin_data::friends::FriendsStore;
@@ -21,6 +24,8 @@ use welkin_data::grid::GridStore;
 use welkin_data::grid_user::GridUserStore;
 use welkin_data::inventory::InventoryStore;
 use welkin_data::presence::PresenceStore;
+
+use crate::abuse_guard::AbuseGuard;
 
 #[derive(Clone)]
 pub struct LoginServiceState {
@@ -39,8 +44,9 @@ pub fn router(state: LoginServiceState) -> Router {
         .with_state(state)
 }
 
-async fn login_handler(State(state): State<LoginServiceState>, body: String) -> Response {
+async fn login_handler(State(state): State<LoginServiceState>, headers: HeaderMap, body: String) -> Response {
     let trimmed = body.trim_start();
+    let client_ip = client_ip(&headers);
     let is_llsd = trimmed.starts_with("<llsd>") || trimmed.starts_with("<map>");
     if is_llsd {
         tracing::debug!("LLSD login request — extracting params");
@@ -51,7 +57,7 @@ async fn login_handler(State(state): State<LoginServiceState>, body: String) -> 
                 return error_response("Malformed", "Could not parse the login request");
             }
         };
-        let xmlrpc_response = handle_login(state, params).await;
+        let xmlrpc_response = handle_login(state, params, client_ip.clone()).await;
         return xmlrpc_response_to_llsd(xmlrpc_response).await;
     }
 
@@ -66,13 +72,13 @@ async fn login_handler(State(state): State<LoginServiceState>, body: String) -> 
     tracing::debug!(method = %method, "login XML-RPC request");
 
     match method.as_str() {
-        "login_to_simulator" => handle_login(state, params).await,
+        "login_to_simulator" => handle_login(state, params, client_ip).await,
         "set_login_level" => error_response("AdminRequired", "Admin access required"),
         _ => error_response("UnsupportedMethod", "Unknown method"),
     }
 }
 
-async fn handle_login(state: LoginServiceState, params: HashMap<String, String>) -> Response {
+async fn handle_login(state: LoginServiceState, params: HashMap<String, String>, client_ip: String) -> Response {
     let first = params.get("first").cloned().unwrap_or_default();
     let last = params.get("last").cloned().unwrap_or_default();
     let passwd = params.get("passwd").cloned().unwrap_or_default();
@@ -80,6 +86,12 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>)
         .get("start")
         .cloned()
         .unwrap_or_else(|| "home".to_string());
+
+    let username = format!("{} {}", first, last).trim().to_string();
+    if !login_abuse_allowed(&client_ip, &username) {
+        tracing::warn!(ip = %client_ip, username = %username, "login: throttled");
+        return error_response("TooMany", "Too many login attempts, please try again later");
+    }
 
     if first.is_empty() || last.is_empty() {
         return error_response("key", "Missing name");
@@ -620,6 +632,37 @@ fn parse_position(s: &str) -> (f64, f64, f64) {
         .unwrap_or(0.0);
     (x, y, z)
 }
+
+
+fn client_ip(headers: &HeaderMap) -> String {
+    if let Some(v) = headers.get("x-forwarded-for").and_then(|h| h.to_str().ok()) {
+        if let Some(first) = v.split(',').next() {
+            let trimmed = first.trim();
+            if !trimmed.is_empty() && trimmed.parse::<std::net::IpAddr>().is_ok() {
+                return trimmed.to_string();
+            }
+        }
+    }
+    if let Some(v) = headers.get("x-real-ip").and_then(|h| h.to_str().ok()) {
+        let trimmed = v.trim();
+        if !trimmed.is_empty() && trimmed.parse::<std::net::IpAddr>().is_ok() {
+            return trimmed.to_string();
+        }
+    }
+    "unknown".to_string()
+}
+
+static LOGIN_GUARD: OnceLock<Mutex<AbuseGuard>> = OnceLock::new();
+
+fn login_guard() -> &'static Mutex<AbuseGuard> {
+    LOGIN_GUARD.get_or_init(|| Mutex::new(AbuseGuard::new(5, std::time::Duration::from_secs(60), std::time::Duration::from_secs(300))))
+}
+
+fn login_abuse_allowed(ip: &str, username: &str) -> bool {
+    let mut guard = login_guard().lock().unwrap();
+    guard.allow(ip) && guard.allow(username)
+}
+
 
 fn md5_hex(input: &str) -> String {
     format!("{:x}", md5::compute(input.as_bytes()))

@@ -40,6 +40,7 @@ const REQUESTED_CAPS: &[&str] = &[
     "RenderMaterials",
     "GetDisplayNames",
     "EnvironmentSettings",
+    "ExtEnvironment",
 ];
 
 /// Manages capability URLs obtained from a region's seed capability and runs

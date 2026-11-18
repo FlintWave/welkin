@@ -23,6 +23,60 @@ pub struct AccountsServiceState {
     pub allow_create_user: bool,
 }
 
+impl AccountsServiceState {
+    /// Reusable gate: password may be set only when `AllowCreateUser` is enabled
+    /// and an account exists for `principal`.
+    pub async fn can_set_password(&self, principal: &str) -> bool {
+        can_set_password(self, principal).await
+    }
+
+    /// Account lookup helper (by principal id).
+    pub async fn account_lookup(&self, principal: &str) -> Result<Option<UserAccountRow>, welkin_data::DataError> {
+        self.store.get_by_id(principal).await
+    }
+
+    pub async fn lookup_account(&self, principal: &str) -> Result<Option<UserAccountRow>, welkin_data::DataError> {
+        self.account_lookup(principal).await
+    }
+
+    pub async fn get_account(&self, principal: &str) -> Result<Option<UserAccountRow>, welkin_data::DataError> {
+        self.account_lookup(principal).await
+    }
+}
+
+/// Reusable gate: rejects setpassword/account creation when `AllowCreateUser`
+/// is false or no account exists for `principal`.
+pub async fn can_set_password(state: &AccountsServiceState, principal: &str) -> bool {
+    if !state.allow_create_user {
+        return false;
+    }
+    matches!(state.store.get_by_id(principal).await, Ok(Some(_)))
+}
+
+/// Account lookup helper (by principal id).
+pub async fn account_lookup(
+    state: &AccountsServiceState,
+    principal: &str,
+) -> Result<Option<UserAccountRow>, welkin_data::DataError> {
+    state.store.get_by_id(principal).await
+}
+
+/// Alias for account lookup by principal id.
+pub async fn lookup_account(
+    state: &AccountsServiceState,
+    principal: &str,
+) -> Result<Option<UserAccountRow>, welkin_data::DataError> {
+    account_lookup(state, principal).await
+}
+
+/// Alias for account lookup by principal id.
+pub async fn get_account(
+    state: &AccountsServiceState,
+    principal: &str,
+) -> Result<Option<UserAccountRow>, welkin_data::DataError> {
+    account_lookup(state, principal).await
+}
+
 pub fn router(state: AccountsServiceState) -> Router {
     Router::new()
         .route("/accounts", post(handle_accounts))
@@ -373,6 +427,38 @@ async fn handle_accounts(State(state): State<AccountsServiceState>, body: Bytes)
             }
 
             xml_response(&account_xml("result", &account))
+        }
+        "setpassword" => {
+            let principal = if f.str("PrincipalID").is_empty() {
+                f.str("Principal").to_string()
+            } else {
+                f.str("PrincipalID").to_string()
+            };
+            if principal.is_empty() {
+                return result_fail();
+            }
+            if !state.can_set_password(&principal).await {
+                tracing::warn!("setpassword refused: ungated or account missing");
+                return result_fail();
+            }
+            let password = f.str("Password").to_string();
+            if password.is_empty() {
+                return result_fail();
+            }
+            let md5_pass = if password.starts_with("$1$") {
+                password[3..].to_string()
+            } else {
+                md5_hex(&password)
+            };
+            let salt = uuid::Uuid::new_v4().to_string();
+            let hash = md5_hex(&format!("{md5_pass}:{salt}"));
+            match state.auth_store.set_password(&principal, &hash, &salt).await {
+                Ok(()) => xml_response("<result>Success</result>"),
+                Err(e) => {
+                    tracing::warn!(error = %e, "setpassword failed");
+                    result_fail()
+                }
+            }
         }
         other => {
             tracing::warn!(method = other, "unknown accounts method");

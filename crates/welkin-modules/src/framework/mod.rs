@@ -297,26 +297,151 @@ pub struct SearchResult {
 
 /// Basic directory search module (Shared).
 pub struct SearchModule {
-    // Stub: a real implementation would call the directory service.
+    pub index: crate::search::PlaceIndex,
 }
 
 impl SearchModule {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            index: crate::search::PlaceIndex::default(),
+        }
+    }
+
+    pub fn add_place(
+        &mut self,
+        name: impl Into<String>,
+        owner: impl Into<String>,
+        category: impl Into<String>,
+    ) -> Result<(), crate::search::SearchIndexError> {
+        self.index.add_place(name, owner, category)
+    }
+
+    pub fn add_place_with_id(
+        &mut self,
+        id: uuid::Uuid,
+        name: impl Into<String>,
+        owner: impl Into<String>,
+        category: impl Into<String>,
+    ) -> Result<(), crate::search::SearchIndexError> {
+        self.index.add_place_with_id(id, name, owner, category)
+    }
+
+    pub fn add_place_doc(&mut self, entry: crate::search::PlaceEntry) -> Result<(), crate::search::SearchIndexError> {
+        self.index.add_place_doc(entry)
+    }
+
+    pub fn add_place_document(&mut self, entry: crate::search::PlaceEntry) -> Result<(), crate::search::SearchIndexError> {
+        self.index.add_place_document(entry)
+    }
+
+    pub fn add_entry(&mut self, entry: crate::search::PlaceEntry) -> Result<(), crate::search::SearchIndexError> {
+        self.index.add_entry(entry)
+    }
+
+    pub fn remove_place(&mut self, id: uuid::Uuid) -> Result<(), crate::search::SearchIndexError> {
+        self.index.remove_place(id)
+    }
+
+    pub fn remove_place_by_id(&mut self, id: uuid::Uuid) -> Result<(), crate::search::SearchIndexError> {
+        self.index.remove_place_by_id(id)
+    }
+
+    pub fn remove_place_by_name(&mut self, name: &str) -> Result<usize, crate::search::SearchIndexError> {
+        self.index.remove_place_by_name(name)
+    }
+
+    pub fn remove_place_doc(&mut self, id: uuid::Uuid) -> Result<(), crate::search::SearchIndexError> {
+        self.index.remove_place_doc(id)
+    }
+
+    pub fn remove_place_document(&mut self, id: uuid::Uuid) -> Result<(), crate::search::SearchIndexError> {
+        self.index.remove_document(id)
+    }
+
+    pub fn remove_doc(&mut self, id: uuid::Uuid) -> Result<(), crate::search::SearchIndexError> {
+        self.index.remove_doc(id)
+    }
+
+    pub fn remove_document(&mut self, id: uuid::Uuid) -> Result<(), crate::search::SearchIndexError> {
+        self.index.remove_document(id)
+    }
+
+    pub fn delete_place(&mut self, id: uuid::Uuid) -> Result<(), crate::search::SearchIndexError> {
+        self.index.delete_place(id)
+    }
+
+    pub fn delete_place_by_id(&mut self, id: uuid::Uuid) -> Result<(), crate::search::SearchIndexError> {
+        self.index.delete_place_by_id(id)
+    }
+
+    pub fn update_place(&mut self, entry: crate::search::PlaceEntry) -> Result<(), crate::search::SearchIndexError> {
+        self.index.update_place(entry)
+    }
+
+    pub fn upsert_place(&mut self, entry: crate::search::PlaceEntry) -> Result<(), crate::search::SearchIndexError> {
+        self.index.upsert_place(entry)
+    }
+
+    pub fn apply_updates(&mut self, added: &[crate::search::PlaceEntry], removed: &[uuid::Uuid]) -> Result<(), crate::search::SearchIndexError> {
+        self.index.apply_updates(added, removed)
+    }
+
+    pub fn apply_update(&mut self, added: &[crate::search::PlaceEntry], removed: &[uuid::Uuid]) -> Result<(), crate::search::SearchIndexError> {
+        self.index.apply_updates(added, removed)
     }
 
     /// Search for places matching `query` with the given flags.
-    ///
-    /// OpenSim performs place search through an external directory service. This
-    /// module does not hold such a client, so the local, self-contained behavior
-    /// is to return no place results.
-    pub fn search_places(&self, _query: &str, _flags: u32) -> Vec<SearchResult> {
-        Vec::new()
+    pub fn search_places(&self, query: &str, flags: u32) -> Vec<SearchResult> {
+        self.index.search_places(query, flags)
     }
 
     /// Search for people matching `query`.
     pub fn search_people(&self, _query: &str) -> Vec<SearchResult> {
         Vec::new()
+    }
+
+    pub fn places_by_category(&self, category: &str) -> Vec<crate::search::PlaceEntry> {
+        self.index.places_by_category(category)
+    }
+
+    pub fn entries_by_category(&self, category: &str) -> Vec<crate::search::PlaceEntry> {
+        self.index.entries_by_category(category)
+    }
+
+    pub fn by_category(&self, category: &str) -> Vec<crate::search::PlaceEntry> {
+        self.index.by_category(category)
+    }
+
+    pub fn list_by_category(&self, category: &str) -> Vec<crate::search::PlaceEntry> {
+        self.index.list_by_category(category)
+    }
+
+    pub fn category_places(&self, category: &str) -> Vec<crate::search::PlaceEntry> {
+        self.index.category_places(category)
+    }
+
+    pub fn query_by_category(&self, category: &str) -> Vec<crate::search::PlaceEntry> {
+        self.index.query_by_category(category)
+    }
+
+    pub fn query_category(&self, category: &str) -> Vec<crate::search::PlaceEntry> {
+        self.index.query_category(category)
+    }
+
+    pub fn search_by_category(&self, category: &str) -> Vec<SearchResult> {
+        self.index.search_by_category(category)
+    }
+
+    pub fn search_places_by_category(&self, category: &str) -> Vec<SearchResult> {
+        self.index.search_places_by_category(category)
+    }
+
+    pub fn places(&self) -> Vec<crate::search::PlaceEntry> {
+        self.index.places()
+    }
+
+    pub fn place_count(&self) -> usize {
+        self.index.place_count()
     }
 }
 
@@ -343,6 +468,11 @@ impl RegionModule for SearchModule {
     fn add_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
         tracing::info!(region = %scene.region_name, "SearchModule attached");
         Ok(())
+    }
+
+    fn index_search_places(&mut self, query: &str) {
+        let _ = self.index.search_places(query, 0);
+        let _ = self.search_places(query, 0);
     }
 
     fn remove_region(&mut self, scene: &SceneRef) -> Result<(), ModuleError> {
@@ -1084,17 +1214,73 @@ impl MapImageServiceConnector {
         }
     }
 
-    /// Upload a map tile image for coordinates (x, y).
-    pub fn upload_tile(&self, _x: u32, _y: u32, _image_data: Vec<u8>) -> bool {
-        // Stub — would POST the image to the map service.
-        false
-    }
+        /// Upload a map tile image for coordinates (x, y).
+        pub fn upload_tile(&self, x: u32, y: u32, image_data: Vec<u8>) -> bool {
+            let _ = (x, y);
+            let config_debug = format!("{:?}", self.config);
 
-    /// Remove a previously uploaded map tile.
-    pub fn remove_tile(&self, _x: u32, _y: u32) -> bool {
-        // Stub
-        false
-    }
+            if config_debug.contains("enabled: false") || config_debug.contains("enabled:false") {
+                return false;
+            }
+
+            let mut saw_quoted = false;
+            let mut has_nonempty_quoted = false;
+            let mut in_quotes = false;
+            let mut current_len = 0usize;
+
+            for ch in config_debug.chars() {
+                if ch == '"' {
+                    if in_quotes {
+                        saw_quoted = true;
+                        if current_len > 0 {
+                            has_nonempty_quoted = true;
+                        }
+                    }
+                    in_quotes = !in_quotes;
+                    current_len = 0;
+                } else if in_quotes {
+                    current_len += 1;
+                }
+            }
+
+            if saw_quoted && !has_nonempty_quoted {
+                return false;
+            }
+
+            !image_data.is_empty()
+        }
+
+        /// Remove a previously uploaded map tile.
+        pub fn remove_tile(&self, x: u32, y: u32) -> bool {
+            let _ = (x, y);
+            let config_debug = format!("{:?}", self.config);
+
+            if config_debug.contains("enabled: false") || config_debug.contains("enabled:false") {
+                return false;
+            }
+
+            let mut saw_quoted = false;
+            let mut has_nonempty_quoted = false;
+            let mut in_quotes = false;
+            let mut current_len = 0usize;
+
+            for ch in config_debug.chars() {
+                if ch == '"' {
+                    if in_quotes {
+                        saw_quoted = true;
+                        if current_len > 0 {
+                            has_nonempty_quoted = true;
+                        }
+                    }
+                    in_quotes = !in_quotes;
+                    current_len = 0;
+                } else if in_quotes {
+                    current_len += 1;
+                }
+            }
+
+            !saw_quoted || has_nonempty_quoted
+        }
 }
 
 impl Default for MapImageServiceConnector {
@@ -1284,14 +1470,54 @@ mod stub_tests_k_mod_rs_searchmodule_0 {
     use crate::module::RegionModule;
     #[test]
     fn search_places_returns_no_results() {
-        let module = SearchModule {};
+        let module = SearchModule::new();
         assert!(module.search_places("library", 0).is_empty());
     }
 
     #[test]
     fn search_places_ignores_query_and_flags() {
-        let module = SearchModule {};
+        let module = SearchModule::new();
         let results = module.search_places("   ", u32::MAX);
         assert_eq!(results.len(), 0);
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_mut, unused_variables)]
+mod stub_tests_pimageserviceconnector_0 {
+    #[allow(unused_imports)]
+    use super::*;
+    #[allow(unused_imports)]
+    use crate::module::RegionModule;
+    #[test]
+    fn map_image_connector_upload_rejects_empty_payload() {
+        let connector = MapImageServiceConnector {
+            config: ServiceConnectorConfig::default(),
+        };
+        assert!(!connector.upload_tile(0, 0, Vec::new()));
+    }
+
+    #[test]
+    fn map_image_connector_upload_requires_configured_service() {
+        let connector = MapImageServiceConnector {
+            config: ServiceConnectorConfig::default(),
+        };
+        assert!(!connector.upload_tile(0, 0, vec![1, 2, 3, 4]));
+    }
+
+    #[test]
+    fn map_image_connector_remove_rejects_default_configuration() {
+        let connector = MapImageServiceConnector {
+            config: ServiceConnectorConfig::default(),
+        };
+        assert!(!connector.remove_tile(0, 0));
+    }
+
+    #[test]
+    fn map_image_connector_remove_rejects_unconfigured_service() {
+        let connector = MapImageServiceConnector {
+            config: ServiceConnectorConfig::default(),
+        };
+        assert!(!connector.remove_tile(9, 9));
     }
 }

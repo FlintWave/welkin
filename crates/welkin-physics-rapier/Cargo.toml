@@ -7,14 +7,11 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-welkin-types = { path = "../welkin-types" }
 welkin-physics = { path = "../welkin-physics" }
 rapier3d = { workspace = true }
 glam = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-thiserror = { workspace = true }
-tracing = { workspace = true }
 
 [dev-dependencies]
 aurora-prim = { workspace = true }

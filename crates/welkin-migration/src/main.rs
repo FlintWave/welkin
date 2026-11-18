@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
+#![allow(unused_crate_dependencies)]
+
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 

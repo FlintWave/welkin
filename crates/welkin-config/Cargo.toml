@@ -8,7 +8,6 @@ publish.workspace = true
 
 [dependencies]
 toml = { workspace = true }
-serde = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 configparser = { workspace = true }

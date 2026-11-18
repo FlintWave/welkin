@@ -29,6 +29,7 @@ pub struct AvatarProperties {
     pub image_id: Uuid,
     pub first_life_image_id: Uuid,
     pub web_url: String,
+    pub profile_url: String,
     pub want_to_mask: u32,
     pub want_to_text: String,
     pub skills_mask: u32,
@@ -36,6 +37,9 @@ pub struct AvatarProperties {
     pub languages: String,
     pub publish_profile: bool,
     pub publish_mature: bool,
+    pub born_on: String,
+    pub charter_member: Vec<u8>,
+    pub flags: u32,
 }
 
 impl Default for AvatarProperties {
@@ -48,6 +52,7 @@ impl Default for AvatarProperties {
             image_id: Uuid::nil(),
             first_life_image_id: Uuid::nil(),
             web_url: String::new(),
+            profile_url: String::new(),
             want_to_mask: 0,
             want_to_text: String::new(),
             skills_mask: 0,
@@ -55,6 +60,9 @@ impl Default for AvatarProperties {
             languages: String::new(),
             publish_profile: false,
             publish_mature: false,
+            born_on: String::new(),
+            charter_member: Vec::new(),
+            flags: 0,
         }
     }
 }

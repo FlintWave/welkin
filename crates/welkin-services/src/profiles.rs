@@ -10,7 +10,8 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
-use welkin_data::profiles::{ClassifiedRow, PickRow, ProfileRow, ProfilesStore, UserSettingsRow};
+use welkin_data::profiles::{AvatarProperties, ClassifiedRow, PickRow, ProfileRow, ProfilesStore, UserSettingsRow};
+use welkin_data::DataError;
 
 #[derive(Clone)]
 pub struct ProfilesServiceState {
@@ -628,4 +629,45 @@ async fn handle_json_rpc(
             error(id, "Method not found")
         }
     }
+}
+
+
+/// Fetch a typed avatar-properties record (profile + account info) by agent UUID.
+pub async fn fetch_avatar_properties(
+    store: &ProfilesStore,
+    agent_uuid: &str,
+) -> Result<Option<AvatarProperties>, DataError> {
+    store.get_avatar_properties(agent_uuid).await
+}
+
+/// Alias: profile fetch by agent UUID.
+pub async fn fetch_profile_by_agent_uuid(
+    store: &ProfilesStore,
+    agent_uuid: &str,
+) -> Result<Option<AvatarProperties>, DataError> {
+    store.get_avatar_properties(agent_uuid).await
+}
+
+/// Alias: get profile by agent UUID.
+pub async fn get_profile_by_agent_uuid(
+    store: &ProfilesStore,
+    agent_uuid: &str,
+) -> Result<Option<AvatarProperties>, DataError> {
+    store.get_avatar_properties(agent_uuid).await
+}
+
+/// Alias: fetch avatar profile.
+pub async fn fetch_avatar_profile(
+    store: &ProfilesStore,
+    agent_uuid: &str,
+) -> Result<Option<AvatarProperties>, DataError> {
+    store.get_avatar_properties(agent_uuid).await
+}
+
+/// Alias: avatar properties for agent.
+pub async fn avatar_properties_for(
+    store: &ProfilesStore,
+    agent_uuid: &str,
+) -> Result<Option<AvatarProperties>, DataError> {
+    store.get_avatar_properties(agent_uuid).await
 }

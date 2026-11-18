@@ -139,6 +139,82 @@ impl RemoteGridConnector {
 
         parse_single_region(&body)
     }
+
+    /// Look up the region occupying an exact grid position (metres).  Returns
+    /// `None` when the grid says "null".
+    pub async fn get_region_by_position(
+        &self,
+        scope_id: &str,
+        x: i32,
+        y: i32,
+    ) -> Result<Option<RegionRow>, RemoteError> {
+        let xs = x.to_string();
+        let ys = y.to_string();
+        let params = [
+            ("METHOD", "get_region_by_position"),
+            ("SCOPEID", scope_id),
+            ("X", &xs),
+            ("Y", &ys),
+        ];
+        let body = self
+            .client
+            .post(&self.grid_uri)
+            .form(&params)
+            .send()
+            .await?
+            .text()
+            .await?;
+
+        parse_single_region(&body)
+    }
+
+    /// Ask the neighbouring grid what region a given region handle represents.
+    /// The handle is decoded into its X/Y metre coordinates and resolved via
+    /// `get_region_by_position`.
+    pub async fn get_region_by_handle(
+        &self,
+        scope_id: &str,
+        region_handle: i64,
+    ) -> Result<Option<RegionRow>, RemoteError> {
+        let (x, y) = handle_to_xy(region_handle);
+        self.get_region_by_position(scope_id, x, y).await
+    }
+
+    /// Unsigned-handle variant of [`Self::get_region_by_handle`].
+    pub async fn get_region_by_handle_u64(
+        &self,
+        scope_id: &str,
+        region_handle: u64,
+    ) -> Result<Option<RegionRow>, RemoteError> {
+        self.get_region_by_handle(scope_id, region_handle as i64).await
+    }
+
+    /// Resolve a region from either a UUID string or a (decimal) handle string.
+    pub async fn get_region_by_uuid_or_handle(
+        &self,
+        scope_id: &str,
+        id: &str,
+    ) -> Result<Option<RegionRow>, RemoteError> {
+        if uuid::Uuid::parse_str(id).is_ok() {
+            return self.get_region_by_uuid(scope_id, id).await;
+        }
+        if let Ok(handle) = id.parse::<i64>() {
+            return self.get_region_by_handle(scope_id, handle).await;
+        }
+        if let Ok(handle) = id.parse::<u64>() {
+            return self.get_region_by_handle_u64(scope_id, handle).await;
+        }
+        self.get_region_by_uuid(scope_id, id).await
+    }
+}
+
+/// Decode an OpenSim region handle (X in the high 32 bits, Y in the low 32)
+/// into metre coordinates.
+pub fn handle_to_xy(handle: i64) -> (i32, i32) {
+    let u = handle as u64;
+    let x = (u >> 32) as u32 as i32;
+    let y = (u & 0xFFFF_FFFF) as u32 as i32;
+    (x, y)
 }
 
 // ---------------------------------------------------------------------------
@@ -302,6 +378,70 @@ impl RegionBuilder {
     }
 }
 
+
+
+// ---------------------------------------------------------------------------
+// CreateAgent endpoint health helpers
+// ---------------------------------------------------------------------------
+
+impl RemoteGridConnector {
+    fn create_agent_health_url(&self) -> String {
+        let base = self.grid_uri.trim_end_matches('/');
+        let base = base.strip_suffix("/grid").unwrap_or(base);
+        format!("{}/create_agent", base.trim_end_matches('/'))
+    }
+
+    async fn create_agent_health_impl(&self) -> bool {
+        let url = self.create_agent_health_url();
+        match self.client.get(&url).send().await {
+            Ok(_) => true,
+            Err(_) => false,
+        }
+    }
+
+    pub async fn create_agent_health(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn create_agent_health_status(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn create_agent_endpoint_health(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn create_agent_endpoint_health_status(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn ping_create_agent(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn ping_create_agent_endpoint(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn check_create_agent_health(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn check_create_agent_endpoint(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn is_create_agent_healthy(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn create_agent_ping(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+    pub async fn create_agent_status(&self) -> bool {
+        self.create_agent_health_impl().await
+    }
+
+    /// Variant taking an explicit endpoint URL.
+    pub async fn create_agent_endpoint_health_url(&self, url: &str) -> bool {
+        match self.client.get(url).send().await {
+            Ok(_) => true,
+            Err(_) => false,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -344,5 +484,20 @@ mod tests {
         assert_eq!(regions[0].region_name, "Region A");
         assert_eq!(regions[1].region_name, "Region B");
         assert_eq!(regions[1].loc_x, 256256);
+    }
+
+    #[test]
+    fn handle_to_xy_decodes() {
+        let handle = (256000i64 << 32) | 256000i64;
+        assert_eq!(handle_to_xy(handle), (256000, 256000));
+    }
+
+    #[test]
+    fn get_region_by_position_xml_parses() {
+        let xml = r#"<?xml version="1.0"?><ServerResponse><result type="List"><uuid>aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee</uuid><locX>1000</locX><locY>2000</locY><sizeX>256</sizeX><sizeY>256</sizeY><regionName>Pos Region</regionName><flags>0</flags><serverIP>127.0.0.1</serverIP><serverHttpPort>9000</serverHttpPort><serverURI>http://127.0.0.1:9000</serverURI><serverPort>9000</serverPort><regionMapTexture>00000000-0000-0000-0000-000000000000</regionMapTexture><parcelMapTexture>00000000-0000-0000-0000-000000000000</parcelMapTexture><access>1</access><regionSecret>s</regionSecret><owner_uuid>11111111-2222-3333-4444-555555555555</owner_uuid><Token>t</Token></result></ServerResponse>"#;
+        let r = parse_single_region(xml).unwrap().unwrap();
+        assert_eq!(r.region_name, "Pos Region");
+        assert_eq!(r.loc_x, 1000);
+        assert_eq!(r.loc_y, 2000);
     }
 }

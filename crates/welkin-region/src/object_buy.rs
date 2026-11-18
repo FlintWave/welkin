@@ -31,6 +31,7 @@ pub struct BuyResult {
     pub items: Vec<InventoryItemRow>,
     pub removed_local_ids: Vec<u32>,
     pub errors: Vec<String>,
+    pub total_paid: i32,
 }
 
 #[derive(Debug)]
@@ -44,6 +45,7 @@ pub async fn buy_objects(
     scene: &welkin_scene::scene::Scene,
     inventory: &welkin_services::remote::inventory::RemoteInventoryConnector,
     assets: &welkin_services::remote::asset::RemoteAssetConnector,
+    money: Option<&dyn welkin_modules::economy::MoneyModule>,
     buyer: Uuid,
     folder_id: Uuid,
     entries: &[BuyEntry],
@@ -52,6 +54,7 @@ pub async fn buy_objects(
         items: Vec::new(),
         removed_local_ids: Vec::new(),
         errors: Vec::new(),
+        total_paid: 0,
     };
 
     for entry in entries.iter().take(32) {
@@ -63,7 +66,7 @@ pub async fn buy_objects(
             }
         };
 
-        let (root_sale_type, root_price, _owner) = {
+        let (root_sale_type, root_price, owner) = {
             let guard = match scene.get_object(&uuid) {
                 Some(guard) => guard,
                 None => {
@@ -76,7 +79,6 @@ pub async fn buy_objects(
         };
 
         // For an original sale, buying one's own object is acceptable.
-        let _ = _owner;
         let _ = buyer;
 
         let action = match check_sale(
@@ -91,6 +93,13 @@ pub async fn buy_objects(
                 continue;
             }
         };
+
+        if let Some(mm) = money {
+            if root_price > 0 && !mm.amount_covered(buyer, root_price) {
+                result.errors.push("insufficient funds".to_string());
+                continue;
+            }
+        }
 
         let group = {
             let guard = match scene.get_object(&uuid) {
@@ -107,6 +116,12 @@ pub async fn buy_objects(
 
         match save_group_to_inventory(inventory, assets, action, buyer, folder_id, &group).await {
             Ok(item) => {
+                if let Some(mm) = money {
+                    if root_price != 0 {
+                        mm.move_money(buyer, owner, root_price, "Object purchase");
+                    }
+                }
+                result.total_paid += root_price;
                 result.items.push(item);
                 if is_take && scene.remove_object(&uuid).is_some() {
                     result.removed_local_ids.push(entry.local_id);

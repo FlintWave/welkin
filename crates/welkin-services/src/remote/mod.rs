@@ -2,9 +2,11 @@
 
 //! Remote HTTP connectors for talking to an external grid's Robust services.
 
+pub mod create_agent;
 pub mod accounts;
 pub mod asset;
 pub mod avatar;
+pub mod gandalf;
 pub mod grid;
 pub mod friends;
 pub mod groups;

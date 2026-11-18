@@ -10,13 +10,19 @@ publish.workspace = true
 welkin-config = { path = "../welkin-config" }
 welkin-runtime = { path = "../welkin-runtime" }
 welkin-services = { path = "../welkin-services" }
+welkin-modules = { path = "../welkin-modules" }
 welkin-data = { path = "../welkin-data" }
+welkin-llsd = { path = "../welkin-llsd" }
 axum = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 clap = { workspace = true }
+uuid = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

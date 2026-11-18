@@ -9,7 +9,6 @@ description = "Rust-native bot/client SDK for OpenSimulator-compatible grids"
 
 [dependencies]
 welkin-msg = { path = "../welkin-msg" }
-welkin-types = { path = "../welkin-types" }
 tokio = { workspace = true }
 reqwest = { version = "0.12", features = ["json"] }
 quick-xml = { version = "0.37", features = ["serialize"] }

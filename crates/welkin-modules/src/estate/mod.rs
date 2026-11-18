@@ -4,7 +4,7 @@
 //! management, and estate-level actions.
 
 use std::collections::HashSet;
-use std::sync::mpsc;
+use tokio::sync::mpsc;
 
 use uuid::Uuid;
 
@@ -267,7 +267,7 @@ impl TelehubManager {
 pub struct EstateManagementModule {
     pub settings: EstateSettings,
     pub telehub: TelehubManager,
-    pub action_sender: Option<mpsc::Sender<EstateAction>>,
+    pub action_sender: Option<mpsc::UnboundedSender<EstateAction>>,
 }
 
 impl EstateManagementModule {

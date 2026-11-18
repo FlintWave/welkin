@@ -5,3 +5,6 @@ ConnectionString = "sqlite:robust.db?mode=rwc"
 # Dev/test only. Defaults to false; enabling lets anyone who can reach the
 # private service port create accounts.
 AllowCreateUser = true
+
+[Hypergrid]
+Enabled = false

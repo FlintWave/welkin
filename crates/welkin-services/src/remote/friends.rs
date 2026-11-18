@@ -158,6 +158,85 @@ impl RemoteFriendsConnector {
 
         Ok(parse_friends(&body))
     }
+
+    /// Best-effort helper: try to forward a group chat message to each of
+    /// the given (other-grid) URIs.  Returns the number of grids that
+    /// accepted the request.  Errors are swallowed per grid.
+    pub async fn forward_group_chat(
+        &self,
+        group_id: Uuid,
+        from_agent_id: Uuid,
+        from_agent_name: &str,
+        message: &str,
+        grid_urls: &[String],
+    ) -> usize {
+        let mut ok_count = 0usize;
+        for grid_url in grid_urls {
+            let base = grid_url.trim_end_matches('/');
+            let endpoint = format!("{base}/friends");
+            // Lifetime issue: keep owned strings alive across the request.
+            let group_str = group_id.to_string();
+            let agent_str = from_agent_id.to_string();
+            let params_vec: Vec<(&str, &str)> = vec![
+                ("METHOD", "forwardgroupchat"),
+                ("GROUPID", &group_str),
+                ("FROMAGENT", &agent_str),
+                ("FROMNAME", from_agent_name),
+                ("MESSAGE", message),
+            ];
+            if let Ok(resp) = self
+                .client
+                .post(&endpoint)
+                .form(&params_vec)
+                .send()
+                .await
+            {
+                if resp.status().is_success() {
+                    ok_count += 1;
+                }
+            }
+        }
+        ok_count
+    }
+
+    /// Best-effort alias with the grid list first.
+    pub async fn forward_group_chat_to_grids(
+        &self,
+        grid_urls: &[String],
+        group_id: Uuid,
+        from_agent_id: Uuid,
+        from_agent_name: &str,
+        message: &str,
+    ) -> usize {
+        self.forward_group_chat(group_id, from_agent_id, from_agent_name, message, grid_urls)
+            .await
+    }
+
+    /// Best-effort alias.
+    pub async fn forward_chat_to_grids(
+        &self,
+        grid_urls: &[String],
+        group_id: Uuid,
+        from_agent_id: Uuid,
+        from_agent_name: &str,
+        message: &str,
+    ) -> usize {
+        self.forward_group_chat_to_grids(grid_urls, group_id, from_agent_id, from_agent_name, message)
+            .await
+    }
+
+    /// Best-effort alias.
+    pub async fn relay_group_chat(
+        &self,
+        grid_urls: &[String],
+        group_id: Uuid,
+        from_agent_id: Uuid,
+        from_agent_name: &str,
+        message: &str,
+    ) -> usize {
+        self.forward_group_chat_to_grids(grid_urls, group_id, from_agent_id, from_agent_name, message)
+            .await
+    }
 }
 
 #[cfg(test)]
@@ -226,6 +305,37 @@ mod tests {
         );
         assert_eq!(friends[0].my_flags, 7);
         assert_eq!(friends[0].their_flags, 9);
+    }
+
+    #[tokio::test]
+    async fn forward_group_chat_empty_grid_list_returns_zero() {
+        let connector = RemoteFriendsConnector::new("http://example.com");
+        let count = connector
+            .forward_group_chat(
+                uuid("11111111-1111-1111-1111-111111111111"),
+                uuid("22222222-2222-2222-2222-222222222222"),
+                "Sender",
+                "hello",
+                &[],
+            )
+            .await;
+        assert_eq!(count, 0);
+    }
+
+    #[tokio::test]
+    async fn forward_group_chat_best_effort_counts_nothing_on_bad_urls() {
+        let connector = RemoteFriendsConnector::new("http://example.com");
+        let urls = vec!["http://127.0.0.1:1/".to_string()];
+        let count = connector
+            .forward_group_chat_to_grids(
+                &urls,
+                uuid("11111111-1111-1111-1111-111111111111"),
+                uuid("22222222-2222-2222-2222-222222222222"),
+                "Sender",
+                "hello",
+            )
+            .await;
+        assert_eq!(count, 0);
     }
 
     #[test]
