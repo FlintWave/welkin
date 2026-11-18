@@ -387,7 +387,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     create_agent_state = create_agent_state.with_traveling_data_store(traveling_data_store.clone());
     create_agent_state = create_agent_state.with_hg_user_management(hg_user_management_module.clone());
     create_agent_state = create_agent_state.with_hypergrid_connector(hg_connector.clone());
-    let create_agent_router = gatekeeper_create_agent::router(create_agent_state);
+    let create_agent_router = if hypergrid_enabled {
+        gatekeeper_create_agent::router(create_agent_state)
+    } else {
+        Router::new()
+    };
 
     let mut public_router = Router::new()
         .merge(welkin_services::login::router(login_state))
