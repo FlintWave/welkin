@@ -29,8 +29,8 @@
 
 ## Phase 4: glTF import
 
-- [ ] Add `gltf` 1.4.1 crate to workspace Cargo.toml
-- [ ] Implement glTF parser: extract vertices, normals, UVs, indices, and PBR material data from glTF/glb
+- [x] Add `gltf` 1.4.1 crate to workspace Cargo.toml
+- [x] Implement glTF parser: extract vertices, normals, UVs, indices, and PBR material data from glTF/glb
 - [x] Convert glTF mesh data to Welkin's internal mesh format (SL mesh asset format)
 - [x] Wire mesh upload cap to accept glTF/glb content type alongside existing mesh format
 - [x] Store converted mesh as standard mesh asset with PBR material references
