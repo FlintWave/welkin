@@ -1,6 +1,7 @@
-// Existing imports…
-mod bake;
-mod texture;
+mod mesh;
+mod pbr_material;
+mod error;
 
-// Re‑export the compositing function for external use.
-pub use bake::compositing::bake_composite;
+pub use mesh::Mesh;
+pub use pbr_material::PbrMaterial;
+pub use error::Result;
