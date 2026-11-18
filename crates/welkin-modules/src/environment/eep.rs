@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]
 pub enum Llsd {
     Undefined,
     Boolean(bool),
@@ -15,6 +16,7 @@ pub enum Llsd {
     Map(BTreeMap<String, Llsd>),
 }
 
+#[allow(dead_code)]
 impl Llsd {
     pub fn map() -> Self {
         Self::Map(BTreeMap::new())
@@ -72,6 +74,7 @@ impl Llsd {
     }
 }
 
+#[allow(dead_code)]
 impl From<&Llsd> for Llsd {
     fn from(value: &Llsd) -> Self {
         value.clone()
@@ -81,12 +84,14 @@ impl From<&Llsd> for Llsd {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnvironmentError(pub String);
 
+#[allow(dead_code)]
 impl std::fmt::Display for EnvironmentError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&self.0)
     }
 }
 
+#[allow(dead_code)]
 impl std::error::Error for EnvironmentError {}
 
 pub const EEP_PHASE: u32 = 1;
@@ -117,6 +122,7 @@ pub struct SkyData {
     pub sunlight_color: [f32; 3],
 }
 
+#[allow(dead_code)]
 impl Default for SkyData {
     fn default() -> Self {
         Self {
@@ -142,6 +148,7 @@ impl Default for SkyData {
     }
 }
 
+#[allow(dead_code)]
 impl SkyData {
     pub fn to_llsd(&self) -> Llsd {
         let mut map = BTreeMap::new();
@@ -303,6 +310,7 @@ pub struct WaterData {
     pub small_wave_speed: f32,
 }
 
+#[allow(dead_code)]
 impl Default for WaterData {
     fn default() -> Self {
         Self {
@@ -321,6 +329,7 @@ impl Default for WaterData {
     }
 }
 
+#[allow(dead_code)]
 impl WaterData {
     pub fn to_llsd(&self) -> Llsd {
         let mut map = BTreeMap::new();
@@ -412,6 +421,7 @@ pub struct DayCycleTrack {
     pub water: WaterData,
 }
 
+#[allow(dead_code)]
 impl Default for DayCycleTrack {
     fn default() -> Self {
         Self {
@@ -422,6 +432,7 @@ impl Default for DayCycleTrack {
     }
 }
 
+#[allow(dead_code)]
 impl DayCycleTrack {
     pub fn to_llsd(&self) -> Llsd {
         let mut map = BTreeMap::new();
@@ -456,6 +467,7 @@ pub struct DayCycle {
     pub day_length: f64,
 }
 
+#[allow(dead_code)]
 impl Default for DayCycle {
     fn default() -> Self {
         Self {
@@ -465,6 +477,7 @@ impl Default for DayCycle {
     }
 }
 
+#[allow(dead_code)]
 impl DayCycle {
     pub fn compute_day_fraction(&self, time_of_day_seconds: f64) -> f64 {
         compute_day_fraction(time_of_day_seconds, self.day_length)
@@ -514,6 +527,7 @@ pub struct ViewerEnvironment {
     pub use_day_cycle: bool,
 }
 
+#[allow(dead_code)]
 impl Default for ViewerEnvironment {
     fn default() -> Self {
         Self {
@@ -526,6 +540,7 @@ impl Default for ViewerEnvironment {
     }
 }
 
+#[allow(dead_code)]
 impl ViewerEnvironment {
     pub fn default_region() -> Self {
         Self {

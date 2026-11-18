@@ -1,17 +1,12 @@
 use uuid::Uuid;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 #[allow(dead_code)]
 pub enum PbrAlphaMode {
+    #[default]
     Opaque,
     Mask,
     Blend,
-}
-
-impl Default for PbrAlphaMode {
-    fn default() -> Self {
-        Self::Opaque
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
