@@ -47,3 +47,12 @@ OPENCODE.md
 # Worker artifacts (task runner outputs)
 scratchpad/
 scripts/__pycache__/
+__pycache__/
+*.pyc
+
+# LibreMetaverse bot asset caches
+**/linden/cache/
+
+# Autonomous-runner state (dark factory, task runner); never commit
+.dark-factory*
+dark-factory-framework*/
