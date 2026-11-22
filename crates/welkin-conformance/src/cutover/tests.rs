@@ -1,24 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
-//! Integration tests for the load-test and mixed-grid validation modules.
-//!
-//! These live in a separate integration test file so they exercise the public
-//! API surface of the `cutover` module.
+//! Tests for the load-test and mixed-grid validation modules.
 
-// NOTE: These modules are compiled here for test purposes. Once main.rs adds
-// `pub mod cutover;`, the integration tests can use `welkin_conformance::cutover::*`
-// instead of the path-include approach below.
-
-// Whole modules are included for the tests that use part of them.
-#[allow(dead_code)]
-#[path = "../src/load_test.rs"]
-mod load_test;
-#[allow(dead_code)]
-#[path = "../src/mixed_grid.rs"]
-mod mixed_grid;
-
-use load_test::*;
-use mixed_grid::*;
+use super::load_test::*;
+use super::mixed_grid::*;
 
 // ---------------------------------------------------------------------------
 // Load-test integration tests
