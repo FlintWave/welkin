@@ -743,7 +743,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     );
     caps_router = caps_router
         .route("/currency.php", axum::routing::post(currency_php_handler))
-        .route("/landtool.php", axum::routing::post(landtool_php_handler));
+        .route("/landtool.php", axum::routing::post(landtool_php_handler))
+        .route("/health", axum::routing::get(welkin_runtime::health));
 
     let caps_listener = tokio::net::TcpListener::bind(caps_addr).await?;
     info!(addr = %caps_addr, "Capability HTTP server listening");

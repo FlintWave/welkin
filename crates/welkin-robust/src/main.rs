@@ -61,7 +61,7 @@ fn redact_connection_string(url: &str) -> String {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    tracing_subscriber::fmt::init();
+    welkin_runtime::init_tracing(false);
 
     let cli = Cli::parse();
     info!("Starting ROBUST grid services server");
@@ -415,6 +415,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     }
     let public_router = public_router
+        .route("/health", get(welkin_runtime::health))
         .route(
             "/get_grid_info",
             get({
