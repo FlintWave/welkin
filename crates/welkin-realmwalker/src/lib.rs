@@ -9,6 +9,7 @@ pub mod caps;
 pub mod client;
 pub mod chat;
 pub mod objects;
+pub mod inventory;
 
 pub use client::RealmWalker;
 pub use config::{GridConfig, StartLocation};

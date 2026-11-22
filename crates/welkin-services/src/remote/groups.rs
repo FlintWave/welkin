@@ -3,6 +3,7 @@
 //! groups are grid-only for now: Hypergrid agent ids of the form `uuid;http://home;First Last` are not parsed or supported by this connector.
 
 use quick_xml::{Reader, events::Event};
+use std::collections::HashMap;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -118,6 +119,36 @@ impl RemoteGroupsConnector {
             None => return Ok(None),
         };
         Ok(Some(parse_group(result)?))
+    }
+
+    /// Resolve a list of group UUIDs to their names using this connector.
+    /// Missing or unresolvable groups default to "Unknown Group".
+    pub async fn get_names(&self, group_ids: &[Uuid]) -> HashMap<Uuid, String> {
+        let mut out: HashMap<Uuid, String> = HashMap::new();
+        for id in group_ids {
+            out.insert(*id, "Unknown Group".to_string());
+        }
+        for id in group_ids {
+            if id.is_nil() {
+                continue;
+            }
+            if let Ok(Some(group)) = self.get_group(Uuid::nil(), Some(*id), None).await {
+                if !group.group_name.trim().is_empty() {
+                    out.insert(*id, group.group_name);
+                }
+            }
+        }
+        out
+    }
+
+    /// Alias: resolve a list of group UUIDs to names.
+    pub async fn get_group_names(&self, group_ids: &[Uuid]) -> HashMap<Uuid, String> {
+        self.get_names(group_ids).await
+    }
+
+    /// Alias: resolve a list of group UUIDs to names.
+    pub async fn resolve_group_names(&self, group_ids: &[Uuid]) -> HashMap<Uuid, String> {
+        self.get_names(group_ids).await
     }
 
     pub async fn add_agent_to_group(
@@ -1807,4 +1838,58 @@ mod tests {
         assert_eq!(memberships.len(), 1);
         assert_eq!(memberships[0].active_role, created.owner_role_id);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Helper: resolve a list of group UUIDs to names
+// ---------------------------------------------------------------------------
+
+/// Resolve a list of group UUIDs to names using the groups connector where
+/// possible. Groups that cannot be resolved default to "Unknown Group".
+pub async fn resolve_group_names(
+    connector: Option<&RemoteGroupsConnector>,
+    group_ids: &[Uuid],
+) -> HashMap<Uuid, String> {
+    match connector {
+        Some(conn) => conn.get_names(group_ids).await,
+        None => {
+            let mut out = HashMap::new();
+            for id in group_ids {
+                out.insert(*id, "Unknown Group".to_string());
+            }
+            out
+        }
+    }
+}
+
+/// Alias for `resolve_group_names`.
+pub async fn get_group_names(
+    connector: Option<&RemoteGroupsConnector>,
+    group_ids: &[Uuid],
+) -> HashMap<Uuid, String> {
+    resolve_group_names(connector, group_ids).await
+}
+
+/// Alias for `resolve_group_names`.
+pub async fn group_names(
+    connector: Option<&RemoteGroupsConnector>,
+    group_ids: &[Uuid],
+) -> HashMap<Uuid, String> {
+    resolve_group_names(connector, group_ids).await
+}
+
+/// Resolve a list of group UUIDs to names using a required groups connector.
+pub async fn resolve_group_names_with_connector(
+    connector: &RemoteGroupsConnector,
+    group_ids: &[Uuid],
+) -> HashMap<Uuid, String> {
+    connector.get_names(group_ids).await
+}
+
+/// Alias for `resolve_group_names_with_connector`.
+pub async fn get_group_names_with_connector(
+    connector: &RemoteGroupsConnector,
+    group_ids: &[Uuid],
+) -> HashMap<Uuid, String> {
+    connector.get_names(group_ids).await
 }

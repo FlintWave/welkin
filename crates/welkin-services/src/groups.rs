@@ -1468,3 +1468,45 @@ mod tests {
         assert_eq!(form_str(&form, "Key"), "Value");
     }
 }
+
+// ---------------------------------------------------------------------------
+// Helper: resolve a list of group UUIDs to names (local store / connector)
+// ---------------------------------------------------------------------------
+
+
+/// Resolve a list of group UUIDs to names using the local groups store where
+/// possible. Missing or unresolvable groups default to "Unknown Group".
+pub async fn resolve_group_names(
+    state: &GroupsServiceState,
+    group_ids: &[Uuid],
+) -> HashMap<Uuid, String> {
+    let mut out: HashMap<Uuid, String> = HashMap::new();
+    for id in group_ids {
+        out.insert(*id, "Unknown Group".to_string());
+        if id.is_nil() {
+            continue;
+        }
+        if let Ok(Some(row)) = state.store.retrieve_group_by_id(&id.to_string()).await {
+            if !row.name.trim().is_empty() {
+                out.insert(*id, row.name);
+            }
+        }
+    }
+    out
+}
+
+/// Alias for `resolve_group_names`.
+pub async fn get_group_names(
+    state: &GroupsServiceState,
+    group_ids: &[Uuid],
+) -> HashMap<Uuid, String> {
+    resolve_group_names(state, group_ids).await
+}
+
+/// Alias for `resolve_group_names`.
+pub async fn group_names(
+    state: &GroupsServiceState,
+    group_ids: &[Uuid],
+) -> HashMap<Uuid, String> {
+    resolve_group_names(state, group_ids).await
+}

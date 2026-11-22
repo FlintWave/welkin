@@ -45,3 +45,8 @@ pub mod remote;
 pub mod simulation;
 pub mod user_agent;
 pub mod wizard;
+
+// URL filter/throttle helpers for llHTTPRequest
+pub use remote::network;
+pub use remote::network as outbound_url_filter;
+pub use remote::network as url_filter;

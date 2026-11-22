@@ -10,6 +10,7 @@ pub mod grid;
 pub mod friends;
 pub mod groups;
 pub mod inventory;
+pub mod network;
 
 use thiserror::Error;
 

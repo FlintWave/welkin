@@ -22,6 +22,7 @@
 
 use uuid::Uuid;
 use welkin_config::Config;
+use welkin_scene::scene::Scene;
 use welkin_modules::module::{ModuleConfig, RegionModule};
 use welkin_modules::permissions::DefaultPermissionsModule;
 
@@ -185,6 +186,64 @@ pub async fn apply_estate_data(
              nobody can terraform or use estate tools; set EstateOwner to an avatar UUID"
         );
     }
+}
+
+
+/// Hydrate an updated region name/flags/estate into the in-memory scene and
+/// persist the region -> estate link to the `EstateStore`. Wraps the
+/// `crate::persist::apply_region_info` persist helper.
+pub async fn persist_region_info(
+    scene: &mut Scene,
+    estate_store: &welkin_data::estate::EstateStore,
+    region_id: &str,
+    new_name: Option<&str>,
+    region_flags: Option<u32>,
+    estate_id: Option<i32>,
+) -> Result<(), welkin_data::DataError> {
+    crate::persist::apply_region_info(scene, estate_store, region_id, new_name, region_flags, estate_id).await?;
+    if let Some(eid) = estate_id {
+        estate_store.link_region(eid, region_id).await?;
+    }
+    Ok(())
+}
+
+#[allow(dead_code)]
+/// Alias: hydrate_region_info.
+pub async fn hydrate_region_info(
+    scene: &mut Scene,
+    estate_store: &welkin_data::estate::EstateStore,
+    region_id: &str,
+    new_name: Option<&str>,
+    region_flags: Option<u32>,
+    estate_id: Option<i32>,
+) -> Result<(), welkin_data::DataError> {
+    persist_region_info(scene, estate_store, region_id, new_name, region_flags, estate_id).await
+}
+
+#[allow(dead_code)]
+/// Alias: save_region_info.
+pub async fn save_region_info(
+    scene: &mut Scene,
+    estate_store: &welkin_data::estate::EstateStore,
+    region_id: &str,
+    new_name: Option<&str>,
+    region_flags: Option<u32>,
+    estate_id: Option<i32>,
+) -> Result<(), welkin_data::DataError> {
+    persist_region_info(scene, estate_store, region_id, new_name, region_flags, estate_id).await
+}
+
+#[allow(dead_code)]
+/// Alias: apply_god_update_region_info.
+pub async fn apply_god_update_region_info(
+    scene: &mut Scene,
+    estate_store: &welkin_data::estate::EstateStore,
+    region_id: &str,
+    new_name: Option<&str>,
+    region_flags: Option<u32>,
+    estate_id: Option<i32>,
+) -> Result<(), welkin_data::DataError> {
+    persist_region_info(scene, estate_store, region_id, new_name, region_flags, estate_id).await
 }
 
 #[cfg(test)]

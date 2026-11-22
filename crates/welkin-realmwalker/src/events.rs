@@ -35,6 +35,10 @@ pub enum Event {
     ObjectPropertiesReceived(ObjectPropertiesData),
     /// A caps event-queue event that has no dedicated variant yet.
     EventQueueEvent(String, serde_json::Value),
+    /// Inventory folders/items were updated for the current agent.
+    InventoryUpdated,
+    /// An inventory item was offered to this agent by another avatar.
+    InventoryOffer { from_name: String, from_id: Uuid, item_id: Uuid, folder_id: Uuid },
 }
 
 /// A chat message received from the simulator.
