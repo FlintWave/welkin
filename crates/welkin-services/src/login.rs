@@ -101,16 +101,26 @@ async fn handle_login(
         .cloned()
         .unwrap_or_else(|| "home".to_string());
 
-    let username = format!("{} {}", first, last).trim().to_string();
-
     if first.is_empty() || last.is_empty() {
         return error_response("key", "Missing name");
     }
 
-    if state.throttle.is_blocked(client_ip, &username) {
-        tracing::warn!(ip = ?client_ip, username = %username, "login: throttled");
-        return error_response("TooMany", "Too many failed login attempts, please try again later");
+    if first.len() > 64 || last.len() > 64 {
+        return error_response(
+            "key",
+            "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist.",
+        );
     }
+
+    let account_key = welkin_data::accounts::name_key(&first, &last);
+
+    let attempt = match state.throttle.begin(client_ip, &account_key) {
+        Some(a) => a,
+        None => {
+            tracing::warn!(ip = ?client_ip, account = %account_key, "login: throttled");
+            return error_response("TooMany", "Too many failed login attempts, please try again later");
+        }
+    };
 
     tracing::debug!(first = %first, last = %last, start = %start, "login attempt");
 
@@ -119,7 +129,7 @@ async fn handle_login(
         Ok(Some(a)) => a,
         Ok(None) => {
             tracing::debug!("login: user not found");
-            state.throttle.record_failure(client_ip, &username);
+            attempt.unknown_account();
             return error_response(
                 "key",
                 "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist.",
@@ -140,7 +150,7 @@ async fn handle_login(
     let auth = match state.auth_store.get(&principal_id).await {
         Ok(Some(a)) => a,
         Ok(None) => {
-            state.throttle.record_failure(client_ip, &username);
+            attempt.failed();
             return error_response(
                 "key",
                 "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist.",
@@ -165,14 +175,14 @@ async fn handle_login(
     let computed = md5_hex(&format!("{}:{}", stripped, auth.password_salt));
     if !crate::constant_time_eq(&computed, &auth.password_hash) {
         tracing::debug!(principal = %principal_id, "login: password mismatch");
-        state.throttle.record_failure(client_ip, &username);
+        attempt.failed();
         return error_response(
             "key",
             "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist.",
         );
     }
 
-    state.throttle.record_success(&username);
+    attempt.succeeded();
 
     // 3. Generate session tokens
     let secure_session_id = Uuid::new_v4().to_string();

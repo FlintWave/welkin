@@ -543,13 +543,29 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/grid.example.com/privkey.pem;
 
     location / {
-        proxy_pass http://127.0.0.1:8003;
+        proxy_pass http://127.0.0.1:8002;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
 ```
+
+Proxy the public port (8002, login and grid info), never the private port
+(8003), which serves account and authentication endpoints without
+authentication.
+
+Tell the login service to trust the proxy's `X-Forwarded-For` header, or every
+failed login counts against the proxy's address and 20 of them lock out all
+users for 5 minutes:
+
+```toml
+# robust.toml
+[LoginService]
+TrustedProxies = "127.0.0.1"
+```
+
+See [login throttling](configuration.md#login-throttling).
 
 LLUDP (UDP 9000) is not proxied; it must be reachable directly.
 

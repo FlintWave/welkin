@@ -135,6 +135,7 @@ storage, inventory queries).
 | DatabaseService | ConnectionString | string | sqlite:robust.db | Database URL for all grid services |
 | DatabaseService | RobustConnectionString | string | (from ConnectionString) | Override when grid services need a separate database |
 | UserAccountService | AllowCreateUser | bool | false | Let the `createuser` grid method create accounts |
+| LoginService | TrustedProxies | string | (empty) | Comma-separated IP addresses of reverse proxies whose `X-Forwarded-For` header is trusted for login throttling |
 | AssetService | AssetLoaderEnabled | bool | true | Load the default asset sets at start |
 | AssetService | AssetLoaderArgs | string | assets/AssetSets.xml | Path to the asset set control file |
 
@@ -165,6 +166,35 @@ that port off the public network.
 [UserAccountService]
 AllowCreateUser = true
 ```
+
+### Login throttling
+
+`welkin-robust` limits failed logins. It counts only failed authentications
+(unknown name, missing password record, wrong password), never successful ones:
+
+- 20 failures from one client address in 5 minutes block that address for
+  5 minutes. IPv6 clients are grouped by their /64 network.
+- 5 failures for one account from one address block that address from that
+  account. Other addresses can still log in to it.
+- 50 failures for one account from any mix of addresses block the account for
+  5 minutes, which limits distributed password guessing.
+
+The client address is the TCP peer address. If `welkin-robust` runs behind a
+reverse proxy, every login appears to come from the proxy, so list the proxy in
+`TrustedProxies`. The login service then reads the client address from
+`X-Forwarded-For`, and only for requests that arrive from a listed address. If
+the header from a trusted proxy is missing or malformed, that request is not
+limited per address, rather than being charged to the proxy.
+
+```toml
+[LoginService]
+TrustedProxies = "127.0.0.1, ::1"
+```
+
+Without this setting, a proxied grid counts all failures against the proxy's
+address, and 20 failed logins from anyone lock out every user for 5 minutes.
+The server logs a warning the first time it sees `X-Forwarded-For` from a
+loopback address that is not listed.
 
 ## Database URLs
 
