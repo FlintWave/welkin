@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [dev]
+    branches: ['**']
   pull_request:
     branches: [main, dev]
 
@@ -54,3 +54,14 @@ jobs:
             echo "::error::Found stub or placeholder code"
             exit 1
           fi
+
+  orphan-files:
+    name: Orphan files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Check orphan files
+        run: bash scripts/check-orphan-rs.sh
