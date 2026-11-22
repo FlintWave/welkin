@@ -362,6 +362,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // --- PUBLIC router: login, map (GET-only), grid info ---
 
+    let trusted_proxies: Vec<std::net::IpAddr> = config
+        .get_string_or("LoginService", "TrustedProxies", "")
+        .split(',')
+        .filter(|s| !s.trim().is_empty())
+        .filter_map(|s| match s.trim().parse() {
+            Ok(ip) => Some(ip),
+            Err(_) => {
+                tracing::warn!(value = %s.trim(), "invalid trusted proxy IP, skipping");
+                None
+            }
+        })
+        .collect();
+    let login_throttle_config = welkin_services::login_throttle::LoginThrottleConfig {
+        trusted_proxies,
+        ..Default::default()
+    };
+
     let login_state = welkin_services::login::LoginServiceState {
         auth_store: auth_store.clone(),
         accounts_store: accounts_store.clone(),
@@ -370,6 +387,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         presence_store: presence_store.clone(),
         griduser_store: griduser_store.clone(),
         friends_store: friends_store.clone(),
+        throttle: std::sync::Arc::new(welkin_services::login_throttle::LoginThrottle::new(login_throttle_config)),
     };
 
     let public_map = welkin_services::map::router(welkin_services::map::MapImageServiceState {
@@ -546,9 +564,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     );
 
     let public_handle = tokio::spawn(async move {
-        if let Err(e) = axum::serve(public_listener, public_router)
-            .with_graceful_shutdown(welkin_runtime::shutdown_signal())
-            .await
+        if let Err(e) = axum::serve(
+            public_listener,
+            public_router.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        )
+        .with_graceful_shutdown(welkin_runtime::shutdown_signal())
+        .await
         {
             error!("Public server error: {e}");
         }
