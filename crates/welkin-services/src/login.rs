@@ -53,6 +53,9 @@ async fn login_handler(
     let peer = extensions
         .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
         .map(|c| c.0);
+    if peer.is_none() {
+        tracing::warn!("login: no peer address (ConnectInfo missing); per-IP throttling disabled for this request");
+    }
     let client_ip = state.throttle.client_ip(peer, &headers);
     let is_llsd = trimmed.starts_with("<llsd>") || trimmed.starts_with("<map>");
     if is_llsd {

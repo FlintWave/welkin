@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
+//! Per-IP and per-account login throttle with expiring windows and temporary lockouts.
+//! Tracks failure counts, resolves client IPs through trusted proxies, and
+//! evicts least-recently-used unlocked entries when capacity is reached.
+//! Known limitation: `is_blocked` and `record_failure` are separate calls, so
+//! concurrent requests can overshoot a limit by the number in flight.
+
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Mutex;
@@ -45,6 +51,8 @@ pub struct LoginThrottle {
 
 impl LoginThrottle {
     pub fn new(config: LoginThrottleConfig) -> Self {
+        let mut config = config;
+        config.trusted_proxies = config.trusted_proxies.into_iter().map(canonical).collect();
         Self {
             config,
             ip_entries: Mutex::new(HashMap::new()),
@@ -71,6 +79,7 @@ impl LoginThrottle {
         drop(accounts);
 
         if let Some(ip) = ip {
+            let ip = canonical(ip);
             let ips = self.ip_entries.lock().unwrap_or_else(|e| e.into_inner());
             if let Some(entry) = ips.get(&ip)
                 && let Some(until) = entry.locked_until
@@ -98,6 +107,7 @@ impl LoginThrottle {
             self.config.max_tracked_keys,
         );
         if let Some(ip) = ip {
+            let ip = canonical(ip);
             record_in_map(
                 &self.ip_entries,
                 ip,
@@ -111,10 +121,10 @@ impl LoginThrottle {
     }
 
     pub fn record_success(&self, account: &str) {
-        self.record_success_at(account, Instant::now());
+        self.record_success_at(account);
     }
 
-    pub fn record_success_at(&self, account: &str, _now: Instant) {
+    pub fn record_success_at(&self, account: &str) {
         let account_key = account.to_lowercase();
         let mut accounts = self
             .account_entries
@@ -124,16 +134,11 @@ impl LoginThrottle {
     }
 
     pub fn client_ip(&self, peer: Option<SocketAddr>, headers: &HeaderMap) -> Option<IpAddr> {
-        self.client_ip_at(peer, headers, Instant::now())
+        self.client_ip_at(peer, headers)
     }
 
-    pub fn client_ip_at(
-        &self,
-        peer: Option<SocketAddr>,
-        headers: &HeaderMap,
-        _now: Instant,
-    ) -> Option<IpAddr> {
-        let peer_ip = peer.map(|addr| addr.ip())?;
+    pub fn client_ip_at(&self, peer: Option<SocketAddr>, headers: &HeaderMap) -> Option<IpAddr> {
+        let peer_ip = canonical(peer.map(|addr| addr.ip())?);
         if !self.config.trusted_proxies.contains(&peer_ip) {
             return Some(peer_ip);
         }
@@ -144,10 +149,14 @@ impl LoginThrottle {
                 if trimmed.is_empty() {
                     continue;
                 }
-                if let Ok(ip) = trimmed.parse::<IpAddr>() {
-                    if !self.config.trusted_proxies.contains(&ip) {
-                        return Some(ip);
+                match trimmed.parse::<IpAddr>() {
+                    Ok(ip) => {
+                        let ip = canonical(ip);
+                        if !self.config.trusted_proxies.contains(&ip) {
+                            return Some(ip);
+                        }
                     }
+                    Err(_) => return Some(peer_ip),
                 }
             }
         }
@@ -155,7 +164,7 @@ impl LoginThrottle {
         if let Some(value) = headers.get("x-real-ip").and_then(|h| h.to_str().ok()) {
             let trimmed = value.trim();
             if let Ok(ip) = trimmed.parse::<IpAddr>() {
-                return Some(ip);
+                return Some(canonical(ip));
             }
         }
 
@@ -163,14 +172,16 @@ impl LoginThrottle {
     }
 }
 
-fn expired(entry: &Entry, now: Instant, window: Duration, lockout: Duration) -> bool {
+fn canonical(ip: IpAddr) -> IpAddr {
+    ip.to_canonical()
+}
+
+fn expired(entry: &Entry, now: Instant, window: Duration) -> bool {
     let window_elapsed = now
         .checked_duration_since(entry.window_start)
         .unwrap_or_default()
         >= window;
     let lockout_expired = entry.locked_until.map_or(true, |until| now >= until);
-    // lockout duration is part of the supplied config; keep parameter used.
-    let _ = lockout;
     window_elapsed && lockout_expired
 }
 
@@ -192,14 +203,18 @@ fn record_in_map<K>(
     let mut map = mutex.lock().unwrap_or_else(|e| e.into_inner());
 
     if !map.contains_key(&key) && map.len() >= max_keys {
-        map.retain(|_, entry| !expired(entry, now, window, lockout));
+        map.retain(|_, entry| !expired(entry, now, window));
         if map.len() >= max_keys {
-            let oldest = map
+            let candidate = map
                 .iter()
+                .filter(|(_, entry)| entry.locked_until.map_or(true, |until| now >= until))
                 .min_by_key(|(_, entry)| entry.window_start)
                 .map(|(existing, _)| existing.clone());
-            if let Some(oldest_key) = oldest {
-                map.remove(&oldest_key);
+            match candidate {
+                Some(oldest_key) => {
+                    map.remove(&oldest_key);
+                }
+                None => return,
             }
         }
     }
@@ -263,7 +278,7 @@ mod tests {
         let now = Instant::now();
 
         for _ in 0..10 {
-            throttle.record_success_at("alice", now);
+            throttle.record_success_at("alice");
         }
 
         assert!(!throttle.is_blocked_at(None, "alice", now));
@@ -361,5 +376,102 @@ mod tests {
         assert!(throttle.is_blocked_at(None, "bad-account", now));
         let other_ip = IpAddr::V4(Ipv4Addr::new(198, 51, 100, 3));
         assert!(!throttle.is_blocked_at(Some(other_ip), "good-account", now));
+    }
+
+    #[test]
+    fn full_locked_table_retains_lockouts() {
+        let config = LoginThrottleConfig {
+            max_tracked_keys: 2,
+            max_failures_per_ip: 1,
+            max_failures_per_account: 100,
+            ..Default::default()
+        };
+        let throttle = LoginThrottle::new(config);
+        let now = Instant::now();
+        let ip_one = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1));
+        let ip_two = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2));
+        let ip_new = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 3));
+
+        throttle.record_failure_at(Some(ip_one), "shared-account", now);
+        throttle.record_failure_at(Some(ip_two), "shared-account", now);
+
+        assert!(throttle.is_blocked_at(Some(ip_one), "shared-account", now));
+        assert!(throttle.is_blocked_at(Some(ip_two), "shared-account", now));
+
+        throttle.record_failure_at(Some(ip_new), "shared-account", now);
+
+        let ips = throttle
+            .ip_entries
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        assert_eq!(ips.len(), 2);
+        drop(ips);
+
+        assert!(throttle.is_blocked_at(Some(ip_one), "shared-account", now));
+        assert!(throttle.is_blocked_at(Some(ip_two), "shared-account", now));
+        assert!(!throttle.is_blocked_at(Some(ip_new), "shared-account", now));
+    }
+
+    #[test]
+    fn mapped_peer_ip_is_treated_as_trusted_proxy() {
+        let proxy = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 5));
+        let config = LoginThrottleConfig {
+            trusted_proxies: vec![proxy],
+            ..Default::default()
+        };
+        let throttle = LoginThrottle::new(config);
+        let peer = Some(SocketAddr::new("::ffff:10.0.0.5".parse().unwrap(), 4000));
+
+        assert_eq!(throttle.client_ip(peer, &HeaderMap::new()), Some(proxy));
+    }
+
+    #[test]
+    fn mapped_and_unmapped_ips_share_a_bucket() {
+        let config = LoginThrottleConfig {
+            max_failures_per_ip: 1,
+            ..Default::default()
+        };
+        let throttle = LoginThrottle::new(config);
+        let now = Instant::now();
+        let mapped: IpAddr = "::ffff:1.2.3.4".parse().unwrap();
+        let unmapped = IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4));
+
+        throttle.record_failure_at(Some(mapped), "account", now);
+
+        assert!(throttle.is_blocked_at(Some(unmapped), "account", now));
+    }
+
+    #[test]
+    fn forwarded_for_with_unknown_entry_returns_peer_ip() {
+        let proxy_ip = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1));
+        let config = LoginThrottleConfig {
+            trusted_proxies: vec![proxy_ip],
+            ..Default::default()
+        };
+        let throttle = LoginThrottle::new(config);
+        let peer_ip = proxy_ip;
+        let peer = Some(SocketAddr::new(peer_ip, 4000));
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "6.6.6.6, unknown".parse().unwrap());
+
+        assert_eq!(throttle.client_ip(peer, &headers), Some(peer_ip));
+    }
+
+    #[test]
+    fn forwarded_for_returns_rightmost_untrusted_entry() {
+        let proxy_ip = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1));
+        let config = LoginThrottleConfig {
+            trusted_proxies: vec![proxy_ip],
+            ..Default::default()
+        };
+        let throttle = LoginThrottle::new(config);
+        let peer = Some(SocketAddr::new(proxy_ip, 4000));
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "6.6.6.6, 7.7.7.7".parse().unwrap());
+
+        assert_eq!(
+            throttle.client_ip(peer, &headers),
+            Some(IpAddr::V4(Ipv4Addr::new(7, 7, 7, 7)))
+        );
     }
 }
