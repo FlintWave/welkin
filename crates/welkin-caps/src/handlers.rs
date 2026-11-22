@@ -30,8 +30,6 @@ pub struct TextureQuery {
 #[derive(Debug, serde::Deserialize)]
 pub struct MeshQuery {
     pub mesh_id: Option<String>,
-    #[serde(default)]
-    pub pbr_material_id: Option<String>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -195,9 +193,6 @@ pub async fn get_mesh2(
         return (StatusCode::BAD_REQUEST, "missing mesh_id").into_response();
     };
     tracing::debug!(mesh_id, "GetMesh2");
-    if let Some(ref pbr_material_id) = q.pbr_material_id {
-        tracing::debug!(%pbr_material_id, "Associated PBR material ID");
-    }
     match fetch_asset(&state, mesh_id).await {
         Ok(data) => (
             StatusCode::OK,
