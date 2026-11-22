@@ -460,6 +460,7 @@ fn build_router(pool: &sqlx::AnyPool) -> axum::Router {
             presence_store,
             griduser_store,
             friends_store,
+            throttle: std::sync::Arc::new(welkin_services::login_throttle::LoginThrottle::new(Default::default())),
         }))
 }
 

@@ -15,7 +15,6 @@ use quick_xml::events::Event;
 use uuid::Uuid;
 
 use axum::http::HeaderMap;
-use std::sync::{Mutex, OnceLock};
 
 use welkin_data::accounts::UserAccountStore;
 use welkin_data::auth::AuthStore;
@@ -25,7 +24,6 @@ use welkin_data::grid_user::GridUserStore;
 use welkin_data::inventory::InventoryStore;
 use welkin_data::presence::PresenceStore;
 
-use crate::abuse_guard::AbuseGuard;
 
 #[derive(Clone)]
 pub struct LoginServiceState {
@@ -36,6 +34,7 @@ pub struct LoginServiceState {
     pub presence_store: Arc<PresenceStore>,
     pub griduser_store: Arc<GridUserStore>,
     pub friends_store: Arc<FriendsStore>,
+    pub throttle: Arc<crate::login_throttle::LoginThrottle>,
 }
 
 pub fn router(state: LoginServiceState) -> Router {
@@ -44,9 +43,20 @@ pub fn router(state: LoginServiceState) -> Router {
         .with_state(state)
 }
 
-async fn login_handler(State(state): State<LoginServiceState>, headers: HeaderMap, body: String) -> Response {
+async fn login_handler(
+    State(state): State<LoginServiceState>,
+    headers: HeaderMap,
+    extensions: axum::http::Extensions,
+    body: String,
+) -> Response {
     let trimmed = body.trim_start();
-    let client_ip = client_ip(&headers);
+    let peer = extensions
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        .map(|c| c.0);
+    if peer.is_none() {
+        tracing::warn!("login: no peer address (ConnectInfo missing); per-IP throttling disabled for this request");
+    }
+    let client_ip = state.throttle.client_ip(peer, &headers);
     let is_llsd = trimmed.starts_with("<llsd>") || trimmed.starts_with("<map>");
     if is_llsd {
         tracing::debug!("LLSD login request — extracting params");
@@ -57,7 +67,7 @@ async fn login_handler(State(state): State<LoginServiceState>, headers: HeaderMa
                 return error_response("Malformed", "Could not parse the login request");
             }
         };
-        let xmlrpc_response = handle_login(state, params, client_ip.clone()).await;
+        let xmlrpc_response = handle_login(state, params, client_ip).await;
         return xmlrpc_response_to_llsd(xmlrpc_response).await;
     }
 
@@ -78,7 +88,11 @@ async fn login_handler(State(state): State<LoginServiceState>, headers: HeaderMa
     }
 }
 
-async fn handle_login(state: LoginServiceState, params: HashMap<String, String>, client_ip: String) -> Response {
+async fn handle_login(
+    state: LoginServiceState,
+    params: HashMap<String, String>,
+    client_ip: Option<std::net::IpAddr>,
+) -> Response {
     let first = params.get("first").cloned().unwrap_or_default();
     let last = params.get("last").cloned().unwrap_or_default();
     let passwd = params.get("passwd").cloned().unwrap_or_default();
@@ -87,15 +101,26 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>,
         .cloned()
         .unwrap_or_else(|| "home".to_string());
 
-    let username = format!("{} {}", first, last).trim().to_string();
-    if !login_abuse_allowed(&client_ip, &username) {
-        tracing::warn!(ip = %client_ip, username = %username, "login: throttled");
-        return error_response("TooMany", "Too many login attempts, please try again later");
-    }
-
     if first.is_empty() || last.is_empty() {
         return error_response("key", "Missing name");
     }
+
+    if first.len() > 64 || last.len() > 64 {
+        return error_response(
+            "key",
+            "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist.",
+        );
+    }
+
+    let account_key = welkin_data::accounts::name_key(&first, &last);
+
+    let attempt = match state.throttle.begin(client_ip, &account_key) {
+        Some(a) => a,
+        None => {
+            tracing::warn!(ip = ?client_ip, account = %account_key, "login: throttled");
+            return error_response("TooMany", "Too many failed login attempts, please try again later");
+        }
+    };
 
     tracing::debug!(first = %first, last = %last, start = %start, "login attempt");
 
@@ -104,6 +129,7 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>,
         Ok(Some(a)) => a,
         Ok(None) => {
             tracing::debug!("login: user not found");
+            attempt.unknown_account();
             return error_response(
                 "key",
                 "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist.",
@@ -124,6 +150,7 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>,
     let auth = match state.auth_store.get(&principal_id).await {
         Ok(Some(a)) => a,
         Ok(None) => {
+            attempt.failed();
             return error_response(
                 "key",
                 "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist.",
@@ -148,11 +175,14 @@ async fn handle_login(state: LoginServiceState, params: HashMap<String, String>,
     let computed = md5_hex(&format!("{}:{}", stripped, auth.password_salt));
     if !crate::constant_time_eq(&computed, &auth.password_hash) {
         tracing::debug!(principal = %principal_id, "login: password mismatch");
+        attempt.failed();
         return error_response(
             "key",
             "Could not authenticate your avatar. Please check your username and password, and check the grid if problems persist.",
         );
     }
+
+    attempt.succeeded();
 
     // 3. Generate session tokens
     let secure_session_id = Uuid::new_v4().to_string();
@@ -631,36 +661,6 @@ fn parse_position(s: &str) -> (f64, f64, f64) {
         .and_then(|v| v.trim().parse().ok())
         .unwrap_or(0.0);
     (x, y, z)
-}
-
-
-fn client_ip(headers: &HeaderMap) -> String {
-    if let Some(v) = headers.get("x-forwarded-for").and_then(|h| h.to_str().ok()) {
-        if let Some(first) = v.split(',').next() {
-            let trimmed = first.trim();
-            if !trimmed.is_empty() && trimmed.parse::<std::net::IpAddr>().is_ok() {
-                return trimmed.to_string();
-            }
-        }
-    }
-    if let Some(v) = headers.get("x-real-ip").and_then(|h| h.to_str().ok()) {
-        let trimmed = v.trim();
-        if !trimmed.is_empty() && trimmed.parse::<std::net::IpAddr>().is_ok() {
-            return trimmed.to_string();
-        }
-    }
-    "unknown".to_string()
-}
-
-static LOGIN_GUARD: OnceLock<Mutex<AbuseGuard>> = OnceLock::new();
-
-fn login_guard() -> &'static Mutex<AbuseGuard> {
-    LOGIN_GUARD.get_or_init(|| Mutex::new(AbuseGuard::new(5, std::time::Duration::from_secs(60), std::time::Duration::from_secs(300))))
-}
-
-fn login_abuse_allowed(ip: &str, username: &str) -> bool {
-    let mut guard = login_guard().lock().unwrap();
-    guard.allow(ip) && guard.allow(username)
 }
 
 

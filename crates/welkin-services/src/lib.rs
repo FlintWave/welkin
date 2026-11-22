@@ -36,6 +36,7 @@ pub mod hg_linker;
 pub mod hypergrid;
 pub mod inventory;
 pub mod login;
+pub mod login_throttle;
 pub mod map;
 pub mod mute;
 pub mod offline_im;
