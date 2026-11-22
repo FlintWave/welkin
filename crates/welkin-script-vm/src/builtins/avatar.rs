@@ -33,16 +33,64 @@ pub const AGENT_BUSY: i32 = 0x0800;
 pub const AGENT_ALWAYS_RUN: i32 = 0x1000;
 pub const AGENT_AUTOPILOT: i32 = 0x2000;
 
+const PERMISSION_DEBIT: u32 = 0x00000002;
+const PERMISSION_TAKE_CONTROLS: u32 = 0x00000004;
+const PERMISSION_TRIGGER_ANIMATION: u32 = 0x00000010;
+const PERMISSION_ATTACH: u32 = 0x00000020;
+const PERMISSION_CHANGE_LINKS: u32 = 0x00000080;
+const PERMISSION_TRACK_CAMERA: u32 = 0x00000400;
+const PERMISSION_CONTROL_CAMERA: u32 = 0x00000800;
+const PERMISSION_TELEPORT: u32 = 0x00001000;
+const PERMISSION_OVERRIDE_ANIMATIONS: u32 = 0x00008000;
+
+#[derive(Debug, PartialEq, Eq)]
+enum PermissionDecision {
+    Ignore,
+    Release,
+    Grant(u32),
+    Refuse,
+}
+
+fn decide_permissions(ctx: &ScriptContext, agent: uuid::Uuid, perm: u32) -> PermissionDecision {
+    if agent.is_nil() {
+        return PermissionDecision::Ignore;
+    }
+    if perm == 0 {
+        return PermissionDecision::Release;
+    }
+    let implicit = if ctx.is_attachment && agent == ctx.owner_id {
+        PERMISSION_TAKE_CONTROLS
+            | PERMISSION_TRIGGER_ANIMATION
+            | PERMISSION_CONTROL_CAMERA
+            | PERMISSION_TRACK_CAMERA
+            | PERMISSION_ATTACH
+            | PERMISSION_OVERRIDE_ANIMATIONS
+    } else if ctx.sitting_avatars.contains(&agent) || ctx.sitting_avatar == Some(agent) {
+        PERMISSION_TRIGGER_ANIMATION
+            | PERMISSION_CONTROL_CAMERA
+            | PERMISSION_TRACK_CAMERA
+            | PERMISSION_TAKE_CONTROLS
+    } else {
+        0
+    };
+    if (perm & !implicit) == 0 {
+        PermissionDecision::Grant(perm)
+    } else {
+        PermissionDecision::Refuse
+    }
+}
+
 pub fn register_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<(), crate::VmError> {
     // PERMISSION_* constants
-    lua.globals().set("PERMISSION_DEBIT", 0x2i64)?;
-    lua.globals().set("PERMISSION_TRIGGER_ANIMATION", 0x10i64)?;
-    lua.globals().set("PERMISSION_ATTACH", 0x20i64)?;
-    lua.globals().set("PERMISSION_CHANGE_LINKS", 0x80i64)?;
-    lua.globals().set("PERMISSION_TRACK_CAMERA", 0x400i64)?;
-    lua.globals().set("PERMISSION_CONTROL_CAMERA", 0x800i64)?;
-    lua.globals().set("PERMISSION_TELEPORT", 0x1000i64)?;
-    lua.globals().set("PERMISSION_TAKE_CONTROLS", 0x4i64)?;
+    lua.globals().set("PERMISSION_DEBIT", i64::from(PERMISSION_DEBIT))?;
+    lua.globals().set("PERMISSION_TRIGGER_ANIMATION", i64::from(PERMISSION_TRIGGER_ANIMATION))?;
+    lua.globals().set("PERMISSION_ATTACH", i64::from(PERMISSION_ATTACH))?;
+    lua.globals().set("PERMISSION_CHANGE_LINKS", i64::from(PERMISSION_CHANGE_LINKS))?;
+    lua.globals().set("PERMISSION_TRACK_CAMERA", i64::from(PERMISSION_TRACK_CAMERA))?;
+    lua.globals().set("PERMISSION_CONTROL_CAMERA", i64::from(PERMISSION_CONTROL_CAMERA))?;
+    lua.globals().set("PERMISSION_TELEPORT", i64::from(PERMISSION_TELEPORT))?;
+    lua.globals().set("PERMISSION_TAKE_CONTROLS", i64::from(PERMISSION_TAKE_CONTROLS))?;
+    lua.globals().set("PERMISSION_OVERRIDE_ANIMATIONS", i64::from(PERMISSION_OVERRIDE_ANIMATIONS))?;
 
     // DATA_* constants
     lua.globals().set("DATA_ONLINE", DATA_ONLINE as i64)?;
@@ -73,10 +121,74 @@ pub fn register_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
     // llRequestPermissions(agent_id, permissions)
     {
         let ctx = Arc::clone(ctx);
-        let f = lua.create_function(move |_, (_agent_id, perms): (String, i64)| {
+        let f = lua.create_function(move |_, (agent_id, perm_i64): (String, i64)| {
+            let agent = match uuid::Uuid::parse_str(&agent_id) {
+                Ok(u) if !u.is_nil() => u,
+                _ => return Ok(()),
+            };
+            let perm = perm_i64 as u32;
             let mut ctx = ctx.write();
-            ctx.permissions_granted = perms as u32;
-            tracing::debug!(perms, "llRequestPermissions: auto-granting");
+            match decide_permissions(&ctx, agent, perm) {
+                PermissionDecision::Ignore => return Ok(()),
+                PermissionDecision::Release => {
+                    if let Some(ref tx) = ctx.control_sender {
+                        let _ = tx.send(crate::builtins::control::ControlRequest::Release {
+                            script_id: ctx.script_id,
+                        });
+                    }
+                    ctx.permissions_granter = uuid::Uuid::nil();
+                    ctx.permissions_granted = 0;
+                    if let Some(ref tx) = ctx.event_sender {
+                        let _ = tx.send((
+                            ctx.prim_id,
+                            crate::ScriptEvent::RunTimePermissions { permissions: 0 },
+                        ));
+                    }
+                }
+                PermissionDecision::Grant(granted) => {
+                    if ctx.permissions_granter != agent
+                        || (perm & PERMISSION_TAKE_CONTROLS) == 0
+                    {
+                        if let Some(ref tx) = ctx.control_sender {
+                            let _ = tx.send(crate::builtins::control::ControlRequest::Release {
+                                script_id: ctx.script_id,
+                            });
+                        }
+                    }
+                    ctx.permissions_granter = agent;
+                    ctx.permissions_granted = granted;
+                    if let Some(ref tx) = ctx.event_sender {
+                        let _ = tx.send((
+                            ctx.prim_id,
+                            crate::ScriptEvent::RunTimePermissions {
+                                permissions: granted,
+                            },
+                        ));
+                    }
+                }
+                PermissionDecision::Refuse => {
+                    if ctx.permissions_granter != agent
+                        || (perm & PERMISSION_TAKE_CONTROLS) == 0
+                    {
+                        if let Some(ref tx) = ctx.control_sender {
+                            let _ = tx.send(crate::builtins::control::ControlRequest::Release {
+                                script_id: ctx.script_id,
+                            });
+                        }
+                    }
+                    tracing::info!(
+                        "llRequestPermissions: request refused because permission prompts are not implemented yet"
+                    );
+                    ctx.permissions_granter = uuid::Uuid::nil();
+                    ctx.permissions_granted = 0;
+                    if let Some(ref tx) = ctx.event_sender {
+                        let _ = tx.send((
+                            ctx.prim_id,
+                            crate::ScriptEvent::RunTimePermissions { permissions: 0 },
+                        ));
+                    }
+                }
+            }
             Ok(())
         })?;
         lua.globals().set("llRequestPermissions", f)?;
@@ -97,11 +209,7 @@ pub fn register_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
         let ctx = Arc::clone(ctx);
         let f = lua.create_function(move |_, ()| {
             let ctx = ctx.read();
-            if ctx.permissions_granted != 0 {
-                Ok(ctx.owner_id.to_string())
-            } else {
-                Ok(uuid::Uuid::nil().to_string())
-            }
+            Ok(ctx.permissions_granter.to_string())
         })?;
         lua.globals().set("llGetPermissionsKey", f)?;
     }
@@ -111,7 +219,7 @@ pub fn register_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
         let ctx = Arc::clone(ctx);
         let f = lua.create_function(move |_, anim: String| {
             let ctx = ctx.read();
-            if ctx.permissions_granted & 0x10 == 0 {
+            if ctx.permissions_granted & PERMISSION_TRIGGER_ANIMATION == 0 {
                 return Err(mlua::Error::runtime(
                     "llStartAnimation: PERMISSION_TRIGGER_ANIMATION not granted",
                 ));
@@ -133,7 +241,7 @@ pub fn register_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
         let ctx = Arc::clone(ctx);
         let f = lua.create_function(move |_, anim: String| {
             let ctx = ctx.read();
-            if ctx.permissions_granted & 0x10 == 0 {
+            if ctx.permissions_granted & PERMISSION_TRIGGER_ANIMATION == 0 {
                 return Err(mlua::Error::runtime(
                     "llStopAnimation: PERMISSION_TRIGGER_ANIMATION not granted",
                 ));
@@ -250,7 +358,7 @@ pub fn register_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
         let f = lua.create_function(
             move |_, (agent_id, landmark, pos, look_at): (String, String, LuaTable, LuaTable)| {
                 let ctx = ctx.read();
-                if ctx.permissions_granted & 0x1000 == 0 {
+                if ctx.permissions_granted & PERMISSION_TELEPORT == 0 {
                     return Err(mlua::Error::runtime(
                         "llTeleportAgent: PERMISSION_TELEPORT not granted",
                     ));
@@ -348,7 +456,7 @@ pub fn register_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
         let ctx = Arc::clone(ctx);
         let f = lua.create_function(move |_, attach_point: i64| {
             let ctx = ctx.read();
-            if ctx.permissions_granted & 0x20 == 0 {
+            if ctx.permissions_granted & PERMISSION_ATTACH == 0 {
                 return Err(mlua::Error::runtime("llAttachToAvatar: PERMISSION_ATTACH not granted"));
             }
             if let Some(ref tx) = ctx.attach_sender {
@@ -371,7 +479,7 @@ pub fn register_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
         let ctx = Arc::clone(ctx);
         let f = lua.create_function(move |_, attach_point: i64| {
             let ctx = ctx.read();
-            if ctx.permissions_granted & 0x20 == 0 {
+            if ctx.permissions_granted & PERMISSION_ATTACH == 0 {
                 return Err(mlua::Error::runtime("llAttachToAvatarTemp: PERMISSION_ATTACH not granted"));
             }
             if let Some(ref tx) = ctx.attach_sender {
@@ -394,7 +502,7 @@ pub fn register_avatar(lua: &Lua, ctx: &Arc<RwLock<ScriptContext>>) -> Result<()
         let ctx = Arc::clone(ctx);
         let f = lua.create_function(move |_, ()| {
             let ctx = ctx.read();
-            if ctx.permissions_granted & 0x20 == 0 {
+            if ctx.permissions_granted & PERMISSION_ATTACH == 0 {
                 return Err(mlua::Error::runtime("llDetachFromAvatar: PERMISSION_ATTACH not granted"));
             }
             if let Some(ref tx) = ctx.attach_sender {
@@ -484,6 +592,7 @@ mod tests {
     fn test_ctx() -> Arc<RwLock<ScriptContext>> {
         Arc::new(RwLock::new(ScriptContext {
             owner_id: Uuid::from_u128(0xabcd),
+            is_attachment: true,
             ..Default::default()
         }))
     }
@@ -493,10 +602,11 @@ mod tests {
         let lua = Lua::new();
         let ctx = test_ctx();
         register_avatar(&lua, &ctx).unwrap();
-        lua.load(r#"llRequestPermissions("00000000-0000-0000-0000-000000000000", PERMISSION_TRIGGER_ANIMATION)"#)
+        lua.load(r#"llRequestPermissions("00000000-0000-0000-0000-00000000abcd", PERMISSION_TRIGGER_ANIMATION)"#)
             .exec()
             .unwrap();
         assert_eq!(ctx.read().permissions_granted, 0x10);
+        assert_eq!(ctx.read().permissions_granter, Uuid::from_u128(0xabcd));
     }
 
     #[test]
@@ -504,11 +614,195 @@ mod tests {
         let lua = Lua::new();
         let ctx = test_ctx();
         register_avatar(&lua, &ctx).unwrap();
-        lua.load(r#"llRequestPermissions("00000000-0000-0000-0000-000000000000", PERMISSION_DEBIT)"#)
+        lua.load(r#"llRequestPermissions("00000000-0000-0000-0000-00000000abcd", PERMISSION_TRIGGER_ANIMATION)"#)
             .exec()
             .unwrap();
         let perms: i64 = lua.load("return llGetPermissions()").eval().unwrap();
-        assert_eq!(perms, 0x2);
+        assert_eq!(perms, 0x10);
+    }
+
+    #[test]
+    fn request_permissions_refused_stranger_debit() {
+        let (ctx, rx) = ctx_with_events();
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+        lua.load(r#"llRequestPermissions("00000000-0000-0000-0000-000000009999", PERMISSION_DEBIT)"#)
+            .exec()
+            .unwrap();
+        assert_eq!(ctx.read().permissions_granter, Uuid::nil());
+        assert_eq!(ctx.read().permissions_granted, 0);
+        let (_prim_id, event) = rx.try_recv().unwrap();
+        match event {
+            crate::ScriptEvent::RunTimePermissions { permissions } => {
+                assert_eq!(permissions, 0);
+            }
+            _ => panic!("expected RunTimePermissions event"),
+        }
+    }
+
+    #[test]
+    fn request_permissions_owner_unattached_debit_refused() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            owner_id: Uuid::from_u128(0xabcd),
+            event_sender: Some(tx),
+            ..Default::default()
+        }));
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+        lua.load(r#"llRequestPermissions("00000000-0000-0000-0000-00000000abcd", PERMISSION_DEBIT)"#)
+            .exec()
+            .unwrap();
+        assert_eq!(ctx.read().permissions_granter, Uuid::nil());
+        assert_eq!(ctx.read().permissions_granted, 0);
+        let (_prim_id, event) = rx.try_recv().unwrap();
+        match event {
+            crate::ScriptEvent::RunTimePermissions { permissions } => {
+                assert_eq!(permissions, 0);
+            }
+            _ => panic!("expected RunTimePermissions event"),
+        }
+    }
+
+    #[test]
+    fn request_permissions_wearer_granted() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let owner = Uuid::from_u128(0xabcd);
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            owner_id: owner,
+            is_attachment: true,
+            event_sender: Some(tx),
+            ..Default::default()
+        }));
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+        lua.load(r#"llRequestPermissions("00000000-0000-0000-0000-00000000abcd", 0x14)"#)
+            .exec()
+            .unwrap();
+        assert_eq!(ctx.read().permissions_granter, owner);
+        assert_eq!(ctx.read().permissions_granted, PERMISSION_TAKE_CONTROLS | PERMISSION_TRIGGER_ANIMATION);
+        let (_prim_id, event) = rx.try_recv().unwrap();
+        match event {
+            crate::ScriptEvent::RunTimePermissions { permissions } => {
+                assert_eq!(permissions, PERMISSION_TAKE_CONTROLS | PERMISSION_TRIGGER_ANIMATION);
+            }
+            _ => panic!("expected RunTimePermissions event"),
+        }
+    }
+
+    #[test]
+    fn request_permissions_nonwearer_attachment_refused() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            owner_id: Uuid::from_u128(0xabcd),
+            is_attachment: true,
+            event_sender: Some(tx),
+            ..Default::default()
+        }));
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+        lua.load(r#"llRequestPermissions("00000000-0000-0000-0000-000000009999", PERMISSION_TRIGGER_ANIMATION)"#)
+            .exec()
+            .unwrap();
+        assert_eq!(ctx.read().permissions_granter, Uuid::nil());
+        assert_eq!(ctx.read().permissions_granted, 0);
+        let (_prim_id, event) = rx.try_recv().unwrap();
+        match event {
+            crate::ScriptEvent::RunTimePermissions { permissions } => {
+                assert_eq!(permissions, 0);
+            }
+            _ => panic!("expected RunTimePermissions event"),
+        }
+    }
+
+    #[test]
+    fn decide_permissions_sitting_granted_and_attach_refused() {
+        let agent = Uuid::from_u128(0x1234);
+        let ctx = ScriptContext {
+            sitting_avatars: vec![agent],
+            ..Default::default()
+        };
+        assert_eq!(
+            decide_permissions(&ctx, agent, PERMISSION_TRIGGER_ANIMATION | PERMISSION_TAKE_CONTROLS),
+            PermissionDecision::Grant(PERMISSION_TRIGGER_ANIMATION | PERMISSION_TAKE_CONTROLS)
+        );
+        assert_eq!(
+            decide_permissions(&ctx, agent, PERMISSION_ATTACH),
+            PermissionDecision::Refuse
+        );
+    }
+
+    #[test]
+    fn request_permissions_zero_releases() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let owner = Uuid::from_u128(0xabcd);
+        let ctx = Arc::new(RwLock::new(ScriptContext {
+            owner_id: owner,
+            permissions_granter: owner,
+            permissions_granted: PERMISSION_TRIGGER_ANIMATION,
+            event_sender: Some(tx),
+            ..Default::default()
+        }));
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+        lua.load(r#"llRequestPermissions("00000000-0000-0000-0000-00000000abcd", 0)"#)
+            .exec()
+            .unwrap();
+        assert_eq!(ctx.read().permissions_granter, Uuid::nil());
+        assert_eq!(ctx.read().permissions_granted, 0);
+        let (_prim_id, event) = rx.try_recv().unwrap();
+        match event {
+            crate::ScriptEvent::RunTimePermissions { permissions } => {
+                assert_eq!(permissions, 0);
+            }
+            _ => panic!("expected RunTimePermissions event"),
+        }
+    }
+
+    #[test]
+    fn request_permissions_invalid_or_nil_agent_ignored() {
+        let (ctx, rx) = ctx_with_events();
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+        let before_granter = ctx.read().permissions_granter;
+        let before_granted = ctx.read().permissions_granted;
+        lua.load(r#"llRequestPermissions("not-a-uuid", PERMISSION_TRIGGER_ANIMATION)"#)
+            .exec()
+            .unwrap();
+        lua.load(r#"llRequestPermissions("00000000-0000-0000-0000-000000000000", PERMISSION_TRIGGER_ANIMATION)"#)
+            .exec()
+            .unwrap();
+        assert_eq!(ctx.read().permissions_granter, before_granter);
+        assert_eq!(ctx.read().permissions_granted, before_granted);
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn get_permissions_key_returns_granter_after_grant() {
+        let lua = Lua::new();
+        let ctx = test_ctx();
+        register_avatar(&lua, &ctx).unwrap();
+        lua.load(r#"llRequestPermissions("00000000-0000-0000-0000-00000000abcd", PERMISSION_TRIGGER_ANIMATION)"#)
+            .exec()
+            .unwrap();
+        let key: String = lua.load("return llGetPermissionsKey()").eval().unwrap();
+        assert_eq!(key, Uuid::from_u128(0xabcd).to_string());
+    }
+
+    #[test]
+    fn decide_permissions_zero_is_release() {
+        let ctx = ScriptContext::default();
+        let agent = Uuid::from_u128(0x1234);
+        assert_eq!(decide_permissions(&ctx, agent, 0), PermissionDecision::Release);
+    }
+
+    #[test]
+    fn decide_permissions_invalid_agent_is_ignore() {
+        let ctx = ScriptContext::default();
+        assert_eq!(
+            decide_permissions(&ctx, Uuid::nil(), PERMISSION_TRIGGER_ANIMATION),
+            PermissionDecision::Ignore
+        );
     }
 
     #[test]
@@ -607,7 +901,7 @@ mod tests {
         let (tx, rx) = std::sync::mpsc::channel();
         let ctx = Arc::new(RwLock::new(ScriptContext {
             owner_id: Uuid::from_u128(0xabcd),
-            permissions_granted: 0x20, // PERMISSION_ATTACH
+            permissions_granted: PERMISSION_ATTACH, // PERMISSION_ATTACH
             attach_sender: Some(tx),
             ..Default::default()
         }));
@@ -719,7 +1013,7 @@ mod tests {
         let (tx, rx) = std::sync::mpsc::channel();
         let ctx = Arc::new(RwLock::new(ScriptContext {
             owner_id: Uuid::from_u128(0xabcd),
-            permissions_granted: 0x10, // PERMISSION_TRIGGER_ANIMATION
+            permissions_granted: PERMISSION_TRIGGER_ANIMATION, // PERMISSION_TRIGGER_ANIMATION
             animation_sender: Some(tx),
             ..Default::default()
         }));
@@ -753,7 +1047,7 @@ mod tests {
         let (tx, rx) = std::sync::mpsc::channel();
         let ctx = Arc::new(RwLock::new(ScriptContext {
             owner_id: Uuid::from_u128(0xabcd),
-            permissions_granted: 0x10,
+            permissions_granted: PERMISSION_TRIGGER_ANIMATION,
             animation_sender: Some(tx),
             ..Default::default()
         }));
@@ -850,7 +1144,7 @@ mod tests {
         let (tp_tx, tp_rx) = std::sync::mpsc::channel();
         let ctx = Arc::new(RwLock::new(ScriptContext {
             owner_id: Uuid::from_u128(0xabcd),
-            permissions_granted: 0x1000, // PERMISSION_TELEPORT
+            permissions_granted: PERMISSION_TELEPORT, // PERMISSION_TELEPORT
             teleport_sender: Some(tp_tx),
             ..Default::default()
         }));
@@ -938,5 +1232,92 @@ mod tests {
             }
             _ => panic!("expected Dataserver event"),
         }
+    }
+
+    #[test]
+    fn wearer_cannot_get_debit_teleport_or_change_links() {
+        let owner = Uuid::from_u128(0xabcd);
+        let ctx = ScriptContext {
+            owner_id: owner,
+            is_attachment: true,
+            ..Default::default()
+        };
+        for base in [PERMISSION_DEBIT, PERMISSION_TELEPORT, PERMISSION_CHANGE_LINKS] {
+            for perm in [base, base | PERMISSION_TRIGGER_ANIMATION] {
+                assert_eq!(
+                    decide_permissions(&ctx, owner, perm),
+                    PermissionDecision::Refuse
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sitter_cannot_get_debit_teleport_change_links_or_attach() {
+        let agent = Uuid::from_u128(0x1234);
+        let ctx = ScriptContext {
+            sitting_avatars: vec![agent],
+            ..Default::default()
+        };
+        for perm in [
+            PERMISSION_DEBIT,
+            PERMISSION_TELEPORT,
+            PERMISSION_CHANGE_LINKS,
+            PERMISSION_ATTACH,
+            PERMISSION_OVERRIDE_ANIMATIONS,
+        ] {
+            assert_eq!(
+                decide_permissions(&ctx, agent, perm),
+                PermissionDecision::Refuse
+            );
+        }
+    }
+
+    #[test]
+    fn owner_of_rezzed_object_gets_nothing_implicit() {
+        let owner = Uuid::from_u128(0xabcd);
+        let ctx = ScriptContext {
+            owner_id: owner,
+            ..Default::default()
+        };
+        for perm in [
+            PERMISSION_DEBIT,
+            PERMISSION_TAKE_CONTROLS,
+            PERMISSION_TRIGGER_ANIMATION,
+            PERMISSION_ATTACH,
+            PERMISSION_CHANGE_LINKS,
+            PERMISSION_TRACK_CAMERA,
+            PERMISSION_CONTROL_CAMERA,
+            PERMISSION_TELEPORT,
+            PERMISSION_OVERRIDE_ANIMATIONS,
+        ] {
+            assert_eq!(
+                decide_permissions(&ctx, owner, perm),
+                PermissionDecision::Refuse
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_and_nil_agent_calls_leave_state_unchanged() {
+        let (ctx, rx) = ctx_with_events();
+        ctx.write().is_attachment = true;
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+        lua.load(r#"llRequestPermissions("00000000-0000-0000-0000-00000000abcd", 16)"#)
+            .exec()
+            .unwrap();
+        let _ = rx.try_recv().unwrap();
+        let granter_before = ctx.read().permissions_granter;
+        let granted_before = ctx.read().permissions_granted;
+        lua.load(r#"llRequestPermissions("not-a-uuid", 16)"#)
+            .exec()
+            .unwrap();
+        lua.load(r#"llRequestPermissions("00000000-0000-0000-0000-000000000000", 16)"#)
+            .exec()
+            .unwrap();
+        assert_eq!(ctx.read().permissions_granter, granter_before);
+        assert_eq!(ctx.read().permissions_granted, granted_before);
+        assert!(rx.try_recv().is_err());
     }
 }
