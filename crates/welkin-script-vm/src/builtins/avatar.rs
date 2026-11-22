@@ -1233,4 +1233,91 @@ mod tests {
             _ => panic!("expected Dataserver event"),
         }
     }
+
+    #[test]
+    fn wearer_cannot_get_debit_teleport_or_change_links() {
+        let owner = Uuid::from_u128(0xabcd);
+        let ctx = ScriptContext {
+            owner_id: owner,
+            is_attachment: true,
+            ..Default::default()
+        };
+        for base in [PERMISSION_DEBIT, PERMISSION_TELEPORT, PERMISSION_CHANGE_LINKS] {
+            for perm in [base, base | PERMISSION_TRIGGER_ANIMATION] {
+                assert_eq!(
+                    decide_permissions(&ctx, owner, perm),
+                    PermissionDecision::Refuse
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sitter_cannot_get_debit_teleport_change_links_or_attach() {
+        let agent = Uuid::from_u128(0x1234);
+        let ctx = ScriptContext {
+            sitting_avatars: vec![agent],
+            ..Default::default()
+        };
+        for perm in [
+            PERMISSION_DEBIT,
+            PERMISSION_TELEPORT,
+            PERMISSION_CHANGE_LINKS,
+            PERMISSION_ATTACH,
+            PERMISSION_OVERRIDE_ANIMATIONS,
+        ] {
+            assert_eq!(
+                decide_permissions(&ctx, agent, perm),
+                PermissionDecision::Refuse
+            );
+        }
+    }
+
+    #[test]
+    fn owner_of_rezzed_object_gets_nothing_implicit() {
+        let owner = Uuid::from_u128(0xabcd);
+        let ctx = ScriptContext {
+            owner_id: owner,
+            ..Default::default()
+        };
+        for perm in [
+            PERMISSION_DEBIT,
+            PERMISSION_TAKE_CONTROLS,
+            PERMISSION_TRIGGER_ANIMATION,
+            PERMISSION_ATTACH,
+            PERMISSION_CHANGE_LINKS,
+            PERMISSION_TRACK_CAMERA,
+            PERMISSION_CONTROL_CAMERA,
+            PERMISSION_TELEPORT,
+            PERMISSION_OVERRIDE_ANIMATIONS,
+        ] {
+            assert_eq!(
+                decide_permissions(&ctx, owner, perm),
+                PermissionDecision::Refuse
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_and_nil_agent_calls_leave_state_unchanged() {
+        let (ctx, rx) = ctx_with_events();
+        ctx.write().is_attachment = true;
+        let lua = Lua::new();
+        register_avatar(&lua, &ctx).unwrap();
+        lua.load(r#"llRequestPermissions("00000000-0000-0000-0000-00000000abcd", 16)"#)
+            .exec()
+            .unwrap();
+        let _ = rx.try_recv().unwrap();
+        let granter_before = ctx.read().permissions_granter;
+        let granted_before = ctx.read().permissions_granted;
+        lua.load(r#"llRequestPermissions("not-a-uuid", 16)"#)
+            .exec()
+            .unwrap();
+        lua.load(r#"llRequestPermissions("00000000-0000-0000-0000-000000000000", 16)"#)
+            .exec()
+            .unwrap();
+        assert_eq!(ctx.read().permissions_granter, granter_before);
+        assert_eq!(ctx.read().permissions_granted, granted_before);
+        assert!(rx.try_recv().is_err());
+    }
 }
