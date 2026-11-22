@@ -143,21 +143,28 @@ impl LoginThrottle {
             return Some(peer_ip);
         }
 
-        if let Some(value) = headers.get("x-forwarded-for").and_then(|h| h.to_str().ok()) {
-            for entry in value.split(',').rev() {
-                let trimmed = entry.trim();
-                if trimmed.is_empty() {
-                    continue;
-                }
-                match trimmed.parse::<IpAddr>() {
-                    Ok(ip) => {
-                        let ip = canonical(ip);
-                        if !self.config.trusted_proxies.contains(&ip) {
-                            return Some(ip);
-                        }
+        let mut forwarded = Vec::new();
+        for header in headers.get_all("x-forwarded-for").iter() {
+            let value = match header.to_str() {
+                Ok(value) => value,
+                Err(_) => return Some(peer_ip),
+            };
+            forwarded.extend(value.split(','));
+        }
+
+        for entry in forwarded.into_iter().rev() {
+            let trimmed = entry.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            match trimmed.parse::<IpAddr>() {
+                Ok(ip) => {
+                    let ip = canonical(ip);
+                    if !self.config.trusted_proxies.contains(&ip) {
+                        return Some(ip);
                     }
-                    Err(_) => return Some(peer_ip),
                 }
+                Err(_) => return Some(peer_ip),
             }
         }
 
@@ -468,6 +475,25 @@ mod tests {
         let peer = Some(SocketAddr::new(proxy_ip, 4000));
         let mut headers = HeaderMap::new();
         headers.insert("x-forwarded-for", "6.6.6.6, 7.7.7.7".parse().unwrap());
+
+        assert_eq!(
+            throttle.client_ip(peer, &headers),
+            Some(IpAddr::V4(Ipv4Addr::new(7, 7, 7, 7)))
+        );
+    }
+
+    #[test]
+    fn forwarded_for_uses_all_header_lines() {
+        let proxy_ip = IpAddr::V4(Ipv4Addr::new(10, 0, 0, 1));
+        let config = LoginThrottleConfig {
+            trusted_proxies: vec![proxy_ip],
+            ..Default::default()
+        };
+        let throttle = LoginThrottle::new(config);
+        let peer = Some(SocketAddr::new(proxy_ip, 4000));
+        let mut headers = HeaderMap::new();
+        headers.append("x-forwarded-for", "6.6.6.6".parse().unwrap());
+        headers.append("x-forwarded-for", "7.7.7.7".parse().unwrap());
 
         assert_eq!(
             throttle.client_ip(peer, &headers),
